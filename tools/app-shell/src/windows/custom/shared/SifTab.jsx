@@ -700,6 +700,7 @@ export default function SifTab({
                 getDateVal={getDateVal}
                 onChange={onChange}
                 readOnly={siiFieldReadOnly}
+                step={1}
                 data-testid="SiiImportDuaSection__b99c8b" />
             )}
             {isPurchaseInvoice && (
@@ -713,6 +714,7 @@ export default function SifTab({
                 token={token}
                 readOnly={siiFieldReadOnly || !isDraft}
                 onHeaderRefresh={onHeaderRefresh}
+                step={2}
                 data-testid="SiiImportTaxesSection__b99c8b" />
             )}
             <SifAttachmentsSection

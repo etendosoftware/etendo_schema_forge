@@ -1,66 +1,62 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Pencil, Trash2 } from 'lucide-react';
-import { Label } from '@/components/ui/label';
+import { Plus, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import RequiredMark from '@/components/ui/required-mark.jsx';
-import { AddLineButton } from '@/components/ui/add-line-button.jsx';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { SelectorInput } from '@/components/contract-ui/SelectorInput.jsx';
 import { DeleteConfirmDialog } from '@/components/contract-ui/DeleteConfirmDialog.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useLocaleSwitch } from '@/i18n';
-import { formatCurrency } from '@/lib/formatCurrency';
+import { formatCurrency, formatGroupedNumber } from '@/lib/formatCurrency';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { buildLineSelectorContext } from '@/lib/selectorContext.js';
+import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { translateBackendErrorResponse } from '@/lib/backendErrors.js';
 import { normalizeDateInputValue } from '@/windows/custom/fiscal-config/fiscalConfig.utils.js';
+import SiiPanelCard from '@/windows/custom/shared/SiiPanelCard.jsx';
 import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
 
 /**
- * ETP-6284 (step 2) — "Impuestos de importación" block of the purchase-invoice SII panel, right
- * after "Importación (DUA)" and behind the same `sii-import-dua` flag.
+ * ETP-6284 — "Impuestos de importación" card of the purchase-invoice SII panel, right after
+ * "Importación (DUA)" and behind the same `sii-import-dua` flag.
  *
  * Classic parity (module SII, purchase invoice "Tax" tab): an import is declared by adding manual
  * tax lines (`C_InvoiceTax` with `Recalculate = 'N'`) next to the ones the invoice lines generate.
  * The core trigger `C_INVOICETAX_TRG2` adds a manual line's tax amount to the invoice grand total,
  * and `C_Invoice_Post` keeps those lines on completion (and copies them, negated, on a reversal).
- * With "Multiple DUA" checked on the header, each line carries its own DUA and DUA date
+ * With "Varios DUA" on the header, each line carries its own DUA and DUA date
  * (`C_InvoiceTax.EM_Aeatsii_Dua` / `EM_Aeatsii_Fecha_Dua`).
  *
- * Only the manual lines are listed here: the automatic ones (`recalculate = true`) belong to the
- * invoice lines and are not editable in Classic either. The tax amount is computed by the Classic
- * callout `SL_InvoiceTax_Amt` (base x rate, currency precision) through the NEO callout endpoint,
- * and stays editable, as in Classic.
+ * Inline editable table: Impuesto*, Tipo (rate, read-only), Base imponible*, Cuota (read-only,
+ * computed by the Classic callout `SL_InvoiceTax_Amt` — base x rate, currency precision — through
+ * the NEO callout endpoint), plus DUA* / Fecha DUA* with "Varios DUA", and a delete icon.
  *
- * DUA / DUA date are REQUIRED here while Multiple DUA is checked. Classic declares that rule in
+ * Saving: each row saves ITSELF as soon as it is complete — on choosing the tax, on committing the
+ * base (blur / Enter), on leaving the DUA field, on picking the DUA date. An incomplete row stays a
+ * local draft with its empty required cells outlined in red; nothing is sent until it is complete.
+ * A saved row only PATCHes when a value really changed. Each write re-reads the rows and the header
+ * totals (`onHeaderRefresh`).
+ *
+ * DUA / DUA date are REQUIRED per line with "Varios DUA". Classic declares that rule in
  * `InvoiceTaxEventHandler` but its `showMsg` never throws, so the backend does not enforce it —
- * this block is the only place it holds.
+ * this card is the only place it holds.
  *
  * Tax picker: the purchase-line tax selector (`/lines/selectors/tax`, `C_Tax_IsSOTrx_Date` rule:
- * purchase or both, valid at the invoice date) — the normal purchase taxes. The tax entity's own
- * selector has no validation rule and would offer every tax of the client, sales ones included.
- *
- * Writes persist immediately (own CRUD on `/tax`), independent of the header save; after each one
- * the header totals are re-read (`onHeaderRefresh`) so the grand total reflects the new tax.
+ * purchase or both, valid at the invoice date). Its items carry the rate shown in the Tipo column
+ * (`labelPrefix`, the same rate the line pickers show); a saved row falls back to `tax.rate`.
  */
 const DUA_TYPE_KEYS = new Set(['F5', 'LC']);
-// The block is mounted on purchase invoices only (SifTab's `isPurchaseInvoice` gate).
+// The card is mounted on purchase invoices only (SifTab's `isPurchaseInvoice` gate).
 const WINDOW_CATEGORY = 'purchases';
-
-const EMPTY_DRAFT = {
-  id: null,
-  tax: '',
-  taxLabel: '',
-  taxableAmount: null,
-  taxAmount: null,
-  aeatsiiDua: '',
-  aeatsiiFechaDua: '',
-};
-
+const CATALOG_PAGE = 100;
+const CATALOG_MAX_PAGES = 5;
+const ERROR_OUTLINE = 'border-destructive focus-visible:ring-destructive focus-within:ring-destructive';
 const TAX_FIELD = { id: 'sif-importTax-tax', key: 'tax', column: 'tax', required: true };
+
+let draftSeq = 0;
 
 function isTrue(value) {
   return value === true || value === 'Y';
@@ -84,42 +80,80 @@ export function nextTaxLineNo(rows) {
 }
 
 /**
- * Returns the i18n key of the first validation failure of a draft, or null when it can be saved.
- * With Multiple DUA, DUA and DUA date are required on every line.
+ * The required cells a row still lacks (`tax`, `taxableAmount`, and with Multiple DUA `aeatsiiDua`
+ * and `aeatsiiFechaDua`). `taxAmount` is not a cell the user fills: it comes from the callout, and a
+ * row without it is simply not saved yet.
  */
-export function validateImportTaxDraft(draft, multiDua) {
-  if (!draft?.tax || draft.taxableAmount == null || draft.taxAmount == null) {
-    return 'sifDataTabs.importTaxes.missingFields';
+export function missingImportTaxFields(row, multiDua) {
+  const missing = new Set();
+  if (!row?.tax) missing.add('tax');
+  if (row?.taxableAmount == null) missing.add('taxableAmount');
+  if (multiDua) {
+    if (!String(row?.aeatsiiDua ?? '').trim()) missing.add('aeatsiiDua');
+    if (!row?.aeatsiiFechaDua) missing.add('aeatsiiFechaDua');
   }
-  if (multiDua && (!String(draft.aeatsiiDua ?? '').trim() || !draft.aeatsiiFechaDua)) {
-    return 'sifDataTabs.importTaxes.duaRequired';
-  }
-  return null;
+  return missing;
 }
 
 /** Request body of a save. DUA fields travel only while Multiple DUA is checked. */
-export function buildImportTaxBody(draft, multiDua) {
+export function buildImportTaxBody(row, multiDua) {
   const body = {
-    tax: draft.tax,
-    taxableAmount: draft.taxableAmount,
-    taxAmount: draft.taxAmount,
+    tax: row.tax,
+    taxableAmount: row.taxableAmount,
+    taxAmount: row.taxAmount,
   };
   if (multiDua) {
-    body.aeatsiiDua = String(draft.aeatsiiDua ?? '').trim();
-    body.aeatsiiFechaDua = draft.aeatsiiFechaDua;
+    body.aeatsiiDua = String(row.aeatsiiDua ?? '').trim();
+    body.aeatsiiFechaDua = row.aeatsiiFechaDua;
   }
   return body;
 }
 
-function rowToDraft(row) {
+/** True when a saved row's editable values differ from what the server holds. */
+export function isImportTaxRowDirty(row, persisted, multiDua) {
+  if (!persisted) return true;
+  const body = buildImportTaxBody(row, multiDua);
+  const stored = buildImportTaxBody(persisted, multiDua);
+  return Object.keys(body).some(k => (body[k] ?? '') !== (stored[k] ?? ''));
+}
+
+/** Sums of the import-tax rows (`total` = base + tax amount). */
+export function summarizeImportTaxes(rows) {
+  let base = 0;
+  let amount = 0;
+  for (const r of rows ?? []) {
+    base += toNumberOrNull(r?.taxableAmount) ?? 0;
+    amount += toNumberOrNull(r?.taxAmount) ?? 0;
+  }
+  return { base, amount, total: base + amount };
+}
+
+function serverRowToRow(row) {
   return {
+    key: row.id,
     id: row.id,
     tax: row.tax ?? '',
     taxLabel: row['tax$_identifier'] ?? '',
+    serverRate: toNumberOrNull(row['tax$rate']),
     taxableAmount: toNumberOrNull(row.taxableAmount),
     taxAmount: toNumberOrNull(row.taxAmount),
     aeatsiiDua: row.aeatsiiDua ?? '',
     aeatsiiFechaDua: normalizeDateInputValue(row.aeatsiiFechaDua ?? ''),
+  };
+}
+
+function newDraftRow() {
+  draftSeq += 1;
+  return {
+    key: `draft-${draftSeq}`,
+    id: null,
+    tax: '',
+    taxLabel: '',
+    serverRate: null,
+    taxableAmount: null,
+    taxAmount: null,
+    aeatsiiDua: '',
+    aeatsiiFechaDua: '',
   };
 }
 
@@ -130,217 +164,208 @@ function calloutAmount(updates, key) {
   return toNumberOrNull(entry && typeof entry === 'object' ? entry.value : entry);
 }
 
-function TaxField({ label, htmlFor, required, children }) {
+function createdId(body) {
+  const data = body?.response?.data;
+  if (Array.isArray(data)) return data[0]?.id ?? null;
+  return data?.id ?? body?.id ?? null;
+}
+
+function rateLabel(row, rateMap) {
+  const prefix = row.tax ? rateMap[row.tax] : null;
+  if (prefix != null && prefix !== '') return `${prefix} %`;
+  if (row.serverRate != null) return `${formatGroupedNumber(row.serverRate, { maximumFractionDigits: 4 })} %`;
+  return '—';
+}
+
+function HeaderCell({ children, required, align = 'left', testId }) {
   return (
-    <div className="space-y-1.5">
-      <Label
-        htmlFor={htmlFor}
-        className="text-sm text-foreground font-medium"
-        data-testid={`Label__siiImportTax_${htmlFor}`}>
-        {label}
-        {required && <RequiredMark aria-hidden="true" data-testid={`RequiredMark__siiImportTax_${htmlFor}`} />}
-      </Label>
+    <th className={`px-2 py-1.5 text-xs font-medium text-muted-foreground text-${align} whitespace-nowrap`} data-testid={testId}>
       {children}
-    </div>
+      {required && <RequiredMark aria-hidden="true" data-testid={`${testId}_required`} />}
+    </th>
   );
 }
 
-function ImportTaxForm({
-  ui, draft, setDraft, multiDua, currency, saving, error, onSave, onCancel, onAmountChange,
-  selectorUrl, selectorContext, token,
-}) {
+function ReadOnlyAmount({ currency, value, testId }) {
   return (
     <div
-      className="col-span-2 grid grid-cols-2 gap-x-5 gap-y-4 rounded-md border border-border/60 p-3"
-      data-testid="SiiImportTaxesSection__form">
-      <div className="col-span-2" data-testid="SiiImportTaxesSection__taxCell">
-        <TaxField label={ui('tax')} htmlFor="sif-importTax-tax" required data-testid="TaxField__tax">
-          <SelectorInput
-            entityName="tax"
-            field={TAX_FIELD}
-            value={draft.tax}
-            displayValue={draft.taxLabel}
-            onChange={(val, lbl) => onAmountChange('tax', { tax: val ?? '', taxLabel: lbl ?? '' })}
-            catalogs={null}
-            resolvedLabel={ui('tax')}
-            selectorUrl={selectorUrl}
-            selectorContext={selectorContext}
-            token={token}
-            data-testid="SelectorInput__siiImportTax" />
-        </TaxField>
-      </div>
-      <TaxField
-        label={ui('sifDataTabs.importTaxes.taxableAmount')}
-        htmlFor="sif-importTax-base"
-        required
-        data-testid="TaxField__base">
-        <MaskedAmountInput
-          id="sif-importTax-base"
-          bare
-          currency={currency}
-          value={draft.taxableAmount}
-          onCommit={parsed => onAmountChange('taxableAmount', { taxableAmount: parsed })}
-          disabled={saving}
-          data-testid="MaskedAmountInput__siiImportTaxBase" />
-      </TaxField>
-      <TaxField
-        label={ui('sifDataTabs.importTaxes.taxAmount')}
-        htmlFor="sif-importTax-amount"
-        required
-        data-testid="TaxField__amount">
-        <MaskedAmountInput
-          id="sif-importTax-amount"
-          bare
-          currency={currency}
-          value={draft.taxAmount}
-          onCommit={parsed => onAmountChange('taxAmount', { taxAmount: parsed })}
-          disabled={saving}
-          data-testid="MaskedAmountInput__siiImportTaxAmount" />
-      </TaxField>
-      {multiDua && (
-        <>
-          <TaxField label={ui('sifDataTabs.field.dua')} htmlFor="sif-importTax-dua" required data-testid="TaxField__dua">
-            <Input
-              id="sif-importTax-dua"
-              type="text"
-              maxLength={255}
-              value={draft.aeatsiiDua}
-              onChange={e => setDraft(d => ({ ...d, aeatsiiDua: e.target.value }))}
-              disabled={saving}
-              aria-required
-              className="bg-card"
-              data-testid="Input__siiImportTaxDua" />
-          </TaxField>
-          <TaxField
-            label={ui('sifDataTabs.field.duaDate')}
-            htmlFor="sif-importTax-duaDate"
-            required
-            data-testid="TaxField__duaDate">
-            <DateField
-              id="sif-importTax-duaDate"
-              value={draft.aeatsiiFechaDua}
-              onChange={iso => setDraft(d => ({ ...d, aeatsiiFechaDua: iso ?? '' }))}
-              disabled={saving}
-              data-testid="DateField__siiImportTaxDuaDate" />
-          </TaxField>
-        </>
-      )}
-      {error && (
-        <p className="col-span-2 text-xs text-destructive" role="alert" data-testid="SiiImportTaxesSection__error">
-          {error}
-        </p>
-      )}
-      <div className="col-span-2 flex justify-end gap-2" data-testid="SiiImportTaxesSection__formActions">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onCancel}
-          disabled={saving}
-          data-testid="Button__siiImportTaxCancel">
-          {ui('cancel')}
-        </Button>
-        <Button type="button" size="sm" onClick={onSave} disabled={saving} data-testid="Button__siiImportTaxSave">
-          {saving ? ui('saving') : ui('save')}
-        </Button>
-      </div>
+      className="h-8 min-w-24 rounded-lg bg-muted px-2 flex items-center justify-end text-sm tabular-nums text-muted-foreground"
+      data-testid={testId}>
+      {value == null ? '—' : formatCurrency(currency, value)}
     </div>
   );
 }
 
-function ImportTaxesTable({ ui, rows, multiDua, currency, locale, editable, onEdit, onDelete }) {
+function ImportTaxRow({
+  ui, row, multiDua, editable, currency, locale, rateMap, selectorUrl, selectorContext, token,
+  onTaxChange, onBaseCommit, onDuaChange, onDuaBlur, onDateChange, onDelete,
+}) {
   const cell = 'px-2 py-1.5 align-middle';
+  const missing = editable ? missingImportTaxFields(row, multiDua) : new Set();
+  const disabled = Boolean(row.saving);
+  if (!editable) {
+    return (
+      <tr className="border-b border-border/20" data-testid={`SiiImportTaxesSection__row_${row.key}`}>
+        <td className={cell} data-testid="SiiImportTaxesSection__tdTax">{row.taxLabel || row.tax}</td>
+        <td className={`${cell} tabular-nums`} data-testid="SiiImportTaxesSection__tdRate">{rateLabel(row, rateMap)}</td>
+        <td className={`${cell} text-right tabular-nums`} data-testid="SiiImportTaxesSection__tdBase">
+          {formatCurrency(currency, row.taxableAmount)}
+        </td>
+        <td className={`${cell} text-right tabular-nums`} data-testid="SiiImportTaxesSection__tdAmount">
+          {formatCurrency(currency, row.taxAmount)}
+        </td>
+        {multiDua && (
+          <>
+            <td className={cell} data-testid="SiiImportTaxesSection__tdDua">{row.aeatsiiDua || '—'}</td>
+            <td className={cell} data-testid="SiiImportTaxesSection__tdDuaDate">
+              {row.aeatsiiFechaDua ? formatCalendarDate(row.aeatsiiFechaDua, locale) : '—'}
+            </td>
+          </>
+        )}
+      </tr>
+    );
+  }
   return (
-    <table className="w-full text-sm" data-testid="SiiImportTaxesSection__table">
-      <thead data-testid="SiiImportTaxesSection__thead">
-        <tr className="text-xs text-muted-foreground border-b border-border/40" data-testid="SiiImportTaxesSection__headRow">
-          <th className={`${cell} text-left font-medium`} data-testid="SiiImportTaxesSection__thTax">{ui('tax')}</th>
-          <th className={`${cell} text-right font-medium`} data-testid="SiiImportTaxesSection__thBase">
-            {ui('sifDataTabs.importTaxes.taxableAmount')}
-          </th>
-          <th className={`${cell} text-right font-medium`} data-testid="SiiImportTaxesSection__thAmount">
-            {ui('sifDataTabs.importTaxes.taxAmount')}
-          </th>
-          {multiDua && (
-            <>
-              <th className={`${cell} text-left font-medium`} data-testid="SiiImportTaxesSection__thDua">{ui('sifDataTabs.field.dua')}</th>
-              <th className={`${cell} text-left font-medium`} data-testid="SiiImportTaxesSection__thDuaDate">
-                {ui('sifDataTabs.field.duaDate')}
-              </th>
-            </>
-          )}
-          {editable && <th className={cell} aria-hidden="true" data-testid="SiiImportTaxesSection__thActions" />}
-        </tr>
-      </thead>
-      <tbody data-testid="SiiImportTaxesSection__tbody">
-        {rows.map(row => (
-          <tr key={row.id} className="border-b border-border/20" data-testid={`SiiImportTaxesSection__row_${row.id}`}>
-            <td className={cell} data-testid="SiiImportTaxesSection__tdTax">{row['tax$_identifier'] ?? row.tax}</td>
-            <td className={`${cell} text-right tabular-nums`} data-testid="SiiImportTaxesSection__tdBase">
-              {formatCurrency(currency, row.taxableAmount)}
-            </td>
-            <td className={`${cell} text-right tabular-nums`} data-testid="SiiImportTaxesSection__tdAmount">
-              {formatCurrency(currency, row.taxAmount)}
-            </td>
-            {multiDua && (
-              <>
-                <td className={cell} data-testid="SiiImportTaxesSection__tdDua">{row.aeatsiiDua || '—'}</td>
-                <td className={cell} data-testid="SiiImportTaxesSection__tdDuaDate">
-                  {row.aeatsiiFechaDua ? formatCalendarDate(row.aeatsiiFechaDua, locale) : '—'}
-                </td>
-              </>
-            )}
-            {editable && (
-              <td className={`${cell} text-right whitespace-nowrap`} data-testid="SiiImportTaxesSection__tdActions">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={ui('edit')}
-                  onClick={() => onEdit(row)}
-                  data-testid="Button__siiImportTaxEdit">
-                  <Pencil data-testid="Pencil__siiImportTax" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={ui('delete')}
-                  onClick={() => onDelete(row)}
-                  data-testid="Button__siiImportTaxDelete">
-                  <Trash2 data-testid="Trash2__siiImportTax" />
-                </Button>
-              </td>
-            )}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <tr className="border-b border-border/20" data-testid={`SiiImportTaxesSection__row_${row.key}`}>
+      <td className={`${cell} min-w-44`} data-testid="SiiImportTaxesSection__tdTax">
+        <SelectorInput
+          entityName="tax"
+          field={TAX_FIELD}
+          value={row.tax}
+          displayValue={row.taxLabel}
+          onChange={(val, lbl) => onTaxChange(row, val ?? '', lbl ?? '')}
+          catalogs={null}
+          resolvedLabel={ui('tax')}
+          selectorUrl={selectorUrl}
+          selectorContext={selectorContext}
+          token={token}
+          compact
+          triggerClassName={`w-full h-8 text-sm text-text-primary bg-card focus:ring-2 focus:ring-primary ${missing.has('tax') ? ERROR_OUTLINE : ''}`}
+          data-testid="SelectorInput__siiImportTax" />
+      </td>
+      <td className={`${cell} tabular-nums text-muted-foreground whitespace-nowrap`} data-testid="SiiImportTaxesSection__tdRate">
+        {rateLabel(row, rateMap)}
+      </td>
+      <td className={`${cell} min-w-28`} data-testid="SiiImportTaxesSection__tdBase">
+        <MaskedAmountInput
+          bare
+          currency={currency}
+          value={row.taxableAmount}
+          onCommit={parsed => onBaseCommit(row, parsed)}
+          disabled={disabled}
+          aria-label={ui('sifDataTabs.importTaxes.taxableAmount')}
+          aria-invalid={missing.has('taxableAmount') || undefined}
+          className={`h-8 ${missing.has('taxableAmount') ? ERROR_OUTLINE : ''}`}
+          data-testid="MaskedAmountInput__siiImportTaxBase" />
+      </td>
+      <td className={cell} data-testid="SiiImportTaxesSection__tdAmount">
+        <ReadOnlyAmount currency={currency} value={row.taxAmount} testId="SiiImportTaxesSection__amount" data-testid="ReadOnlyAmount__siiImportTax" />
+      </td>
+      {multiDua && (
+        <>
+          <td className={`${cell} min-w-36`} data-testid="SiiImportTaxesSection__tdDua">
+            <Input
+              type="text"
+              maxLength={255}
+              value={row.aeatsiiDua}
+              onChange={e => onDuaChange(row, e.target.value)}
+              onBlur={() => onDuaBlur(row)}
+              disabled={disabled}
+              aria-label={ui('sifDataTabs.field.dua')}
+              aria-invalid={missing.has('aeatsiiDua') || undefined}
+              className={`h-8 bg-card ${missing.has('aeatsiiDua') ? ERROR_OUTLINE : ''}`}
+              data-testid="Input__siiImportTaxDua" />
+          </td>
+          <td className={`${cell} min-w-36`} data-testid="SiiImportTaxesSection__tdDuaDate">
+            <DateField
+              value={row.aeatsiiFechaDua}
+              onChange={iso => onDateChange(row, iso ?? '')}
+              disabled={disabled}
+              className={missing.has('aeatsiiFechaDua') ? ERROR_OUTLINE : undefined}
+              data-testid="DateField__siiImportTaxDuaDate" />
+          </td>
+        </>
+      )}
+      <td className={`${cell} text-right`} data-testid="SiiImportTaxesSection__tdActions">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={ui('delete')}
+          onClick={() => onDelete(row)}
+          disabled={disabled}
+          data-testid="Button__siiImportTaxDelete">
+          <Trash2 data-testid="Trash2__siiImportTax" />
+        </Button>
+      </td>
+    </tr>
   );
 }
 
-function ImportTaxesBlock({ ui, multiDua, recordId, data, apiBaseUrl, token, readOnly, onHeaderRefresh }) {
+function SummaryLine({ label, value, strong, testId }) {
+  return (
+    <div className={`flex items-center justify-between gap-6 text-sm ${strong ? 'font-semibold text-foreground' : 'text-muted-foreground'}`} data-testid={testId}>
+      <span data-testid={`${testId}_label`}>{label}</span>
+      <span className="tabular-nums" data-testid={`${testId}_value`}>{value}</span>
+    </div>
+  );
+}
+
+function useTaxRateCatalog(apiFetch, selectorUrl, selectorContext) {
+  const [rateMap, setRateMap] = useState({});
+  const contextKey = JSON.stringify(selectorContext ?? {});
+  useEffect(() => {
+    if (!selectorUrl) return undefined;
+    let cancelled = false;
+    (async () => {
+      const map = {};
+      for (let page = 0; page < CATALOG_MAX_PAGES; page += 1) {
+        const url = buildUrlWithParams(selectorUrl, { ...selectorContext, limit: CATALOG_PAGE, offset: page * CATALOG_PAGE });
+        const res = await apiFetch(url, { baseUrl: '' });
+        if (!res.ok) break;
+        const body = await res.json();
+        const items = body?.items ?? body?.response?.data ?? [];
+        for (const item of items) if (item?.id) map[item.id] = item.labelPrefix ?? null;
+        if (items.length < CATALOG_PAGE) break;
+      }
+      if (!cancelled) setRateMap(map);
+    })().catch(() => { /* the Tipo column falls back to the saved tax rate */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiFetch, selectorUrl, contextKey]);
+  return rateMap;
+}
+
+function ImportTaxesBlock({ ui, multiDua, recordId, data, apiBaseUrl, token, readOnly, onHeaderRefresh, step }) {
   const apiFetch = useApiFetch(apiBaseUrl);
   const { locale } = useLocaleSwitch();
-  const [allRows, setAllRows] = useState([]);
-  const [draft, setDraft] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
+  const [allServerRows, setAllServerRows] = useState([]);
+  const [rows, setRows] = useState([]);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const persistedRef = useRef({});
 
   const currency = data?.['currency$_identifier'] || '';
-  const rows = selectImportTaxRows(allRows);
   const editable = !readOnly && Boolean(recordId);
+  const selectorUrl = apiBaseUrl ? `${apiBaseUrl}/lines/selectors/tax` : null;
+  const selectorContext = buildLineSelectorContext({ windowCategory: WINDOW_CATEGORY, parentId: recordId, headerRecord: data });
+  const rateMap = useTaxRateCatalog(apiFetch, editable ? selectorUrl : null, selectorContext);
 
   const load = useCallback(async () => {
     if (!recordId || !apiBaseUrl) return;
     try {
-      const res = await apiFetch(`/tax?parentId=${encodeURIComponent(recordId)}`);
+      const res = await apiFetch(`/tax?parentId=${encodeURIComponent(recordId)}&_extraProperties=tax.rate`);
       if (!res.ok) return;
       const body = await res.json();
       const list = body?.response?.data ?? (Array.isArray(body) ? body : []);
-      setAllRows(Array.isArray(list) ? list : []);
+      const all = Array.isArray(list) ? list : [];
+      const manual = selectImportTaxRows(all).map(serverRowToRow);
+      persistedRef.current = Object.fromEntries(manual.map(r => [r.id, r]));
+      setAllServerRows(all);
+      // Keep the local drafts (not saved yet) after the saved rows.
+      setRows(prev => [...manual, ...prev.filter(r => !r.id)]);
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
     }
@@ -348,76 +373,96 @@ function ImportTaxesBlock({ ui, multiDua, recordId, data, apiBaseUrl, token, rea
 
   useEffect(() => { load(); }, [load]);
 
-  const afterWrite = useCallback(async (messageKey) => {
-    toast.success(ui(messageKey));
-    await load();
-    onHeaderRefresh?.();
-  }, [load, onHeaderRefresh, ui]);
+  const patchRow = useCallback((key, patch) => {
+    setRows(prev => prev.map(r => (r.key === key ? { ...r, ...patch } : r)));
+  }, []);
 
-  // Mirrors Classic's SL_InvoiceTax_Amt: changing the base (or the tax) recomputes the tax
-  // amount; changing the tax amount recomputes the base. Best effort — on failure the user's
-  // values stay as typed.
-  const runAmountCallout = useCallback(async (field, next) => {
-    const sourceField = field === 'taxAmount' ? 'taxAmount' : 'taxableAmount';
-    if (!next.tax || next[sourceField] == null) return;
+  // Classic SL_InvoiceTax_Amt: the tax amount follows the base and the tax. Best effort — on
+  // failure the row keeps no amount and is not saved.
+  const withCalloutAmount = useCallback(async (row) => {
+    if (!row.tax || row.taxableAmount == null) return row;
     try {
       const res = await apiFetch('/tax/callout', {
         method: 'POST',
         body: JSON.stringify({
-          field: sourceField,
-          value: next[sourceField],
-          formState: {
-            tax: next.tax,
-            invoice: recordId,
-            taxableAmount: next.taxableAmount,
-            taxAmount: next.taxAmount,
-          },
+          field: 'taxableAmount',
+          value: row.taxableAmount,
+          formState: { tax: row.tax, invoice: recordId, taxableAmount: row.taxableAmount, taxAmount: row.taxAmount },
         }),
       });
-      if (!res.ok) return;
-      const result = await res.json();
-      const updates = result?.updates;
-      const amount = calloutAmount(updates, 'taxAmount');
-      const base = calloutAmount(updates, 'taxableAmount');
-      setDraft(d => (d ? {
-        ...d,
-        ...(sourceField === 'taxableAmount' && amount !== undefined ? { taxAmount: amount } : {}),
-        ...(sourceField === 'taxAmount' && base !== undefined ? { taxableAmount: base } : {}),
-      } : d));
-    } catch { /* keep the typed values */ }
+      if (!res.ok) return row;
+      const amount = calloutAmount((await res.json())?.updates, 'taxAmount');
+      return amount === undefined ? row : { ...row, taxAmount: amount };
+    } catch {
+      return row;
+    }
   }, [apiFetch, recordId]);
 
-  const onAmountChange = useCallback((field, patch) => {
-    const next = { ...draft, ...patch };
-    setDraft(next);
-    runAmountCallout(field, next);
-  }, [draft, runAmountCallout]);
-
-  const save = useCallback(async () => {
-    const invalidKey = validateImportTaxDraft(draft, multiDua);
-    if (invalidKey) { setError(ui(invalidKey)); return; }
-    setError(null);
-    setSaving(true);
+  const saveRow = useCallback(async (row) => {
+    if (!row || row.saving) return;
+    if (missingImportTaxFields(row, multiDua).size > 0 || row.taxAmount == null) return;
+    if (row.id && !isImportTaxRowDirty(row, persistedRef.current[row.id], multiDua)) return;
+    patchRow(row.key, { saving: true });
     try {
-      const body = buildImportTaxBody(draft, multiDua);
-      const res = draft.id
-        ? await apiFetch(`/tax/${encodeURIComponent(draft.id)}`, { method: 'PATCH', body: JSON.stringify(body) })
+      const body = buildImportTaxBody(row, multiDua);
+      const res = row.id
+        ? await apiFetch(`/tax/${encodeURIComponent(row.id)}`, { method: 'PATCH', body: JSON.stringify(body) })
         : await apiFetch('/tax', {
           method: 'POST',
-          body: JSON.stringify({ ...body, parentId: recordId, lineNo: nextTaxLineNo(allRows), recalculate: false }),
+          body: JSON.stringify({ ...body, parentId: recordId, lineNo: nextTaxLineNo(allServerRows), recalculate: false }),
         });
       if (!res.ok) {
-        setError(await translateBackendErrorResponse(res, ui));
+        toast.error(await translateBackendErrorResponse(res, ui));
+        patchRow(row.key, { saving: false });
         return;
       }
-      setDraft(null);
-      await afterWrite('sifDataTabs.importTaxes.saved');
+      if (!row.id) {
+        // The draft becomes the saved row; the reload below replaces it with the server version.
+        const id = createdId(await res.json().catch(() => null));
+        setRows(prev => (id == null
+          ? prev.filter(r => r.key !== row.key)
+          : prev.map(r => (r.key === row.key ? { ...r, id, key: id, saving: false } : r))));
+      }
+      await load();
+      onHeaderRefresh?.();
     } catch (err) {
-      setError(err?.message || ui('networkError'));
-    } finally {
-      setSaving(false);
+      toast.error(err?.message || ui('networkError'));
+      patchRow(row.key, { saving: false });
     }
-  }, [draft, multiDua, apiFetch, recordId, allRows, afterWrite, ui]);
+  }, [multiDua, patchRow, apiFetch, recordId, allServerRows, load, onHeaderRefresh, ui]);
+
+  const recomputeAndSave = useCallback(async (row) => {
+    const next = await withCalloutAmount(row);
+    patchRow(row.key, { taxAmount: next.taxAmount });
+    await saveRow(next);
+  }, [withCalloutAmount, patchRow, saveRow]);
+
+  const onTaxChange = useCallback((row, tax, taxLabel) => {
+    const next = { ...row, tax, taxLabel, serverRate: null, taxAmount: row.tax === tax ? row.taxAmount : null };
+    patchRow(row.key, { tax, taxLabel, serverRate: null, taxAmount: next.taxAmount });
+    recomputeAndSave(next);
+  }, [patchRow, recomputeAndSave]);
+
+  const onBaseCommit = useCallback((row, parsed) => {
+    if (parsed === row.taxableAmount) return;
+    const next = { ...row, taxableAmount: parsed, taxAmount: null };
+    patchRow(row.key, { taxableAmount: parsed, taxAmount: null });
+    recomputeAndSave(next);
+  }, [patchRow, recomputeAndSave]);
+
+  const onDuaChange = useCallback((row, value) => patchRow(row.key, { aeatsiiDua: value }), [patchRow]);
+  const onDuaBlur = useCallback((row) => {
+    saveRow(rowsRef.current.find(r => r.key === row.key));
+  }, [saveRow]);
+  const onDateChange = useCallback((row, iso) => {
+    patchRow(row.key, { aeatsiiFechaDua: iso });
+    saveRow({ ...rowsRef.current.find(r => r.key === row.key), aeatsiiFechaDua: iso });
+  }, [patchRow, saveRow]);
+
+  const onDelete = useCallback((row) => {
+    if (row.id) setDeleteTarget(row);
+    else setRows(prev => prev.filter(r => r.key !== row.key));
+  }, []);
 
   const confirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -428,75 +473,121 @@ function ImportTaxesBlock({ ui, multiDua, recordId, data, apiBaseUrl, token, rea
         toast.error(await translateBackendErrorResponse(res, ui));
         return;
       }
-      await afterWrite('sifDataTabs.importTaxes.deleted');
+      setRows(prev => prev.filter(r => r.key !== deleteTarget.key));
+      toast.success(ui('sifDataTabs.importTaxes.deleted'));
+      await load();
+      onHeaderRefresh?.();
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
     }
-  }, [deleteTarget, apiFetch, afterWrite, ui]);
+  }, [deleteTarget, apiFetch, load, onHeaderRefresh, ui]);
 
-  const selectorUrl = apiBaseUrl ? `${apiBaseUrl}/lines/selectors/tax` : null;
-  const selectorContext = buildLineSelectorContext({
-    windowCategory: WINDOW_CATEGORY,
-    parentId: recordId,
-    headerRecord: data,
-  });
+  const summary = summarizeImportTaxes(rows);
 
   return (
-    <>
-      <div className="col-span-2 pt-2 mt-1 border-t border-border/40" data-testid="SiiImportTaxesSection__title">
-        <span className="text-xs font-semibold text-foreground">{ui('sifDataTabs.importTaxes.title')}</span>
-      </div>
-      <div className="col-span-2 space-y-3" data-testid="SiiImportTaxesSection__body">
-        {!recordId && (
-          <p className="text-xs text-muted-foreground" data-testid="SiiImportTaxesSection__saveFirst">
-            {ui('sifDataTabs.importTaxes.saveFirst')}
-          </p>
-        )}
-        {recordId && rows.length === 0 && !draft && (
-          <p className="text-xs text-muted-foreground" data-testid="SiiImportTaxesSection__empty">
-            {ui('sifDataTabs.importTaxes.empty')}
-          </p>
-        )}
-        {rows.length > 0 && (
-          <ImportTaxesTable
-            ui={ui}
-            rows={rows}
-            multiDua={multiDua}
-            currency={currency}
-            locale={locale}
-            editable={editable && !draft}
-            onEdit={row => { setError(null); setDraft(rowToDraft(row)); }}
-            onDelete={row => setDeleteTarget(row)}
-            data-testid="ImportTaxesTable__siiImportTax" />
-        )}
-        {draft && (
-          <ImportTaxForm
-            ui={ui}
-            draft={draft}
-            setDraft={setDraft}
-            multiDua={multiDua}
-            currency={currency}
-            saving={saving}
-            error={error}
-            onSave={save}
-            onCancel={() => { setDraft(null); setError(null); }}
-            onAmountChange={onAmountChange}
-            selectorUrl={selectorUrl}
-            selectorContext={selectorContext}
-            token={token}
-            data-testid="ImportTaxForm__siiImportTax" />
-        )}
-        {editable && !draft && (
-          <AddLineButton
-            label={ui('sifDataTabs.importTaxes.add')}
-            onClick={() => { setError(null); setDraft({ ...EMPTY_DRAFT }); }}
-            hideChevron
-            data-testid="AddLineButton__siiImportTax" />
-        )}
-      </div>
+    <SiiPanelCard
+      step={step}
+      title={ui('sifDataTabs.importTaxes.title')}
+      subtitle={ui('sifDataTabs.importTaxes.subtitle')}
+      testId="SiiImportTaxesSection__card"
+      data-testid="SiiPanelCard__siiImportTaxes">
+      {!recordId ? (
+        <p className="text-xs text-muted-foreground" data-testid="SiiImportTaxesSection__saveFirst">
+          {ui('sifDataTabs.importTaxes.saveFirst')}
+        </p>
+      ) : (
+        <>
+          {rows.length > 0 && (
+            <div className="overflow-x-auto" data-testid="SiiImportTaxesSection__tableWrap">
+              <table className="w-full text-sm" data-testid="SiiImportTaxesSection__table">
+                <thead data-testid="SiiImportTaxesSection__thead">
+                  <tr className="border-b border-border/40" data-testid="SiiImportTaxesSection__headRow">
+                    <HeaderCell required={editable} testId="SiiImportTaxesSection__thTax" data-testid="HeaderCell__tax">{ui('tax')}</HeaderCell>
+                    <HeaderCell testId="SiiImportTaxesSection__thRate" data-testid="HeaderCell__rate">{ui('sifDataTabs.importTaxes.rate')}</HeaderCell>
+                    <HeaderCell required={editable} align="right" testId="SiiImportTaxesSection__thBase" data-testid="HeaderCell__base">
+                      {ui('sifDataTabs.importTaxes.taxableAmount')}
+                    </HeaderCell>
+                    <HeaderCell align="right" testId="SiiImportTaxesSection__thAmount" data-testid="HeaderCell__amount">
+                      {ui('sifDataTabs.importTaxes.taxAmount')}
+                    </HeaderCell>
+                    {multiDua && (
+                      <>
+                        <HeaderCell required={editable} testId="SiiImportTaxesSection__thDua" data-testid="HeaderCell__dua">{ui('sifDataTabs.field.dua')}</HeaderCell>
+                        <HeaderCell required={editable} testId="SiiImportTaxesSection__thDuaDate" data-testid="HeaderCell__duaDate">
+                          {ui('sifDataTabs.field.duaDate')}
+                        </HeaderCell>
+                      </>
+                    )}
+                    {editable && <th aria-hidden="true" data-testid="SiiImportTaxesSection__thActions" />}
+                  </tr>
+                </thead>
+                <tbody data-testid="SiiImportTaxesSection__tbody">
+                  {rows.map(row => (
+                    <ImportTaxRow
+                      key={row.key}
+                      ui={ui}
+                      row={row}
+                      multiDua={multiDua}
+                      editable={editable}
+                      currency={currency}
+                      locale={locale}
+                      rateMap={rateMap}
+                      selectorUrl={selectorUrl}
+                      selectorContext={selectorContext}
+                      token={token}
+                      onTaxChange={onTaxChange}
+                      onBaseCommit={onBaseCommit}
+                      onDuaChange={onDuaChange}
+                      onDuaBlur={onDuaBlur}
+                      onDateChange={onDateChange}
+                      onDelete={onDelete}
+                      data-testid="ImportTaxRow__siiImportTax" />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {rows.length === 0 && !editable && (
+            <p className="text-xs text-muted-foreground" data-testid="SiiImportTaxesSection__empty">
+              {ui('sifDataTabs.importTaxes.empty')}
+            </p>
+          )}
+          <div className="flex flex-wrap items-start justify-between gap-4" data-testid="SiiImportTaxesSection__footer">
+            {editable ? (
+              <button
+                type="button"
+                onClick={() => setRows(prev => [...prev, newDraftRow()])}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border-control px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
+                data-testid="Button__siiImportTaxAdd">
+                <Plus className="h-4 w-4" data-testid="Plus__siiImportTax" />
+                {ui('sifDataTabs.importTaxes.add')}
+              </button>
+            ) : <span data-testid="SiiImportTaxesSection__footerSpacer" />}
+            <div className="min-w-56 space-y-1.5" data-testid="SiiImportTaxesSection__summary">
+              <SummaryLine
+                label={ui('sifDataTabs.importTaxes.taxableAmount')}
+                value={formatCurrency(currency, summary.base)}
+                testId="SiiImportTaxesSection__sumBase"
+                data-testid="SummaryLine__base" />
+              <SummaryLine
+                label={ui('sifDataTabs.importTaxes.summaryTaxAmount')}
+                value={formatCurrency(currency, summary.amount)}
+                testId="SiiImportTaxesSection__sumAmount"
+                data-testid="SummaryLine__amount" />
+              <div className="border-t border-border/60" data-testid="SiiImportTaxesSection__sumSeparator" />
+              <SummaryLine
+                label={ui('total')}
+                value={formatCurrency(currency, summary.total)}
+                strong
+                testId="SiiImportTaxesSection__sumTotal"
+                data-testid="SummaryLine__total" />
+            </div>
+          </div>
+        </>
+      )}
       <DeleteConfirmDialog
         open={Boolean(deleteTarget)}
         count={1}
@@ -505,12 +596,12 @@ function ImportTaxesBlock({ ui, multiDua, recordId, data, apiBaseUrl, token, rea
         onClose={() => { if (!deleting) setDeleteTarget(null); }}
         testIdScope="sii-import-tax-delete"
         data-testid="DeleteConfirmDialog__siiImportTax" />
-    </>
+    </SiiPanelCard>
   );
 }
 
 export default function SiiImportTaxesSection({
-  ui, siiTypeKey, multiDua, recordId, data, apiBaseUrl, token, readOnly, onHeaderRefresh,
+  ui, siiTypeKey, multiDua, recordId, data, apiBaseUrl, token, readOnly, onHeaderRefresh, step,
 }) {
   const enabled = useFeatureFlag(SII_IMPORT_DUA) === true;
   if (!enabled || !DUA_TYPE_KEYS.has(siiTypeKey)) return null;
@@ -524,6 +615,7 @@ export default function SiiImportTaxesSection({
       token={token}
       readOnly={readOnly}
       onHeaderRefresh={onHeaderRefresh}
+      step={step}
       data-testid="ImportTaxesBlock__siiImportTax" />
   );
 }
