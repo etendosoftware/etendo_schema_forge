@@ -138,6 +138,67 @@ export function confirmReasonKey(code) {
   return CONFIRM_ERROR_LABEL_KEYS[code] ?? CONFIRM_FALLBACK_KEY;
 }
 
+/**
+ * The reason of a failed confirm is stored as an IDENTIFIER (`{code, params}`, ETP-6051), never as
+ * translated text: the SPA translates it here, with the same table for the stored path
+ * (`review.errorInfo`) and the live 422 (`error.detailCode` / `error.detailParams`). `step_failed` and
+ * `search_key_exists` carry the failed `step`, translated through `CONFIRM_STEP_KEYS`.
+ */
+export const CONFIRM_FAILED_DETAIL_KEYS = Object.freeze({
+  no_lookups: 'invoiceInboxConfirmDetailNoLookups',
+  completion_error: 'invoiceInboxConfirmDetailCompletionError',
+  no_vendor_category: 'invoiceInboxConfirmDetailNoVendorCategory',
+  no_product_sequence: 'invoiceInboxConfirmDetailNoProductSequence',
+  no_file: 'invoiceInboxConfirmDetailNoFile',
+  attach_failed: 'invoiceInboxConfirmDetailAttachFailed',
+  currency_mismatch: 'invoiceInboxConfirmDetailCurrencyMismatch',
+  total_mismatch: 'invoiceInboxConfirmDetailTotalMismatch',
+  step_failed: 'invoiceInboxConfirmDetailStepFailed',
+  search_key_exists: 'invoiceInboxConfirmDetailSearchKeyExists',
+  refused: 'invoiceInboxConfirmDetailRefused',
+});
+
+/** The failed step of a `step_failed` / `search_key_exists` detail, by `params.step`. */
+export const CONFIRM_STEP_KEYS = Object.freeze({
+  vendor: 'invoiceInboxConfirmStepVendor',
+  vendorAddress: 'invoiceInboxConfirmStepVendorAddress',
+  header: 'invoiceInboxConfirmStepHeader',
+  line: 'invoiceInboxConfirmStepLine',
+  product: 'invoiceInboxConfirmStepProduct',
+  creation: 'invoiceInboxConfirmStepCreation',
+});
+
+function stepText(ui, params) {
+  return ui(CONFIRM_STEP_KEYS[params.step] ?? CONFIRM_STEP_KEYS.creation, { n: params.n ?? '', name: params.name ?? '' });
+}
+
+function nonEmpty(value) {
+  return typeof value === 'string' && value.trim() !== '' ? value : null;
+}
+
+/**
+ * The text of the reason a confirm failed, in the user's language.
+ *
+ * @param {Function} ui the `useUI()` translator
+ * @param {{code?: string, params?: object, text?: string}|null} info the identifier (`errorInfo` of the
+ *   review answer, or `{code: detailCode, params: detailParams}` of the live 422)
+ * @param {string|null} [legacy] the raw stored string: legacy free text of rows written before the
+ *   identifier, shown as it is when there is no `info`
+ * @returns {string|null} `null` when there is nothing to show (the caller shows the no-detail text)
+ */
+export function confirmFailedDetail(ui, info, legacy = null) {
+  const code = info?.code;
+  if (!code) return nonEmpty(legacy);
+  const params = info.params ?? {};
+  const key = CONFIRM_FAILED_DETAIL_KEYS[code];
+  if (!key) return nonEmpty(params.reason) ?? nonEmpty(params.message) ?? nonEmpty(info.text) ?? nonEmpty(legacy);
+  if (code === 'step_failed' || code === 'search_key_exists') {
+    const missing = Array.isArray(params.missing) && params.missing.length > 0 ? ` (${params.missing.join(', ')})` : '';
+    return ui(key, { step: stepText(ui, params), reason: params.reason ?? '', missing });
+  }
+  return ui(key, { ...params });
+}
+
 export function statusLabelKey(status) {
   return STATUS_LABEL_KEYS[status] ?? null;
 }

@@ -20,11 +20,11 @@ vi.mock('@/lib/utils', () => ({
   cn: (...args) => args.filter(Boolean).join(' '),
 }));
 
-vi.mock('lucide-react', () => ({
-  Archive: () => <svg data-testid="icon-archive" />,
-  LoaderCircle: () => <svg data-testid="icon-loader" />,
-  Plus: () => <svg data-testid="icon-plus" />,
-  Search: () => <svg data-testid="icon-search" />,
+vi.mock('@phosphor-icons/react', () => ({
+  ArchiveIcon: () => <svg data-testid="icon-archive" />,
+  CircleNotchIcon: () => <svg data-testid="icon-loader" />,
+  PlusIcon: () => <svg data-testid="icon-plus" />,
+  MagnifyingGlassIcon: () => <svg data-testid="icon-search" />,
 }));
 
 vi.mock('../ConversationItem.jsx', () => ({

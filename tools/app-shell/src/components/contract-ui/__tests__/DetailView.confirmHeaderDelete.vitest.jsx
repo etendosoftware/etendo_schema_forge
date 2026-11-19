@@ -119,14 +119,13 @@ vi.mock('../SummaryBar.jsx', () => ({ SummaryBar: () => null }));
 vi.mock('../DocumentTotalsPanel.jsx', () => ({ default: () => null }));
 vi.mock('../LinesSelectionBar.jsx', () => ({ default: () => null }));
 vi.mock('../DocumentStatusPill.jsx', () => ({ default: ({ status }) => <span>{status}</span> }));
-// Iconic trash stubbed on top of the real module: the file does not depend on the core
-// version that ships it, and the icon inside the topbar Delete stays observable.
-vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
+// Phosphor trash stubbed on top of the real module so the icon inside the topbar Delete
+// stays observable.
+vi.mock('@phosphor-icons/react', async (importOriginal) => ({
   ...(await importOriginal()),
-  IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
-  IconicEditIcon: (props) => <svg data-icon="iconic-edit" {...props} />,
+  TrashIcon: (props) => <svg data-icon="phosphor-trash" {...props} />,
+  PencilSimpleIcon: (props) => <svg data-icon="phosphor-pencil" {...props} />,
 }));
-vi.mock('@/components/attachments/AttachmentIcon', () => ({ AttachmentIcon: () => <span>📎</span> }));
 
 const MockForm = ({ data }) => <div data-testid="mock-form"><span>{data?.documentNo}</span></div>;
 
@@ -179,7 +178,7 @@ describe('DetailView — confirmHeaderDelete navigate-only-on-success (ETP-4656)
     expect(btn).toHaveAttribute('type', 'button');
     expect(btn).toHaveAttribute('title', 'delete');
     expect(btn).toHaveAccessibleName('delete');
-    expect(btn.querySelector('[data-icon="iconic-trash"]')).not.toBeNull();
+    expect(btn.querySelector('[data-icon="phosphor-trash"]')).not.toBeNull();
     expect(screen.queryByTestId('action-delete-confirm')).toBeNull();
 
     await user.click(btn);

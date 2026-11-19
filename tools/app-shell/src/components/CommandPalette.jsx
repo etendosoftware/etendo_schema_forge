@@ -27,29 +27,29 @@ import { useSupportSession } from '@/hooks/useSupportSession.js';
 import { isSupportRestrictedMenuItem } from '@/lib/supportSession.js';
 
 import {
-  LayoutDashboard,
-  ShoppingCart,
-  Truck,
-  Calculator,
-  Package,
-  Users,
-  FolderKanban,
-  Settings,
-  Search,
-  X,
-  Clock3,
-  Sparkles,
-} from 'lucide-react';
+  SquaresFourIcon,
+  ShoppingCartIcon,
+  TruckIcon,
+  CalculatorIcon,
+  PackageIcon,
+  UsersIcon,
+  KanbanIcon,
+  GearIcon,
+  MagnifyingGlassIcon,
+  XIcon,
+  ClockIcon,
+  SparkleIcon,
+} from '@phosphor-icons/react';
 
 const ICON_MAP = {
-  LayoutDashboard,
-  ShoppingCart,
-  Truck,
-  Calculator,
-  Package,
-  Users,
-  FolderKanban,
-  Settings,
+  LayoutDashboard: SquaresFourIcon,
+  ShoppingCart: ShoppingCartIcon,
+  Truck: TruckIcon,
+  Calculator: CalculatorIcon,
+  Package: PackageIcon,
+  Users: UsersIcon,
+  FolderKanban: KanbanIcon,
+  Settings: GearIcon,
 };
 
 function HighlightedQuery({ text, query }) {
@@ -408,9 +408,8 @@ export function CommandPalette() {
         onSelect={() => handleVectorSelect(match)}
         data-testid="vector-search-result"
       >
-        <Search
+        <MagnifyingGlassIcon
           className="mr-2 h-4 w-4 shrink-0"
-          strokeWidth={2}
           data-testid="Search__73263e" />
         <span className="min-w-0 flex-1 break-words" data-testid="vector-search-result-label"><HighlightedQuery text={label} query={query} data-testid="HighlightedQuery__73263e" /></span>
         {entityLabel && <span className="ml-auto shrink-0 whitespace-nowrap rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground" data-testid="vector-search-result-tag">{entityLabel}</span>}
@@ -432,7 +431,7 @@ export function CommandPalette() {
             data-testid="vector-search-scope"
           >
             <span className="truncate">{vectorSearchScopeLabel}</span>
-            <X className="h-3 w-3 shrink-0" aria-hidden="true" data-testid="X__73263e" />
+            <XIcon className="h-3 w-3 shrink-0" aria-hidden="true" data-testid="X__73263e" />
           </button>
           {/* Portaled (Radix) so the cmdk-root's overflow-hidden — the dialog is only as wide and
               as tall as the search box and its results — can never clip it; Radix flips/shifts it
@@ -509,7 +508,7 @@ export function CommandPalette() {
                     data-testid="recent-search-item"
                     data-search-kind="recent"
                   >
-                    <Clock3
+                    <ClockIcon
                       className="mr-2 h-4 w-4 text-muted-foreground"
                       data-testid="Clock3__73263e" />
                     <span>{item.query}</span>
@@ -540,7 +539,7 @@ export function CommandPalette() {
                   }}
                   data-testid="window-filter-suggestion"
                 >
-                  <Sparkles
+                  <SparkleIcon
                     className="mr-2 h-4 w-4 text-muted-foreground"
                     data-testid="Sparkles__73263e" />
                   <span>{ui(suggestion.label) || tMenu(suggestion.label) || suggestion.label}</span>
@@ -555,7 +554,7 @@ export function CommandPalette() {
           </CommandGroup>
         )}
         {matchingMenuGroups.map((group) => {
-          const Icon = ICON_MAP[group.icon] || Package;
+          const Icon = ICON_MAP[group.icon] || PackageIcon;
           return (
             <CommandGroup
               key={`${group.tier ?? 0}:${group.group}`}

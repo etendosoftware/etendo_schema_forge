@@ -1837,3 +1837,13 @@ The JS side is `chartSeriesColor(index)` and `CHART_AREA_OPACITY_VAR` in `tools/
 ## Rate and cost fields are numeric — ETP-6342
 
 Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. **Cost** (`cost`, `Cost`) on the `price` entity is now `decimal` in the contract (`tsType: number`), and the product import's `cost` column is typed `decimal` as well.
+
+## Agent prompt — ETP-5850
+
+`product/transactions` (the Movements tab, read-only) carries an `agentPrompt`: it is every stock
+movement of the product (receipts, shipments, returns, warehouse movements, inventories,
+consumptions, production), listed with `parentId` = the product id, with `etgoDocKind` naming the
+document type. Before it, an agent asked "what moved for this product" read the lines of each
+document type and failed (`goodsReceiptLine` and others cannot be listed across parents). MCP test
+`q-product-movements` (suite `okr`). The text lives in this window's `decisions.json` and in
+`com.etendoerp.go`'s `ETGO_SF_ENTITY` sourcedata; keep both equal.

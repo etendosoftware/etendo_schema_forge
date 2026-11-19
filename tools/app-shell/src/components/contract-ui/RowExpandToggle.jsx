@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { CaretDownIcon, CaretRightIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 /**
@@ -37,7 +37,7 @@ export function RowExpandToggle({
 }) {
   const ui = useUI();
   const horizontal = orientation === 'horizontal';
-  const Icon = horizontal ? ChevronRight : ChevronDown;
+  const Icon = horizontal ? CaretRightIcon : CaretDownIcon;
   const expandedRotation = horizontal ? 'rotate(90deg)' : 'rotate(180deg)';
 
   return (

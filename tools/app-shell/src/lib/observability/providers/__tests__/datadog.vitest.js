@@ -149,3 +149,19 @@ describe('Datadog provider in a support session', () => {
     expect(globalContext()[SUPPORT_SESSION_CONTEXT_KEY]).toBe(true);
   });
 });
+
+// ETP-6080 — Datadog must not redact the report session id either (RUM showed '[REDACTED]').
+describe('Datadog provider — reportSessionId', () => {
+  it('lets reportSessionId through unredacted in beforeSend', async () => {
+    const calls = [];
+    const rum = Object.fromEntries(['init', 'startView', 'setGlobalContext']
+      .map(m => [m, (...args) => calls.push([m, ...args])]));
+    const provider = createDatadogProvider({ env, loader: vi.fn().mockResolvedValue({ datadogRum: rum }) });
+    await provider.init();
+    const { beforeSend } = calls.find(([m]) => m === 'init')[1];
+    const uuid = '3f2b8c1e-5d4a-4e7b-9a10-0c6d2e8f7a11';
+    const event = { type: 'action', action: { type: 'custom', target: { name: 'report_opened' } }, context: { reportSessionId: uuid } };
+    beforeSend(event);
+    expect(event.context.reportSessionId).toBe(uuid);
+  });
+});

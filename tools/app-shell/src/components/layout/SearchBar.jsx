@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react';
+import { MagnifyingGlassIcon } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -43,7 +43,7 @@ export function SearchBar({
       tabIndex={asButton ? 0 : undefined}
       data-testid={testId}
     >
-      <Search className="mr-2 h-5 w-5 shrink-0 text-search-placeholder" data-testid="Search__133e64" />
+      <MagnifyingGlassIcon className="mr-2 h-5 w-5 shrink-0 text-search-placeholder" data-testid="Search__133e64" />
       {leading}
       <input
         ref={inputRef}

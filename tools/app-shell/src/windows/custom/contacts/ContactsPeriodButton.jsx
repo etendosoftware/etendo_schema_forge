@@ -1,4 +1,4 @@
-import { ChevronDown, Calendar, Check } from 'lucide-react';
+import { CaretDownIcon, CalendarBlankIcon, CheckIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import {
   DropdownMenu,
@@ -40,11 +40,11 @@ export default function ContactsPeriodButton() {
   return (
     <DropdownMenu modal={false} data-testid="DropdownMenu__28b84a">
       <DropdownMenuTrigger className={TRIGGER_CLS} data-testid="ContactsPeriodButton__trigger">
-        <Calendar
+        <CalendarBlankIcon
           className="h-4 w-4 text-icon-secondary shrink-0"
           data-testid="Calendar__28b84a" />
         <span className="flex-1 text-left mx-1">{ui(selected.labelKey)}</span>
-        <ChevronDown
+        <CaretDownIcon
           className="h-4 w-4 text-icon-secondary shrink-0"
           data-testid="ChevronDown__28b84a" />
       </DropdownMenuTrigger>
@@ -65,7 +65,7 @@ export default function ContactsPeriodButton() {
               data-testid="DropdownMenuRadioItem__28b84a">
               <span>{ui(opt.labelKey)}</span>
               {opt.value === selected.value && (
-                <Check
+                <CheckIcon
                   className="h-4 w-4 text-text-primary shrink-0"
                   data-testid="Check__28b84a" />
               )}

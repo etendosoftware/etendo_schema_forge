@@ -10,10 +10,10 @@ vi.mock('@/components/ui/label', () => ({
   Label: ({ children, ...props }) => <label {...props}>{children}</label>,
 }));
 
-vi.mock('lucide-react', () => ({
-  MapPin: (props) => <span data-testid="icon-mappin" {...props} />,
-  ChevronRight: (props) => <span data-testid="icon-chevron-right" {...props} />,
-  Pencil: (props) => <span data-testid="icon-pencil" {...props} />,
+vi.mock('@phosphor-icons/react', () => ({
+  MapPinIcon: (props) => <span data-testid="icon-mappin" {...props} />,
+  CaretRightIcon: (props) => <span data-testid="icon-chevron-right" {...props} />,
+  PencilSimpleIcon: (props) => <span data-testid="icon-pencil" {...props} />,
 }));
 
 // Stub the heavy editor modal: it renders its incoming props as data-attributes

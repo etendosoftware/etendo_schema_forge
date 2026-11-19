@@ -176,7 +176,7 @@
   },
   "entities": {
     "businessPartner": {
-      "agentPrompt": "A new contact has no billing preferences of its own: price list, payment terms, payment method, financial account and blocking, for sales and for purchases. The ones you send on create are saved; the others stay empty until you set them with etendo_update, as in the app.",
+      "agentPrompt": "A new contact has no billing preferences of its own: price list, payment terms, payment method, financial account and blocking, for sales and for purchases. The ones you send on create are saved; the others stay empty until you set them with etendo_update, as in the app. A link for the customer to see their quotations, orders, shipments and invoices is the customer portal link: run the action portalLink on the contact (etendo_action). The contact's record URL (recordUrlTemplate) only opens for users of the app, never give it to a customer.",
       "fields": {
         "tbaiIssimplifiedinv": {
           "visibility": "editable",
@@ -488,7 +488,12 @@
           "grid": true,
           "form": false,
           "section": "principal",
-          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.vendor.md"
+          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.vendor.md",
+          "publicApi": {
+            "exposed": true,
+            "name": "isVendor",
+            "description": "true when the contact can be used on purchase documents; a purchase order only accepts a vendor as its contact. When omitted on create, Etendo applies the default (false), or the type defined by the contact's category."
+          }
         },
         "purchasePricelist": {
           "visibility": "editable",
@@ -536,7 +541,12 @@
           "grid": true,
           "form": false,
           "section": "principal",
-          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.customer.md"
+          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.customer.md",
+          "publicApi": {
+            "exposed": true,
+            "name": "isCustomer",
+            "description": "true when the contact can be used on sales documents. When omitted on create, Etendo applies the default (true), or the type defined by the contact's category."
+          }
         },
         "priceList": {
           "visibility": "editable",

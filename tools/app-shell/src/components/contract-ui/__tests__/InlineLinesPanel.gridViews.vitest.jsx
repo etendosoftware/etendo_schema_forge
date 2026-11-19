@@ -14,10 +14,10 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US' }),
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
-vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
+vi.mock('@phosphor-icons/react', async (importOriginal) => ({
   ...(await importOriginal()),
-  IconicTrashIcon: (props) => <svg {...props} />,
-  IconicEditIcon: (props) => <svg {...props} />,
+  TrashIcon: (props) => <svg {...props} />,
+  PencilSimpleIcon: (props) => <svg {...props} />,
 }));
 vi.mock('../InlineSearchCombo.jsx', () => ({ InlineSearchCombo: () => null }));
 vi.mock('../SelectorInput.jsx', () => ({ SelectorInput: () => null, default: () => null }));

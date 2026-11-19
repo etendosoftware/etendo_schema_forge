@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Sparkles, Plus } from 'lucide-react';
+import { SparkleIcon, PlusIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
@@ -35,8 +35,8 @@ export function RecentSalesList({ invoices = [], currencyLabel = '', canCreateSa
           subtitle={ui('recentSalesEmptySubtitle')}
           width="340px"
           actions={canCreateSale ? [
-            { key: 'copilot', icon: Sparkles, label: ui('createWithCopilot'), onClick: openCopilot, variant: 'secondary' },
-            { key: 'new', icon: Plus, label: ui('newSale'), onClick: () => navigate('/sales-invoice/new'), variant: 'primary' },
+            { key: 'copilot', icon: SparkleIcon, label: ui('createWithCopilot'), onClick: openCopilot, variant: 'secondary' },
+            { key: 'new', icon: PlusIcon, label: ui('newSale'), onClick: () => navigate('/sales-invoice/new'), variant: 'primary' },
           ] : []}
           data-testid="DashboardEmptyState__4af5f2" />
       ) : (

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, ChevronDown } from 'lucide-react';
+import { XIcon, CaretDownIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
 import { fetchTemplateRoles, fetchRolesOverview } from '@/lib/rolesApi.js';
@@ -215,7 +215,7 @@ export default function AssignTemplateRolesControl(props) {
               className="hover:text-destructive"
               data-testid={`AssignTemplateRolesControl__chip-remove-${role.id}`}
             >
-              <X className="h-3 w-3" data-testid="X__16443b" />
+              <XIcon className="h-3 w-3" data-testid="X__16443b" />
             </button>
           </span>
         ))}
@@ -239,7 +239,7 @@ export default function AssignTemplateRolesControl(props) {
             vertical scrollbar — shifting all content sideways by the scrollbar's
             width. Making the panel `absolute` (Fix 1) removes that page-height change
             entirely, so that shift cannot happen anymore either. */}
-        <ChevronDown
+        <CaretDownIcon
           className="h-3.5 w-3.5 ml-auto shrink-0 text-muted-foreground"
           data-testid="ChevronDown__16443b" />
       </div>

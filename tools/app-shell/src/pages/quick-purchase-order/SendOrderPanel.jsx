@@ -1,8 +1,14 @@
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
-import { Mail, MessageCircle, FileText, ChevronUp, ExternalLink } from 'lucide-react';
+import {
+  EnvelopeSimpleIcon,
+  ChatCircleIcon,
+  FileTextIcon,
+  CaretUpIcon,
+  ArrowSquareOutIcon,
+} from '@phosphor-icons/react';
 
-const ICONS = { Mail, MessageCircle, FileText };
+const ICONS = { Mail: EnvelopeSimpleIcon, MessageCircle: ChatCircleIcon, FileText: FileTextIcon };
 
 export default function SendOrderPanel({
   visible,
@@ -39,7 +45,7 @@ export default function SendOrderPanel({
             onClick={onBack}
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
-            <ChevronUp className="h-3 w-3" data-testid="ChevronUp__9c5975" />
+            <CaretUpIcon className="h-3 w-3" data-testid="ChevronUp__9c5975" />
             {ui('qpoBackToCart')}
           </button>
         </div>
@@ -51,7 +57,7 @@ export default function SendOrderPanel({
           </label>
           <div className="flex gap-2">
             {methods.map(m => {
-              const Icon = ICONS[m.icon] || Mail;
+              const Icon = ICONS[m.icon] || EnvelopeSimpleIcon;
               const isActive = sendMethod === m.id;
               return (
                 <button
@@ -78,7 +84,7 @@ export default function SendOrderPanel({
               {ui('qpoEmailTo')}
             </label>
             <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm">
-              <Mail className="h-3.5 w-3.5 text-muted-foreground" data-testid="Mail__9c5975" />
+              <EnvelopeSimpleIcon className="h-3.5 w-3.5 text-muted-foreground" data-testid="Mail__9c5975" />
               <span className="text-muted-foreground">{supplier?.email || '—'}</span>
             </div>
             <p className="text-xs text-muted-foreground">{ui('qpoEmailTemplateHint')}</p>
@@ -99,7 +105,7 @@ export default function SendOrderPanel({
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-xs text-status-success-foreground hover:text-status-success-foreground font-medium"
             >
-              <ExternalLink className="h-3 w-3" data-testid="ExternalLink__9c5975" />
+              <ArrowSquareOutIcon className="h-3 w-3" data-testid="ExternalLink__9c5975" />
               {ui('qpoOpenWhatsApp')}
             </a>
           </div>

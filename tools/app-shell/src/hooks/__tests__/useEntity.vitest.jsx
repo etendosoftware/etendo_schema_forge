@@ -1,4 +1,6 @@
+// @covers tools/app-shell/src/hooks/useEntity.js
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { toast } from 'sonner';
 import { useEntity } from '../useEntity';
 
 // Mock dependencies
@@ -14,8 +16,12 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ logout: vi.fn() }),
 }));
 
+// The import refusal sentences need a translation to be used at all: a label that comes back as
+// its own key counts as missing from the locale.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params) => (key.startsWith('backendError.importQuantity')
+    ? `${key}:${JSON.stringify(params)}`
+    : key),
 }));
 
 describe('useEntity', () => {
@@ -457,6 +463,56 @@ describe('useEntity', () => {
       expect(postCalled).toBe(true);
       expect(saved).toBeNull();
       expect(result.current.saveError).toBeTruthy();
+    });
+
+    it.each([
+      [
+        'the translated sentence of a quantity refusal, not the server English',
+        {
+          status: 422,
+          code: 'importQuantityExceedsPending',
+          message: 'Cannot save 9 of Fernet: the maximum for this line is 4.',
+          product: 'Fernet',
+          requested: 9,
+          pending: 4,
+          maximumAllowed: 4,
+        },
+        'backendError.importQuantityExceedsLineMaximum:{"product":"Fernet","requested":9,"pending":4}',
+      ],
+      [
+        'the server text of any other refusal',
+        { status: 422, code: 'business_rule', message: 'The warehouse is closed for inventory' },
+        'The warehouse is closed for inventory',
+      ],
+    ])('a refused save shows %s', async (_label, error, expected) => {
+      // The module mock's vi.fn() keeps its calls across tests; only this save's toast counts.
+      toast.error.mockClear();
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (url.includes('/defaults')) {
+          return { ok: true, json: async () => ({ defaults: {} }) };
+        }
+        if (opts?.method === 'POST') {
+          return {
+            ok: false,
+            status: 422,
+            clone: () => ({ json: async () => ({ error }) }),
+            json: async () => ({ error }),
+          };
+        }
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+
+      const { result } = renderEntity('goodsShipmentLine', null, { skipListFetch: true });
+      await act(async () => { await result.current.handleNew(); });
+      act(() => { result.current.handleChange('movementQuantity', 9); });
+
+      let saved;
+      await act(async () => { saved = await result.current.handleSave(); });
+
+      expect(saved).toBeNull();
+      expect(result.current.saveError).toBe(expected);
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(toast.error).toHaveBeenLastCalledWith(expected);
     });
 
     it('returns null when editing is null', async () => {

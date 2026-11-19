@@ -1,4 +1,4 @@
-import { Upload } from 'lucide-react';
+import { UploadSimpleIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 /**
@@ -13,7 +13,7 @@ export default function InvoiceInboxDragOverlay({ visible }) {
       className="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary bg-primary/10 backdrop-blur-[1px]"
       data-testid="invoice-inbox-drag-overlay"
     >
-      <Upload
+      <UploadSimpleIcon
         className="h-8 w-8 text-primary"
         aria-hidden="true"
         data-testid="Upload__a11e06" />

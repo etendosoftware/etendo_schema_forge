@@ -1,5 +1,11 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Search, X, Loader2, Plus, AlertCircle } from 'lucide-react';
+import {
+  MagnifyingGlassIcon,
+  XIcon,
+  CircleNotchIcon,
+  PlusIcon,
+  WarningCircleIcon,
+} from '@phosphor-icons/react';
 import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -278,7 +284,7 @@ export default function ProductDrawerShell({
             >
               {/* Search bar */}
               <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-                <Search
+                <MagnifyingGlassIcon
                   className="h-4 w-4 text-muted-foreground shrink-0"
                   data-testid="Search__pds" />
                 <input
@@ -300,11 +306,11 @@ export default function ProductDrawerShell({
                   // such ancestor override, for every window that mounts this shared drawer.
                   className="flex-1 !bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
                 />
-                {(loading || loadingMore) && <Loader2
+                {(loading || loadingMore) && <CircleNotchIcon
                   className="h-4 w-4 text-muted-foreground animate-spin shrink-0"
                   data-testid="Loader2__pds" />}
                 <button onClick={onClose} className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground shrink-0">
-                  <X className="h-4 w-4" data-testid="X__pds" />
+                  <XIcon className="h-4 w-4" data-testid="X__pds" />
                 </button>
               </div>
 
@@ -331,14 +337,14 @@ export default function ProductDrawerShell({
                     onClick={() => setCreateOpen(true)}
                     className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-primary hover:bg-muted/50 border-b border-border text-left"
                   >
-                    <Plus className="h-4 w-4 shrink-0" data-testid="Plus__pds" />
+                    <PlusIcon className="h-4 w-4 shrink-0" data-testid="Plus__pds" />
                     <span className="truncate">{ui(createTarget.ctaKey)}</span>
                   </button>
                 )}
 
                 {loading && results.length === 0 && (
                   <div className="flex items-center justify-center py-12">
-                    <Loader2
+                    <CircleNotchIcon
                       className="h-6 w-6 text-muted-foreground animate-spin"
                       data-testid="Loader2__pds" />
                   </div>
@@ -355,7 +361,7 @@ export default function ProductDrawerShell({
                     role="alert"
                     className="flex flex-col items-center justify-center gap-3 py-12 px-6 text-center"
                   >
-                    <AlertCircle className="h-6 w-6 text-destructive" data-testid="AlertCircle__pds" />
+                    <WarningCircleIcon className="h-6 w-6 text-destructive" data-testid="AlertCircle__pds" />
                     <p className="text-sm text-foreground">{errorMessage}</p>
                     <button
                       type="button"
@@ -400,7 +406,7 @@ export default function ProductDrawerShell({
 
                 {loadingMore && (
                   <div className="flex items-center justify-center py-3">
-                    <Loader2
+                    <CircleNotchIcon
                       className="h-4 w-4 text-muted-foreground animate-spin"
                       data-testid="Loader2__pds" />
                   </div>

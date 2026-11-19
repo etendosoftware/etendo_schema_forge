@@ -1,17 +1,17 @@
 import {
-  MoreVertical,
-  ExternalLink,
-  Pencil,
-  Archive,
-  RefreshCw,
-  Cable,
-  Unlink2,
-  Plug,
-  ArrowLeftRight,
-  Plus,
-  RotateCcw,
-  Trash2,
-} from 'lucide-react';
+  DotsThreeVerticalIcon,
+  ArrowSquareOutIcon,
+  PencilSimpleIcon,
+  ArchiveIcon,
+  ArrowsClockwiseIcon,
+  PlugsConnectedIcon,
+  LinkBreakIcon,
+  PlugIcon,
+  ArrowsLeftRightIcon,
+  PlusIcon,
+  ArrowCounterClockwiseIcon,
+  TrashIcon,
+} from '@phosphor-icons/react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -44,7 +44,7 @@ function StaleReconnectMenuItem({ account, ui, onBankConnectionAction }) {
       onClick={() => onBankConnectionAction?.('reconnect', account)}
       data-testid={`account-row-menu-reconnect-stale-${account.id}`}
     >
-      <Cable className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="CableReconnectStale__ffaf9f" />
+      <PlugsConnectedIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="CableReconnectStale__ffaf9f" />
       <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
         {ui('financeAccountsBankConnectionReconnect')}
       </span>
@@ -103,7 +103,7 @@ function AccountRowMenuWriteItems({
         onClick={() => onEdit?.(account)}
         data-testid={`account-row-menu-edit-${account.id}`}
       >
-        <Pencil className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__ffaf9f" />
+        <PencilSimpleIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__ffaf9f" />
         <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
           {ui('financeAccountsMenuEdit')}
         </span>
@@ -113,7 +113,7 @@ function AccountRowMenuWriteItems({
         onClick={() => onNewMovement?.(account)}
         data-testid={`account-row-menu-new-movement-${account.id}`}
       >
-        <Plus className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Plus__ffaf9f" />
+        <PlusIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Plus__ffaf9f" />
         <span className="text-sm font-normal leading-6 text-[hsl(var(--text-primary))]">
           {ui('financeAccountTxNewAction')}
         </span>
@@ -123,7 +123,7 @@ function AccountRowMenuWriteItems({
         onClick={() => onTransfer?.(account)}
         data-testid={`account-row-menu-transfer-${account.id}`}
       >
-        <ArrowLeftRight className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ArrowLeftRight__ffaf9f" />
+        <ArrowsLeftRightIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ArrowLeftRight__ffaf9f" />
         <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
           {ui('financeAccountTransferAction')}
         </span>
@@ -148,7 +148,7 @@ function AccountRowMenuWriteItems({
                 onClick={() => onBankConnectionAction?.('disconnect', account)}
                 data-testid={`account-row-menu-disconnect-${account.id}`}
               >
-                <Unlink2 className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Unlink2__ffaf9f" />
+                <LinkBreakIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Unlink2__ffaf9f" />
                 <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                   {ui('financeAccountsMenuDisconnect')}
                 </span>
@@ -164,7 +164,7 @@ function AccountRowMenuWriteItems({
                 onClick={() => onBankConnectionAction?.('reconnect', account)}
                 data-testid={`account-row-menu-reconnect-${account.id}`}
               >
-                <RefreshCw className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RefreshCwReconnect__ffaf9f" />
+                <ArrowsClockwiseIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RefreshCwReconnect__ffaf9f" />
                 <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                   {ui('financeAccountsBankConnectionReconnect')}
                 </span>
@@ -183,7 +183,7 @@ function AccountRowMenuWriteItems({
               onClick={() => onBankConnectionAction?.('connect', account)}
               data-testid={`account-row-menu-connect-${account.id}`}
             >
-              <Plug className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Plug__ffaf9f" />
+              <PlugIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Plug__ffaf9f" />
               <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                 {ui('financeAccountsMenuConnect')}
               </span>
@@ -196,7 +196,7 @@ function AccountRowMenuWriteItems({
               onClick={() => onBankConnectionAction?.('deleteConnection', account)}
               data-testid={`account-row-menu-delete-connection-${account.id}`}
             >
-              <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Trash2__ffaf9f" />
+              <TrashIcon className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Trash2__ffaf9f" />
               <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
                 {ui('financeAccountsBankConnectionDeleteAction')}
               </span>
@@ -214,7 +214,7 @@ function AccountRowMenuWriteItems({
           onClick={() => onArchive?.(account)}
           data-testid={`account-row-menu-unarchive-${account.id}`}
         >
-          <RotateCcw
+          <ArrowCounterClockwiseIcon
             className="h-5 w-5 text-[hsl(var(--muted-foreground))]"
             data-testid="RotateCcw__ffaf9f" />
           <span className="text-sm font-normal leading-6">
@@ -226,7 +226,7 @@ function AccountRowMenuWriteItems({
           onClick={() => onArchive?.(account)}
           data-testid={`account-row-menu-archive-${account.id}`}
         >
-          <Archive className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Archive__ffaf9f" />
+          <ArchiveIcon className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Archive__ffaf9f" />
           <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
             {ui('financeAccountsMenuArchive')}
           </span>
@@ -245,7 +245,7 @@ function AccountRowMenuWriteItems({
         onClick={() => onDelete?.(account)}
         data-testid={`account-row-menu-delete-${account.id}`}
       >
-        <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="TrashDelete__ffaf9f" />
+        <TrashIcon className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="TrashDelete__ffaf9f" />
         <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
           {ui('financeAccountsMenuDelete')}
         </span>
@@ -298,7 +298,7 @@ export function AccountRowMenu({
           data-testid={`account-row-menu-trigger-${account.id}`}
           className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))]"
         >
-          <MoreVertical className="h-5 w-5" data-testid="MoreVertical__ffaf9f" />
+          <DotsThreeVerticalIcon className="h-5 w-5" data-testid="MoreVertical__ffaf9f" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -309,7 +309,7 @@ export function AccountRowMenu({
           onClick={() => onOpen?.(account)}
           data-testid={`account-row-menu-open-${account.id}`}
         >
-          <ExternalLink className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ExternalLink__ffaf9f" />
+          <ArrowSquareOutIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ExternalLink__ffaf9f" />
           <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
             {ui('financeAccountsMenuOpen')}
           </span>

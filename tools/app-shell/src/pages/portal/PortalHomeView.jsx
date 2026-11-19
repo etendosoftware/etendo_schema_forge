@@ -1,11 +1,20 @@
+import {
+  ArrowRightIcon,
+  ArrowUpRightIcon,
+  CalendarBlankIcon,
+  CaretDownIcon,
+  CaretRightIcon,
+  ChartBarHorizontalIcon,
+  ChartBarIcon,
+  CheckIcon,
+  FileTextIcon,
+  SmileyIcon,
+} from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
-import { ArrowRight } from 'lucide-react';
+
 // The design's own Phosphor icons (spec of 2026-11-17), with the library's `*Icon` names like the
 // rest of the app (`pages/first-steps/firstStepsIcons.js`). Phosphor sizes by its `size` prop.
-import {
-  ArrowUpRightIcon, CalendarBlankIcon, CaretDownIcon, CaretRightIcon, ChartBarHorizontalIcon,
-  ChartBarIcon, CheckIcon, FileTextIcon, SmileyIcon,
-} from '@phosphor-icons/react';
+
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import {
@@ -345,7 +354,7 @@ function MobilePendingHero({ balances, onNavigate }) {
           data-testid="portal-view-pending-invoices"
         >
           {ui('portalViewPendingInvoices')}
-          <ArrowRight className="h-4 w-4" aria-hidden="true" data-testid="ArrowRight__beaeb4" />
+          <ArrowRightIcon className="h-4 w-4" aria-hidden="true" data-testid="ArrowRight__beaeb4" />
         </button>
       ) : null}
     </section>

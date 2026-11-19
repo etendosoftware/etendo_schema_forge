@@ -31,16 +31,16 @@ vi.mock('@/components/ui/separator', () => ({
   Separator: () => <hr />,
 }));
 
-// Mock lucide icons
-vi.mock('lucide-react', () => ({
-  Target: (props) => <svg {...props} />,
-  DollarSign: (props) => <svg {...props} />,
-  Trophy: (props) => <svg {...props} />,
-  TrendingUp: (props) => <svg {...props} />,
-  Users: (props) => <svg {...props} />,
-  Activity: (props) => <svg {...props} />,
-  ArrowUp: (props) => <svg {...props} />,
-  ArrowDown: (props) => <svg {...props} />,
+// Mock Phosphor icons
+vi.mock('@phosphor-icons/react', () => ({
+  TargetIcon: (props) => <svg {...props} />,
+  CurrencyDollarIcon: (props) => <svg {...props} />,
+  TrophyIcon: (props) => <svg {...props} />,
+  TrendUpIcon: (props) => <svg {...props} />,
+  UsersIcon: (props) => <svg {...props} />,
+  PulseIcon: (props) => <svg {...props} />,
+  ArrowUpIcon: (props) => <svg {...props} />,
+  ArrowDownIcon: (props) => <svg {...props} />,
 }));
 
 // Mock CRM config and data

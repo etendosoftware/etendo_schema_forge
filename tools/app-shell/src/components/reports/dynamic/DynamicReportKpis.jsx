@@ -1,4 +1,4 @@
-import { ArrowDownRight, ArrowUpRight, Info } from 'lucide-react';
+import { ArrowDownRightIcon, ArrowUpRightIcon, InfoIcon } from '@phosphor-icons/react';
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip';
@@ -15,7 +15,7 @@ const PILL_CLASS = {
 
 /** ▲/▼ pill with the change of a figure, green when it is good news, red when it is not. */
 export function TrendPill({ trend, up, children, testId }) {
-  const Arrow = up ? ArrowUpRight : ArrowDownRight;
+  const Arrow = up ? ArrowUpRightIcon : ArrowDownRightIcon;
   return (
     <span
       className={cn('inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums', PILL_CLASS[trend] || 'bg-muted text-muted-foreground')}
@@ -47,7 +47,7 @@ function Kpi({ card: { id, value, refValue, percent, delta, trend, up, tone }, l
         <Tooltip delayDuration={200} data-testid="Tooltip__5cc5db">
           <TooltipTrigger asChild data-testid="TooltipTrigger__5cc5db">
             <button type="button" className="rounded-full hover:text-foreground" aria-label={hint} data-testid={`DynamicReportKpis__${id}Info`}>
-              <Info className="w-3.5 h-3.5" aria-hidden="true" data-testid="Info__5cc5db" />
+              <InfoIcon className="w-3.5 h-3.5" aria-hidden="true" data-testid="Info__5cc5db" />
             </button>
           </TooltipTrigger>
           <TooltipContent

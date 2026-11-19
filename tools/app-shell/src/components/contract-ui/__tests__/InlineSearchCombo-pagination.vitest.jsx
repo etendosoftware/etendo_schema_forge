@@ -7,12 +7,12 @@
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
-vi.mock('lucide-react', () => ({
-  ChevronDown: () => <span data-testid="chevron" />,
+vi.mock('@phosphor-icons/react', () => ({
+  CaretDownIcon: () => <span data-testid="chevron" />,
   // A committed value renders the chip, which draws an X (clear); reopening marks the current
   // option with a Check. Both must exist on the mock or the render throws (ETP-5846).
-  X: () => <span data-testid="x-icon" />,
-  Check: () => <span data-testid="check-icon" />,
+  XIcon: () => <span data-testid="x-icon" />,
+  CheckIcon: () => <span data-testid="check-icon" />,
 }));
 vi.mock('@/lib/buildUrlWithParams.js', () => ({
   buildUrlWithParams: (url, params) => {

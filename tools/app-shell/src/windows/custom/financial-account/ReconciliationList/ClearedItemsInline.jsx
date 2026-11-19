@@ -1,7 +1,7 @@
 import { FinancialGridView, FinancialGridRow } from '../FinancialGridView.jsx';
 import { Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRightIcon } from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -57,7 +57,7 @@ const CELL_RENDERERS = {
           aria-label={ctx.ui('financeAccountClearedItemsOpenMovement')}
           className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
         >
-          <ArrowUpRight className="h-3.5 w-3.5" data-testid="ArrowUpRight__9d6ccb" />
+          <ArrowUpRightIcon className="h-3.5 w-3.5" data-testid="ArrowUpRight__9d6ccb" />
         </button>
       );
     },
@@ -78,7 +78,7 @@ const CELL_RENDERERS = {
           className="inline-flex items-center gap-1 truncate font-semibold text-[hsl(var(--foreground))] underline decoration-[hsl(var(--border-control))] underline-offset-4 hover:decoration-[hsl(var(--foreground))]"
         >
           {docNo}
-          <ArrowUpRight className="h-3 w-3 shrink-0" data-testid="ArrowUpRight__9d6ccb" />
+          <ArrowUpRightIcon className="h-3 w-3 shrink-0" data-testid="ArrowUpRight__9d6ccb" />
         </button>
       );
     },

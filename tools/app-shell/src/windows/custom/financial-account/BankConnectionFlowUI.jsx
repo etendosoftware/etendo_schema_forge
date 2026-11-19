@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Landmark } from 'lucide-react';
+import { CircleNotchIcon, BankIcon } from '@phosphor-icons/react';
 import {
   Dialog,
   DialogContent,
@@ -46,7 +46,7 @@ export function BankConnectionFlowUI({ flow }) {
         >
           <DialogHeader data-testid="DialogHeader__bankconnflow">
             <DialogTitle className="flex items-center justify-center gap-2 text-center" data-testid="DialogTitle__bankconnflow">
-              <Loader2 className="h-5 w-5 animate-spin text-[var(--status-info-fg)]" data-testid="Loader2__bankconnflow" />
+              <CircleNotchIcon className="h-5 w-5 animate-spin text-[var(--status-info-fg)]" data-testid="Loader2__bankconnflow" />
               {ui('financeAccountsBankConnectionConnecting')}
             </DialogTitle>
           </DialogHeader>
@@ -126,7 +126,7 @@ function BankConnectionAccountSelectModal({ selection, onConfirm, onCancel }) {
                     : 'border-[hsl(var(--border-subtle))] hover:bg-[hsl(var(--muted))]'
                 }`}
               >
-                <Landmark
+                <BankIcon
                   className="h-5 w-5 flex-none text-[hsl(var(--muted-foreground))]"
                   data-testid="Landmark__5f0f32" />
                 <span className="min-w-0 flex-1">

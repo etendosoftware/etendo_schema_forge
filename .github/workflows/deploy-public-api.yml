@@ -153,9 +153,12 @@ jobs:
         if: steps.plan.outputs.build == 'true'
         uses: actions/checkout@v4
         with:
-          repository: etendosoftware/schema_forge_core
+          # Same org as this repo (etendosoftware or etendo-ai). The deploy key is used when
+          # present; etendo-ai disables deploy keys, so there the bot token is used instead.
+          repository: ${{ github.repository_owner }}/schema_forge_core
           ref: refs/tags/${{ steps.plan.outputs.core_version }}
           ssh-key: ${{ secrets.CORE_DEPLOY_KEY }}
+          token: ${{ secrets.ETENDOBOT_TOKEN }}
           path: .schema_forge_core
           persist-credentials: false
 

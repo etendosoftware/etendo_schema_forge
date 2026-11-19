@@ -1,9 +1,16 @@
+import {
+  CircleNotchIcon,
+  CalendarBlankIcon,
+  CheckCircleIcon,
+  FileTextIcon,
+  InfoIcon,
+  ProhibitIcon,
+  WarningCircleIcon,
+} from '@phosphor-icons/react';
 import { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
-import {
-  CalendarBlankIcon, CheckCircleIcon, FileTextIcon, InfoIcon, ProhibitIcon, WarningCircleIcon,
-} from '@phosphor-icons/react';
+
+
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { usePortalApiFetch } from '@/lib/portal/usePortalApiFetch.js';
@@ -378,7 +385,7 @@ export default function PortalDecisionPage({ resendDelayMs = CONFIRM_RESEND_DELA
       <Frame data-testid="Frame__be410c">
         <Result
           testId="portal-decision-applying"
-          Icon={Loader2}
+          Icon={CircleNotchIcon}
           spin
           title={ui('portalDecisionApplying')}
           data-testid="Result__be410c" />

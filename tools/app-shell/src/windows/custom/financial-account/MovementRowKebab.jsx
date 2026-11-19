@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import { MoreVertical, BookOpen, BookX, CheckCircle2, RotateCcw, Trash2, Pencil } from 'lucide-react';
+import {
+  DotsThreeVerticalIcon,
+  BookOpenIcon,
+  BookIcon,
+  CheckCircleIcon,
+  ArrowCounterClockwiseIcon,
+  TrashIcon,
+  PencilSimpleIcon,
+} from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
@@ -254,7 +262,7 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
             data-testid={`movement-row-menu-${movement.id}`}
             className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[hsl(var(--border-subtle))]"
           >
-            <MoreVertical className="h-5 w-5" data-testid="MoreVertical__64eff3" />
+            <DotsThreeVerticalIcon className="h-5 w-5" data-testid="MoreVertical__64eff3" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -267,7 +275,7 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
               onClick={() => onEdit?.(movement)}
               disabled={busy}
               data-testid="movement-row-edit">
-              <Pencil className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__64eff3" />
+              <PencilSimpleIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__64eff3" />
               <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                 {ui('financeAccountTxRowEdit')}
               </span>
@@ -280,7 +288,7 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
               onClick={() => runLifecycle(processMovement, 'financeAccountTxRowProcessSuccess', 'financeAccountTxRowProcessError')}
               disabled={busy}
               data-testid="movement-row-process">
-              <CheckCircle2 className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="CheckCircle2__64eff3" />
+              <CheckCircleIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="CheckCircle2__64eff3" />
               <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                 {processing ? ui('financeAccountTxRowProcessing') : ui('financeAccountTxRowProcess')}
               </span>
@@ -293,7 +301,7 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
               onClick={handlePost}
               disabled={busy}
               data-testid="movement-row-post">
-              <BookOpen className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="BookOpen__64eff3" />
+              <BookOpenIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="BookOpen__64eff3" />
               <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                 {posting ? ui('financeAccountMovementsRowPosting') : ui('financeAccountMovementsRowPost')}
               </span>
@@ -307,7 +315,7 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
               onClick={handleUnpost}
               disabled={busy}
               data-testid="movement-row-unpost">
-              <BookX className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="BookX__64eff3" />
+              <BookIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="BookX__64eff3" />
               <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                 {unposting ? ui('financeAccountMovementsRowUnposting') : ui('financeAccountMovementsRowUnpost')}
               </span>
@@ -322,7 +330,7 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
               onClick={handleReactivateClick}
               disabled={busy}
               data-testid="movement-row-reactivate">
-              <RotateCcw className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RotateCcw__64eff3" />
+              <ArrowCounterClockwiseIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RotateCcw__64eff3" />
               <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
                 {reactivating ? ui('financeAccountTxRowReactivating') : ui('financeAccountTxRowReactivate')}
               </span>
@@ -338,7 +346,7 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
             onClick={handleDeleteClick}
             disabled={busy}
             data-testid="movement-row-delete">
-            <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Trash2__64eff3" />
+            <TrashIcon className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Trash2__64eff3" />
             <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
               {deleting ? ui('financeAccountTxRowDeleting') : ui('financeAccountTxRowDelete')}
             </span>

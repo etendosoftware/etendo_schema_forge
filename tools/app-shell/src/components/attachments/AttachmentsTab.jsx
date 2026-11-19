@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Trash2 } from 'lucide-react';
+import { DownloadSimpleIcon, TrashIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import SelectionToolbar from '@/components/contract-ui/SelectionToolbar.jsx';
 import { useAttachments } from './useAttachments';
@@ -300,7 +300,7 @@ export default function AttachmentsTab({
             onClick={downloadSelected}
             className="inline-flex items-center justify-center rounded-md p-2 transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)]"
             data-testid="attachments-download-selected">
-            <Download className="h-3.5 w-3.5" data-testid="Download__281340" />
+            <DownloadSimpleIcon className="h-3.5 w-3.5" data-testid="Download__281340" />
           </button>
           {!effectiveReadOnly && (
             <button
@@ -310,7 +310,7 @@ export default function AttachmentsTab({
               onClick={() => setConfirmDeleteSelection(true)}
               className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10"
               data-testid="attachments-delete-selected">
-              <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__281340" />
+              <TrashIcon className="h-3.5 w-3.5" data-testid="Trash2__281340" />
             </button>
           )}
         </div>

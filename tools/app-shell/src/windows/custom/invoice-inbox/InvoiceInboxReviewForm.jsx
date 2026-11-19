@@ -174,10 +174,10 @@ export default function InvoiceInboxReviewForm({
           apiBaseUrl={apiBaseUrl}
           data-testid="InvoiceInboxReviewLines__form" />
         <InvoiceInboxReviewTotals
-          header={document.header}
           lines={document.lines}
           currency={currency}
           scale={scale}
+          invoiceTotal={review.invoice?.grandTotal ?? null}
           data-testid="InvoiceInboxReviewTotals__form" />
         <InvoiceInboxReviewMismatchBanner review={review} currency={currency} data-testid="InvoiceInboxReviewMismatchBanner__form" />
       </div>

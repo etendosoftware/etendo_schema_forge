@@ -4,7 +4,16 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { SELECTABLE_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { FileText, Landmark, OctagonAlert, TriangleAlert, X, Check, ChevronDown, Search } from 'lucide-react';
+import {
+  FileTextIcon,
+  BankIcon,
+  WarningOctagonIcon,
+  WarningIcon,
+  XIcon,
+  CheckIcon,
+  CaretDownIcon,
+  MagnifyingGlassIcon,
+} from '@phosphor-icons/react';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { formatPeriod, showIaeActivityReminder, RECEIPT_ATTACHMENT_CONFIG } from './fiscalModelsUtils.js';
 import { buildAcceptAttribute, buildTypesLabel, isFileTypeAllowed } from '@/components/attachments/attachmentPolicy.js';
@@ -258,7 +267,7 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
         <div className="fm-config-modal__body">
           <div style={{ display: 'flex', gap: 20 }}>
           <PresentModalColumn
-            icon={<FileText size={16} strokeWidth={1.75} data-testid="FileText__cda0bb" />}
+            icon={<FileTextIcon size={16} data-testid="FileText__cda0bb" />}
             titleKey="fm.present.register_section.title"
             descKey="fm.present.register_section.desc"
             paths={REGISTER_PATHS}
@@ -275,7 +284,7 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
             <>
               <div style={{ width: 1, alignSelf: 'stretch', background: 'hsl(var(--border-subtle))' }} aria-hidden="true" data-testid="PresentModal__columnDivider" />
               <PresentModalColumn
-                icon={<Landmark size={16} strokeWidth={1.75} data-testid="Landmark__cda0bb" />}
+                icon={<BankIcon size={16} data-testid="Landmark__cda0bb" />}
                 titleKey="fm.present.aeat_section.title"
                 descKey="fm.present.aeat_section.desc"
                 paths={AEAT_PATHS}
@@ -594,7 +603,7 @@ function ModelSelectMenu({ model, availableModels, onSelect, onClose, t }) {
   return (
     <div className="fm-newdecl-model-panel" ref={ref} role="listbox">
       <div className="fm-newdecl-model-search">
-        <Search size={14} strokeWidth={1.75} data-testid="Search__cda0bb" />
+        <MagnifyingGlassIcon size={14} data-testid="Search__cda0bb" />
         <input
           type="text"
           value={search}
@@ -620,7 +629,7 @@ function ModelSelectMenu({ model, availableModels, onSelect, onClose, t }) {
                 <div className="fm-newdecl-model-option__desc">{t(`fm.catalog.${id}.desc`) ?? ''}</div>
               </div>
               {selected && (
-                <Check size={16} strokeWidth={2} className="fm-newdecl-model-option__check" data-testid="Check__cda0bb" />
+                <CheckIcon size={16} className="fm-newdecl-model-option__check" data-testid="Check__cda0bb" />
               )}
             </div>
           );
@@ -652,7 +661,7 @@ function YearSelectMenu({ year, years, onSelect, onClose }) {
             >
               <span className="fm-newdecl-year-option__label">{y}</span>
               {selected && (
-                <Check size={16} strokeWidth={2} className="fm-newdecl-year-option__check" data-testid="Check__cda0bb" />
+                <CheckIcon size={16} className="fm-newdecl-year-option__check" data-testid="Check__cda0bb" />
               )}
             </div>
           );
@@ -837,7 +846,7 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
                   <span className="fm-newdecl-model-trigger__desc" data-testid="NewDeclModal__modelDesc">{selectedModelDesc}</span>
                 )}
               </span>
-              <ChevronDown size={16} strokeWidth={1.75} className="fm-newdecl-model-trigger__chevron" data-testid="ChevronDown__cda0bb" />
+              <CaretDownIcon size={16} className="fm-newdecl-model-trigger__chevron" data-testid="ChevronDown__cda0bb" />
             </button>
             {modelMenuOpen && canCreate && (
               <ModelSelectMenu
@@ -871,7 +880,7 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
                 onClick={() => setYearMenuOpen(o => !o)}
               >
                 <span className="fm-newdecl-year-trigger__value">{year}</span>
-                <ChevronDown size={16} strokeWidth={1.75} className="fm-newdecl-year-trigger__chevron" data-testid="ChevronDown__cda0bb" />
+                <CaretDownIcon size={16} className="fm-newdecl-year-trigger__chevron" data-testid="ChevronDown__cda0bb" />
               </button>
               {yearMenuOpen && (
                 <YearSelectMenu
@@ -976,7 +985,7 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
 
           {existingOrdinary && (
             <div className="fm-banner fm-banner--warning fm-newdecl-notice" role="alert" data-testid="NewDeclModal__duplicateOrdinary">
-              <TriangleAlert size={16} strokeWidth={1.75} className="fm-newdecl-notice__icon" data-testid="TriangleAlert__newDeclDuplicate" />
+              <WarningIcon size={16} className="fm-newdecl-notice__icon" data-testid="TriangleAlert__newDeclDuplicate" />
               <strong className="fm-newdecl-notice__text">{t('fm.new_decl.duplicate_ordinary', { model, year })}</strong>
               {onOpenExisting && (
                 <button
@@ -992,7 +1001,7 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
           )}
           {!existingOrdinary && modelWarning && (
             <div className="fm-banner fm-banner--warning fm-newdecl-notice" role="status" data-testid="NewDeclModal__modelWarning">
-              <TriangleAlert size={16} strokeWidth={1.75} className="fm-newdecl-notice__icon" data-testid="TriangleAlert__newDeclWarning" />
+              <WarningIcon size={16} className="fm-newdecl-notice__icon" data-testid="TriangleAlert__newDeclWarning" />
               <span className="fm-newdecl-notice__text">
                 <strong>{t(modelWarning.key, modelWarning.params)}</strong>
                 {modelWarning.bodyKey && <>{' '}{t(modelWarning.bodyKey, modelWarning.params)}</>}
@@ -1041,7 +1050,7 @@ export function IncidentTray({ incidents, onClose }) {
           onClick={onClose}
           aria-label={t('fm.action.close')}
         >
-          <X size={14} data-testid="X__cda0bb" />
+          <XIcon size={14} data-testid="X__cda0bb" />
         </button>
       </div>
       {incidents.map((inc) => (
@@ -1049,7 +1058,7 @@ export function IncidentTray({ incidents, onClose }) {
           key={inc.message}
           className={`fm-incident-tray__item fm-incident-tray__item--${inc.blocking ? 'blocking' : 'warning'}`}
         >
-          {inc.blocking ? <OctagonAlert size={14} data-testid="OctagonAlert__cda0bb" /> : <TriangleAlert size={14} data-testid="TriangleAlert__cda0bb" />} {inc.message}
+          {inc.blocking ? <WarningOctagonIcon size={14} data-testid="OctagonAlert__cda0bb" /> : <WarningIcon size={14} data-testid="TriangleAlert__cda0bb" />} {inc.message}
         </div>
       ))}
     </div>
@@ -1221,7 +1230,7 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
             onClick={() => { setIsDirty(false); onClose(); }}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
-            <Check size={14} strokeWidth={2} data-testid="Check__cda0bb" />
+            <CheckIcon size={14} data-testid="Check__cda0bb" />
             {t('fm.action.save') ?? 'Guardar'}
           </button>
         </div>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CreditCard, Loader2 } from 'lucide-react';
+import { CreditCardIcon, CircleNotchIcon } from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { Button } from '@/components/ui/button';
@@ -314,7 +314,7 @@ export function SubscriptionSection({
             className="mt-4 flex items-center gap-2 text-sm text-muted-foreground"
             data-testid="SubscriptionSection__loading"
           >
-            <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__769a8e" />
+            <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__769a8e" />
             {ui('loading')}
           </div>
         )}
@@ -352,7 +352,7 @@ export function SubscriptionSection({
         {status === 'loaded' && hasSubscription && (
           <div className="mt-4 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <CreditCard
+              <CreditCardIcon
                 className="h-4 w-4 text-muted-foreground"
                 data-testid="CreditCard__769a8e" />
               <span className="text-xs text-muted-foreground">{ui('subscriptionPlan')}</span>
@@ -451,7 +451,7 @@ export function SubscriptionSection({
                 data-testid="SubscriptionSection__manage"
               >
                 {managing
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__769a8e" />
+                  ? <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__769a8e" />
                   : ui('subscriptionManage')}
               </Button>
               {manageError && (

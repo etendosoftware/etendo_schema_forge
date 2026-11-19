@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Check } from 'lucide-react';
+import { CheckIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
@@ -136,7 +136,7 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
           className={`${getSaveBtnCls()} rounded-lg ${savedOk ? 'bg-status-success hover:bg-status-success border-status-success-border' : ''}`}
           data-testid="glc-save"
         >
-          <Check data-testid="Check__79cd86" />
+          <CheckIcon data-testid="Check__79cd86" />
           {ui('saveChanges')}
         </Button>
       </div>

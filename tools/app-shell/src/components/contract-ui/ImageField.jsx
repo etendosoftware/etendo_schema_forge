@@ -1,8 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Upload, X, ImageIcon, Loader2, ZoomIn } from 'lucide-react';
+import {
+  UploadSimpleIcon,
+  XIcon,
+  ImageIcon,
+  CircleNotchIcon,
+  MagnifyingGlassPlusIcon,
+  TrashIcon,
+} from '@phosphor-icons/react';
 import { toast } from 'sonner';
-import { TrashIcon } from '@/components/ui/custom-icons';
 import { useUI } from '@/i18n';
 import { sanitizeImageName } from '@/lib/imageUpload.js';
 
@@ -209,7 +215,7 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
                       className="h-12 w-12 border border-dashed border-[hsl(var(--border-control))] rounded-lg flex items-center justify-center hover:border-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-50"
                       aria-label={ui('uploadImage')}
                     >
-                      <Upload className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Upload__266d2c" />
+                      <UploadSimpleIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Upload__266d2c" />
                     </button>
                   </div>
                 )}
@@ -228,7 +234,7 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
                   onDrop={handleDrop}
                 >
                   {uploading ? (
-                    <Loader2
+                    <CircleNotchIcon
                       className="h-7 w-7 animate-spin text-muted-foreground"
                       data-testid="Loader2__266d2c" />
                   ) : (
@@ -237,7 +243,7 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
                         className="w-8 h-8 flex items-center justify-center bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] rounded-lg"
                         aria-hidden="true"
                       >
-                        <Upload className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Upload__266d2c" />
+                        <UploadSimpleIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Upload__266d2c" />
                       </span>
                       <div className="flex flex-col items-center gap-1">
                         <span className="text-sm font-normal text-[hsl(var(--foreground))] text-center">{ui('imageDropTitle')}</span>
@@ -310,7 +316,7 @@ function ImagePreview({ blobUrl, imageId, uploading, readOnly, ui, onRemove, onU
         <img src={blobUrl} alt="Product" className="max-w-full max-h-full object-contain" />
         {/* Hover overlay */}
         <div className="absolute inset-0 bg-foreground/0 group-hover:bg-foreground/20 transition-colors pointer-events-none flex items-center justify-center">
-          <ZoomIn
+          <MagnifyingGlassPlusIcon
             className="h-7 w-7 text-primary-foreground opacity-0 group-hover:opacity-100 transition-opacity drop-shadow"
             data-testid="ZoomIn__266d2c" />
         </div>
@@ -322,7 +328,7 @@ function ImagePreview({ blobUrl, imageId, uploading, readOnly, ui, onRemove, onU
               className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-foreground/50 text-primary-foreground flex items-center justify-center hover:bg-foreground/70 opacity-0 group-hover:opacity-100 transition-opacity"
               aria-label="Remove image"
             >
-              <X className="h-3.5 w-3.5" data-testid="X__266d2c" />
+              <XIcon className="h-3.5 w-3.5" data-testid="X__266d2c" />
             </button>
             <button
               type="button"
@@ -330,7 +336,7 @@ function ImagePreview({ blobUrl, imageId, uploading, readOnly, ui, onRemove, onU
               onClick={(e) => { e.stopPropagation(); onUpload(); }}
               className="absolute bottom-2 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-foreground/50 text-primary-foreground text-xs font-medium hover:bg-foreground/70 disabled:opacity-50 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap"
             >
-              {uploading ? <Loader2 className="h-3 w-3 animate-spin" data-testid="Loader2__266d2c" /> : <Upload className="h-3 w-3" data-testid="Upload__266d2c" />}
+              {uploading ? <CircleNotchIcon className="h-3 w-3 animate-spin" data-testid="Loader2__266d2c" /> : <UploadSimpleIcon className="h-3 w-3" data-testid="Upload__266d2c" />}
               {ui('uploadImage')}
             </button>
           </>
@@ -341,13 +347,13 @@ function ImagePreview({ blobUrl, imageId, uploading, readOnly, ui, onRemove, onU
   return (
     <div className="flex flex-col items-center gap-2 text-muted-foreground px-3 text-center">
       {uploading
-        ? <Loader2 className="h-7 w-7 animate-spin" data-testid="Loader2__266d2c" />
+        ? <CircleNotchIcon className="h-7 w-7 animate-spin" data-testid="Loader2__266d2c" />
         : <ImageIcon className="h-7 w-7" data-testid="ImageIcon__266d2c" />
       }
       <span className="text-xs">{imageId ? 'Loading…' : ui('noImage')}</span>
       {!readOnly && !uploading && (
         <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground group-hover:text-foreground mt-1">
-          <Upload className="h-3.5 w-3.5" data-testid="Upload__266d2c" />
+          <UploadSimpleIcon className="h-3.5 w-3.5" data-testid="Upload__266d2c" />
           {ui('uploadImage')}
         </span>
       )}
@@ -368,7 +374,7 @@ function ImageLightbox({ blobUrl, onClose }) {
         className="absolute top-4 right-4 h-9 w-9 rounded-full bg-card/20 text-primary-foreground flex items-center justify-center hover:bg-card/30 transition-colors"
         aria-label="Close"
       >
-        <X className="h-5 w-5" data-testid="X__266d2c" />
+        <XIcon className="h-5 w-5" data-testid="X__266d2c" />
       </button>
       <img
         src={blobUrl}

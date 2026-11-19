@@ -3,7 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { KPIHeader, KanbanBoard, DataTable } from '@/components/contract-ui';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Users, Calendar, UserPlus, Clock, Bell, ArrowUp, ArrowDown } from 'lucide-react';
+import {
+  UsersIcon,
+  CalendarBlankIcon,
+  UserPlusIcon,
+  ClockIcon,
+  BellIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 import { sections } from '@generated/hr/generated/config';
@@ -11,7 +19,7 @@ import * as mockData from '@generated/hr/generated/mockData';
 
 // -- Icon resolution (config stores string names) -----------------------------
 
-const ICON_MAP = { Users, Calendar, UserPlus, Clock, Bell };
+const ICON_MAP = { Users: UsersIcon, Calendar: CalendarBlankIcon, UserPlus: UserPlusIcon, Clock: ClockIcon, Bell: BellIcon };
 
 // -- Derived data from contract -----------------------------------------------
 
@@ -62,7 +70,7 @@ export default function HrPage() {
           <Card data-testid="Card__7ba56e">
             <CardHeader data-testid="CardHeader__7ba56e">
               <CardTitle className="flex items-center gap-2" data-testid="CardTitle__7ba56e">
-                <Users className="h-5 w-5 text-muted-foreground" data-testid="Users__7ba56e" />
+                <UsersIcon className="h-5 w-5 text-muted-foreground" data-testid="Users__7ba56e" />
                 {ui('employeeDirectory')}
               </CardTitle>
             </CardHeader>
@@ -93,7 +101,7 @@ export default function HrPage() {
           <CardTitle
             className="flex items-center gap-2 text-base"
             data-testid="CardTitle__7ba56e">
-            <Bell className="h-5 w-5 text-muted-foreground" data-testid="Bell__7ba56e" />
+            <BellIcon className="h-5 w-5 text-muted-foreground" data-testid="Bell__7ba56e" />
             {ui('hrUpdates')}
           </CardTitle>
         </CardHeader>
@@ -109,8 +117,8 @@ export default function HrPage() {
                       : 'bg-status-info text-status-info-foreground'
                   }`}>
                     {entry.direction === 'in'
-                      ? <ArrowUp className="h-3.5 w-3.5" data-testid="ArrowUp__7ba56e" />
-                      : <ArrowDown className="h-3.5 w-3.5" data-testid="ArrowDown__7ba56e" />
+                      ? <ArrowUpIcon className="h-3.5 w-3.5" data-testid="ArrowUp__7ba56e" />
+                      : <ArrowDownIcon className="h-3.5 w-3.5" data-testid="ArrowDown__7ba56e" />
                     }
                   </div>
                 )}
