@@ -51,6 +51,8 @@ jobs:
           sonar_read_token: ${{ secrets.SONAR_READ_TOKEN }}
           coverage_minimum: ${{ vars.COVERAGE_MINIMUM }}
           coverage_tolerance: ${{ vars.COVERAGE_TOLERANCE }}
+          sonar_socket_timeout: ${{ vars.SONAR_SOCKET_TIMEOUT }}
+          sonar_response_timeout: ${{ vars.SONAR_RESPONSE_TIMEOUT }}
 
   mocked:
     name: Mocked E2E

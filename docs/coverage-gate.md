@@ -148,6 +148,10 @@ PR itself: merge `develop` into the branch and push again before adding tests.
   unit tests + Sonar job adds `packages: read` (npm install from GitHub Packages)
   and `checks: write` (the dorny reporter's "Test Results" check). Sonar decorates
   PRs through its own GitHub App, not `GITHUB_TOKEN`.
+- **Scanner timeouts** come from the organization variables `SONAR_SOCKET_TIMEOUT` and
+  `SONAR_RESPONSE_TIMEOUT` (seconds; unset, 60), passed as `sonar.scanner.socketTimeout` and
+  `sonar.scanner.responseTimeout` to every scan (ETP-6390). Raise them when SonarQube is slow and
+  an upload fails with `SocketTimeoutException` while every test passed.
 - **The scan action is pinned** to a full commit sha with its release as a
   comment (`sonarsource/sonarqube-scan-action@<sha> # vX.Y.Z`), never `@master`.
 - **Concurrency** groups a PR by its number (a new push cancels the stale run) and

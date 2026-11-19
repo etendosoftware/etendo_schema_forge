@@ -940,6 +940,18 @@ describe('wiring guardrails', () => {
     assert.match(full, /'Unit tests \+ Sonar \+ coverage', 'Mocked E2E \(full pipeline\)'/, 'Route requires the unit tests');
   });
 
+  it('every Sonar scan takes its timeouts from the organization variables (ETP-6390)', () => {
+    assert.match(action, /-Dsonar\.scanner\.socketTimeout=\$\{\{ inputs\.sonar_socket_timeout \|\| '60' \}\}/);
+    assert.match(action, /-Dsonar\.scanner\.responseTimeout=\$\{\{ inputs\.sonar_response_timeout \|\| '60' \}\}/);
+    for (const unit of [job(mini, 'unit-tests-sonar'), job(full, 'unit-tests')]) {
+      assert.match(unit, /sonar_socket_timeout: \$\{\{ vars\.SONAR_SOCKET_TIMEOUT \}\}/);
+      assert.match(unit, /sonar_response_timeout: \$\{\{ vars\.SONAR_RESPONSE_TIMEOUT \}\}/);
+    }
+    const cut = job(full, 'validated-cut-sonar');
+    assert.match(cut, /-Dsonar\.scanner\.socketTimeout=\$\{\{ vars\.SONAR_SOCKET_TIMEOUT \|\| '60' \}\}/);
+    assert.match(cut, /-Dsonar\.scanner\.responseTimeout=\$\{\{ vars\.SONAR_RESPONSE_TIMEOUT \|\| '60' \}\}/);
+  });
+
   it('pins the scan action to a commit sha and declares least-privilege permissions', () => {
     for (const text of [action, full]) {
       assert.match(text, /sonarqube-scan-action@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
