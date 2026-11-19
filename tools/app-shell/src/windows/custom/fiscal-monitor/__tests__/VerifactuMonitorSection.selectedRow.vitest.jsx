@@ -49,7 +49,7 @@ const stableApiFetch = vi.fn(() => Promise.resolve({
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
-vi.mock('lucide-react', () => ({}));
+vi.mock('@phosphor-icons/react', () => ({}));
 vi.mock('../useFiscalMonitor.js', async () => {
   const { verifactuFiscalMonitorMock } = await import('./testHelpers/verifactuCutoverStub.js');
   return verifactuFiscalMonitorMock;

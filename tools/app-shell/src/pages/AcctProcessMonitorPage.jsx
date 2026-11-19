@@ -9,7 +9,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Loader2, Play, RefreshCw, ShieldAlert, TriangleAlert } from 'lucide-react';
+import {
+  CircleNotchIcon,
+  PlayIcon,
+  ArrowsClockwiseIcon,
+  ShieldWarningIcon,
+  WarningIcon,
+} from '@phosphor-icons/react';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import StatusCard from '@/components/StatusCard.jsx';
@@ -121,7 +127,7 @@ export default function AcctProcessMonitorPage() {
               testId="AcctProcessMonitorPage__noAccess"
               className="gap-2 py-16"
               data-testid="StatusCard__17e70d">
-              <ShieldAlert
+              <ShieldWarningIcon
                 className="h-10 w-10 text-muted-foreground/40 mb-2"
                 data-testid="ShieldAlert__17e70d" />
               <h3 className="text-lg font-medium text-foreground">
@@ -138,7 +144,7 @@ export default function AcctProcessMonitorPage() {
               testId="AcctProcessMonitorPage__notInstalled"
               className="gap-2 py-16"
               data-testid="StatusCard__17e70d">
-              <TriangleAlert
+              <WarningIcon
                 className="h-10 w-10 text-muted-foreground/40 mb-2"
                 data-testid="TriangleAlert__17e70d" />
               <h3 className="text-lg font-medium text-foreground">
@@ -176,7 +182,7 @@ export default function AcctProcessMonitorPage() {
                       aria-label={ui('acctProcessRefresh')}
                       data-testid="AcctProcessMonitorPage__refresh"
                     >
-                      <RefreshCw className="h-4 w-4" data-testid="RefreshCw__17e70d" />
+                      <ArrowsClockwiseIcon className="h-4 w-4" data-testid="RefreshCw__17e70d" />
                     </Button>
                     <Button
                       onClick={trigger}
@@ -188,8 +194,8 @@ export default function AcctProcessMonitorPage() {
                       data-testid="AcctProcessMonitorPage__runNow"
                     >
                       {triggering
-                        ? <Loader2 className="h-4 w-4 mr-2 animate-spin" data-testid="Loader2__17e70d" />
-                        : <Play className="h-4 w-4 mr-2" data-testid="Play__17e70d" />}
+                        ? <CircleNotchIcon className="h-4 w-4 mr-2 animate-spin" data-testid="Loader2__17e70d" />
+                        : <PlayIcon className="h-4 w-4 mr-2" data-testid="Play__17e70d" />}
                       {ui('acctProcessRunNow')}
                     </Button>
                   </div>
@@ -232,7 +238,7 @@ export default function AcctProcessMonitorPage() {
                     className="text-sm text-muted-foreground flex items-center gap-2"
                     data-testid="AcctProcessMonitorPage__running"
                   >
-                    <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__17e70d" />
+                    <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__17e70d" />
                     {/* `awaitingRun` without `running` is the window between handing the job to
                         Quartz and the run row existing. Saying "starting" there is honest; saying
                         nothing would make the page look idle right after a click. */}

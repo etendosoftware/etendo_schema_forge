@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import {
-  ArrowLeftRight, ArrowRight, Landmark,
-} from 'lucide-react';
+import { ArrowsLeftRightIcon, ArrowRightIcon, BankIcon } from '@phosphor-icons/react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
@@ -55,7 +53,7 @@ function BankTile({ size = 34 }) {
       style={{ width: size, height: size }}
       data-testid="bank-tile"
     >
-      <Landmark className="h-[17px] w-[17px]" data-testid="Landmark__tf" />
+      <BankIcon className="h-[17px] w-[17px]" data-testid="Landmark__tf" />
     </span>
   );
 }
@@ -323,7 +321,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
         <div className="flex items-start justify-between px-6 pb-3.5 pt-[22px]">
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 flex-none items-center justify-center rounded-md bg-[hsl(var(--foreground))] text-primary-foreground">
-              <ArrowLeftRight className="h-[18px] w-[18px]" data-testid="ArrowLeftRight__tf-head" />
+              <ArrowsLeftRightIcon className="h-[18px] w-[18px]" data-testid="ArrowLeftRight__tf-head" />
             </span>
             <div>
               <h2 className="text-[18px] font-bold leading-6 tracking-[-0.01em] text-[hsl(var(--foreground))]">
@@ -402,7 +400,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
                   <Label required data-testid="Label__7ff08b">{ui('financeAccountTransferRate')}</Label>
                   <div className="flex items-center gap-2 text-[13px] font-semibold leading-[18px] text-[hsl(var(--foreground))]">
                     <CurrencyBadge iso={source?.currencyIso} data-testid="CurrencyBadge__7ff08b" />
-                    <ArrowRight className="h-[15px] w-[15px] text-[hsl(var(--text-disabled))]" data-testid="ArrowRight__tf" />
+                    <ArrowRightIcon className="h-[15px] w-[15px] text-[hsl(var(--text-disabled))]" data-testid="ArrowRight__tf" />
                     <CurrencyBadge iso={dest?.currencyIso} data-testid="CurrencyBadge__7ff08b" />
                   </div>
                 </div>
@@ -542,7 +540,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
             data-testid="transfer-confirm"
             className="inline-flex h-10 items-center gap-2 rounded-md bg-[hsl(var(--foreground))] px-[18px] text-sm font-semibold text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-[hsl(var(--text-disabled))] disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-[hsl(var(--text-disabled))]"
           >
-            <ArrowLeftRight className="h-4 w-4" data-testid="ArrowLeftRight__tf-confirm" />
+            <ArrowsLeftRightIcon className="h-4 w-4" data-testid="ArrowLeftRight__tf-confirm" />
             {ui('financeAccountTransferConfirm')}
           </button>
         </div>

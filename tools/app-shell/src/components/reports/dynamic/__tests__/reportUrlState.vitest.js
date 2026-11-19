@@ -85,6 +85,13 @@ describe('readReportUrlState', () => {
     expect(readReportUrlState(link, SYNTHETIC, { orgIds: ORGS })).toEqual({ dateFrom: '2026-03-01', dateTo: '2026-03-31', productId: 'P1' });
   });
 
+  it('drops a restored splitBy=org when the role reaches one org or none (ETP-6080)', () => {
+    expect(readReportUrlState('?splitBy=org', PL, { orgIds: ['O1'] })).toEqual({});
+    expect(readReportUrlState('?splitBy=org', PL)).toEqual({});
+    expect(readReportUrlState('?splitBy=org', PL, { orgIds: ['O1', 'O2'] })).toEqual({ splitBy: 'org' });
+    expect(readReportUrlState('?splitBy=product', PL, { orgIds: ['O1'] })).toEqual({ splitBy: 'product' });
+  });
+
   it('ignores invalid values and falls back to the default', () => {
     const read = (q) => readReportUrlState(q, PL, { orgIds: ORGS });
     expect(read('?columns=week&compare=yesterday&splitBy=drop%20table')).toEqual({});

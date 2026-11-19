@@ -1,4 +1,4 @@
-import { ChevronDown, Sparkles, CalendarDays } from 'lucide-react';
+import { CaretDownIcon, SparkleIcon, CalendarBlankIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -56,11 +56,11 @@ export function DashboardGreeting({ username = '', onAskCopilot }) {
         <DropdownMenu data-testid="DropdownMenu__5bd498">
           <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__5bd498">
             <Button data-testid="dashboard-range-trigger" variant="outline" size="sm" className="h-10 gap-1.5 text-sm bg-card hover:bg-[hsl(var(--muted))]">
-              <CalendarDays
+              <CalendarBlankIcon
                 className="h-3.5 w-3.5 text-muted-foreground"
                 data-testid="CalendarDays__5bd498" />
               <span>{currentRangeLabel}</span>
-              <ChevronDown
+              <CaretDownIcon
                 className="h-3.5 w-3.5 text-muted-foreground"
                 data-testid="ChevronDown__5bd498" />
             </Button>
@@ -84,7 +84,7 @@ export function DashboardGreeting({ username = '', onAskCopilot }) {
           className="h-10 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
           onClick={onAskCopilot}
           data-testid="Button__5bd498">
-          <Sparkles className="h-3.5 w-3.5" data-testid="Sparkles__5bd498" />
+          <SparkleIcon className="h-3.5 w-3.5" data-testid="Sparkles__5bd498" />
           <span className="hidden sm:inline">{ui('dashboardCopilotCta')}</span>
         </Button>
       </div>

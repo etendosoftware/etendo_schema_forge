@@ -46,15 +46,15 @@ vi.mock('../../../FmTabContent.jsx', () => ({
   SourcesTab: () => null, IncidentsTab: () => null,
 }));
 vi.mock('../../../fiscal-models.css', () => ({}));
-vi.mock('lucide-react', () => ({
+vi.mock('@phosphor-icons/react', () => ({
   // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
-  Check: () => null,
-  ArrowLeft: () => null, Save: () => null,
-  Download: () => null, CircleCheck: () => null, Search: () => null, Loader2: () => null,
-  Globe: () => null, MoreVertical: () => null, ChevronDown: () => null, Users: () => null,
-  FileEdit: () => null, TriangleAlert: () => null, Folder: () => null, ReceiptText: () => null,
-  Calculator: () => null, PenLine: () => null, ShieldAlert: () => null, Info: () => null,
-  FileCheck: () => null,
+  CheckIcon: () => null,
+  ArrowLeftIcon: () => null, FloppyDiskIcon: () => null,
+  DownloadSimpleIcon: () => null, CheckCircleIcon: () => null, MagnifyingGlassIcon: () => null, CircleNotchIcon: () => null,
+  GlobeIcon: () => null, DotsThreeVerticalIcon: () => null, CaretDownIcon: () => null, UsersIcon: () => null,
+  WarningIcon: () => null, FolderIcon: () => null, ReceiptIcon: () => null,
+  CalculatorIcon: () => null, PencilSimpleIcon: () => null, ShieldWarningIcon: () => null, InfoIcon: () => null,
+  SealCheckIcon: () => null,
 }));
 
 // PresentModal mock: renders 3 buttons reporting the same `{ status, acuseFile }`
@@ -265,7 +265,7 @@ describe('FmModel349Page — no AEAT telematic path (scope guard)', () => {
 
   it('does not import or render an AeatSubmitFlow component', () => {
     // FmModel349Page.jsx has no AeatSubmitFlow import at all — if it ever gained
-    // one, the mocked FmOverlays/lucide modules above would still let the page
+    // one, the mocked FmOverlays/Phosphor modules above would still let the page
     // render, but no 'aeat_telematic' sentinel path exists to trigger it. This
     // guards the observable surface: no such flow ever mounts from this page.
     render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);

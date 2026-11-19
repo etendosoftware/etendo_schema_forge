@@ -1,4 +1,4 @@
-import { Users } from 'lucide-react';
+import { UsersIcon } from '@phosphor-icons/react';
 import { useLocale } from '@/i18n';
 
 function KpiCard({ title, value, icon: Icon, loading }) {
@@ -33,7 +33,7 @@ export default function ContactsKpiCards({ items = [], loading = false }) {
       <KpiCard
         title={t('totalContacts')}
         value={total || null}
-        icon={Users}
+        icon={UsersIcon}
         loading={loading}
         data-testid="KpiCard__4634d4" />
       <KpiCard

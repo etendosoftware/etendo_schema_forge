@@ -1,4 +1,4 @@
-import { Check, Loader2, Trash2 } from 'lucide-react';
+import { CheckIcon, CircleNotchIcon, TrashIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { STATUS, isSelectableRow } from './invoiceInboxFilters.js';
@@ -85,7 +85,7 @@ export default function InvoiceInboxReviewFooter({
           title={ui('invoiceInboxBulkDiscard')}
           className="h-8 w-8 flex-none border-destructive/30 bg-[var(--status-destructive-bg)] text-destructive hover:bg-[var(--status-destructive-bg)] hover:text-destructive"
           data-testid="invoice-inbox-review-discard">
-          <Trash2 className="h-4 w-4" aria-hidden="true" data-testid="Trash2__review-discard" />
+          <TrashIcon className="h-4 w-4" aria-hidden="true" data-testid="Trash2__review-discard" />
         </Button>
       )}
       {locked ? <span className="flex-1" /> : <CounterText pending={pendingCount(review.document)} ready={ready} data-testid="CounterText__review" />}
@@ -105,14 +105,14 @@ export default function InvoiceInboxReviewFooter({
           disabled={!canMarkReviewed(review) || marking || confirming}
           onClick={onMarkReviewed}
           data-testid="invoice-inbox-review-mark-reviewed">
-          {marking && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" data-testid="Loader2__review-marking" />}
+          {marking && <CircleNotchIcon className="h-4 w-4 animate-spin" aria-hidden="true" data-testid="Loader2__review-marking" />}
           {ui('invoiceInboxReviewMarkReviewed')}
         </Button>
       )}
       {!locked && !onConfirm && (
         <SoonButton
           label={ui('invoiceInboxReviewConfirm')}
-          icon={Check}
+          icon={CheckIcon}
           variant="default"
           testId="invoice-inbox-review-confirm"
           data-testid="SoonButton__822e07" />
@@ -126,8 +126,8 @@ export default function InvoiceInboxReviewFooter({
           onClick={onConfirm}
           data-testid="invoice-inbox-review-confirm">
           {confirming
-            ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" data-testid="Loader2__review-confirming" />
-            : <Check className="h-4 w-4" aria-hidden="true" data-testid="Check__review-confirm" />}
+            ? <CircleNotchIcon className="h-4 w-4 animate-spin" aria-hidden="true" data-testid="Loader2__review-confirming" />
+            : <CheckIcon className="h-4 w-4" aria-hidden="true" data-testid="Check__review-confirm" />}
           {ui(isConfirmRetry(review) ? 'invoiceInboxReviewRetryConfirm' : 'invoiceInboxReviewConfirm')}
         </Button>
       )}

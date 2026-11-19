@@ -134,7 +134,6 @@ vi.mock('../DocumentTotalsPanel.jsx', () => ({ default: () => null }));
 vi.mock('../BalanceFooterPanel.jsx', () => ({ default: () => null }));
 vi.mock('../LinesSelectionBar.jsx', () => ({ default: () => null }));
 vi.mock('../DocumentStatusPill.jsx', () => ({ default: ({ status }) => <span>{status}</span> }));
-vi.mock('@/components/attachments/AttachmentIcon', () => ({ AttachmentIcon: () => <span>A</span> }));
 
 const MockDetailTable = (props) => {
   captured.onRowClick = props.onRowClick ?? captured.onRowClick;

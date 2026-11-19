@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { MagnifyingGlassIcon, XIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { SearchPopup, staticPageLoader } from './SearchPopup.jsx';
 
@@ -129,7 +129,7 @@ export function AccountSelect({
           title={selectedLabel || undefined}
           className={`flex h-full min-w-0 flex-1 items-center gap-2 rounded-lg bg-transparent pl-3 ${clearable ? 'pr-1' : 'pr-3'} text-left focus:outline-none`}
         >
-          <Search
+          <MagnifyingGlassIcon
             className="h-4 w-4 text-muted-foreground shrink-0"
             aria-hidden="true"
             data-testid="Search__a001bd" />
@@ -145,7 +145,7 @@ export function AccountSelect({
             data-testid={`field-${fieldKey}-clear`}
             className="flex h-full w-8 shrink-0 items-center justify-center rounded-r-lg text-[hsl(var(--text-disabled))] transition-colors hover:text-foreground focus:outline-none focus-visible:text-foreground"
           >
-            <X className="h-4 w-4" aria-hidden="true" data-testid="X__a001bd" />
+            <XIcon className="h-4 w-4" aria-hidden="true" data-testid="X__a001bd" />
           </button>
         )}
       </div>

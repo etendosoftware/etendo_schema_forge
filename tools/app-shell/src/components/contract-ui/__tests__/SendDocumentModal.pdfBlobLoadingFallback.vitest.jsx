@@ -18,15 +18,7 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('lucide-react', () => ({
-  Download: () => null,
-  Mail: () => null,
-  Maximize: () => null,
-  X: () => null,
-  Plus: () => null,
-  Search: () => null,
-  Loader2: () => null,
-}));
+vi.mock('@phosphor-icons/react', async importOriginal => allIconsAs(() => null, importOriginal));
 
 // A PDF blob is previewed through the react-pdf viewer (ETP-5598); pdfjs cannot run in jsdom.
 vi.mock('@/windows/custom/shared/PdfViewer.jsx', () => ({
@@ -47,6 +39,7 @@ vi.mock('../documentEmailSend.js', () => ({
   sendDocumentEmail: (...args) => mockSendDocumentEmail(...args),
 }));
 
+import { allIconsAs } from '@/test/iconMock.js';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SendDocumentModal from '../SendDocumentModal.jsx';

@@ -3,7 +3,7 @@
  */
 import React, {useEffect, useRef, useState} from 'react';
 import {Button} from '@/components/ui/button.jsx';
-import {Trash2, X} from 'lucide-react';
+import { TrashIcon, XIcon } from '@phosphor-icons/react';
 import {toast} from 'sonner';
 import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
 import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
@@ -1123,7 +1123,7 @@ export function renderDetailBulkActionBar({
             className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
             data-testid="detail-bulk-delete-button"
           >
-            <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__7c75ad" />
+            <TrashIcon className="h-3.5 w-3.5" data-testid="Trash2__7c75ad" />
           </button>
         )}
       </div>
@@ -2459,7 +2459,7 @@ function secondaryDetailSidebar(props) {
             onClick={props.onCloseDetailPanel}
             className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
         >
-          <X className="h-3.5 w-3.5" data-testid="X__fa3275" />
+          <XIcon className="h-3.5 w-3.5" data-testid="X__fa3275" />
         </button>
       </div>
       <props.st.Form
@@ -2499,7 +2499,7 @@ function secondaryDetailSidebar(props) {
                     onClick={props.onDeleteLine}
                     className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
                 >
-                  <Trash2 className="h-4 w-4" data-testid="Trash2__fa3275" />
+                  <TrashIcon className="h-4 w-4" data-testid="Trash2__fa3275" />
                   {props.deleteLabel}
                 </button>
             )}
@@ -2570,7 +2570,7 @@ function secondaryAddLineBar(props) {
               onClick={props.onDelete}
               className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
             >
-              <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
+              <TrashIcon className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
             </button>
           </SelectionToolbar>
       )}

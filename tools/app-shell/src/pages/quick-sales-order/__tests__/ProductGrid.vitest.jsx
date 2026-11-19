@@ -8,11 +8,11 @@ vi.mock('@/components/ui/badge', () => ({
   Badge: ({ children, ...props }) => <span data-testid="badge" {...props}>{children}</span>,
 }));
 
-vi.mock('lucide-react', () => ({
-  Plus: (props) => <span data-testid="icon-plus" {...props} />,
-  TrendingUp: (props) => <span data-testid="icon-trending" {...props} />,
-  LayoutGrid: (props) => <span data-testid="icon-grid" {...props} />,
-  List: (props) => <span data-testid="icon-list" {...props} />,
+vi.mock('@phosphor-icons/react', () => ({
+  PlusIcon: (props) => <span data-testid="icon-plus" {...props} />,
+  TrendUpIcon: (props) => <span data-testid="icon-trending" {...props} />,
+  SquaresFourIcon: (props) => <span data-testid="icon-grid" {...props} />,
+  ListBulletsIcon: (props) => <span data-testid="icon-list" {...props} />,
 }));
 
 // --- Imports ---

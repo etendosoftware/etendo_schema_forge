@@ -1,5 +1,5 @@
 import { useMemo, useCallback, useEffect, useRef } from 'react';
-import { ArrowUpRight, Info } from 'lucide-react';
+import { ArrowUpRightIcon, InfoIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
@@ -587,7 +587,7 @@ export function AutoMatchSuggestionModal({
         >
           {/* Summary info */}
           <div className="flex items-center gap-1 text-sm font-medium text-[hsl(var(--muted-foreground))]">
-            <Info className="h-5 w-5 flex-none text-[hsl(var(--text-disabled))]" data-testid="Info__a89979" />
+            <InfoIcon className="h-5 w-5 flex-none text-[hsl(var(--text-disabled))]" data-testid="Info__a89979" />
             <span>{footerSummary}</span>
           </div>
 
@@ -612,7 +612,7 @@ export function AutoMatchSuggestionModal({
               data-testid="automatch-modal-open-reconciliation"
               className="h-10 gap-1 rounded-full border-[hsl(var(--border-control))] bg-card px-3 text-[hsl(var(--foreground))] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-muted hover:text-[hsl(var(--foreground))] [&_svg]:size-5"
             >
-              <ArrowUpRight className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ArrowUpRight__a89979" />
+              <ArrowUpRightIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ArrowUpRight__a89979" />
               <span>{ui('financeReconcileAutomatchActionOpen')}</span>
             </Button>
 

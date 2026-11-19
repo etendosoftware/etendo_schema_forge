@@ -13,6 +13,7 @@
  * props, so such a prop would be dead weight in the source anyway). In the browser the same
  * decision is observed through the URL; see `e2e/tests/flows/first-steps-onboarding.mocked.spec.js`.
  */
+import { allIconsAs } from '@/test/iconMock.js';
 import { useCallback, useState } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 
@@ -69,13 +70,8 @@ vi.mock('@/components/dashboard/CollectionsPaymentsCard', () => ({ CollectionsPa
 vi.mock('@/components/dashboard/FinancialTrendChart', () => ({ FinancialTrendChart: () => <div /> }));
 vi.mock('@/components/dashboard/BestProductsList', () => ({ BestProductsList: () => <div /> }));
 vi.mock('@/components/dashboard/DashboardSkeleton', () => ({ DashboardSkeleton: () => <div /> }));
-vi.mock('lucide-react', () => ({
-  FileText: (props) => <svg {...props} />,
-  ShoppingCart: (props) => <svg {...props} />,
-  Users: (props) => <svg {...props} />,
-  DollarSign: (props) => <svg {...props} />,
-  TrendingUp: (props) => <svg {...props} />,
-}));
+vi.mock('@phosphor-icons/react', async importOriginal =>
+  allIconsAs(props => <svg {...props} />, importOriginal));
 
 const gate = vi.hoisted(() => ({
   scenario: { loading: true, error: null, seen: false },

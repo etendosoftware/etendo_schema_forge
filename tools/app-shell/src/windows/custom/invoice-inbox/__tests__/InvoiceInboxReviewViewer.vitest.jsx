@@ -124,4 +124,31 @@ describe('InvoiceInboxReviewViewer', () => {
     expect(tid('invoice-inbox-review-viewer-image').style.width).toBe(`${(595 * 115) / 100}px`);
     expect(tid('invoice-inbox-review-viewer-zoom')).toHaveTextContent('115%');
   });
+
+  describe('viewer chunk fails to load', () => {
+    afterEach(() => { vi.doUnmock('@/windows/custom/shared/PdfViewer.jsx'); vi.resetModules(); });
+
+    it('contains the failure in the pane (message + Reintentar, siblings stay) and a retry that succeeds shows the viewer', async () => {
+      withPaneWidth(1000);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      let failImport = true;
+      vi.resetModules();
+      vi.doMock('@/windows/custom/shared/PdfViewer.jsx', () => {
+        if (failImport) throw new Error('504 Outdated Optimize Dep');
+        return { default: () => <div data-testid="pdf-stub" /> };
+      });
+      const { default: Fresh } = await import('../InvoiceInboxReviewViewer.jsx');
+      render(<Fresh documentId="D1" fileName="f.pdf" apiBaseUrl="/x" />);
+      await waitFor(() => expect(tid('invoice-inbox-review-viewer-error')).toHaveTextContent('No se pudo cargar el visor del documento'));
+      expect(tid('invoice-inbox-review-viewer-error')).not.toHaveTextContent('504');
+      expect(tid('invoice-inbox-review-viewer-retry')).toHaveTextContent('Reintentar');
+      expect(tid('invoice-inbox-review-viewer-toolbar')).toBeInTheDocument();
+      expect(tid('invoice-inbox-review-viewer-download')).toBeInTheDocument();
+      failImport = false;
+      vi.resetModules();
+      fireEvent.click(tid('invoice-inbox-review-viewer-retry'));
+      await waitFor(() => expect(tid('pdf-stub')).toBeInTheDocument());
+      expect(screen.queryByTestId('invoice-inbox-review-viewer-error')).toBeNull();
+    });
+  });
 });

@@ -1,4 +1,9 @@
-import { Pencil, Trash2, Loader2, RotateCcw } from 'lucide-react';
+import {
+  PencilSimpleIcon,
+  TrashIcon,
+  CircleNotchIcon,
+  ArrowCounterClockwiseIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 /**
@@ -41,7 +46,7 @@ export default function FmRowActions({ onEdit, onDelete, onReactivate, deleting 
           title={ui('quickAction.edit') ?? 'Editar'}
           data-testid="FmRowActions__edit"
         >
-          <Pencil size={15} strokeWidth={1.75} data-testid="Pencil__fmRowActions" />
+          <PencilSimpleIcon size={15} data-testid="Pencil__fmRowActions" />
         </button>
       )}
       {onDelete && (
@@ -55,12 +60,11 @@ export default function FmRowActions({ onEdit, onDelete, onReactivate, deleting 
           data-testid="FmRowActions__delete"
         >
           {deleting
-            ? <Loader2
+            ? <CircleNotchIcon
                 size={15}
-                strokeWidth={1.75}
                 style={{ animation: 'spin 1s linear infinite' }}
                 data-testid="Loader2__fmRowActions" />
-            : <Trash2 size={15} strokeWidth={1.75} data-testid="Trash2__fmRowActions" />}
+            : <TrashIcon size={15} data-testid="Trash2__fmRowActions" />}
         </button>
       )}
       {onReactivate && (
@@ -74,12 +78,11 @@ export default function FmRowActions({ onEdit, onDelete, onReactivate, deleting 
           data-testid="FmRowActions__reactivate"
         >
           {reactivating
-            ? <Loader2
+            ? <CircleNotchIcon
                 size={15}
-                strokeWidth={1.75}
                 style={{ animation: 'spin 1s linear infinite' }}
                 data-testid="Loader2__fmRowActionsReactivate" />
-            : <RotateCcw size={15} strokeWidth={1.75} data-testid="RotateCcw__fmRowActions" />}
+            : <ArrowCounterClockwiseIcon size={15} data-testid="RotateCcw__fmRowActions" />}
         </button>
       )}
     </div>

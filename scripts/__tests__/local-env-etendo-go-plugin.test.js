@@ -293,6 +293,17 @@ describe('etendo-go plugin: backend feature flags from worktree.conf', () => {
   const ENV = 'build/local-env/env';
   const TAG = '# local-env etendo-go: worktree.conf feature-flag';
 
+  it('accepts a worktree with no feature flags when preparing the SPA', () => {
+    write('worktree.conf', 'core - feature/test\n');
+    const source = readFileSync(PLUGIN, 'utf8');
+    const fn = source.slice(source.indexOf('configured_feature_flags() {'), source.indexOf('\n# The `feature-flag`'));
+    const result = spawnSync('bash', ['-eu', '-c', `${fn}\nflags="$(configured_feature_flags)"\nprintf 'ok:%s' "$flags"`], {
+      env: { ...process.env, ETENDO_ROOT: env }, encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'ok:');
+  });
+
   it('exports the boolean flags as ETGO_FLAG_* and replaces only its own lines on the next up', () => {
     write('worktree.conf', 'core - env/x\nfeature-flag sepa-remittances=true\nfeature-flag import-batch-size=5\nfeature-flag invoice-inbox=false\n');
     const hand = 'export ETGO_FLAG_HAND_WRITTEN=true\n';

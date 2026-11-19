@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react';
-import { Check, Loader2 } from 'lucide-react';
+import { CheckIcon, CircleNotchIcon } from '@phosphor-icons/react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog.jsx';
@@ -130,11 +130,11 @@ export default function InvoiceInboxConfirmDialog({
             onClick={onConfirm}
             data-testid="invoice-inbox-confirm-confirm">
             {running
-              ? <Loader2
+              ? <CircleNotchIcon
                   aria-hidden="true"
                   className="!size-3.5 animate-spin [animation-duration:0.8s]"
                   data-testid="invoice-inbox-confirm-spinner" />
-              : <Check aria-hidden="true" data-testid="Check__invoice-inbox-confirm" />}
+              : <CheckIcon aria-hidden="true" data-testid="Check__invoice-inbox-confirm" />}
             {ui(running ? 'invoiceInboxConfirming' : 'invoiceInboxBulkConfirm')}
           </Button>
         </DialogFooter>

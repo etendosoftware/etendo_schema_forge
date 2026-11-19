@@ -12,7 +12,7 @@ This document records the Etendo AI visual identity implementation from the 30 S
 - Plus Jakarta Sans is used for headings.
 - Inter remains the body and data font.
 - Space Mono is available for widget headings and code-oriented labels.
-- Lucide and Phosphor remain the product icon families until the cross-channel icon family is formally selected.
+- Phosphor Icons is the single product icon family (ETP-6155): Regular weight everywhere, Fill only in the Navigation Rail. Brand marks (logo, isotype) stay as they are. See `docs/ui-customization.md` → *Icons*.
 
 ## Implementation boundary
 

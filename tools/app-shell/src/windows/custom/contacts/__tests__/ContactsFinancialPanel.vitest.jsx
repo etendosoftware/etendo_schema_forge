@@ -17,9 +17,11 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
-vi.mock('lucide-react', () => ({
-  Minus: () => <span data-testid="icon-minus" />,
-  Plus: () => <span data-testid="icon-plus" />,
+vi.mock('@phosphor-icons/react', () => ({
+  MinusIcon: () => <span data-testid="icon-minus" />,
+  PlusIcon: () => <span data-testid="icon-plus" />,
+  ArrowUpIcon: () => <span data-testid="icon-arrow-up" />,
+  ArrowDownIcon: () => <span data-testid="icon-arrow-down" />,
 }));
 
 vi.mock('../BillingPreferencesForm', () => ({

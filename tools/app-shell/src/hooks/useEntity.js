@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { resolveBackendSort, buildBackendFilter } from '@/lib/gridQuery.js';
-import { translateBackendError, extractBackendMessageKeys, extractBackendMessageParams, extractBackendErrorCode } from '@/lib/backendErrors.js';
+import { translateBackendError, translateMappedImportRefusal, extractBackendMessageKeys, extractBackendMessageParams, extractBackendErrorCode } from '@/lib/backendErrors.js';
 import { extractQuotaExceeded, isQuotaCheckFailed } from '@/lib/planQuotas.js';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
@@ -283,6 +283,11 @@ export async function extractErrorMessage(res, ui) {
         // `{error:{code, message}}`) is a discriminator for the caller, not text for the user:
         // it is skipped while a readable message exists and only shown as the last resort.
         const errorCode = extractBackendErrorCode(data);
+
+        // ETP-6002 CP-30 — a line saved above what its source line has pending: the server's text
+        // is English, the code and its details render the sentence in the active locale.
+        const importRefusal = translateMappedImportRefusal(data, ui);
+        if (importRefusal) return importRefusal;
 
         // NEO Headless top-level error: { error: { message, status } }
         const neoError = pickReadableError(data?.error, errorCode);

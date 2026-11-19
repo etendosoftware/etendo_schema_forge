@@ -1,4 +1,4 @@
-import { ArrowUpRight, Check } from 'lucide-react';
+import { ArrowUpRightIcon, CheckIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 /**
@@ -19,7 +19,7 @@ export function ReconcilePill({ pendingCount = 0, onClick }) {
         className="inline-flex items-center gap-1 rounded-full bg-[var(--status-success-bg)] px-2 py-1 text-xs font-normal text-[var(--status-success-fg)]"
         data-testid="reconcile-status-reconciled"
       >
-        <Check className="h-3.5 w-3.5 text-[var(--status-success-fg)]" data-testid="Check__69351f" />
+        <CheckIcon className="h-3.5 w-3.5 text-[var(--status-success-fg)]" data-testid="Check__69351f" />
         {ui('financeAccountsStatusReconciled')}
       </span>
     );
@@ -34,7 +34,7 @@ export function ReconcilePill({ pendingCount = 0, onClick }) {
     >
       <span className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--destructive))]" aria-hidden="true" />
       {ui('financeAccountsReconcilePending', { count: pendingCount })}
-      <ArrowUpRight className="h-3 w-3" data-testid="ArrowUpRight__69351f" />
+      <ArrowUpRightIcon className="h-3 w-3" data-testid="ArrowUpRight__69351f" />
     </button>
   );
 }

@@ -8,7 +8,7 @@
 // and omit it entirely when the prop is null/omitted (default), same as before
 // this fix. Mirrors the minimal-mocking style of VerifactuMonitorSection.export.vitest.jsx
 // (FmPrimitives.jsx and useFiscalMonitor.js are used for real; only their own
-// external dependencies — i18n, lucide-react, tooltip, checkbox — are mocked).
+// external dependencies — i18n, @phosphor-icons/react, tooltip, checkbox — are mocked).
 
 const mockApiFetch = vi.hoisted(() =>
   vi.fn().mockResolvedValue({
@@ -20,7 +20,7 @@ const mockApiFetch = vi.hoisted(() =>
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => mockApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u ?? '' }));
-vi.mock('lucide-react', () => ({ TriangleAlert: () => null, ArrowUpRight: () => null }));
+vi.mock('@phosphor-icons/react', () => ({ WarningIcon: () => null, ArrowUpRightIcon: () => null, UploadSimpleIcon: () => null }));
 vi.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ checked, onChange }) => <input type="checkbox" checked={!!checked} onChange={onChange ?? (() => {})} />,
 }));

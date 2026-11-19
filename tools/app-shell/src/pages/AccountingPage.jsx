@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { KPIHeader, DataTable } from '@/components/contract-ui';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { FileText, Receipt, Landmark, Scale } from 'lucide-react';
+import { FileTextIcon, ReceiptIcon, BankIcon, ScalesIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { track, trackKpiEvent } from '@/lib/observability.js';
 
@@ -49,7 +49,7 @@ export default function AccountingPage() {
           <Card data-testid="Card__2f5a25">
             <CardHeader data-testid="CardHeader__2f5a25">
               <CardTitle className="flex items-center gap-2" data-testid="CardTitle__2f5a25">
-                <FileText className="h-5 w-5 text-muted-foreground" data-testid="FileText__2f5a25" />
+                <FileTextIcon className="h-5 w-5 text-muted-foreground" data-testid="FileText__2f5a25" />
                 {ui('recentSalesInvoices')}
               </CardTitle>
             </CardHeader>
@@ -66,7 +66,7 @@ export default function AccountingPage() {
           <Card data-testid="Card__2f5a25">
             <CardHeader data-testid="CardHeader__2f5a25">
               <CardTitle className="flex items-center gap-2" data-testid="CardTitle__2f5a25">
-                <Receipt className="h-5 w-5 text-muted-foreground" data-testid="Receipt__2f5a25" />
+                <ReceiptIcon className="h-5 w-5 text-muted-foreground" data-testid="Receipt__2f5a25" />
                 {ui('recentPurchaseInvoices')}
               </CardTitle>
             </CardHeader>
@@ -85,7 +85,7 @@ export default function AccountingPage() {
           <Card data-testid="Card__2f5a25">
             <CardHeader data-testid="CardHeader__2f5a25">
               <CardTitle className="flex items-center gap-2" data-testid="CardTitle__2f5a25">
-                <Landmark className="h-5 w-5 text-muted-foreground" data-testid="Landmark__2f5a25" />
+                <BankIcon className="h-5 w-5 text-muted-foreground" data-testid="Landmark__2f5a25" />
                 {ui('bankAccountsSummary')}
               </CardTitle>
             </CardHeader>
@@ -102,7 +102,7 @@ export default function AccountingPage() {
           <Card data-testid="Card__2f5a25">
             <CardHeader data-testid="CardHeader__2f5a25">
               <CardTitle className="flex items-center gap-2" data-testid="CardTitle__2f5a25">
-                <Scale className="h-5 w-5 text-muted-foreground" data-testid="Scale__2f5a25" />
+                <ScalesIcon className="h-5 w-5 text-muted-foreground" data-testid="Scale__2f5a25" />
                 {ui('taxObligations')}
               </CardTitle>
             </CardHeader>

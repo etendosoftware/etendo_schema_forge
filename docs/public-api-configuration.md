@@ -44,6 +44,11 @@ Entity: only `GET`/`LIST`, every field `out`:
 "costing": { "publicApi": { "readOnly": true }, "fields": { } }
 ```
 
+The entity is the one under that key in `decisions.json`. When `decisions.json` keys the entity
+under another name and renames it with `name` (for example `conversion-rates`, whose
+`entities.header` declares `"name": "conversionRate"`), declare the entity-level keys on that entry:
+the generator finds it by its contract name.
+
 ## 2b. Mark a writable field as required
 
 Declare it on the field; the OpenAPI POST and PUT bodies then list it under `required` (a PATCH requires nothing):
@@ -51,6 +56,9 @@ Declare it on the field; the OpenAPI POST and PUT bodies then list it under `req
 ```json
 "searchKey": { "visibility": "editable", "publicApi": { "exposed": true, "required": true } }
 ```
+
+Real example: `artifacts/business-partner-category/decisions.json` declares it on `searchKey` and
+`name` (`contact-category`).
 
 Declare only fields the API really refuses to create without. The contract's own `required`
 is not used: it also covers fields NEO fills by itself (an order's address, price list or
@@ -115,7 +123,9 @@ beforehand (a payment method). Declare it on the field:
   (a foreign key). Lookups exist on top-level resources only, never on a child. Anything else, or
   any other shape, fails the generation.
 - The values carry the JSON:API `type` of the reference in kebab-case (`PaymentMethod` gives
-  `payment-method`).
+  `payment-method`). When the reference is itself a published resource, the field is a
+  relationship and the values carry that resource's public name instead (`BusinessPartnerCategory`
+  gives `contact-category`), so an id from the lookup is sent back as the relationship as is.
 - Declare a lookup only for a field an integrator really has to fill and cannot know the id of; a
   value that is a published resource (a contact, a product) is found by listing that resource.
 
@@ -152,12 +162,18 @@ These live in the generator and win over any decision:
   `grantPortalAccess`, bank identifiers (`accountNo`, `bankName`, `displayedAccount`, `iBAN`,
   `swiftCode`) and the accounting bulk-posting fields. `exposed: true` does not publish them.
 - The V1 allowlist (`publicApiV1Entities`, `policy.allowedResources` in the manifest): only
-  `contacts`, `product`, `product-category`, `sales-quotation`, `sales-order` and `purchase-order`,
-  with the child entities listed there, are published. A window outside it stays out whatever its
-  `decisions.json` says; adding one is a change to the generator, not a decision.
-- Conservative defaults: `system`/`discarded` fields are never published, excluded categories,
-  windows and child tabs stay out, no action without opt-in, a resource with no writable field is
-  read-only.
+  `contacts`, `product`, `product-category`, `sales-quotation`, `sales-order`, `purchase-order`,
+  `business-partner-category` (published as `contact-category`), `tax`, `tax-category` and
+  `conversion-rates`, with the entities listed there, are published. A window outside it stays out
+  whatever its `decisions.json` says; adding one is a change to the generator, not a decision.
+  Listing a window is its scope decision, so it overrides the category exclusion: an allowlisted
+  window is published even when its category (`settings`, `configuration`, `finance`, ...) is
+  excluded.
+- Public resource names (`publicResourceNames`, `policy.publicResourceNames` in the manifest): a
+  window is published under its artifact name unless the generator renames it there
+  (`business-partner-category` is `contact-category`). The NEO spec does not change.
+- Conservative defaults: `system`/`discarded` fields are never published, excluded windows and
+  child tabs stay out, no action without opt-in, a resource with no writable field is read-only.
 
 ## 6. Regenerate, verify, commit
 

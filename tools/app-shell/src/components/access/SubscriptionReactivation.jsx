@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { CircleNotchIcon, ArrowsClockwiseIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { createSubscriptionReactivation, getCheckoutStatus } from '@/lib/upgrade/api.js';
@@ -63,7 +63,7 @@ export function ReactivateSubscriptionButton({
         onClick={start}
         data-testid="blocked-access-reactivate"
       >
-        {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" data-testid="Loader2__reactivate" />}
+        {busy && <CircleNotchIcon className="h-4 w-4 mr-2 animate-spin" data-testid="Loader2__reactivate" />}
         {ui('blockedAccessReactivateCta')}
       </Button>
       {errorKey && (
@@ -148,11 +148,11 @@ export function ReactivationPendingNotice({
           onClick={() => reload(REACTIVATED_LANDING)}
           data-testid="blocked-access-reactivating-reload"
         >
-          <RefreshCw className="h-4 w-4 mr-2" data-testid="RefreshCw__reactivating" />
+          <ArrowsClockwiseIcon className="h-4 w-4 mr-2" data-testid="RefreshCw__reactivating" />
           {ui('retry')}
         </Button>
       ) : (
-        <Loader2 className="mt-4 h-6 w-6 animate-spin text-muted-foreground"
+        <CircleNotchIcon className="mt-4 h-6 w-6 animate-spin text-muted-foreground"
           data-testid="blocked-access-reactivating-spinner" />
       )}
     </div>

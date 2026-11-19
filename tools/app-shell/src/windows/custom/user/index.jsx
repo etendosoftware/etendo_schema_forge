@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Loader2, Send } from 'lucide-react';
+import { CircleNotchIcon, PaperPlaneRightIcon } from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import UserPage from '@generated/user/generated/web/user/UserPage';
 import UserRolesTab from './UserRolesTab';
@@ -159,8 +159,8 @@ function useResendInvitationExtraActions() {
       label: (
         <span className="flex items-center gap-2" data-testid="ResendInvitationButton">
           {sending
-            ? <Loader2 className="h-5 w-5 animate-spin text-[#828FA3]" data-testid="Loader2__ResendInvitation" />
-            : <Send className="h-5 w-5 text-[#828FA3]" data-testid="Send__ResendInvitation" />}
+            ? <CircleNotchIcon className="h-5 w-5 animate-spin text-[#828FA3]" data-testid="Loader2__ResendInvitation" />
+            : <PaperPlaneRightIcon className="h-5 w-5 text-[#828FA3]" data-testid="Send__ResendInvitation" />}
           <span>{ui('resendInvitationAction')}</span>
         </span>
       ),

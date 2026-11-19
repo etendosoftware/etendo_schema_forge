@@ -26,12 +26,12 @@ vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 // told apart by their PATH, which is what the journal labels on.
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => apiFetchMock }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('lucide-react', () => ({
-  X: () => <span data-testid="icon-x" />,
-  Loader2: () => <span data-testid="icon-loader" />,
-  MapPin: () => <span data-testid="icon-map" />,
-  ChevronDown: () => <span data-testid="icon-chevron" />,
-  Check: () => <span data-testid="icon-check" />,
+vi.mock('@phosphor-icons/react', () => ({
+  XIcon: () => <span data-testid="icon-x" />,
+  CircleNotchIcon: () => <span data-testid="icon-loader" />,
+  MapPinIcon: () => <span data-testid="icon-map" />,
+  CaretDownIcon: () => <span data-testid="icon-chevron" />,
+  CheckIcon: () => <span data-testid="icon-check" />,
 }));
 vi.mock('@/windows/custom/shared/LocationEditorModal.jsx', () => ({
   default: () => <div data-testid="location-editor-modal" />,

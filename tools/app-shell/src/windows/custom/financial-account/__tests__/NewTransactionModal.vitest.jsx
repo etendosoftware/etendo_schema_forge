@@ -30,13 +30,13 @@ vi.mock('@/hooks/useMovementLookups', () => ({
 }));
 
 // Icons → no-ops.
-vi.mock('lucide-react', () => ({
-  X: () => null,
-  Check: () => null,
-  Save: () => null,
-  ArrowDown: () => null,
-  ArrowUp: () => null,
-  BarChart3: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  XIcon: () => null,
+  CheckIcon: () => null,
+  FloppyDiskIcon: () => null,
+  ArrowDownIcon: () => null,
+  ArrowUpIcon: () => null,
+  ChartBarIcon: () => null,
 }));
 
 // Radix Dialog — render children only while open, so the closed-state test is

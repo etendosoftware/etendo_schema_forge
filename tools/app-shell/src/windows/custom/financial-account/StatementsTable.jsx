@@ -1,6 +1,6 @@
 import { FinancialGridView, FinancialGridRow } from './FinancialGridView.jsx';
 import { Fragment, useState } from 'react';
-import { FileText, Pencil, Trash2 } from 'lucide-react';
+import { FileTextIcon, PencilSimpleIcon, TrashIcon } from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -374,7 +374,7 @@ function renderBody({
     return (
       <div className="flex flex-col items-center gap-2 px-4 py-16 text-center">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[hsl(var(--muted))]">
-          <FileText className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="FileText__3acaeb" />
+          <FileTextIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="FileText__3acaeb" />
         </div>
         <p className="text-sm font-medium text-[hsl(var(--foreground))]">
           {ui('financeAccountStatementsEmpty')}
@@ -441,7 +441,7 @@ function RowActions({ statement: s, actions, ui, bankConnected = false }) {
           onClick={(e) => { e.stopPropagation(); actions.onEdit(s); }}
           className={cn(iconBtn, 'text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))] hover:text-[hsl(var(--foreground))]')}
         >
-          <Pencil className="h-4 w-4" data-testid="Pencil__3acaeb" />
+          <PencilSimpleIcon className="h-4 w-4" data-testid="Pencil__3acaeb" />
         </button>
       ) : null}
       <StatementRowKebab
@@ -460,7 +460,7 @@ function RowActions({ statement: s, actions, ui, bankConnected = false }) {
           onClick={(e) => { e.stopPropagation(); actions.onDelete(s); }}
           className={cn(iconBtn, 'text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)] hover:text-[hsl(var(--destructive))]')}
         >
-          <Trash2 className="h-4 w-4" data-testid="Trash2__3acaeb" />
+          <TrashIcon className="h-4 w-4" data-testid="Trash2__3acaeb" />
         </button>
       ) : null}
     </>

@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
-import { X, Upload, Trash2, Loader2, Download } from 'lucide-react';
+import {
+  XIcon,
+  UploadSimpleIcon,
+  TrashIcon,
+  CircleNotchIcon,
+  DownloadSimpleIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { useMainAttachment } from './useMainAttachment.js';
 import PdfViewer from './PdfViewer.jsx';
@@ -29,7 +35,7 @@ function StoredFileDownloadLink({ objectUrl, fileName }) {
       title={`${ui('downloadPdf')} — ${fileName}`}
       aria-label={ui('downloadPdf')}
     >
-      <Download size={16} className="text-[hsl(var(--text-disabled))]" data-testid="Download__152ff6" />
+      <DownloadSimpleIcon size={16} className="text-[hsl(var(--text-disabled))]" data-testid="Download__152ff6" />
     </a>
   );
 }
@@ -210,7 +216,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
               title={`${ui('deleteDocument')} — ${fileName}`}
               aria-label={ui('deleteDocument')}
             >
-              <Trash2 size={16} className="text-[hsl(var(--text-disabled))]" data-testid="Trash2__152ff6" />
+              <TrashIcon size={16} className="text-[hsl(var(--text-disabled))]" data-testid="Trash2__152ff6" />
             </button>)}
           </div>
         )}
@@ -228,7 +234,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
   if (attachment.isBusy) {
     return (
       <div className="flex flex-1 items-center justify-center gap-2 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__152ff6" />
+        <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__152ff6" />
       </div>
     );
   }
@@ -254,7 +260,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
         }`}
       >
         <div className="w-16 h-20 bg-card rounded-lg border border-border-subtle flex items-center justify-center shadow-sm">
-          <Upload size={20} className="text-muted-foreground" data-testid="Upload__152ff6" />
+          <UploadSimpleIcon size={20} className="text-muted-foreground" data-testid="Upload__152ff6" />
         </div>
         {isDragOver ? (
           <p className="text-sm font-medium text-foreground">{ui('dropZoneDropHere')}</p>
@@ -431,7 +437,7 @@ const GenericPreviewModal = forwardRef(function GenericPreviewModal({
               className="absolute top-3 right-3 z-10 p-1.5 text-muted-foreground hover:text-muted-foreground hover:bg-muted rounded-lg transition-colors"
               aria-label={ui('close')}
             >
-              <X size={16} data-testid="X__152ff6" />
+              <XIcon size={16} data-testid="X__152ff6" />
             </button>
 
             {/* Header: title + subtitle + action buttons */}

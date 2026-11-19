@@ -154,25 +154,25 @@ vi.mock('@/components/ui/button.jsx', () => ({
   ),
 }));
 
-vi.mock('lucide-react', async (importOriginal) => {
+vi.mock('@phosphor-icons/react', async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
-    X: () => <span data-testid="icon-x" />,
-    Upload: () => <span />,
-    Edit2: () => <span />,
-    FileText: () => <span />,
-    Image: () => <span />,
-    Plus: () => <span />,
-    Check: () => <span />,
-    Trash2: () => <span />,
-    Loader2: () => <span />,
-    AlertCircle: () => <span />,
-    Mail: () => <span />,
-    Download: () => <span />,
-    Ban: () => <span />,
-    Wallet: () => <span />,
-    MoreVertical: () => <span />,
+    XIcon: () => <span data-testid="icon-x" />,
+    UploadSimpleIcon: () => <span />,
+    PencilSimpleIcon: () => <span />,
+    FileTextIcon: () => <span />,
+    ImageIcon: () => <span />,
+    PlusIcon: () => <span />,
+    CheckIcon: () => <span />,
+    TrashIcon: () => <span />,
+    CircleNotchIcon: () => <span />,
+    WarningCircleIcon: () => <span />,
+    EnvelopeSimpleIcon: () => <span />,
+    DownloadSimpleIcon: () => <span />,
+    ProhibitIcon: () => <span />,
+    WalletIcon: () => <span />,
+    DotsThreeVerticalIcon: () => <span />,
   };
 });
 

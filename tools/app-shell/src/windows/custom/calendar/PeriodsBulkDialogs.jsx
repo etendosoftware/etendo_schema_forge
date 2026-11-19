@@ -1,4 +1,4 @@
-import { Check, Minus, X } from 'lucide-react';
+import { CheckIcon, MinusIcon, XIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog.jsx';
@@ -63,9 +63,9 @@ export function PeriodsBulkConfirmDialog({ action, periodNames, onConfirm, onCan
 }
 
 function OutcomeIcon({ outcome }) {
-  if (outcome === 'ok') return <Check className="h-4 w-4 text-[var(--status-success-fg)]" aria-hidden="true" data-testid="Check__periodsBulkResult" />;
-  if (outcome === 'failed') return <X className="h-4 w-4 text-destructive" aria-hidden="true" data-testid="X__periodsBulkResult" />;
-  return <Minus className="h-4 w-4 text-muted-foreground" aria-hidden="true" data-testid="Minus__periodsBulkResult" />;
+  if (outcome === 'ok') return <CheckIcon className="h-4 w-4 text-[var(--status-success-fg)]" aria-hidden="true" data-testid="Check__periodsBulkResult" />;
+  if (outcome === 'failed') return <XIcon className="h-4 w-4 text-destructive" aria-hidden="true" data-testid="X__periodsBulkResult" />;
+  return <MinusIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" data-testid="Minus__periodsBulkResult" />;
 }
 
 /**

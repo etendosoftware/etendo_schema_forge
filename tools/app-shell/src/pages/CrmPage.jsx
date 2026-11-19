@@ -4,14 +4,23 @@ import { useNavigate } from 'react-router-dom';
 import { KPIHeader, KanbanBoard, DataTable } from '@/components/contract-ui';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Target, DollarSign, Trophy, TrendingUp, Users, Activity, ArrowUp, ArrowDown } from 'lucide-react';
+import {
+  TargetIcon,
+  CurrencyDollarIcon,
+  TrophyIcon,
+  TrendUpIcon,
+  UsersIcon,
+  PulseIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+} from '@phosphor-icons/react';
 
 import { sections } from '@generated/crm/generated/config';
 import * as mockData from '@generated/crm/generated/mockData';
 
 // -- Icon resolution (config stores string names) -----------------------------
 
-const ICON_MAP = { Target, DollarSign, Trophy, TrendingUp, Users, Activity };
+const ICON_MAP = { Target: TargetIcon, DollarSign: CurrencyDollarIcon, Trophy: TrophyIcon, TrendingUp: TrendUpIcon, Users: UsersIcon, Activity: PulseIcon };
 
 // -- Derived data from contract -----------------------------------------------
 
@@ -78,7 +87,7 @@ export default function CrmPage() {
           <Card data-testid="Card__81e6f5">
             <CardHeader data-testid="CardHeader__81e6f5">
               <CardTitle className="flex items-center gap-2" data-testid="CardTitle__81e6f5">
-                <Activity className="h-5 w-5 text-muted-foreground" data-testid="Activity__81e6f5" />
+                <PulseIcon className="h-5 w-5 text-muted-foreground" data-testid="Activity__81e6f5" />
                 {ui('recentActivities')}
               </CardTitle>
             </CardHeader>
@@ -99,7 +108,7 @@ export default function CrmPage() {
               <CardTitle
                 className="flex items-center gap-2 text-base"
                 data-testid="CardTitle__81e6f5">
-                <Users className="h-5 w-5 text-muted-foreground" data-testid="Users__81e6f5" />
+                <UsersIcon className="h-5 w-5 text-muted-foreground" data-testid="Users__81e6f5" />
                 {ui('teamActivity')}
               </CardTitle>
             </CardHeader>
@@ -115,8 +124,8 @@ export default function CrmPage() {
                           : 'bg-status-info text-status-info-foreground'
                       }`}>
                         {entry.direction === 'in'
-                          ? <ArrowUp className="h-3.5 w-3.5" data-testid="ArrowUp__81e6f5" />
-                          : <ArrowDown className="h-3.5 w-3.5" data-testid="ArrowDown__81e6f5" />
+                          ? <ArrowUpIcon className="h-3.5 w-3.5" data-testid="ArrowUp__81e6f5" />
+                          : <ArrowDownIcon className="h-3.5 w-3.5" data-testid="ArrowDown__81e6f5" />
                         }
                       </div>
                     )}

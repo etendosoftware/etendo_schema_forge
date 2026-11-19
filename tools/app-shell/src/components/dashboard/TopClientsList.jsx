@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Sparkles, Plus } from 'lucide-react';
+import { CaretRightIcon, SparkleIcon, PlusIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
@@ -91,7 +91,7 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
                 className="flex items-center justify-center"
                 style={{ padding: '4px 8px', height: '32px', background: 'hsl(var(--card))', border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', borderRadius: '8px', gap: '4px', cursor: 'pointer' }}
               >
-                <Sparkles
+                <SparkleIcon
                   style={{ width: '20px', height: '20px', color: 'hsl(var(--text-disabled))' }}
                   data-testid="Sparkles__2d735a" />
                 <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: 'hsl(var(--foreground))' }}>
@@ -104,7 +104,7 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
                 className="flex items-center justify-center"
                 style={{ padding: '4px 8px', height: '32px', background: 'hsl(var(--foreground))', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
               >
-                <Plus
+                <PlusIcon
                   style={{ width: '20px', height: '20px', color: 'hsl(var(--background) / 0.9)' }}
                   data-testid="Plus__2d735a" />
                 <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: 'hsl(var(--card))' }}>
@@ -142,7 +142,7 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
 
               {/* Trailing: chevron 24x24, padding 0 4px 0 0 */}
               <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', padding: '0 4px 0 0', width: '28px', height: '24px', flexShrink: 0 }}>
-                <ChevronRight
+                <CaretRightIcon
                   style={{ width: '16px', height: '16px', color: 'hsl(var(--text-disabled))' }}
                   data-testid="ChevronRight__2d735a" />
               </div>

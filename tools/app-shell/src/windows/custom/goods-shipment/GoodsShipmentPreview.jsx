@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Edit2, Mail } from 'lucide-react';
+import { DownloadSimpleIcon, PencilSimpleIcon, EnvelopeSimpleIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button.jsx';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
@@ -158,7 +158,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
           className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[hsl(var(--foreground))] hover:bg-[hsl(var(--foreground))] text-primary-foreground [&_svg]:size-5"
           onClick={openEmailModal}
           data-testid="Button__5d626b">
-          <Mail data-testid="Mail__5d626b" />
+          <EnvelopeSimpleIcon data-testid="Mail__5d626b" />
           {ui('invoicePreviewSend')}
         </Button>
       )}
@@ -169,7 +169,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
         disabled={!pdfBlob || !isDownloadable}
         onClick={pdfBlob && isDownloadable ? handleDownload : undefined}
         data-testid="Button__5d626b">
-        <Download className="text-[hsl(var(--text-disabled))]" data-testid="Download__5d626b" />
+        <DownloadSimpleIcon className="text-[hsl(var(--text-disabled))]" data-testid="Download__5d626b" />
         {ui('invoicePreviewDownloadPdf')}
       </Button>
       <Button
@@ -178,7 +178,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] [&_svg]:size-5"
         onClick={() => modalRef.current?.triggerEdit?.()}
         data-testid="Button__5d626b">
-        <Edit2 className="text-[hsl(var(--text-disabled))]" data-testid="Edit2__5d626b" />
+        <PencilSimpleIcon className="text-[hsl(var(--text-disabled))]" data-testid="Edit2__5d626b" />
         {ui('invoicePreviewEdit')}
       </Button>
     </>

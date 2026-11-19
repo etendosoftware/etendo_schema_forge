@@ -31,10 +31,10 @@ vi.mock('@/lib/utils', () => ({
   cn: (...args) => args.filter(Boolean).join(' '),
 }));
 
-vi.mock('lucide-react', () => ({
-  MessageSquare: () => <svg data-testid="icon-message" />,
-  Send: () => <svg data-testid="icon-send" />,
-  ChevronDown: () => <svg data-testid="icon-chevron" />,
+vi.mock('@phosphor-icons/react', () => ({
+  ChatIcon: () => <svg data-testid="icon-message" />,
+  PaperPlaneRightIcon: () => <svg data-testid="icon-send" />,
+  CaretDownIcon: () => <svg data-testid="icon-chevron" />,
 }));
 
 import { render, screen, fireEvent } from '@testing-library/react';

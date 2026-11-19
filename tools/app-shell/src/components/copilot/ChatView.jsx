@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Bot, Paperclip, Send, X } from 'lucide-react';
+import { RobotIcon, PaperclipIcon, PaperPlaneRightIcon, XIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
@@ -119,7 +119,7 @@ export function ChatView({
           >
             {message.role !== 'user' && (
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
-                <Bot className="h-4 w-4 text-muted-foreground" data-testid="Bot__61b427" />
+                <RobotIcon className="h-4 w-4 text-muted-foreground" data-testid="Bot__61b427" />
               </div>
             )}
             <div
@@ -153,7 +153,7 @@ export function ChatView({
         {isSending && (
           <div className="flex gap-2 mr-auto">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
-              <Bot className="h-4 w-4 text-muted-foreground" data-testid="Bot__61b427" />
+              <RobotIcon className="h-4 w-4 text-muted-foreground" data-testid="Bot__61b427" />
             </div>
             <div className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
               <span className="inline-flex gap-1">
@@ -196,7 +196,7 @@ export function ChatView({
                   className="text-muted-foreground hover:text-foreground"
                   aria-label={`${ui('remove')} ${file.name}`}
                 >
-                  <X className="h-3 w-3" data-testid="X__61b427" />
+                  <XIcon className="h-3 w-3" data-testid="X__61b427" />
                 </button>
               </Badge>
             ))}
@@ -224,7 +224,7 @@ export function ChatView({
           disabled={isSending}
           aria-label={ui('copilotAttachFile')}
           data-testid="Button__61b427">
-          <Paperclip className="h-4 w-4" data-testid="Paperclip__61b427" />
+          <PaperclipIcon className="h-4 w-4" data-testid="Paperclip__61b427" />
         </Button>
 
         <Input
@@ -243,7 +243,7 @@ export function ChatView({
           disabled={!input.trim() || isSending}
           aria-label={ui('send')}
           data-testid="Button__61b427">
-          <Send className="h-4 w-4" data-testid="Send__61b427" />
+          <PaperPlaneRightIcon className="h-4 w-4" data-testid="Send__61b427" />
         </Button>
       </form>
     </>

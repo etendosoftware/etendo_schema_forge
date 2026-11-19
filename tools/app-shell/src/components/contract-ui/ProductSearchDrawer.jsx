@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Check } from 'lucide-react';
+import { CheckIcon } from '@phosphor-icons/react';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useCurrency } from '@/hooks/useCurrency.jsx';
 import ProductDrawerShell from './ProductDrawerShell.jsx';
@@ -166,7 +166,7 @@ function useDefaultVariant(ctx) {
                 </span>
               )}
               {isChecked && (
-                <Check className="h-4 w-4 text-primary shrink-0" data-testid="Check__pds" />
+                <CheckIcon className="h-4 w-4 text-primary shrink-0" data-testid="Check__pds" />
               )}
             </button>
           </li>
