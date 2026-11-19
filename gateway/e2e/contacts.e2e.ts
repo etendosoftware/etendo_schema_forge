@@ -5,7 +5,7 @@ import { api, cleanupCreated, createRecord, expectErrorDocument, expectStatus, r
 import { CONTACT_HINT, createAddress, createContact, createContactCategory, personAttributes } from './support/fixtures.ts';
 import {
   expectDeleted, expectListed, expectMissingIfMatchRefused, expectPatchWithEtag, expectStaleEtagRefused,
-  readWithEtag, type LifecycleSpec,
+  patch, readWithEtag, type LifecycleSpec,
 } from './support/lifecycle.ts';
 
 after(cleanupCreated);
@@ -258,5 +258,36 @@ describe('contact categories', () => {
 
   it('deletes the contact category and it answers 404 afterwards', async () => {
     await expectDeleted(category);
+  });
+});
+
+describe('contact roles: is_customer and is_vendor', () => {
+  it('reads back the roles a contact is created with', async () => {
+    const created = await createContact('vendor-only', { is_vendor: true, is_customer: false });
+    const read = (await api('GET', `contacts/${created.id}`)).json.data.attributes;
+    assert.equal(read.is_vendor, true);
+    assert.equal(read.is_customer, false);
+  });
+
+  it('a contact created with neither role reads back as customer and not vendor', async () => {
+    // The contact sends neither flag. It goes into its own customer category so the result is the same
+    // with `contact-category-type` on (the flags come from that category) and off (the AD defaults apply).
+    const own = await createContactCategory('role-defaults');
+    const created = await createContact('role-defaults', {}, { category: ['contact-category', own.id] });
+    const read = (await api('GET', `contacts/${created.id}`)).json.data.attributes;
+    assert.equal(read.is_customer, true, 'an omitted is_customer is true');
+    assert.equal(read.is_vendor, false, 'an omitted is_vendor is false');
+  });
+
+  it('PATCHing a role with the ETag changes it and leaves the other one alone', async () => {
+    const created = await createContact('role-patch', { is_vendor: false, is_customer: true });
+    const spec: LifecycleSpec = {
+      collection: 'contacts', type: 'contacts', id: created.id, firstPatch: { is_vendor: true }, secondPatch: {},
+    };
+    const { etag } = await readWithEtag(`contacts/${created.id}`);
+    expectStatus(await patch(spec, { is_vendor: true }, etag), 200);
+    const read = (await readWithEtag(`contacts/${created.id}`)).res.json.data.attributes;
+    assert.equal(read.is_vendor, true, 'the patched role changed');
+    assert.equal(read.is_customer, true, 'the other role is untouched');
   });
 });
