@@ -63,9 +63,10 @@ probes:
   - id: p-profit-denied
     category: error
     mode: read
-    # Refused means the agent says it cannot give the P&L and does not report success. One of three
-    # gemini attempts (2026-11-19) answered OKAY with operational figures instead: a real finding,
-    # kept failing on purpose.
+    # Refused means the agent says it cannot give the P&L and does not report success. The role is
+    # not offered generate_profit_loss at all, so no 403 comes from the report: it comes from the
+    # revenue widgets (kpis, revenue-trend, top-clients), which answered an empty list until
+    # ETP-5850 and led one of three gemini attempts to report OKAY with operational figures.
     prompt: "¿Cuál fue el resultado del segundo trimestre de 2026?"
     platforms:
       etendo-go:
