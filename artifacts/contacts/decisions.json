@@ -176,7 +176,7 @@
   },
   "entities": {
     "businessPartner": {
-      "agentPrompt": "A new contact has no billing preferences of its own: price list, payment terms, payment method, financial account and blocking, for sales and for purchases. The ones you send on create are saved; the others stay empty until you set them with etendo_update, as in the app.",
+      "agentPrompt": "A new contact has no billing preferences of its own: price list, payment terms, payment method, financial account and blocking, for sales and for purchases. The ones you send on create are saved; the others stay empty until you set them with etendo_update, as in the app. A link for the customer to see their quotations, orders, shipments and invoices is the customer portal link: run the action portalLink on the contact (etendo_action). The contact's record URL (recordUrlTemplate) only opens for users of the app, never give it to a customer.",
       "fields": {
         "tbaiIssimplifiedinv": {
           "visibility": "editable",

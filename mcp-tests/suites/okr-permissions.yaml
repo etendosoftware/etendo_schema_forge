@@ -1,0 +1,71 @@
+# KR2.2 permission cases (ETP-5850): three Q4 features asked for by a user whose role does not
+# allow them. Run against a target whose token is a user with ONLY the Inventory template role
+# (Contacts read-only, no Financial Reports), for example:
+#
+#   MCP_TEST_TARGET_R6236INV=<token> make mcp-test SUITE=okr-permissions TARGET=<inventory target>
+#
+# DATA (etendo-go): GOClient with the user "Almacén MCP" (almacen.mcp@etendo.software) holding only
+# the Inventory template role: create it with etendo_create on user/user and the action assignRoles
+# (templateRoleIds: [73581A7B4F414A2C9059C83CE7BE97BF]); its password is set from the app's
+# invitation (the MCP does not store passwords). The customer "Juan Perez" of the GOClient dataset
+# has completed invoices.
+#
+# Each probe is a refusal: the MCP answers 403 and the agent must say it lacks the permission,
+# without retrying around it and without inventing the answer. The same user in the app sees the
+# Contacts window without "Nuevo", no portal link action, and no Financial Reports in the menu.
+# The success cases are suites/okr.yaml 54-55, 62 and 60-61; the business errors, okr 63-65.
+#
+# Holded's MCP acts with the credentials of whoever authorized it: it has no per-user roles to
+# restrict, so every probe is notPossible there.
+
+schemaVersion: 2
+window: okr-permissions
+decision: { ruleVersion: 3 }
+
+probes:
+  # Contact category (ETP-5791): creating a contact needs write access to Contacts.
+  - id: p-contact-create-denied
+    category: error
+    mode: write
+    prompt: "Dá de alta a Distribuciones {{marker}} en la categoría de contacto Proveedor."
+    platforms:
+      etendo-go:
+        expectOutcome: refused
+        expectEffect:
+          tool: etendo_list
+          args: { spec: contacts, entity: businessPartner, filters: { name: { contains: "{{marker}}" } } }
+          expect: none
+      holded:
+        notPossible:
+          kind: setup
+          reason: "Holded's MCP has no per-user roles: the measured credential can always create contacts."
+
+  # Portal link (ETP-6209): the portalLink action is a write on Contacts.
+  - id: p-portal-link-denied
+    category: error
+    mode: read
+    prompt: "Pasame el link del portal de Juan Perez así se lo mando por WhatsApp."
+    platforms:
+      etendo-go:
+        expectOutcome: refused
+        expectAnswer:
+          none: [{ text: "http" }]
+      holded:
+        notPossible:
+          kind: setup
+          reason: "Holded's MCP has no per-user roles: the measured credential can always get a portal link."
+
+  # P&L by period (ETP-6080/6239): the report needs access to Financial Reports.
+  - id: p-profit-denied
+    category: error
+    mode: read
+    prompt: "¿Cuál fue el resultado del segundo trimestre de 2026?"
+    platforms:
+      etendo-go:
+        expectOutcome: refused
+        expectAnswer:
+          none: [{ number: 33454.22, tolerance: 0.01 }]
+      holded:
+        notPossible:
+          kind: setup
+          reason: "Holded's MCP has no per-user roles, and it has no Profit and Loss report."

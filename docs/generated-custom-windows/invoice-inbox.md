@@ -766,3 +766,12 @@ Prerequisites: `etendo.go.flags.invoice-inbox=true` (Tomcat restart) and the spe
     confirmed, the toast is a warning. From the panel: Confirmar factura → toast and the next pending document
     (or the panel closes); a failed one shows the banner with the reason and "Reintentar". Widths 360, 390 and
     420: the header, the line inputs and the two footer actions all fit, no horizontal scroll.
+
+## Agent prompt — ETP-5850
+
+The `header` entity carries an `agentPrompt` listing the exact `status` codes (PROCESSING,
+PENDING_REVIEW, READY, ERROR, CONFIRMED, DISCARDED) and that "pending" means PENDING_REVIEW, READY
+and ERROR: an agent asked what is pending filtered `status: "pending"`, which matches nothing and
+answered "no documents". It also says an agent only reads the inbox (the actions stay for people,
+ETP-6051). MCP test `q-invoice-inbox` (suite `okr`). The text lives in this window's
+`decisions.json` and in `com.etendoerp.go`'s `ETGO_SF_ENTITY` sourcedata; keep both equal.
