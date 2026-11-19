@@ -799,3 +799,27 @@ describe('useInvoiceWindow', () => {
     });
   });
 });
+
+// ETP-6232 — status gating of the standalone invoice unpost, over every lifecycle status.
+describe('invoice unpost status gating (ETP-6232)', () => {
+  const STATUSES = ['DR', 'CO', 'VO', 'UE', 'XX', undefined];
+  const row = (documentStatus, posted = 'Y') => ({ id: 'r', documentStatus, posted });
+
+  it('offers Unpost only when some row is completed AND posted', () => {
+    for (const st of STATUSES) {
+      assert.equal(buildInvoiceUnpostActions([row(st)]).length, st === 'CO' ? 1 : 0, String(st));
+    }
+    assert.equal(buildInvoiceUnpostActions([row('CO', 'N')]).length, 0);
+  });
+
+  it('falls back to docStatus when documentStatus is absent', () => {
+    assert.equal(buildInvoiceUnpostActions([{ docStatus: 'CO', posted: 'Y' }]).length, 1);
+  });
+
+  it('row filter lets a posted completed row through and explains every other status', () => {
+    for (const st of STATUSES) {
+      const res = invoiceUnpostRowFilter(row(st), 'unpost', fakeUi);
+      assert.equal(res, st === 'CO' ? true : '__bulkRowNotCompleted__', String(st));
+    }
+  });
+});

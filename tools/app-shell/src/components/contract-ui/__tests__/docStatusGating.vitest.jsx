@@ -27,12 +27,12 @@ describe('LinesBottomSection totals read-only (docStatus)', () => {
     ['XX', 'true'],
     [undefined, 'true'],
   ])('status %s -> readOnly=%s', (documentStatus, expected) => {
-    render(<LinesBottomSection data={{ documentStatus }} lines={[]} notesField="description" Docs={Docs} />);
+    render(<LinesBottomSection data={{ documentStatus }} lines={[]} notesField="description" relatedDocuments={Docs} />);
     expect(screen.getByTestId('totals-panel').dataset.readonly).toBe(expected);
   });
 
   it('stays read-only on a draft when the document itself is read-only', () => {
-    render(<LinesBottomSection data={{ documentStatus: 'DR' }} isDocumentReadOnly lines={[]} notesField="description" Docs={Docs} />);
+    render(<LinesBottomSection data={{ documentStatus: 'DR' }} isDocumentReadOnly lines={[]} notesField="description" relatedDocuments={Docs} />);
     expect(screen.getByTestId('totals-panel').dataset.readonly).toBe('true');
   });
 });

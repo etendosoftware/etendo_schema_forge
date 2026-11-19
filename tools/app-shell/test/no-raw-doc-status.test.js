@@ -19,7 +19,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const SRC = join(__dirname, '..', 'src');
 const OPT_OUT = 'doc-status-ok';
 
-// A line is an offender when it compares with `===`/`!==`/`==`/`!=` (either operand order) a raw
+// A line is an offender when it compares with `===`/`!==`/`==`/`!=` (either operand order; the same pattern also matches the `!=` of display expressions such as
+// `@DocumentStatus@!='DR'`, but not a lone `=`, so `@DocumentStatus@!='DR'` is NOT flagged — a known gap) a raw
 // DR/CO/VO literal AND names a status somewhere on the line, so `statusOf(r) === 'DR'`,
 // `'CO' === row.documentStatus` and `row.status !== 'VO'` are caught while a SII state such as
 // `aeatsiiEstado === 'CO'` is not. Also flagged: `case 'DR':` and `['DR', ...].includes(` forms.
@@ -92,6 +93,7 @@ describe('isRawDocStatusLine matcher (self-test)', () => {
     "rows.some((r) => statusOf(r) === 'DR')",
     "switch (s) { case 'DR': break; }",
     "['DR', 'CO'].includes(row.documentStatus)",
+    "const expr = \"@DocumentStatus@!='DR'\";",
   ]) it(`flags ${line}`, () => assert.equal(isRawDocStatusLine(line), true));
 
   for (const line of [

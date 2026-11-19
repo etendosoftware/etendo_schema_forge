@@ -15,9 +15,9 @@
 // InvoicePaymentHistoryModal (the modal these badges open) has always done:
 // `const isCreditInstrument = grandTotal < 0`.
 
-/** Amounts below this are treated as zero — guards against float dust in sums. */
 import { isCompletedStatus } from '../../../lib/docStatus.js';
 
+/** Amounts below this are treated as zero — guards against float dust in sums. */
 const EPSILON = 0.001;
 
 /**

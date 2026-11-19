@@ -25,21 +25,38 @@ const ALIASES = Object.freeze({ draft: 'DR', complete: 'CO', completed: 'CO' });
  */
 export function docStatusCode(status) {
   const raw = status && typeof status === 'object' ? (status.id ?? status.value ?? null) : (status ?? null);
-  return typeof raw === 'string' && raw in ALIASES ? ALIASES[raw] : raw;
+  return typeof raw === 'string' && Object.hasOwn(ALIASES, raw) ? ALIASES[raw] : raw;
 }
 
-/** @param {*} status raw status (see docStatusCode) @returns {boolean} true for a draft (DR) */
+/**
+ * True for a draft (DR).
+ * @param {*} status raw status (see docStatusCode)
+ * @returns {boolean}
+ */
 export const isDraftStatus = (status) => docStatusCode(status) === DOC_STATUS.DRAFT;
-/** @param {*} status raw status (see docStatusCode) @returns {boolean} true for a completed (CO) document */
+/**
+ * True for a completed (CO) document.
+ * @param {*} status raw status (see docStatusCode)
+ * @returns {boolean}
+ */
 export const isCompletedStatus = (status) => docStatusCode(status) === DOC_STATUS.COMPLETED;
-/** @param {*} status raw status (see docStatusCode) @returns {boolean} true for a voided (VO) document */
+/**
+ * True for a voided (VO) document.
+ * @param {*} status raw status (see docStatusCode)
+ * @returns {boolean}
+ */
 export const isVoidedStatus = (status) => docStatusCode(status) === DOC_STATUS.VOIDED;
-/** @param {*} status raw status (see docStatusCode) @returns {boolean} true for a not-approved (UE) document */
+/**
+ * True for a not-approved (UE) document.
+ * @param {*} status raw status (see docStatusCode)
+ * @returns {boolean}
+ */
 export const isNotApprovedStatus = (status) => docStatusCode(status) === DOC_STATUS.NOT_APPROVED;
 /**
  * The single home of "editable only in draft": use this wherever the question is "can the user
  * edit this document", so a rule change (e.g. UE/IP) lands here. Use isDraftStatus for lifecycle
  * checks (print exclusion, PDF caching).
- * @param {*} status raw status (see docStatusCode) @returns {boolean}
+ * @param {*} status raw status (see docStatusCode)
+ * @returns {boolean}
  */
 export const isEditableStatus = (status) => isDraftStatus(status);
