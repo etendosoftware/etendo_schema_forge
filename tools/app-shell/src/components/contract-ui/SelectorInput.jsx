@@ -25,6 +25,8 @@ function buildSelectPlaceholder(ui, label) {
  * 1. The server selector at `selectorUrl` (lazy-loaded on first dropdown open, paginated).
  * 2. `catalogs` (mock/dev fallback, only when no selectorUrl is configured).
  *
+ * `orderOptions(options)` (optional) reorders the loaded `{ id, name }` options before render.
+ *
  * If the current value is not present in the loaded options (e.g. a stale FK), a hidden
  * SelectItem keeps Radix able to display the current label without offering it for re-selection.
  */
@@ -42,6 +44,7 @@ export function SelectorInput({
   compact = false,
   triggerClassName,
   optionTranslator,
+  orderOptions,
 }) {
   const ui = useUI();
   // ETP-4564: shared cache for selector option pages. Null when no DataProvider
@@ -191,7 +194,10 @@ export function SelectorInput({
     }, { passive: true });
   }, [fetchPage, revalidateFirstPage, selectorUrl, serverOptions]);
 
-  const baseOptions = serverOptions ?? catalogOptions;
+  // ETP-6284: optional caller ordering of the loaded options (e.g. import taxes first). Ordering
+  // only — nothing is added or removed, so the committed-value contract is unchanged.
+  const loadedOptions = serverOptions ?? catalogOptions;
+  const baseOptions = typeof orderOptions === 'function' ? orderOptions(loadedOptions) : loadedOptions;
   const hasValue = value && baseOptions.some(opt => opt.id === value);
 
   // ETP-5903 — Radix already marks the committed item, focuses it and scrolls to it on open, and

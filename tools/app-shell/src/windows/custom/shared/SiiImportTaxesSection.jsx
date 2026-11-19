@@ -47,7 +47,8 @@ import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
  * this card is the only place it holds.
  *
  * Tax picker: the purchase-line tax selector (`/lines/selectors/tax`, `C_Tax_IsSOTrx_Date` rule:
- * purchase or both, valid at the invoice date). Its items carry the rate shown in the Tipo column
+ * purchase or both, valid at the invoice date), with the import taxes first (`isImportTaxName`,
+ * Classic's name heuristic; ordering only). Its items carry the rate shown in the Tipo column
  * (`labelPrefix`, the same rate the line pickers show); a saved row falls back to `tax.rate`.
  */
 const DUA_TYPE_KEYS = new Set(['F5', 'LC']);
@@ -68,6 +69,26 @@ function toNumberOrNull(value) {
   if (value === null || value === undefined || value === '') return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
+}
+
+function normalizeTaxName(name) {
+  return String(name ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+/**
+ * Classic's import-tax heuristic (deferred-VAT path of the SII module): a tax is an import tax
+ * when its name contains "import" (case- and accent-insensitive — "Compras IGIC IMPORTACION 7%",
+ * "Importaciones 21%"), except the compensatory "=0%" ones. There is no import flag on C_Tax.
+ */
+export function isImportTaxName(name) {
+  const normalized = normalizeTaxName(name);
+  return normalized.includes('import') && !normalized.replace(/\s/g, '').includes('=0%');
+}
+
+/** Import taxes first, then the rest, each group in its original order (ordering, not filtering). */
+export function orderImportTaxesFirst(options) {
+  const list = Array.isArray(options) ? options : [];
+  return [...list.filter(o => isImportTaxName(o?.name)), ...list.filter(o => !isImportTaxName(o?.name))];
 }
 
 /** Manual (import) tax lines only — the automatic ones belong to the invoice lines. */
@@ -355,6 +376,7 @@ function ImportTaxRow({
             selectorUrl={selectorUrl}
             selectorContext={selectorContext}
             token={token}
+            orderOptions={orderImportTaxesFirst}
             compact
             triggerClassName={`w-full ${CONTROL} text-text-primary bg-card ${missing.has('tax') ? ERROR_OUTLINE : ''}`}
             data-testid="SelectorInput__siiImportTax" />
@@ -663,7 +685,7 @@ function ImportTaxesBlock({ ui, multiDua, recordId, data, apiBaseUrl, token, rea
                 data-testid="SummaryLine__amount" />
               <div className="border-t border-border/60" data-testid="SiiImportTaxesSection__sumSeparator" />
               <SummaryLine
-                label={ui('total')}
+                label={ui('sifDataTabs.importTaxes.duaTotal')}
                 value={formatCurrency(currency, summary.total)}
                 strong
                 testId="SiiImportTaxesSection__sumTotal"

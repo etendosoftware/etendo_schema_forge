@@ -22480,6 +22480,7 @@
     "sifDataTabs.importTaxes.subtitle": "Introduce la base liquidada en el DUA; la cuota se calcula según el tipo.",
     "sifDataTabs.importTaxes.rate": "Tipo",
     "sifDataTabs.importTaxes.summaryTaxAmount": "Cuota IVA importación",
+    "sifDataTabs.importTaxes.duaTotal": "Total DUA",
     "sifDataTabs.importTaxes.taxableAmount": "Base imponible",
     "sifDataTabs.importTaxes.taxAmount": "Cuota",
     "sifDataTabs.importTaxes.add": "Añadir impuesto",
