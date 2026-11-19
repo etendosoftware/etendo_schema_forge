@@ -154,12 +154,15 @@ jobs:
             exit 1
           fi
 
+      # Timeouts from the organization variables (ETP-6390), as in .github/actions/unit-tests-sonar.
       - name: Sonar analysis
         uses: sonarsource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
         env:
           SONAR_SCANNER_OPTS: "-Xmx4096m"
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: -Dsonar.scanner.socketTimeout=${{ vars.SONAR_SOCKET_TIMEOUT || '60' }} -Dsonar.scanner.responseTimeout=${{ vars.SONAR_RESPONSE_TIMEOUT || '60' }}
 
   unit-tests:
     name: Unit tests + Sonar + coverage
@@ -187,6 +190,8 @@ jobs:
           sonar_read_token: ${{ secrets.SONAR_READ_TOKEN }}
           coverage_minimum: ${{ vars.COVERAGE_MINIMUM }}
           coverage_tolerance: ${{ vars.COVERAGE_TOLERANCE }}
+          sonar_socket_timeout: ${{ vars.SONAR_SOCKET_TIMEOUT }}
+          sonar_response_timeout: ${{ vars.SONAR_RESPONSE_TIMEOUT }}
           retention_days: ${{ env.RETENTION_DAYS }}
 
   mocked:
