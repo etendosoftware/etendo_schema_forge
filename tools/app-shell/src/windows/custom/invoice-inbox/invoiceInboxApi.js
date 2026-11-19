@@ -5,7 +5,7 @@
  * dispatches before the spec router; the spec's CRUD is read-only), the discard is the action
  * `/header/{id}/action/discard`, the review read (ETP-6050) the GET action
  * `/header/{id}/action/review`, its edits the POST actions `/header/{id}/action/apply` and
- * `/header/{id}/action/mark-reviewed` (contract: docs/plans/ETP-6050-invoice-inbox-review-panel.md 9.2).
+ * `/header/{id}/action/mark-reviewed`, the confirm (ETP-6051) the POST action `/header/{id}/action/confirm` (contract: docs/plans/ETP-6050-invoice-inbox-review-panel.md 9.2).
  */
 import { buildListQuery, COUNT_QUERIES, idsCriteria } from './invoiceInboxFilters.js';
 
@@ -21,6 +21,8 @@ export const REVIEW_ACTION = 'review';
 export const APPLY_ACTION = 'apply';
 /** NEO POST action that marks a valid document as reviewed (ETP-6050 S2). */
 export const MARK_REVIEWED_ACTION = 'mark-reviewed';
+/** NEO POST action that confirms a document: creates the purchase invoice and completes it (ETP-6051). */
+export const CONFIRM_ACTION = 'confirm';
 
 const HTTP_FORBIDDEN = 403;
 
@@ -215,6 +217,39 @@ export async function markReviewed(apiFetch, id, updated, signal) {
   const json = await readJson(res);
   if (res.ok && json) return { status: 'ok', review: json };
   return failedOutcome(res, json);
+}
+
+/**
+ * ETP-6051 — confirms ONE document: `POST /header/{id}/action/confirm`, optionally with `{updated}`
+ * (the review panel sends its token, the batch sends none). The server creates the vendor, the new
+ * products and the purchase invoice, completes it and links it, all or nothing. 200 answers
+ * `{id, status: 'CONFIRMED', invoice: {id, documentNo, identifier}, adjusted, createdVendor,
+ * createdProducts, alreadyConfirmed}`. A write: `timeout: 0`. Never throws for an HTTP answer; no
+ * HTTP answer rejects with the core `NetworkError`.
+ *
+ * @param {Function} apiFetch
+ * @param {string} id document id
+ * @param {string|null} [updated] optimistic-lock token, sent only when known
+ * @returns {Promise<{status: 'confirmed', result: object} | {status: 'failed', code: string|null,
+ *   httpStatus: number, missing: string[]|null, updated: string|null, detail: string|null,
+ *   detailInfo: {code: string, params: object}|null, invoice: object|null}>} `detail` is the English reason of
+ *   `confirm_failed` and `detailInfo` its identifier (`error.detailCode` / `error.detailParams`, translated by
+ *   `confirmFailedDetail`), `invoice` the existing one of `duplicate_invoice`
+ */
+export async function confirmInboxDocument(apiFetch, id, updated = null) {
+  const path = `${LIST_PATH}/${encodeURIComponent(id)}/action/${CONFIRM_ACTION}`;
+  const init = { method: 'POST', timeout: 0 };
+  if (updated != null) init.body = JSON.stringify({ updated });
+  const res = await apiFetch(path, init);
+  const json = await readJson(res);
+  if (res.ok && json) return { status: 'confirmed', result: json };
+  const error = json?.error ?? {};
+  return {
+    ...failedOutcome(res, json),
+    detail: error.detail ?? null,
+    detailInfo: error.detailCode ? { code: error.detailCode, params: error.detailParams ?? {} } : null,
+    invoice: error.invoice ?? null,
+  };
 }
 
 /**

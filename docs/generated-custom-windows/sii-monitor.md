@@ -60,3 +60,7 @@ Schema Forge extracts from AD, that column surfaces in this window's contract as
 frontend (there is no `AD_Field` for it on this window). No UI or behavior change;
 this note only records why the contract was regenerated when the PSD2 dependency
 was added. Full rationale: [`docs/plans/psd2-dependency-cross-domain.md`](../plans/psd2-dependency-cross-domain.md).
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. `eTGOCurrencyRate` (`EM_ETGO_Currency_Rate`) on the four invoice entities (issued and received, current and previous period) is now `decimal` in the backend contract. No frontend field changes.

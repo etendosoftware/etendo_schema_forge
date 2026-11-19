@@ -153,7 +153,8 @@
         "warehouse": {
           "grid": false,
           "seq": 60,
-          "inputMode": "search"
+          "inputMode": "search",
+          "publicApi": { "lookup": true }
         },
         "scheduledDeliveryDate": {
           "section": "principal",
@@ -164,7 +165,8 @@
           "reference": "PaymentMethod",
           "form": true,
           "section": "principal",
-          "seq": 70
+          "seq": 70,
+          "publicApi": { "lookup": { "context": { "IsSOTrx": "N" } } }
         },
         "paymentTerms": {
           "form": true,

@@ -76,6 +76,28 @@ Everything not listed here is forwarded to `fetch` untouched (`method`, `body`, 
 
 | `timeout` | ms to wait for a response before rejecting with a `NetworkError` (`reason: 'timeout'`). **Default: 60 s for a safe method (`GET`, `HEAD`, `OPTIONS`, or no method) and none for any other method.** An explicit value applies to any method; `0` disables it. Pass `timeout: 0` for a **long read** — see [Network failures and the timeout](#network-failures-and-the-timeout-etp-5424) |
 
+### A caller that belongs to no session (the customer portal, the support handoff)
+
+A client from `useApiFetch` or the ambient `apiFetch` is bound to the app's session identity: it
+captures the identity when the request leaves and, if the identity changed by the time the answer
+arrives, throws *"The request belongs to a superseded session."* and discards the answer — the
+right call for a tenant user whose session ended mid-request. It is the wrong call for a page
+that has no session at all: on a cold open the app's auth bootstrap resolves the identity
+(unknown, then anonymous) while that page's first requests are in flight, and a 200 the backend
+already committed is thrown away.
+
+Such a page builds its client OUTSIDE the session scope, still through the shared helper:
+`createApiFetch(baseUrl, () => null, null, null)` — the explicit `null` scope opts out of the
+ambient session, and the `null` logout handler means no 401 can log anybody out.
+
+| Caller | Client | Precedent |
+|---|---|---|
+| Customer portal (`/portal/*`, `/portal/decision/*`) | `usePortalApiFetch` (`lib/portal/usePortalApiFetch.js`) | ETP-6209: the decision landing showed "No pudimos aplicar tu decisión" for a decision the backend had applied |
+| Support handoff (`/support-access`) | `handoffFetch` (`lib/supportSession.js`) | the ticket was spent and the page read "no se pudo abrir el acceso" |
+
+Use it only for a page whose credential is not an app session. Anything a tenant user does keeps
+`useApiFetch`.
+
 ## Network failures and the timeout (ETP-5424)
 
 A request that never got an HTTP answer does not reach the call site as the browser's

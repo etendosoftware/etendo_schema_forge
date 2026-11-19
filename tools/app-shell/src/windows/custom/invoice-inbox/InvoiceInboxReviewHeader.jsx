@@ -1,4 +1,10 @@
-import { ChevronLeft, ChevronRight, FileText, Image as ImageIcon, X } from 'lucide-react';
+import {
+  CaretLeftIcon,
+  CaretRightIcon,
+  FileTextIcon,
+  ImageIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { SheetClose, SheetTitle } from '@/components/ui/sheet';
@@ -51,15 +57,16 @@ export default function InvoiceInboxReviewHeader({
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const statusKey = statusLabelKey(document.status);
-  const FileIcon = isImageFileName(document.fileName) ? ImageIcon : FileText;
+  const FileIcon = isImageFileName(document.fileName) ? ImageIcon : FileTextIcon;
   return (
     <header
-      className="flex h-[60px] flex-none items-center gap-3 border-b border-border pl-5 pr-4"
+      className="flex h-[60px] flex-none items-center gap-3 border-b border-border pl-5 pr-4 max-[480px]:gap-2 max-[480px]:pl-3 max-[480px]:pr-2"
       data-testid="invoice-inbox-review-header">
-      <FileIcon className="h-[18px] w-[18px] flex-none text-muted-foreground" aria-hidden="true" data-testid="FileIcon__review-header" />
+      <FileIcon className="h-[18px] w-[18px] flex-none text-muted-foreground max-[480px]:hidden" aria-hidden="true" data-testid="FileIcon__review-header" />
       <div className="min-w-0">
-        <div className="flex items-center gap-2.5">
-          <SheetTitle className="min-w-0 truncate text-[17px] font-bold leading-tight tracking-tight" title={document.fileName ?? ''} data-testid="invoice-inbox-review-title">
+        {/* Under 480px (a phone: the drawer is the whole viewport) the tag wraps under the name, and the origin line, the position and the file icon go: there is no room for them next to prev / next / close. */}
+        <div className="flex items-center gap-2.5 max-[480px]:flex-wrap max-[480px]:gap-y-0.5">
+          <SheetTitle className="min-w-0 truncate text-[17px] font-bold leading-tight tracking-tight max-[480px]:basis-full" title={document.fileName ?? ''} data-testid="invoice-inbox-review-title">
             {document.fileName ?? ''}
           </SheetTitle>
           {document.status && (
@@ -71,19 +78,19 @@ export default function InvoiceInboxReviewHeader({
             </span>
           )}
         </div>
-        <p className="truncate text-xs leading-snug text-muted-foreground" data-testid="invoice-inbox-review-origin">
+        <p className="truncate text-xs leading-snug text-muted-foreground max-[480px]:hidden" data-testid="invoice-inbox-review-origin">
           {originLine(document, ui, formatReceived(document.created, locale))}
         </p>
       </div>
       <span className="flex-1" />
       <span
-        className="min-h-4 flex-none whitespace-nowrap text-xs font-medium text-muted-foreground"
+        className="min-h-4 min-w-0 max-w-[40%] shrink overflow-hidden whitespace-nowrap text-xs font-medium text-muted-foreground max-[480px]:max-w-[88px]"
         aria-live="polite"
         data-testid="invoice-inbox-review-save-status">
         {saveStatus}
       </span>
       {position != null && (
-        <span className="ml-2 flex-none whitespace-nowrap font-mono text-xs font-medium text-muted-foreground tabular-nums" data-testid="invoice-inbox-review-position">
+        <span className="ml-2 flex-none whitespace-nowrap font-mono text-xs font-medium text-muted-foreground tabular-nums max-[480px]:hidden" data-testid="invoice-inbox-review-position">
           {ui('invoiceInboxReviewPosition', { n: position, total })}
         </span>
       )}
@@ -93,7 +100,7 @@ export default function InvoiceInboxReviewHeader({
         disabled={!canPrev}
         testId="invoice-inbox-review-prev"
         data-testid="IconButton__abf2a4">
-        <ChevronLeft className="h-4 w-4" aria-hidden="true" data-testid="ChevronLeft__review-header" />
+        <CaretLeftIcon className="h-4 w-4" aria-hidden="true" data-testid="ChevronLeft__review-header" />
       </IconButton>
       <IconButton
         label={ui('next')}
@@ -101,7 +108,7 @@ export default function InvoiceInboxReviewHeader({
         disabled={!canNext}
         testId="invoice-inbox-review-next"
         data-testid="IconButton__abf2a4">
-        <ChevronRight className="h-4 w-4" aria-hidden="true" data-testid="ChevronRight__review-header" />
+        <CaretRightIcon className="h-4 w-4" aria-hidden="true" data-testid="ChevronRight__review-header" />
       </IconButton>
       <SheetClose asChild data-testid="SheetClose__review-header">
         <Button
@@ -112,7 +119,7 @@ export default function InvoiceInboxReviewHeader({
           title={ui('close')}
           className="h-8 w-8 flex-none"
           data-testid="invoice-inbox-review-close">
-          <X className="h-4 w-4" aria-hidden="true" data-testid="X__review-header" />
+          <XIcon className="h-4 w-4" aria-hidden="true" data-testid="X__review-header" />
         </Button>
       </SheetClose>
     </header>

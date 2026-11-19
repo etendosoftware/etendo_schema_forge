@@ -99,6 +99,29 @@ export function isSelectableRow(row) {
   return SELECTABLE_STATUSES.has(row?.status);
 }
 
+/** The stored `Error_Code` of a failed confirm: the document can be confirmed again (ETP-6051). */
+export const CONFIRM_FAILED_CODE = 'CONFIRM_FAILED';
+/**
+ * `Error_Code` of a document with required data missing. Confirm accepts it too: the server
+ * recomputes the verdict after the claim, so a document the user completed meanwhile succeeds and a
+ * still incomplete one is refused with its missing codes.
+ */
+const MISSING_FIELDS_CODE = 'MISSING_FIELDS';
+export const CONFIRMABLE_ERROR_CODES = new Set([CONFIRM_FAILED_CODE, MISSING_FIELDS_CODE]);
+
+const CONFIRMABLE_STATUSES = new Set([STATUS.PENDING_REVIEW, STATUS.READY]);
+
+/**
+ * Rows that can be confirmed (ETP-6051): PENDING_REVIEW and READY, plus an ERROR row whose error is
+ * a failed confirm (a retry) or missing fields (it may have been completed since). Any other ERROR
+ * (unreadable, service failure, foreign receiver…), PROCESSING, CONFIRMED and DISCARDED are not.
+ */
+export function isConfirmableRow(row) {
+  if (!row) return false;
+  return CONFIRMABLE_STATUSES.has(row.status)
+    || (row.status === STATUS.ERROR && CONFIRMABLE_ERROR_CODES.has(row.errorCode));
+}
+
 export function isProcessingRow(row) {
   return row?.status === STATUS.PROCESSING;
 }

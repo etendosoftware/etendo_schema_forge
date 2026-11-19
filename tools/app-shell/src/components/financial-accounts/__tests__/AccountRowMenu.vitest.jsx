@@ -1,5 +1,7 @@
 // @covers tools/app-shell/src/components/financial-accounts/AccountRowMenu.jsx
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { ArrowsClockwiseIcon } from '@phosphor-icons/react';
+import { findIcon } from '@/test/iconGlyph.js';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -464,7 +466,7 @@ describe('AccountRowMenu — "Sincronizar ahora" and the shared bank-sync state'
     openMenu();
     const sync = await screen.findByTestId('account-row-menu-sync-acc-1');
     expect(sync).toContainElement(screen.getByTestId('account-row-menu-sync-icon-acc-1'));
-    expect(sync.querySelector('.lucide-refresh-cw')).toBeNull();
+    expect(findIcon(sync, ArrowsClockwiseIcon)).toBeNull();
     unmount();
 
     render(<AccountRowMenu account={{ ...baseAccount, bankConnected: false, bankReconnectable: true }} />);

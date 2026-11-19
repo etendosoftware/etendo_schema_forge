@@ -1,4 +1,4 @@
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRightIcon } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
 
 /**
@@ -21,7 +21,7 @@ export function RecordLink({ to, onNavigate, children, iconTestId = 'ArrowUpRigh
       data-testid={dataTestId}
     >
       <span className="min-w-0 truncate">{children}</span>
-      <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" data-testid={iconTestId} />
+      <ArrowUpRightIcon className="h-3 w-3 shrink-0" aria-hidden="true" data-testid={iconTestId} />
     </button>
   );
 }

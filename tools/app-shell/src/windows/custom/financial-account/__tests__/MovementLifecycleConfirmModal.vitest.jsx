@@ -15,11 +15,11 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
-vi.mock('lucide-react', () => ({
-  RotateCcw: (props) => (
+vi.mock('@phosphor-icons/react', () => ({
+  ArrowCounterClockwiseIcon: (props) => (
     <span data-testid="icon-rotate-ccw" data-width={props.width} data-stroke-width={props.strokeWidth} />
   ),
-  Trash2: (props) => (
+  TrashIcon: (props) => (
     <span data-testid="icon-trash2" data-width={props.width} data-stroke-width={props.strokeWidth} />
   ),
 }));

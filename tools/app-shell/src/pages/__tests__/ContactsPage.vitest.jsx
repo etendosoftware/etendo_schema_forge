@@ -43,12 +43,12 @@ vi.mock('@/components/ui/separator', () => ({
   Separator: () => <hr />,
 }));
 
-vi.mock('lucide-react', () => ({
-  Users: () => <span>Users</span>,
-  Mail: () => <span>Mail</span>,
-  Phone: () => <span>Phone</span>,
-  MapPin: () => <span>MapPin</span>,
-  X: () => <span>X</span>,
+vi.mock('@phosphor-icons/react', () => ({
+  UsersIcon: () => <span>Users</span>,
+  EnvelopeSimpleIcon: () => <span>Mail</span>,
+  PhoneIcon: () => <span>Phone</span>,
+  MapPinIcon: () => <span>MapPin</span>,
+  XIcon: () => <span>X</span>,
 }));
 
 vi.mock('@generated/contacts/generated/config', () => ({

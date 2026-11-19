@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Info, X } from 'lucide-react';
+import { InfoIcon, XIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 /**
@@ -28,7 +28,7 @@ import { useUI } from '@/i18n';
  * Props:
  *  - children:      banner content (already-resolved text or nodes)
  *  - tone:          'info' (default) | 'warning' | 'success' | 'danger'
- *  - icon:          lucide icon component (defaults to Info; pass null to hide)
+ *  - icon:          Phosphor icon component (defaults to Info; pass null to hide)
  *  - dismissible:   renders the close button (default true; pass false for a banner that must
  *                   never be closed, e.g. one that IS the whole body of its container)
  *  - onDismiss:     click handler; supplying it switches the banner to controlled mode
@@ -55,7 +55,7 @@ const TONES = {
 export function InfoBanner({
   children,
   tone = 'info',
-  icon: Icon = Info,
+  icon: Icon = InfoIcon,
   dismissible = true,
   onDismiss,
   reopenSignal,
@@ -87,7 +87,7 @@ export function InfoBanner({
           data-testid={dismissTestId}
           className={`rounded-full p-1 transition-colors ${t.dismiss}`}
         >
-          <X className="h-4 w-4" data-testid="X__f7c55d" />
+          <XIcon className="h-4 w-4" data-testid="X__f7c55d" />
         </button>
       )}
     </div>

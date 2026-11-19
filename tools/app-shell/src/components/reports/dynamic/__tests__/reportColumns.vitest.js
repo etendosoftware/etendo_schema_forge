@@ -1,9 +1,9 @@
 // @covers tools/app-shell/src/components/reports/dynamic/reportColumns.js
 import {
-  columnCount, columnModel, cellParts, COLUMN_GRAINS, exportTooLong, modeOf, rowsForMode, SCREEN_PERIODS,
+  columnCount, columnModel, cellParts, COLUMN_GRAINS, exportTooLong, modeHiddenCount, modeOf, periodLimit, rowsForMode, SCREEN_PERIODS,
 } from '../reportColumns.js';
 import { periodBuckets, serializePeriods } from '../dynamicDates.js';
-import { buildPeriodValues, EXPORT_MAX_BUCKETS } from '@etendosoftware/schema-forge-cli/src/report-periods.js';
+import { buildPeriodValues, EXPORT_MAX_BUCKETS, SCREEN_PERIODS as CORE_SCREEN_PERIODS } from '@etendosoftware/schema-forge-cli/src/report-periods.js';
 
 const range = { dateFrom: '2026-07-15', dateTo: '2026-09-30' };
 const buckets = (grain, opts) => periodBuckets(range, grain, opts).buckets;
@@ -12,8 +12,12 @@ const model = (over = {}) => columnModel({
 });
 
 describe('reportColumns constants', () => {
-  it('screen/PDF show the last 6 months or 4 quarters; exports accept 25 buckets', () => {
-    expect(SCREEN_PERIODS).toEqual({ month: 6, quarter: 4 });
+  it('screen/PDF show the last 12 months / 8 quarters, or 6 / 4 with a comparison; exports accept 25 buckets', () => {
+    expect(SCREEN_PERIODS).toBe(CORE_SCREEN_PERIODS); // one source: core's
+    expect(SCREEN_PERIODS).toEqual({ month: { plain: 12, compared: 6 }, quarter: { plain: 8, compared: 4 } }); // sanity literal
+    expect([periodLimit('month', 'none'), periodLimit('month', 'sly'), periodLimit('month', 'prev')]).toEqual([12, 6, 6]);
+    expect([periodLimit('quarter', 'none'), periodLimit('quarter', 'sly')]).toEqual([8, 4]);
+    expect(periodLimit('total', 'sly')).toBe(Infinity);
     expect(EXPORT_MAX_BUCKETS).toBe(25);
     expect(COLUMN_GRAINS).toEqual(['total', 'month', 'quarter']);
   });
@@ -72,15 +76,52 @@ describe('columnModel', () => {
     expect(prev[prev.length - 1].compared).toEqual({ from: '2026-06-15', to: '2026-08-31' });
   });
 
+  it('says what Comparado is compared against: the compared month / quarter, or the range for the Total', () => {
+    expect(model().map((g) => g.comparedLabel)).toEqual(['', '', '', '']);
+    // Same period last year: the same month, a year back. The total group names the compared dates.
+    expect(model({ mode: 'sly' }).map((g) => g.comparedLabel)).toEqual(['jul 25', 'ago 25', expect.stringMatching(/^sept? 25$/), '15/07/2025 – 30/09/2025']);
+    // Previous period: the previous calendar month; the total, the single D3 range.
+    expect(model({ mode: 'prev' }).map((g) => g.comparedLabel)).toEqual(['jun 26', 'jul 26', 'ago 26', '15/06/2026 – 31/08/2026']);
+    expect(model({ mode: 'sly', locale: 'en_US' }).map((g) => g.comparedLabel).slice(0, 2)).toEqual(['Jul 25', 'Aug 25']);
+  });
+
+  it('labels a compared quarter with the quarter prefix, and the Total mode with the compared dates', () => {
+    const quarters = { periods: buckets('quarter'), grain: 'quarter' };
+    expect(model({ ...quarters, mode: 'sly' })[0].comparedLabel).toBe('T3 25');
+    expect(model({ ...quarters, mode: 'prev' })[0].comparedLabel).toBe('T2 26');
+    expect(model({ ...quarters, mode: 'prev', locale: 'en_US', quarterPrefix: 'Q' })[0].comparedLabel).toBe('Q2 26');
+    const total = model({ periods: buckets('total'), grain: 'total', mode: 'prev', locale: 'en_US' });
+    // Previous period in Total mode: the same number of days (77), ending the day before the range; en-US dates, as the chip.
+    expect(total[0].comparedLabel).toBe('04/28/2026 – 07/14/2026');
+    expect(model({ periods: buckets('total'), grain: 'total', mode: 'sly' })[0].comparedLabel).toBe('15/07/2025 – 30/09/2025');
+  });
+
   it('the last N buckets for screen and PDF, every bucket for export', () => {
     const wide = { dateFrom: '2025-01-01', dateTo: '2026-12-31' };
-    const screen = periodBuckets(wide, 'month', { maxShown: SCREEN_PERIODS.month }).buckets;
+    const screen = periodBuckets(wide, 'month', { maxShown: SCREEN_PERIODS.month.plain }).buckets;
     const all = periodBuckets(wide, 'month').buckets;
-    expect(screen).toHaveLength(SCREEN_PERIODS.month + 1);
+    expect(screen).toHaveLength(SCREEN_PERIODS.month.plain + 1);
     expect(all).toHaveLength(EXPORT_MAX_BUCKETS);
     const labels = columnModel({ periods: screen, grain: 'month', mode: 'none', locale: 'en_US', totalLabel: 'TOTAL' }).map((g) => g.label);
-    expect(labels).toEqual(['Jul 26', 'Aug 26', 'Sep 26', 'Oct 26', 'Nov 26', 'Dec 26', 'TOTAL']);
-    expect(periodBuckets(wide, 'quarter', { maxShown: SCREEN_PERIODS.quarter }).buckets).toHaveLength(SCREEN_PERIODS.quarter + 1);
+    expect(labels).toEqual(['Jan 26', 'Feb 26', 'Mar 26', 'Apr 26', 'May 26', 'Jun 26', 'Jul 26', 'Aug 26', 'Sep 26', 'Oct 26', 'Nov 26', 'Dec 26', 'TOTAL']);
+    expect(periodBuckets(wide, 'quarter', { maxShown: SCREEN_PERIODS.quarter.plain }).buckets).toHaveLength(SCREEN_PERIODS.quarter.plain + 1);
+  });
+
+  it('a comparison keeps only the last 6 months / 4 quarters of the answer, pos still indexing row.cells, and counts what it hides', () => {
+    const wide = { dateFrom: '2025-01-01', dateTo: '2026-12-31' };
+    const months = periodBuckets(wide, 'month', { maxShown: 12 }).buckets;
+    const plain = columnModel({ periods: months, grain: 'month', mode: 'none', locale: 'en_US', totalLabel: 'TOTAL' });
+    const compared = columnModel({ periods: months, grain: 'month', mode: 'sly', locale: 'en_US', totalLabel: 'TOTAL' });
+    expect(plain).toHaveLength(13);
+    expect(compared.map((g) => g.label)).toEqual(['Jul 26', 'Aug 26', 'Sep 26', 'Oct 26', 'Nov 26', 'Dec 26', 'TOTAL']);
+    expect(compared.map((g) => g.pos)).toEqual([7, 8, 9, 10, 11, 12, 0]);
+    expect([modeHiddenCount(months, 'month', 'none'), modeHiddenCount(months, 'month', 'prev')]).toEqual([0, 6]);
+    const quarters = periodBuckets(wide, 'quarter', { maxShown: 8 }).buckets;
+    expect(columnModel({ periods: quarters, grain: 'quarter', mode: 'none', totalLabel: 'T' })).toHaveLength(9);
+    expect(columnModel({ periods: quarters, grain: 'quarter', mode: 'prev', totalLabel: 'T' })).toHaveLength(5);
+    expect(modeHiddenCount(quarters, 'quarter', 'sly')).toBe(4);
+    // The Total grain has one group and never hides anything.
+    expect(modeHiddenCount(periodBuckets(wide, 'total').buckets, 'total', 'sly')).toBe(0);
   });
 
   it('no periods, no groups; the locale defaults to en_US', () => {

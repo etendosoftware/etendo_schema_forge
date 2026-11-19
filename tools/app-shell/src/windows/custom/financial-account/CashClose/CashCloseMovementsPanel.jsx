@@ -1,6 +1,6 @@
 import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
 import { FinancialGridView, FinancialTableRow as TableRow } from '../FinancialGridView.jsx';
-import { AlertTriangle, ArrowLeft } from 'lucide-react';
+import { WarningIcon, ArrowLeftIcon } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -131,7 +131,7 @@ export function CashCloseMovementsPanel({
           className="flex items-start gap-2 border-b border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-6 py-3"
           data-testid="cash-close-after-date-banner"
         >
-          <AlertTriangle
+          <WarningIcon
             className="mt-px h-[18px] w-[18px] shrink-0 text-[var(--status-warning-fg)]"
             data-testid="AlertTriangle__64d56f" />
           <p className="text-[13px] leading-[18px] text-[var(--status-warning-fg)]">
@@ -149,7 +149,7 @@ export function CashCloseMovementsPanel({
           onClick={() => navigate(-1)}
           className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-[#828FA3] transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
         >
-          <ArrowLeft className="h-5 w-5" data-testid="ArrowLeft__64d56f" />
+          <ArrowLeftIcon className="h-5 w-5" data-testid="ArrowLeft__64d56f" />
         </button>
         <ToggleFilter
           label={ui('financeAccountCashCloseHideCleared')}

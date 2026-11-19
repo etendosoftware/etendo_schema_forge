@@ -3,6 +3,8 @@
 // had a lighter hover than every other field and no focus ring, while the same field in
 // Albaranes (CreatableSearchSelect / disabled Input) had both. These tests pin the picker
 // to the shared field shell.
+import { allIconsAs } from '@/test/iconMock.js';
+import { currencyRateIconOverrides } from '@/test/currencyRateIconOverrides.jsx';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -18,13 +20,8 @@ vi.mock('@/components/ui/label', () => ({
   Label: ({ children, ...props }) => <label {...props}>{children}</label>,
 }));
 
-vi.mock('lucide-react', () => ({
-  ChevronDown: (props) => <span data-testid={props['data-testid'] || 'icon-chevron'} />,
-  Loader2: (props) => <span data-testid={props['data-testid'] || 'icon-loader'} />,
-  Pencil: (props) => <span data-testid={props['data-testid'] || 'icon-pencil'} />,
-  Check: (props) => <span data-testid={props['data-testid'] || 'icon-check'} />,
-  X: (props) => <span data-testid={props['data-testid'] || 'icon-x'} />,
-}));
+vi.mock('@phosphor-icons/react', async importOriginal =>
+  allIconsAs(() => null, importOriginal, currencyRateIconOverrides));
 
 import { CurrencyRatePicker } from '../CurrencyRatePicker.jsx';
 import { FIELD_HEIGHT, LABEL_GAP } from '@/components/ui/formDensity';

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { CircleNotchIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
@@ -116,7 +116,7 @@ export default function OrgLogoField({ imageId, orgName, token, apiBaseUrl, onCh
 
   let previewContent;
   if (uploading) {
-    previewContent = <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" data-testid="Loader2__orglogo" />;
+    previewContent = <CircleNotchIcon className="h-5 w-5 animate-spin text-muted-foreground" data-testid="Loader2__orglogo" />;
   } else if (blobUrl) {
     previewContent = <img src={blobUrl} alt={orgName || 'Logo'} className="h-full w-full object-contain" />;
   } else {

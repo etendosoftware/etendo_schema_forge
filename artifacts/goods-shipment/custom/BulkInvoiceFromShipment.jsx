@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { FilePlus } from 'lucide-react';
+import { FilePlusIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { translateBackendError, translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
@@ -340,7 +340,7 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
           generic document icon alone doesn't say "create an invoice from the
           selected shipments". No "(count)" suffix — the pill's own counter
           segment already shows the selection count. Figma "Crear factura"
-          button (Button 6, verified in Dev Mode): icon file-plus → lucide
+          button (Button 6, verified in Dev Mode): icon file-plus → Phosphor
           FilePlus, padding 7px/12px, gap 4px, Hug(149px)×38px. */}
       <button
         type="button"
@@ -355,7 +355,7 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
           opacity: canCreate ? 1 : 0.5,
         }}
       >
-        <FilePlus className="h-3.5 w-3.5" data-testid="FilePlus__bulkInvoice" />
+        <FilePlusIcon className="h-3.5 w-3.5" data-testid="FilePlus__bulkInvoice" />
         {ui('createInvoiceBtn')}
       </button>
 

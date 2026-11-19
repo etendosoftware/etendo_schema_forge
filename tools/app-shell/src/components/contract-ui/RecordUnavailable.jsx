@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileQuestion, WifiOff } from 'lucide-react';
+import { FileDashedIcon, WifiSlashIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button.jsx';
 import { useUI } from '@/i18n';
 
@@ -38,7 +38,7 @@ export default function RecordUnavailable({
 }) {
   const ui = useUI();
   const isTransportError = variant === 'error';
-  const Icon = isTransportError ? WifiOff : FileQuestion;
+  const Icon = isTransportError ? WifiSlashIcon : FileDashedIcon;
 
   return (
     <div

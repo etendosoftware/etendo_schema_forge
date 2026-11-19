@@ -1825,6 +1825,66 @@ The agentic docs served by the `docs` tool (`etendo-go-docs/agentic/contacts/ind
 
 **Verify:** `etendo_schema(spec: "contacts", view: "create")` lists `etgoEmail` with that `agentPrompt`; re-run the okr probe `w-customer-crud` and compare its calls with the sweep (25).
 
+## Public API — payment methods and their lookups — ETP-6160
+
+`decisions.json` publishes the contact's payment methods through the public API, both writable (`inout`):
+`payment_method` (internal `paymentMethod`, the one a sales order inherits) and `purchase_payment_method`
+(internal `pOPaymentMethod`, the one a purchase order inherits). Each declares a lookup, so the manifest publishes:
+
+| Route | Field | Fixed context |
+|-------|-------|---------------|
+| `GET /api/v1/contacts/lookups/payment_method` | Payment method as a customer | `FIN_ISRECEIPT=Y` |
+| `GET /api/v1/contacts/lookups/purchase_payment_method` | Payment method as a vendor | `FIN_ISRECEIPT=N` |
+
+Each lists the tenant's active payment methods, the same list the app offers: the values come from the same
+selectors as the contact form (`/sws/neo/contacts/businessPartner/selectors/...`). The fixed context is forwarded to
+the field's selector; whether it narrows the list depends on that field's validation rule, as in the app. Integrators
+must not rely on the list being filtered by sales or purchase.
+An integrator looks a value up, sets it with a `PATCH` (with `If-Match`) and every order created afterwards for the
+contact inherits it, which lets the order be completed through the API.
+
+The window itself is unchanged: `publicApi` only affects the public API manifest.
+
+Evidence: `gateway/e2e/support/orders.ts`, `gateway/test/public-api-manifest.test.ts`. Contract: `docs/public-api.md` §4.2.2.
+
+## Public API — a contact as a person or a company — ETP-6175
+
+The public API publishes the same Company/Person choice the detail top bar offers. `decisions.json`
+exposes on `businessPartner` (all writable, `inout`):
+
+| Public field | Internal field | Notes |
+|--------------|----------------|-------|
+| `is_person` | `etgoIsperson` | JSON boolean. A contact created without it is a company (column default N). |
+| `first_name` | `etgoFirstname` | Required for a person, refused for a company. |
+| `last_name` | `etgoLastname` | Required for a person, refused for a company. |
+| `name` | `name` | Required for a company. For a person it is derived from first and last name, as the form does; a value other than that derivation is refused. No longer `required` in the manifest. |
+| `tax_id_key` | `oBTIKTaxIDKey` | AD list, published as an enum with its codes and labels. Defaulted before `tax_id` is validated. |
+| `category` | `businessPartnerCategory` | Relationship to `contact-category`; lookup `GET /api/v1/contacts/lookups/category`, no context. |
+
+The rules live on the server (Etendo GO), not in the manifest: the manifest `required` flag cannot express a
+condition, so none of these fields is `required` and each carries a `publicApi.description` that states the rule
+in the OpenAPI document. `phone`, `email` and `web` apply to both kinds. A create that sends `first_name` or
+`last_name` without `is_person: true` is a company and is refused; switching a contact to a company clears its
+stored first and last name.
+
+The app maps the four server refusals (`ETGO_BPartnerPersonNamesRequired`, `ETGO_BPartnerPersonNameNotAllowed`,
+`ETGO_BPartnerCompanyNameRequired`, `ETGO_BPartnerCompanyPersonNamesNotAllowed`) by message key in
+`BACKEND_ERROR_KEY_MAP` (`tools/app-shell/src/lib/backendErrors.js`) to `backendError.bpartner*` texts in
+`en_US.json` and `es_ES.json`. The Company/Person toggle sends the right fields, so a user meets them only with
+a stale form; the company one tells the user to mark the contact as a person, matching the server's hint.
+
+The category lookup forwards no context: the form's category selector has no validation rule and sends none,
+so the list is the tenant's active categories the key's role can read. Omitting `category` on create keeps the
+form's default (the organization's default category). Contact categories are a public resource
+(`contact-category`, published from the Business Partner Category window), so `category` is a relationship: it is
+written and read under `relationships` with `type` `contact-category`, the type the lookup values carry.
+
+The window itself is unchanged: `publicApi` only affects the public API manifest (the regen only bumps the
+contract version, `0.9.0` to `0.13.0`; the generated frontend does not change).
+
+Evidence: `gateway/e2e/contacts.e2e.ts` (cases marked `[GO]` need the server rules), `gateway/test/public-api-manifest.test.ts`.
+Contract: `docs/public-api.md` §4.3 (*Person or company*) and §4.2.2.
+
 ## SEPA mandate (Financiero → «Mandato SEPA», ETP-6148, behind `sepa-remittances`)
 
 A customer's SEPA direct-debit mandate is edited in the **Financial** tab, in a **Mandato SEPA** section right after the SIF defaults. It reuses the two columns the OBSEPAD module (`org.openbravo.sepa.iso20022.coredirectdebit.customertobank`) adds to `C_BPartner`; Etendo GO adds no column.

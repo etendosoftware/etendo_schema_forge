@@ -230,9 +230,6 @@ vi.mock('../DocumentStatusPill.jsx', () => ({
   default: ({ status }) => <span data-testid="status-pill">{status}</span>,
 }));
 
-vi.mock('@/components/attachments/AttachmentIcon', () => ({
-  AttachmentIcon: () => <span>📎</span>,
-}));
 
 // Simple Form mock
 // Mirrors the real EntityForm contract: `trailing` is rendered as an additional grid

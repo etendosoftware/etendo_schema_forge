@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyRound, Loader2, ShieldCheck, Trash2 } from 'lucide-react';
+import { KeyIcon, CircleNotchIcon, ShieldCheckIcon, TrashIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -73,8 +73,8 @@ export function SecuritySection({ authMethods, onChangePassword, onRemove, remov
         data-testid={`auth-method-remove-${method}`}
       >
         {removing === method
-          ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__20cc4d" />
-          : <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__20cc4d" />}
+          ? <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__20cc4d" />
+          : <TrashIcon className="h-3.5 w-3.5" data-testid="Trash2__20cc4d" />}
         <span className="ml-1.5">{ui('accountMethodRemove')}</span>
       </Button>
     );
@@ -89,7 +89,7 @@ export function SecuritySection({ authMethods, onChangePassword, onRemove, remov
         <div className="mt-4">
           {renderRow(
             'password',
-            <KeyRound className="h-4 w-4" data-testid="KeyRound__20cc4d" />,
+            <KeyIcon className="h-4 w-4" data-testid="KeyRound__20cc4d" />,
             ui('accountMethodPassword'),
             password.enabled
               ? ui('accountMethodPasswordEnabled')
@@ -114,7 +114,7 @@ export function SecuritySection({ authMethods, onChangePassword, onRemove, remov
           {identities.map((identity) =>
             renderRow(
               identity.provider,
-              <ShieldCheck className="h-4 w-4" data-testid="ShieldCheck__20cc4d" />,
+              <ShieldCheckIcon className="h-4 w-4" data-testid="ShieldCheck__20cc4d" />,
               identity.provider,
               identity.email,
               identity.lastLogin

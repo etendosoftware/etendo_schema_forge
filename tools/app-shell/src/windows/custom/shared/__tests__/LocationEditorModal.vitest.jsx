@@ -19,24 +19,24 @@ vi.mock('@/i18n', () => ({
 }));
 
 // ETP-5806 follow-up: the legacy-address banner renders a shared `CopyButton`
-// (`@/components/ui/copy-button.jsx`), which imports `Copy` from lucide-react in
+// (`@/components/ui/copy-button.jsx`), which imports `Copy` from @phosphor-icons/react in
 // addition to `Check`. The pre-ETP-5806 mock only listed the 5 icons this modal
 // imports directly and crashed the moment the banner mounted ("No 'Copy' export
-// is defined on the 'lucide-react' mock") — found while extending this suite for
+// is defined on the '@phosphor-icons/react' mock") — found while extending this suite for
 // ETP-5806 (uncaught exception on every test that reached `isLegacyAddress`).
 // ETP-5806 follow-up (round 2): the redesigned legacy banner and the resulting-address
-// preview badge also render `Info` and `Lock` directly from lucide-react — missing either
+// preview badge also render `Info` and `Lock` directly from @phosphor-icons/react — missing either
 // one crashes the whole suite the moment the component mounts ("No 'Info'/'Lock' export is
-// defined on the 'lucide-react' mock"), the same failure mode `Copy` had above.
-vi.mock('lucide-react', () => ({
-  X: (props) => <span data-testid="icon-x" {...props} />,
-  Loader2: (props) => <span data-testid="loader" {...props} />,
-  Search: (props) => <span data-testid="icon-search" {...props} />,
-  ChevronDown: (props) => <span data-testid="icon-chevron" {...props} />,
-  Check: (props) => <span data-testid="icon-check" {...props} />,
-  Copy: (props) => <span data-testid="icon-copy" {...props} />,
-  Info: (props) => <span data-testid="icon-info" {...props} />,
-  Lock: (props) => <span data-testid="icon-lock" {...props} />,
+// defined on the '@phosphor-icons/react' mock"), the same failure mode `Copy` had above.
+vi.mock('@phosphor-icons/react', () => ({
+  XIcon: (props) => <span data-testid="icon-x" {...props} />,
+  CircleNotchIcon: (props) => <span data-testid="loader" {...props} />,
+  MagnifyingGlassIcon: (props) => <span data-testid="icon-search" {...props} />,
+  CaretDownIcon: (props) => <span data-testid="icon-chevron" {...props} />,
+  CheckIcon: (props) => <span data-testid="icon-check" {...props} />,
+  CopyIcon: (props) => <span data-testid="icon-copy" {...props} />,
+  InfoIcon: (props) => <span data-testid="icon-info" {...props} />,
+  LockIcon: (props) => <span data-testid="icon-lock" {...props} />,
 }));
 
 vi.mock('sonner', () => ({

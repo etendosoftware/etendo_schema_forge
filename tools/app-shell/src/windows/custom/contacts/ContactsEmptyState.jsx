@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { GraduationCap, Plus, Sparkles } from 'lucide-react';
+import { GraduationCapIcon, PlusIcon, SparkleIcon } from '@phosphor-icons/react';
 import { ImportDropzone } from '@etendosoftware/app-shell-core/components/import/ImportDropzone.jsx';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button.jsx';
@@ -69,7 +69,7 @@ export default function ContactsEmptyState({ context }) {
               className="gap-1.5"
               data-testid="contacts-empty-state-copilot"
             >
-              <Sparkles className="h-4 w-4" data-testid="Sparkles__contactsEmpty" />
+              <SparkleIcon className="h-4 w-4" data-testid="Sparkles__contactsEmpty" />
               {ui('askCopilot')}
             </Button>
           )}
@@ -80,7 +80,7 @@ export default function ContactsEmptyState({ context }) {
               className="gap-1.5"
               data-testid="contacts-empty-state-new"
             >
-              <Plus className="h-4 w-4" data-testid="Plus__contactsEmpty" />
+              <PlusIcon className="h-4 w-4" data-testid="Plus__contactsEmpty" />
               {ui('newContact')}
             </Button>
           )}
@@ -89,7 +89,7 @@ export default function ContactsEmptyState({ context }) {
 
       {canLaunch(CREATE_CONTACT_FLOW_ID) && (
         <InfoBanner
-          icon={GraduationCap}
+          icon={GraduationCapIcon}
           dismissible={false}
           className="w-full"
           data-testid="contacts-empty-state-guide"

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink } from 'lucide-react';
+import { ArrowSquareOutIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 /* eslint-disable react/prop-types */
@@ -71,9 +71,8 @@ export default function PaymentConciliadoBadge({ data }) {
     >
       {CHECK_ICON}
       {ui('conciliado')}
-      <ExternalLink
+      <ArrowSquareOutIcon
         size={13}
-        strokeWidth={2.5}
         aria-hidden="true"
         data-testid="ExternalLink__670c2d" />
     </button>

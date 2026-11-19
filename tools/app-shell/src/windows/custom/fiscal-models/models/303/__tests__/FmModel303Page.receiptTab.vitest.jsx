@@ -63,14 +63,14 @@ vi.mock('../AeatSubmitFlow.jsx', () => ({
 }));
 // Explicit per-icon mock (matching the sibling files' established pattern) rather
 // than a catch-all Proxy — see FmModel303Page.aeatFlow.vitest.jsx for why.
-vi.mock('lucide-react', () => ({
-  Check: () => null,
-  Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
-  TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
-  Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
-  TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
-  ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
-  FileCheck: () => null, Landmark: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  CheckIcon: () => null,
+  GearIcon: () => null, DownloadSimpleIcon: () => null, ArrowLeftIcon: () => null, FloppyDiskIcon: () => null, WarningOctagonIcon: () => null,
+  WarningIcon: () => null, CheckCircleIcon: () => null, ArrowsLeftRightIcon: () => null,
+  CalculatorIcon: () => null, CircleNotchIcon: () => null, DotsThreeVerticalIcon: () => null,
+  TrendUpIcon: () => null, TrendDownIcon: () => null, ClockIcon: () => null,
+  ClipboardTextIcon: () => null, ReceiptIcon: () => null, FolderIcon: () => null,
+  SealCheckIcon: () => null, BankIcon: () => null,
 }));
 
 // PresentModal mock: renders 4 buttons, one per path, each reporting the same

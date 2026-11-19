@@ -1,8 +1,8 @@
 {
-  "version": "0.40.0",
+  "version": "0.43.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-11-16T13:50:00.034Z",
-  "checksum": "019f16649d3273e6",
+  "updatedAt": "2026-11-18T15:10:53.542Z",
+  "checksum": "37ae022a6302d0cd",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -269,6 +269,13 @@
                 "IsSOTrx"
               ]
             },
+            "publicApi": {
+              "lookup": {
+                "context": {
+                  "IsSOTrx": "Y"
+                }
+              }
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -323,6 +330,9 @@
             "validation": {
               "required": true,
               "maxLength": 22
+            },
+            "publicApi": {
+              "lookup": true
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
@@ -636,8 +646,8 @@
             "apiKey": "eTGOCurrencyRate",
             "column": "EM_ETGO_Currency_Rate",
             "label": "EM_ETGO_Currency_Rate",
-            "type": "string",
-            "tsType": "string",
+            "type": "decimal",
+            "tsType": "number",
             "visibility": "editable",
             "required": false,
             "grid": false,
@@ -2014,7 +2024,7 @@
             "name": "eTGOCurrencyRate",
             "apiKey": "eTGOCurrencyRate",
             "column": "EM_ETGO_Currency_Rate",
-            "type": "string",
+            "type": "decimal",
             "visibility": "editable",
             "required": false
           },
@@ -3736,7 +3746,7 @@
         "entity": "header",
         "field": "eTGOCurrencyRate",
         "runner": "node",
-        "description": "Field 'eTGOCurrencyRate' should have type 'string' in header"
+        "description": "Field 'eTGOCurrencyRate' should have type 'number' in header"
       },
       {
         "id": "t-field-type-header-eTGODeliveryStatus",

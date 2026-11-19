@@ -14,6 +14,7 @@
 | [NEO Headless Extensibility Guide](neo-headless-extensibility.md) | How to extend/customize NEO Headless: NeoHandler hooks, configuration, patterns |
 | [Usage Measurement (ETP-5050)](usage-measurement.md) | Per-tenant daily usage measurement in shadow mode: the resource catalog, declarative vs strategy counting, the settling window and sealing pass, the open **stock resource** problem, and scheduling the job (ETP-5051: the `usage-aggregation-schedule` flag, the Process Request, the cadence and the lag WARN). Plan quotas built on it — where they are enforced, the extensibility ladder, how to cap a resource — live in `com.etendoerp.go` `docs/plan-quotas.md` |
 | [NEO Entity Naming Investigation](neo-entity-naming-investigation.md) | Investigation report on `push-to-neo` naming, duplicate entities/fields, runtime endpoint resolution, and unification rule |
+| [Dynamic reports (engine)](dynamic-reports.md) | Shared notes of the interactive report view (`DynamicReportView`): selections in the URL, scope, validation, restore |
 | [NEO Constraints](neo-pending-constraints.md) | UNIQUE constraints applied to ETGO_SF_* tables (2026-04-13) — regression guard against duplicate inserts |
 | [NEO Duplicates Report 2026-04-13](neo-duplicates-report-2026-04-13.md) | Snapshot of spec/entity/field duplicates found on 2026-04-13 (pre-dedupe), plus the 54 AD-label naming cases |
 | [Widget Endpoints Guide](widget-endpoints.md) | How to create widget endpoints: handler pattern, XML registration, frontend `useWidget` hook, response contracts |

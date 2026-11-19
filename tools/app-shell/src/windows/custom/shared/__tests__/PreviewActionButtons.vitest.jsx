@@ -18,13 +18,13 @@ vi.mock('../PdfViewer.jsx', () => ({
   default: ({ url }) => <div data-testid="pdf-viewer" data-url={url} />,
 }));
 
-vi.mock('lucide-react', () => ({
-  Edit2: ({ className }) => <span data-testid="icon-edit2" className={className} />,
-  Eye: ({ className }) => <span data-testid="icon-eye" className={className} />,
-  Mail: ({ className }) => <span data-testid="icon-mail" className={className} />,
-  Download: ({ className }) => <span data-testid="icon-download" className={className} />,
-  Loader2: ({ className }) => <span data-testid="icon-loader2" className={className} />,
-  AlertCircle: ({ className }) => <span data-testid="icon-alert-circle" className={className} />,
+vi.mock('@phosphor-icons/react', () => ({
+  PencilSimpleIcon: ({ className }) => <span data-testid="icon-edit2" className={className} />,
+  EyeIcon: ({ className }) => <span data-testid="icon-eye" className={className} />,
+  EnvelopeSimpleIcon: ({ className }) => <span data-testid="icon-mail" className={className} />,
+  DownloadSimpleIcon: ({ className }) => <span data-testid="icon-download" className={className} />,
+  CircleNotchIcon: ({ className }) => <span data-testid="icon-loader2" className={className} />,
+  WarningCircleIcon: ({ className }) => <span data-testid="icon-alert-circle" className={className} />,
 }));
 
 // ETP-5124 — PreviewSendModal renders SendDocumentModal directly, so it is mocked here just to

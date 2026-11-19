@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { FileText, X } from 'lucide-react';
+import { FileTextIcon, XIcon } from '@phosphor-icons/react';
 import { Badge } from '@/components/ui/badge.jsx';
 import { useUI } from '@/i18n';
 
@@ -28,7 +28,7 @@ export function AttachmentChips({ attachments = [], onRemove }) {
             className="gap-2"
             title={`${attachment.tabTitle} — ${label}`}
             data-testid="Badge__5836c2">
-            <FileText
+            <FileTextIcon
               className="h-3 w-3 shrink-0 text-muted-foreground"
               data-testid="FileText__5836c2" />
             <span className="max-w-[220px] truncate">
@@ -40,7 +40,7 @@ export function AttachmentChips({ attachments = [], onRemove }) {
               className="text-muted-foreground hover:text-foreground"
               aria-label={ui('copilotRemoveAttachment')}
             >
-              <X className="h-3 w-3" data-testid="X__5836c2" />
+              <XIcon className="h-3 w-3" data-testid="X__5836c2" />
             </button>
           </Badge>
         );

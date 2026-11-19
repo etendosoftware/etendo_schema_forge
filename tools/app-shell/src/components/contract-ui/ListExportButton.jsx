@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Upload } from 'lucide-react';
+import { UploadSimpleIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button.jsx';
 import { useUI } from '@/i18n';
@@ -132,7 +132,7 @@ export function ListExportButton({ importConfig, importFieldLabel, apiBaseUrl, b
     >
       {/* ETP-4997 (SHELL-02) — the arrow tracks the direction the DATA travels, not the file:
           export pushes records out (Upload), import pulls them in (Download). */}
-      <Upload className="h-5 w-5" data-testid="Upload__ListViewExport" />
+      <UploadSimpleIcon className="h-5 w-5" data-testid="Upload__ListViewExport" />
     </Button>
   );
 

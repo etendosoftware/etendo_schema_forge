@@ -1,5 +1,5 @@
 import { useUI } from '@/i18n';
-import { Search, X } from 'lucide-react';
+import { MagnifyingGlassIcon, XIcon } from '@phosphor-icons/react';
 
 export default function ProductSearchBar({ query, onChange, inputRef, onEnter }) {
   const ui = useUI();
@@ -13,7 +13,7 @@ export default function ProductSearchBar({ query, onChange, inputRef, onEnter })
 
   return (
     <div className="relative">
-      <Search
+      <MagnifyingGlassIcon
         className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
         data-testid="Search__d6f047" />
       <input
@@ -30,7 +30,7 @@ export default function ProductSearchBar({ query, onChange, inputRef, onEnter })
           onClick={() => onChange('')}
           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
         >
-          <X className="h-4 w-4" data-testid="X__d6f047" />
+          <XIcon className="h-4 w-4" data-testid="X__d6f047" />
         </button>
       )}
     </div>

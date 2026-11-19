@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Archive, LoaderCircle, Plus, Search } from 'lucide-react';
+import { ArchiveIcon, CircleNotchIcon, PlusIcon, MagnifyingGlassIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { Separator } from '@/components/ui/separator.jsx';
@@ -70,13 +70,13 @@ export function ConversationSidebar({
           onClick={onNew}
           aria-label={ui('copilotNewConversation')}
           data-testid="Button__db7c3f">
-          <Plus className="h-4 w-4" data-testid="Plus__db7c3f" />
+          <PlusIcon className="h-4 w-4" data-testid="Plus__db7c3f" />
         </Button>
       </div>
       {/* Search */}
       <div className="px-3 pb-2">
         <div className="relative">
-          <Search
+          <MagnifyingGlassIcon
             className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none"
             data-testid="Search__db7c3f" />
           <Input
@@ -92,7 +92,7 @@ export function ConversationSidebar({
       <div className="flex-1 overflow-y-auto px-2 py-1">
         {isLoading && (
           <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
-            <LoaderCircle className="h-4 w-4 animate-spin" data-testid="LoaderCircle__db7c3f" />
+            <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="LoaderCircle__db7c3f" />
           </div>
         )}
         {!isLoading && filteredActive.length > 0 && filteredActive.map((conv) => (
@@ -124,7 +124,7 @@ export function ConversationSidebar({
                 'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
               )}
             >
-              <Archive className="h-3.5 w-3.5 shrink-0" data-testid="Archive__db7c3f" />
+              <ArchiveIcon className="h-3.5 w-3.5 shrink-0" data-testid="Archive__db7c3f" />
               <span className="flex-1 text-left">
                 {ui('copilotArchived')}
                 {filteredArchived.length > 0 && (
@@ -145,7 +145,7 @@ export function ConversationSidebar({
               <div className="mt-1">
                 {isLoadingArchived && (
                   <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
-                    <LoaderCircle className="h-3.5 w-3.5 animate-spin" data-testid="LoaderCircle__db7c3f" />
+                    <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="LoaderCircle__db7c3f" />
                   </div>
                 )}
                 {!isLoadingArchived && filteredArchived.length > 0 && filteredArchived.map((conv) => (

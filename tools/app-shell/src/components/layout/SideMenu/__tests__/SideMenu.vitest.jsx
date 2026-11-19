@@ -1,5 +1,6 @@
 // @covers tools/app-shell/src/components/layout/SideMenu/SideMenu.jsx
 import { render, screen, fireEvent, within } from '@testing-library/react';
+import { allIconsAs } from '@/test/iconMock.js';
 import userEvent from '@testing-library/user-event';
 
 const { mockUseFeatureFlag } = vi.hoisted(() => ({
@@ -163,30 +164,9 @@ vi.mock('@/components/UserAvatarButton.jsx', () => ({
 }));
 
 // Mock Phosphor icons — return simple span stubs
-vi.mock('@phosphor-icons/react', () => {
-  const iconStub = ({ className }) => <span className={className} />;
-  return {
-    ClipboardText: iconStub,
-    House: iconStub,
-    Star: iconStub,
-    IdentificationCard: iconStub,
-    ShareNetwork: iconStub,
-    ChartLineUp: iconStub,
-    Receipt: iconStub,
-    Bank: iconStub,
-    Package: iconStub,
-    Briefcase: iconStub,
-    Users: iconStub,
-    Presentation: iconStub,
-    Plug: iconStub,
-    Gear: iconStub,
-    Flask: iconStub,
-    SquaresFour: iconStub,
-    Eye: iconStub,
-    FileCode: iconStub,
-    Storefront: iconStub,
-  };
-});
+// Every icon SideMenu imports, stubbed (allIconsAs takes the list from the real module).
+vi.mock('@phosphor-icons/react', async (importOriginal) =>
+  allIconsAs(({ className, weight }) => <span className={className} data-weight={weight} />, importOriginal));
 
 import SideMenu from '../SideMenu.jsx';
 import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
@@ -281,6 +261,16 @@ describe('SideMenu', () => {
   it('renders without crashing with minimal props', () => {
     render(<SideMenu {...defaultProps} />);
     expect(screen.getByRole('navigation')).toBeInTheDocument();
+  });
+
+  // ETP-6155 — Fill is reserved for the navigation rail's active entry; the rest stays Regular.
+  it('draws only the active rail entry with the fill weight', () => {
+    render(<SideMenu {...defaultProps} />);
+    const active = screen.getByTestId('menu-item-dashboard');
+    expect(active.querySelector('[data-weight]')).toHaveAttribute('data-weight', 'fill');
+    const nav = active.closest('nav');
+    expect(nav.querySelectorAll('[data-weight="regular"]').length).toBeGreaterThan(0);
+    expect(nav.querySelectorAll('[data-weight="fill"]')).toHaveLength(1);
   });
 
   it('renders the navigation aria label', () => {

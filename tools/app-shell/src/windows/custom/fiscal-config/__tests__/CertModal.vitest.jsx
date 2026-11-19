@@ -14,15 +14,15 @@ vi.mock('@/components/ui/button', () => ({
     <button onClick={onClick} disabled={disabled} {...rest}>{children}</button>
   ),
 }));
-vi.mock('lucide-react', () => ({
-  FileText: () => null,
-  Upload: () => null,
-  Eye: () => null,
-  EyeOff: () => null,
-  Lock: () => null,
-  TriangleAlert: () => null,
-  Check: () => null,
-  Info: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  FileTextIcon: () => null,
+  UploadSimpleIcon: () => null,
+  EyeIcon: () => null,
+  EyeSlashIcon: () => null,
+  LockIcon: () => null,
+  WarningIcon: () => null,
+  CheckIcon: () => null,
+  InfoIcon: () => null,
 }));
 vi.mock('../FiscalStepItem.jsx', () => ({
   default: ({ n, label }) => <span data-testid={`step-${n}`}>{label}</span>,

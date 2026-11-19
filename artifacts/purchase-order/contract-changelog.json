@@ -2150,5 +2150,40 @@
     ],
     "author": "pipeline",
     "date": "2026-11-16"
+  },
+  {
+    "from": "0.57.0",
+    "to": "0.58.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"paymentMethod\" property \"publicApi\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-11-16"
+  },
+  {
+    "from": "0.58.0",
+    "to": "0.59.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"warehouse\" property \"publicApi\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-11-16"
+  },
+  {
+    "from": "0.59.0",
+    "to": "0.60.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"eTGOCurrencyRate\" property \"type\" changed from \"string\" to \"decimal\" in frontend (breaking)",
+      "Field \"eTGOCurrencyRate\" property \"tsType\" changed from \"string\" to \"number\" in frontend (breaking)",
+      "Field \"finaccTxnConvertRate\" property \"type\" changed from \"string\" to \"decimal\" in frontend (breaking)",
+      "Field \"finaccTxnConvertRate\" property \"tsType\" changed from \"string\" to \"number\" in frontend (breaking)",
+      "Field \"eTGOCurrencyRate\" property \"type\" changed from \"string\" to \"decimal\" in backend (breaking)",
+      "Field \"finaccTxnConvertRate\" property \"type\" changed from \"string\" to \"decimal\" in backend (breaking)"
+    ],
+    "author": "pipeline",
+    "date": "2026-11-18"
   }
 ]

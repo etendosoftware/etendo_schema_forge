@@ -3190,3 +3190,19 @@ An issued invoice is voided with a credit note (factura rectificativa), never by
 The purchase invoice mounts the same shared `SifTab`, so its SII *Tipo factura* options (F6, LC, F5,
 F1) read "CODE - Label" with the code once, exactly like the sales invoice; see
 [sales-invoice.md → One label format for the SIF tab's selects](sales-invoice.md#one-label-format-for-the-sif-tabs-selects--etp-6179).
+
+## Mandatory fields of the SIF tab carry the red `*` — ETP-6179
+
+The SIF tab (shared `SifTab.jsx`) marks its mandatory fields with the app's red `*`
+(`RequiredMark`, with `aria-required` on the control). On a purchase invoice those are the SII
+*Tipo factura* (`aeatsiiClaveTipoFc`) and *Descripción SII* (`aeatsiiDescripcionSii`), the two the
+SII pre-send validation refuses when empty. There is no rectification code on a purchase, not even
+on a purchase rectificative, and VERI\*FACTU never applies, so nothing else is marked. The `*` is
+hidden once the field is read-only (completed or sent invoice, read-only role). The rule is the one
+the "Datos fiscales" step of the invoice-creating modals uses
+(`tools/app-shell/src/windows/custom/shared/sifRequiredFields.js`; full table in
+`docs/ui-customization.md` §21b, user-facing detail in `sales-invoice.md`).
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. The header `eTGOCurrencyRate` (`EM_ETGO_Currency_Rate`) is now `decimal` in the contract (`tsType: number`).

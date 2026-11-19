@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
-import { Check, ChevronDown, FileText, Layers, Lock, Trash2 } from 'lucide-react';
+import {
+  CheckIcon,
+  CaretDownIcon,
+  FileTextIcon,
+  StackIcon,
+  LockIcon,
+  TrashIcon,
+} from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
@@ -322,7 +329,7 @@ function MatchedRow({ row, ui, money }) {
           aria-label={ui('financeAccountStatementsManualLineMatchedTooltip')}
           data-testid="manual-line-lock"
         >
-          <Lock className="h-4 w-4" data-testid="Lock__6b4086" />
+          <LockIcon className="h-4 w-4" data-testid="Lock__6b4086" />
         </span>
       </span>
     </div>
@@ -387,7 +394,7 @@ function EditRow({ row, onChange, onRemove, ui, currencySym, currencySymRightSid
         <button type="button" onClick={() => onRemove(row.id)}
           aria-label={ui('financeAccountStatementsManualRemoveLine')} data-testid="manual-line-remove"
           className="flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--destructive))] opacity-0 transition-opacity hover:bg-[var(--status-destructive-bg)] focus:opacity-100 group-hover:opacity-100">
-          <Trash2 className="h-4 w-4" data-testid="Trash2__6b4086" />
+          <TrashIcon className="h-4 w-4" data-testid="Trash2__6b4086" />
         </button>
       </span>
     </div>
@@ -569,7 +576,7 @@ function LinesTab({ count, ui }) {
   return (
     <div className="-mx-6 flex items-center border-b border-[hsl(var(--border-subtle))] px-6">
       <div className="-mb-px flex items-center gap-1.5 border-b-2 border-[hsl(var(--foreground))] pb-3 pr-3 pt-2">
-        <Layers className="h-4 w-4 text-[hsl(var(--foreground))]" data-testid="Layers__6b4086" />
+        <StackIcon className="h-4 w-4 text-[hsl(var(--foreground))]" data-testid="Layers__6b4086" />
         <span className="text-sm font-medium text-[hsl(var(--foreground))]">
           {ui('financeAccountStatementsManualSectionLines')}
         </span>
@@ -631,7 +638,7 @@ function SaveSplitButton({ creating, onProcess, onDraft, ui }) {
         data-testid="manual-statement-save"
         className={cn(btnBase, 'gap-1.5 rounded-l-lg px-3 text-sm font-medium')}
       >
-        <Check className="h-4 w-4" data-testid="Check__6b4086" />
+        <CheckIcon className="h-4 w-4" data-testid="Check__6b4086" />
         {creating ? ui('financeAccountStatementsManualSaving') : ui('financeAccountStatementsManualSaveProcess')}
       </button>
       <button
@@ -644,7 +651,7 @@ function SaveSplitButton({ creating, onProcess, onDraft, ui }) {
         data-testid="manual-statement-save-split"
         className={cn(btnBase, 'w-9 justify-center rounded-r-lg border-l border-inverse-border/20')}
       >
-        <ChevronDown
+        <CaretDownIcon
           className={cn('h-4 w-4 transition-transform', open && 'rotate-180')}
           data-testid="ChevronDown__6b4086" />
       </button>
@@ -663,7 +670,7 @@ function SaveSplitButton({ creating, onProcess, onDraft, ui }) {
             className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-[hsl(var(--muted))]"
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--border-subtle))] text-[hsl(var(--foreground))]">
-              <FileText className="h-4 w-4" data-testid="FileText__6b4086" />
+              <FileTextIcon className="h-4 w-4" data-testid="FileText__6b4086" />
             </span>
             <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
               {ui('financeAccountStatementsManualSaveDraft')}

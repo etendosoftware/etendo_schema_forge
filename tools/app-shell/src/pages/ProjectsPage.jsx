@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { KPIHeader, KanbanBoard, DataTable } from '@/components/contract-ui';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { FolderKanban, Clock, PieChart, FileText } from 'lucide-react';
+import { KanbanIcon, ClockIcon, ChartPieIcon, FileTextIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 import { sections } from '@generated/projects/generated/config';
@@ -10,7 +10,7 @@ import * as mockData from '@generated/projects/generated/mockData';
 
 // -- Icon resolution (config stores string names) -----------------------------
 
-const ICON_MAP = { FolderKanban, Clock, PieChart, FileText };
+const ICON_MAP = { FolderKanban: KanbanIcon, Clock: ClockIcon, PieChart: ChartPieIcon, FileText: FileTextIcon };
 
 // -- Derived data from contract -----------------------------------------------
 
@@ -70,7 +70,7 @@ export default function ProjectsPage() {
         <Card data-testid="Card__84c7bf">
           <CardHeader data-testid="CardHeader__84c7bf">
             <CardTitle className="flex items-center gap-2" data-testid="CardTitle__84c7bf">
-              <Clock className="h-5 w-5 text-muted-foreground" data-testid="Clock__84c7bf" />
+              <ClockIcon className="h-5 w-5 text-muted-foreground" data-testid="Clock__84c7bf" />
               {ui('recentTimeEntries')}
             </CardTitle>
           </CardHeader>
@@ -87,7 +87,7 @@ export default function ProjectsPage() {
         <Card data-testid="Card__84c7bf">
           <CardHeader data-testid="CardHeader__84c7bf">
             <CardTitle className="flex items-center gap-2" data-testid="CardTitle__84c7bf">
-              <FileText className="h-5 w-5 text-muted-foreground" data-testid="FileText__84c7bf" />
+              <FileTextIcon className="h-5 w-5 text-muted-foreground" data-testid="FileText__84c7bf" />
               {ui('recentDocuments')}
             </CardTitle>
           </CardHeader>

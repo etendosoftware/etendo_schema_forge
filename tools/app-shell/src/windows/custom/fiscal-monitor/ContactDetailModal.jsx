@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2, MapPin, ChevronDown, Check } from 'lucide-react';
+import { CircleNotchIcon, MapPinIcon, CaretDownIcon, CheckIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { toast } from 'sonner';
@@ -136,7 +136,7 @@ function OptionPicker({ options, value, onChange, loading, ariaLabel, ui, error 
   if (loading) {
     return (
       <div style={{ ...INPUT_ST, display: 'flex', alignItems: 'center', gap: 8, color: 'hsl(var(--text-disabled))', background: 'hsl(var(--muted))' }}>
-        <Loader2
+        <CircleNotchIcon
           size={13}
           style={{ animation: 'spin 1s linear infinite' }}
           data-testid="Loader2__3fe37d" />
@@ -164,7 +164,7 @@ function OptionPicker({ options, value, onChange, loading, ariaLabel, ui, error 
         <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: selected ? 'hsl(var(--foreground))' : 'hsl(var(--text-disabled))' }}>
           {selected?.label ?? '—'}
         </span>
-        <ChevronDown
+        <CaretDownIcon
           size={15}
           style={{ color: 'hsl(var(--text-disabled))', flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}
           data-testid="ChevronDown__3fe37d" />
@@ -210,7 +210,7 @@ function OptionPicker({ options, value, onChange, loading, ariaLabel, ui, error 
                   }}
                 >
                   <span style={{ width: 16, flexShrink: 0 }}>
-                    {opt.id === value && <Check size={13} data-testid="Check__3fe37d" />}
+                    {opt.id === value && <CheckIcon size={13} data-testid="Check__3fe37d" />}
                   </span>
                   {opt.label}
                 </button>
@@ -430,7 +430,7 @@ export default function ContactDetailModal({ open, onClose, bpId, contactsApiBas
 
             {bpId && loading && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 0' }}>
-                <Loader2
+                <CircleNotchIcon
                   size={20}
                   style={{ animation: 'spin 1s linear infinite', color: 'hsl(var(--text-disabled))' }}
                   data-testid="Loader2__3fe37d" />
@@ -492,7 +492,7 @@ export default function ContactDetailModal({ open, onClose, bpId, contactsApiBas
                             boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
                           }}
                         >
-                          <MapPin size={13} data-testid="MapPin__3fe37d" />
+                          <MapPinIcon size={13} data-testid="MapPin__3fe37d" />
                           {ui('contactDetail.editLocation')}
                         </button>
                       </div>
@@ -551,11 +551,11 @@ export default function ContactDetailModal({ open, onClose, bpId, contactsApiBas
                   onClick={handleSave}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 >
-                  {saving && <Loader2
+                  {saving && <CircleNotchIcon
                     size={13}
                     style={{ animation: 'spin 1s linear infinite' }}
                     data-testid="Loader2__3fe37d" />}
-                  {!saving && isDirty && <Check size={14} strokeWidth={2} data-testid="Check__3fe37d" />}
+                  {!saving && isDirty && <CheckIcon size={14} data-testid="Check__3fe37d" />}
                   {ui('save')}
                 </button>
               )}

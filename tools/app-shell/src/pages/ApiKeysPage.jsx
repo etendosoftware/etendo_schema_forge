@@ -15,7 +15,17 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Ban, Copy, ExternalLink, KeyRound, MoreHorizontal, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import {
+  ProhibitIcon,
+  CopyIcon,
+  ArrowSquareOutIcon,
+  KeyIcon,
+  DotsThreeIcon,
+  PencilSimpleIcon,
+  PlusIcon,
+  ArrowsClockwiseIcon,
+  TrashIcon,
+} from '@phosphor-icons/react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { useFeatureFlag, PUBLIC_API_KEYS } from '@/lib/flags';
@@ -102,22 +112,22 @@ export default function ApiKeysPage() {
 
   let keyContent;
   if (loading) {
-    keyContent = <div className="flex justify-center py-12 text-muted-foreground"><RefreshCw className="mr-2 h-5 w-5 animate-spin" data-testid="RefreshCw__5d273f" />{ui('apiKeysLoading')}</div>;
+    keyContent = <div className="flex justify-center py-12 text-muted-foreground"><ArrowsClockwiseIcon className="mr-2 h-5 w-5 animate-spin" data-testid="RefreshCw__5d273f" />{ui('apiKeysLoading')}</div>;
   } else if (keys.length === 0) {
-    keyContent = <div className="py-16 text-center"><KeyRound
+    keyContent = <div className="py-16 text-center"><KeyIcon
       className="mx-auto mb-4 h-12 w-12 text-muted-foreground/40"
-      data-testid="KeyRound__5d273f" /><h3 className="text-lg font-medium">{ui('apiKeysEmpty')}</h3><p className="mb-4 text-sm text-muted-foreground">{ui('apiKeysEmptyDescription')}</p><Button onClick={openCreate} data-testid="Button__5d273f"><Plus className="mr-2 h-4 w-4" data-testid="Plus__5d273f" />{ui('apiKeysCreateFirst')}</Button></div>;
+      data-testid="KeyRound__5d273f" /><h3 className="text-lg font-medium">{ui('apiKeysEmpty')}</h3><p className="mb-4 text-sm text-muted-foreground">{ui('apiKeysEmptyDescription')}</p><Button onClick={openCreate} data-testid="Button__5d273f"><PlusIcon className="mr-2 h-4 w-4" data-testid="Plus__5d273f" />{ui('apiKeysCreateFirst')}</Button></div>;
   } else {
-    keyContent = <Table data-testid="Table__5d273f"><TableHeader data-testid="TableHeader__5d273f"><TableRow data-testid="TableRow__5d273f"><TableHead data-testid="TableHead__5d273f">{ui('name')}</TableHead><TableHead data-testid="TableHead__5d273f">{ui('clientId')}</TableHead><TableHead data-testid="TableHead__5d273f">{ui('capabilities')}</TableHead><TableHead data-testid="TableHead__5d273f">{ui('active')}</TableHead><TableHead data-testid="TableHead__5d273f" /></TableRow></TableHeader><TableBody data-testid="TableBody__5d273f">{keys.map((key) => <TableRow key={key.id} data-testid="TableRow__5d273f"><TableCell className="font-medium" data-testid="TableCell__5d273f">{key.name}</TableCell><TableCell data-testid="TableCell__5d273f"><button className="inline-flex items-center gap-1 font-mono text-xs" onClick={() => copy(key.clientId, ui('clientId'))}>{key.clientId?.slice(0, 12)}…<Copy className="h-3 w-3" data-testid="Copy__5d273f" /></button></TableCell><TableCell data-testid="TableCell__5d273f"><div className="flex flex-wrap gap-1">{(key.capabilities || []).map((capability) => <Badge variant="secondary" key={capability} data-testid="Badge__5d273f">{capability}</Badge>)}</div></TableCell><TableCell data-testid="TableCell__5d273f"><Badge
+    keyContent = <Table data-testid="Table__5d273f"><TableHeader data-testid="TableHeader__5d273f"><TableRow data-testid="TableRow__5d273f"><TableHead data-testid="TableHead__5d273f">{ui('name')}</TableHead><TableHead data-testid="TableHead__5d273f">{ui('clientId')}</TableHead><TableHead data-testid="TableHead__5d273f">{ui('capabilities')}</TableHead><TableHead data-testid="TableHead__5d273f">{ui('active')}</TableHead><TableHead data-testid="TableHead__5d273f" /></TableRow></TableHeader><TableBody data-testid="TableBody__5d273f">{keys.map((key) => <TableRow key={key.id} data-testid="TableRow__5d273f"><TableCell className="font-medium" data-testid="TableCell__5d273f">{key.name}</TableCell><TableCell data-testid="TableCell__5d273f"><button className="inline-flex items-center gap-1 font-mono text-xs" onClick={() => copy(key.clientId, ui('clientId'))}>{key.clientId?.slice(0, 12)}…<CopyIcon className="h-3 w-3" data-testid="Copy__5d273f" /></button></TableCell><TableCell data-testid="TableCell__5d273f"><div className="flex flex-wrap gap-1">{(key.capabilities || []).map((capability) => <Badge variant="secondary" key={capability} data-testid="Badge__5d273f">{capability}</Badge>)}</div></TableCell><TableCell data-testid="TableCell__5d273f"><Badge
           variant={key.isActive ? 'default' : 'outline'}
-          data-testid="Badge__5d273f">{key.isActive ? ui('active') : ui('inactive')}</Badge></TableCell><TableCell data-testid="TableCell__5d273f"><DropdownMenu data-testid="DropdownMenu__5d273f"><DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__5d273f"><Button variant="ghost" size="icon" data-testid="Button__5d273f"><MoreHorizontal className="h-4 w-4" data-testid="MoreHorizontal__5d273f" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" data-testid="DropdownMenuContent__5d273f"><DropdownMenuItem onClick={() => openEdit(key)} data-testid="DropdownMenuItem__5d273f"><Pencil className="mr-2 h-4 w-4" data-testid="Pencil__5d273f" />{ui('edit')}</DropdownMenuItem><DropdownMenuItem
+          data-testid="Badge__5d273f">{key.isActive ? ui('active') : ui('inactive')}</Badge></TableCell><TableCell data-testid="TableCell__5d273f"><DropdownMenu data-testid="DropdownMenu__5d273f"><DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__5d273f"><Button variant="ghost" size="icon" data-testid="Button__5d273f"><DotsThreeIcon className="h-4 w-4" data-testid="MoreHorizontal__5d273f" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" data-testid="DropdownMenuContent__5d273f"><DropdownMenuItem onClick={() => openEdit(key)} data-testid="DropdownMenuItem__5d273f"><PencilSimpleIcon className="mr-2 h-4 w-4" data-testid="Pencil__5d273f" />{ui('edit')}</DropdownMenuItem><DropdownMenuItem
           onClick={() => runAction(key, `Rotate "${key.name}"?`, ui('apiKeysRotateDescription'), ui('apiKeysRotate'), async () => { const result = await rotateApiKey(apiFetch, key.id); setReveal({ clientId: result.clientId, clientSecret: result.clientSecret }); })}
-          data-testid="DropdownMenuItem__5d273f"><KeyRound className="mr-2 h-4 w-4" data-testid="KeyRound__5d273f" />{ui('apiKeysRotate')}</DropdownMenuItem><DropdownMenuItem
+          data-testid="DropdownMenuItem__5d273f"><KeyIcon className="mr-2 h-4 w-4" data-testid="KeyRound__5d273f" />{ui('apiKeysRotate')}</DropdownMenuItem><DropdownMenuItem
           onClick={() => runAction(key, `Revoke tokens for "${key.name}"?`, ui('apiKeysRevokeDescription'), ui('revokeTokens'), async () => { await revokeApiKeyTokens(apiFetch, key.id); toast.success(ui('apiKeysTokensRevoked')); })}
-          data-testid="DropdownMenuItem__5d273f"><Ban className="mr-2 h-4 w-4" data-testid="Ban__5d273f" />{ui('revokeTokens')}</DropdownMenuItem><DropdownMenuSeparator data-testid="DropdownMenuSeparator__5d273f" /><DropdownMenuItem
+          data-testid="DropdownMenuItem__5d273f"><ProhibitIcon className="mr-2 h-4 w-4" data-testid="Ban__5d273f" />{ui('revokeTokens')}</DropdownMenuItem><DropdownMenuSeparator data-testid="DropdownMenuSeparator__5d273f" /><DropdownMenuItem
           className="text-destructive"
           onClick={() => runAction(key, `Delete "${key.name}"?`, ui('apiKeysDeleteDescription'), ui('delete'), async () => { await deleteApiKey(apiFetch, key.id); toast.success(ui('apiKeysDeleted')); })}
-          data-testid="DropdownMenuItem__5d273f"><Trash2 className="mr-2 h-4 w-4" data-testid="Trash2__5d273f" />{ui('delete')}</DropdownMenuItem></DropdownMenuContent></DropdownMenu></TableCell></TableRow>)}</TableBody></Table>;
+          data-testid="DropdownMenuItem__5d273f"><TrashIcon className="mr-2 h-4 w-4" data-testid="Trash2__5d273f" />{ui('delete')}</DropdownMenuItem></DropdownMenuContent></DropdownMenu></TableCell></TableRow>)}</TableBody></Table>;
   }
 
   // The route is registered for deep links, but the menu capability is the authoritative gate.
@@ -132,14 +142,14 @@ export default function ApiKeysPage() {
           size="icon"
           onClick={load}
           disabled={loading}
-          data-testid="Button__5d273f"><RefreshCw
+          data-testid="Button__5d273f"><ArrowsClockwiseIcon
           className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'}
-          data-testid="RefreshCw__5d273f" /></Button><Button onClick={openCreate} data-testid="Button__5d273f"><Plus className="mr-2 h-4 w-4" data-testid="Plus__5d273f" />{ui('apiKeysCreate')}</Button></div>
+          data-testid="RefreshCw__5d273f" /></Button><Button onClick={openCreate} data-testid="Button__5d273f"><PlusIcon className="mr-2 h-4 w-4" data-testid="Plus__5d273f" />{ui('apiKeysCreate')}</Button></div>
       </div>
       <div className="rounded-md border border-primary/20 bg-primary/5 p-4 text-sm" data-testid="ApiKeysScalarHelp">
         <p className="font-medium">{ui('apiKeysScalarConnectTitle')}</p>
         <p className="mt-1 text-muted-foreground">{ui('apiKeysScalarConnectDescription')} <code className="rounded bg-muted px-1 font-mono text-xs">{ui('apiKeysReadCapability')}</code>{ui('apiKeysScalarConnectDescriptionMiddle')} <code className="rounded bg-muted px-1 font-mono text-xs">{ui('apiKeysCredentialFormat')}</code>{ui('apiKeysScalarConnectDescriptionEnd')} <span className="font-medium">{ui('apiKeysBearerField')}</span>{ui('apiKeysScalarConnectDescriptionTail')} <code className="rounded bg-muted px-1 font-mono text-xs">{ui('apiKeysBearerScheme')}</code> {ui('apiKeysScalarAutomatically')}</p>
-        <a className="mt-2 inline-flex items-center gap-1 text-primary underline underline-offset-4" href={SCALAR_DOCS_URL} target="_blank" rel="noreferrer">{ui('apiKeysOpenScalarDocs')} <ExternalLink className="h-3.5 w-3.5" data-testid="ExternalLink__5d273f" /></a>
+        <a className="mt-2 inline-flex items-center gap-1 text-primary underline underline-offset-4" href={SCALAR_DOCS_URL} target="_blank" rel="noreferrer">{ui('apiKeysOpenScalarDocs')} <ArrowSquareOutIcon className="h-3.5 w-3.5" data-testid="ExternalLink__5d273f" /></a>
       </div>
       <Card data-testid="Card__5d273f"><CardContent className="p-0" data-testid="CardContent__5d273f">
         {keyContent}
@@ -154,7 +164,7 @@ export default function ApiKeysPage() {
         maxLength={120}
         placeholder={ui('apiKeysNamePlaceholder')}
         required
-        data-testid="Input__5d273f" /></div>{!dialog.key && <><div className="grid gap-2"><Label data-testid="Label__5d273f">{ui('apiKeysAllowedCapabilities')}</Label>{CAPABILITIES.map(([capability, description]) => <label className="flex items-start gap-2 rounded-md border p-3 text-sm" key={capability}><input type="checkbox" checked={selected.includes(capability)} onChange={() => setSelected((values) => values.includes(capability) ? values.filter((value) => value !== capability) : [...values, capability])} /><span><span className="font-mono">{capability}</span><span className="block text-xs text-muted-foreground">{ui(description)}</span></span></label>)}</div><div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-sm"><p className="font-medium">{ui('apiKeysScalarDialogTitle')}</p><p className="mt-1 text-muted-foreground">{ui('apiKeysScalarDialogDescription')} <span className="font-medium">{ui('apiKeysBearerFieldLower')}</span> {ui('apiKeysScalarAuthorizationField')}. {ui('apiKeysUse')} <code className="rounded bg-muted px-1 font-mono text-xs">{ui('apiKeysCredentialFormat')}</code>; {ui('apiKeysDoNotAdd')} <code className="rounded bg-muted px-1 font-mono text-xs">{ui('apiKeysBearerScheme')}</code>.</p><a className="mt-2 inline-flex items-center gap-1 text-primary underline underline-offset-4" href={SCALAR_DOCS_URL} target="_blank" rel="noreferrer">{ui('apiKeysOpenScalarDocs')} <ExternalLink className="h-3.5 w-3.5" data-testid="ExternalLink__5d273f" /></a></div></>}<div className="flex items-center justify-between"><Label htmlFor="api-key-active" data-testid="Label__5d273f">{ui('active')}</Label><Switch
+        data-testid="Input__5d273f" /></div>{!dialog.key && <><div className="grid gap-2"><Label data-testid="Label__5d273f">{ui('apiKeysAllowedCapabilities')}</Label>{CAPABILITIES.map(([capability, description]) => <label className="flex items-start gap-2 rounded-md border p-3 text-sm" key={capability}><input type="checkbox" checked={selected.includes(capability)} onChange={() => setSelected((values) => values.includes(capability) ? values.filter((value) => value !== capability) : [...values, capability])} /><span><span className="font-mono">{capability}</span><span className="block text-xs text-muted-foreground">{ui(description)}</span></span></label>)}</div><div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-sm"><p className="font-medium">{ui('apiKeysScalarDialogTitle')}</p><p className="mt-1 text-muted-foreground">{ui('apiKeysScalarDialogDescription')} <span className="font-medium">{ui('apiKeysBearerFieldLower')}</span> {ui('apiKeysScalarAuthorizationField')}. {ui('apiKeysUse')} <code className="rounded bg-muted px-1 font-mono text-xs">{ui('apiKeysCredentialFormat')}</code>; {ui('apiKeysDoNotAdd')} <code className="rounded bg-muted px-1 font-mono text-xs">{ui('apiKeysBearerScheme')}</code>.</p><a className="mt-2 inline-flex items-center gap-1 text-primary underline underline-offset-4" href={SCALAR_DOCS_URL} target="_blank" rel="noreferrer">{ui('apiKeysOpenScalarDocs')} <ArrowSquareOutIcon className="h-3.5 w-3.5" data-testid="ExternalLink__5d273f" /></a></div></>}<div className="flex items-center justify-between"><Label htmlFor="api-key-active" data-testid="Label__5d273f">{ui('active')}</Label><Switch
         id="api-key-active"
         checked={active}
         onCheckedChange={setActive}

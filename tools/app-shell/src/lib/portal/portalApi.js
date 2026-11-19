@@ -137,7 +137,9 @@ function readableAmount(value) {
  * described in this module's docstring.
  *
  * `fetchImpl` is injected rather than imported so the caller supplies the memoized `apiFetch`
- * from `useApiFetch` (and a test supplies a double) — the same shape `lib/upgrade/api.js` uses.
+ * from `usePortalApiFetch` (and a test supplies a double) — the same shape `lib/upgrade/api.js`
+ * uses. Not `useApiFetch`: that client is bound to the app's session and discards an answer that
+ * arrives after the session identity changed, which a cold open from an email always risks.
  */
 async function portalGet(fetchImpl, token, path, {
   invalidOn = INVALID_TOKEN_STATUSES,
@@ -178,7 +180,8 @@ async function portalGet(fetchImpl, token, path, {
  * error state. `state` defaults to `valid`: a backend that predates ETP-6209 answered 200 only
  * for a valid link.
  *
- * @returns {Promise<{ state: string, businessPartnerName: string|null, tenantName: string|null,
+ * @returns {Promise<{ state: string, businessPartnerName: string|null, email: string|null,
+ *   tenantName: string|null,
  *   hasLogo: boolean, entryDocument: { kind: string, id: string }|null,
  *   entryKind: string|null }>}
  *
@@ -195,6 +198,8 @@ export async function fetchPortalIdentity(fetchImpl, token) {
     entryDocument: entryKind && entryId ? { kind: entryKind, id: entryId } : null,
     entryKind: entryKind && entryId ? null : readableText(data?.entryKind),
     businessPartnerName: readableText(data?.businessPartnerName),
+    // The customer's address the portal uses (the root send's To), shown in the user menu.
+    email: readableText(data?.email),
     tenantName: readableText(data?.tenantName),
     // The backend says whether there is a logo, so the page never requests one that does not
     // exist and never has to hide a broken image. Defaults to false: a backend that predates
@@ -408,6 +413,8 @@ export async function fetchPortalDocument(fetchImpl, token, kind, id) {
       canDecide: data.decision.canDecide === true,
       blockedReason: readableText(data.decision.blockedReason),
       acceptAvailable: data.decision.acceptAvailable === true,
+      // Where the confirmation will go, in full; named by the accept / reject popups.
+      email: readableText(data.decision.email),
     } : null,
   };
 }
@@ -486,7 +493,7 @@ async function decisionErrorOf(response) {
 
 /**
  * Asks to accept or reject a quotation; the confirmation goes by email to the main recipient.
- * Resolves `{ ok: true, maskedEmail }` or `{ ok: false, error }` ({@link PORTAL_DECISION_ERROR});
+ * Resolves `{ ok: true, email }` or `{ ok: false, error }` ({@link PORTAL_DECISION_ERROR});
  * a dead link throws {@link PORTAL_ERROR.invalidLink} like every other read.
  */
 export async function requestPortalDecision(fetchImpl, token, quotationId, {
@@ -517,7 +524,7 @@ export async function requestPortalDecision(fetchImpl, token, quotationId, {
   }
   if (response.ok) {
     const data = await response.json().catch(() => ({}));
-    return { ok: true, maskedEmail: readableText(data?.maskedEmail) };
+    return { ok: true, email: readableText(data?.email) };
   }
   return { ok: false, error: await decisionErrorOf(response) };
 }
@@ -537,7 +544,26 @@ function normalizeDecision(data) {
     // token and the quotation it opens on. Absent when the customer cannot enter.
     portalToken: readableText(data?.portalToken),
     quotationId: readableText(data?.quotationId),
+    // The confirmation page's summary (ETP-6209 redesign).
+    date: readableText(data?.date),
+    grandTotal: readableAmount(data?.grandTotal),
+    currency: readableText(data?.currency),
+    documentStatus: readableText(data?.documentStatus),
   };
+}
+
+/**
+ * A decision answer's body, or {@link PORTAL_ERROR.loadFailed} when it cannot be read (ETP-6209
+ * QA BUG-3). Never `{}`: an empty answer normalizes to "no longer pending" with no way into the
+ * portal, which is a false state for a decision the backend has just applied. An unreadable body
+ * is a lost answer, and the landing treats it as one (resend, then the view).
+ */
+async function readDecisionBody(response) {
+  try {
+    return await response.json();
+  } catch (cause) {
+    throw portalError(PORTAL_ERROR.loadFailed, { status: response.status, cause });
+  }
 }
 
 /** The confirmation landing: what will be applied. Never applies anything. */
@@ -545,7 +571,7 @@ export async function fetchPortalDecision(fetchImpl, decisionToken) {
   const response = await portalGet(fetchImpl, null, '/decisions/view', {
     headers: { [PORTAL_DECISION_TOKEN_HEADER]: decisionToken },
   });
-  return normalizeDecision(await response.json().catch(() => ({})));
+  return normalizeDecision(await readDecisionBody(response));
 }
 
 /**
@@ -558,5 +584,5 @@ export async function confirmPortalDecision(fetchImpl, decisionToken) {
     method: 'POST',
     headers: { [PORTAL_DECISION_TOKEN_HEADER]: decisionToken },
   });
-  return normalizeDecision(await response.json().catch(() => ({})));
+  return normalizeDecision(await readDecisionBody(response));
 }

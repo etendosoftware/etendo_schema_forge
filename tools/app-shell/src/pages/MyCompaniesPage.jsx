@@ -1,7 +1,14 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ChevronDown, ChevronRight, Loader2, MailOpen, MoreHorizontal, Plus } from 'lucide-react';
+import {
+  CaretDownIcon,
+  CaretRightIcon,
+  CircleNotchIcon,
+  EnvelopeSimpleOpenIcon,
+  DotsThreeIcon,
+  PlusIcon,
+} from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -97,7 +104,7 @@ function EnterButton({ env, isCurrent, switching, onEnter, ui }) {
       data-testid={`my-companies-enter-${env.clientId}`}
     >
       {busy
-        ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__my-companies-enter" />
+        ? <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__my-companies-enter" />
         : ui('myCompaniesEnter')}
     </Button>
   );
@@ -122,7 +129,7 @@ function CompanyName({ env, isCurrent, ui }) {
  * the same rule as the manage action; invited companies never do.
  */
 function SubscriptionToggle({ env, expanded, onToggle, ui }) {
-  const Icon = expanded ? ChevronDown : ChevronRight;
+  const Icon = expanded ? CaretDownIcon : CaretRightIcon;
   return (
     <Button
       type="button"
@@ -222,7 +229,7 @@ function OwnedCompaniesTable({
                           aria-label={ui('myCompaniesActions')}
                           data-testid={`my-companies-actions-${env.clientId}`}
                         >
-                          <MoreHorizontal className="h-4 w-4" data-testid="MoreHorizontal__my-companies" />
+                          <DotsThreeIcon className="h-4 w-4" data-testid="MoreHorizontal__my-companies" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" data-testid="DropdownMenuContent__44c7f5">
@@ -311,7 +318,7 @@ function PendingInvitation({ invitation, ui, locale }) {
       className="flex items-start gap-3 rounded-lg border bg-muted/40 px-4 py-3"
       data-testid={`my-companies-invitation-${invitation.id}`}
     >
-      <MailOpen className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" data-testid="MailOpen__my-companies" />
+      <EnvelopeSimpleOpenIcon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" data-testid="MailOpen__my-companies" />
       <div className="flex flex-col gap-0.5">
         <span className="text-sm font-semibold">
           {ui('myCompaniesInvitationTitle', { company: invitation.clientName })}
@@ -419,14 +426,14 @@ export default function MyCompaniesPage() {
           <p className="text-muted-foreground">{ui('myCompaniesSubtitle')}</p>
         </div>
         <Button type="button" onClick={() => navigate('/upgrade')} data-testid="my-companies-new">
-          <Plus className="mr-2 h-4 w-4" data-testid="Plus__my-companies" />
+          <PlusIcon className="mr-2 h-4 w-4" data-testid="Plus__my-companies" />
           {ui('myCompaniesNewCompany')}
         </Button>
       </div>
 
       {status === 'loading' && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="my-companies-loading">
-          <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__my-companies" />
+          <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__my-companies" />
           {ui('loading')}
         </div>
       )}

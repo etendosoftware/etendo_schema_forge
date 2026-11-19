@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Check, Loader2, Search } from 'lucide-react';
+import { CheckIcon, CircleNotchIcon, MagnifyingGlassIcon } from '@phosphor-icons/react';
 import { useUI } from '@etendosoftware/app-shell-core';
 
 // committed-selection-ok: a list-filter dropdown, not a field picker. It already marks the active
@@ -33,8 +33,8 @@ const SETTLE_MARGIN_MS = 50;
 // One option row (also used for the "all" row). Full menu width, 32px high, no
 // radius or gaps. Hover and selected share the same tint; only the selected row
 // shows the check, absolutely positioned at the right edge. Figma draws the glyph
-// (~9x6.5px, 1.5px stroke) inside a 24px box 12px from the edge: a 14px lucide icon
-// centred at the same point, with strokeWidth scaled (1.5px * 24/14) to keep the weight.
+// (~9x6.5px, 1.5px stroke) inside a 24px box 12px from the edge: a 14px icon
+// centred at the same point (Phosphor ignores strokeWidth, so the weight is the icon's own).
 function OptionRow({ id, selected, active, onClick, onPointerMove, children }) {
   const ref = useRef(null);
   // Keep the keyboard-active option visible inside the scrollable list.
@@ -55,9 +55,8 @@ function OptionRow({ id, selected, active, onClick, onPointerMove, children }) {
     >
       <span className="min-w-0 flex-1 truncate px-2">{children}</span>
       {selected && (
-        <Check
+        <CheckIcon
           className="absolute right-[17px] top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#121217]"
-          strokeWidth={2.5}
           aria-hidden="true"
           data-testid="Check__55c679" />
       )}
@@ -144,9 +143,9 @@ export function DistinctValuesList({
   return (
     <div className="flex flex-col gap-2 py-2">
       <div className="flex h-8 items-center px-2">
-        {/* Figma: 24px box (+4px left padding) whose glyph is ~16.5px, so a 20px lucide icon centred in it. */}
+        {/* Figma: 24px box (+4px left padding) whose glyph is ~16.5px, so a 20px icon centred in it. */}
         <span className="flex h-6 w-6 shrink-0 items-center justify-center box-content pl-1">
-          <Search className="h-5 w-5 text-[#828FA3]" aria-hidden="true" data-testid="Search__55c679" />
+          <MagnifyingGlassIcon className="h-5 w-5 text-[#828FA3]" aria-hidden="true" data-testid="Search__55c679" />
         </span>
         <input
           type="text"
@@ -195,7 +194,7 @@ export function DistinctValuesList({
         </div>
         {distinct.loading && codes.length === 0 && (
           <div className="flex items-center justify-center py-4 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__55c679" />
+            <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__55c679" />
           </div>
         )}
         {noResults && (
@@ -208,7 +207,7 @@ export function DistinctValuesList({
         {distinct.hasMore && (
           <div ref={sentinelRef} className="flex items-center justify-center py-2">
             {distinct.loadingMore && (
-              <Loader2
+              <CircleNotchIcon
                 className="h-4 w-4 animate-spin text-muted-foreground"
                 data-testid="Loader2__55c679" />
             )}

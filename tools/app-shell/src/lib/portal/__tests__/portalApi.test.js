@@ -152,6 +152,7 @@ describe('fetchPortalIdentity', () => {
       state: 'expired',
       entryDocument: { kind: ' invoice ', id: ' inv-9 ' },
       businessPartnerName: '  Cliente Uno  ',
+      email: ' cliente@uno.es ',
       tenantName: 'Acme SA',
       hasLogo: true,
     }));
@@ -161,6 +162,7 @@ describe('fetchPortalIdentity', () => {
       entryDocument: { kind: 'invoice', id: 'inv-9' },
       entryKind: null,
       businessPartnerName: 'Cliente Uno',
+      email: 'cliente@uno.es',
       tenantName: 'Acme SA',
       hasLogo: true,
     });
@@ -174,6 +176,7 @@ describe('fetchPortalIdentity', () => {
       entryDocument: null,
       entryKind: null,
       businessPartnerName: null,
+      email: null,
       tenantName: null,
       hasLogo: false,
     });
@@ -187,6 +190,7 @@ describe('fetchPortalIdentity', () => {
       entryDocument: null,
       entryKind: null,
       businessPartnerName: null,
+      email: null,
       tenantName: null,
       hasLogo: false,
     });
@@ -445,12 +449,16 @@ describe('fetchPortalDocument', () => {
     const { fetchImpl } = recordingFetch(() => jsonResponse({
       kind: 'QUOTATION',
       id: 'q-1',
-      decision: { canDecide: 'true', blockedReason: ' expired ', acceptAvailable: true },
+      decision: {
+        canDecide: 'true', blockedReason: ' expired ', acceptAvailable: true, email: ' contact@acme.com ',
+      },
     }));
 
     const document = await fetchPortalDocument(fetchImpl, TOKEN, 'QUOTATION', 'q-1');
 
-    assert.deepEqual(document.decision, { canDecide: false, blockedReason: 'expired', acceptAvailable: true });
+    assert.deepEqual(document.decision, {
+      canDecide: false, blockedReason: 'expired', acceptAvailable: true, email: 'contact@acme.com',
+    });
   });
 });
 
@@ -541,11 +549,11 @@ describe('error mapping of the home, list, detail and printable calls', () => {
 
 describe('requestPortalDecision', () => {
   it('POSTs the decision with the portal token in its header, never in the URL', async () => {
-    const { fetchImpl, calls } = recordingFetch(() => jsonResponse({ maskedEmail: 'c***@acme.com' }));
+    const { fetchImpl, calls } = recordingFetch(() => jsonResponse({ email: 'contact@acme.com' }));
 
     const result = await requestPortalDecision(fetchImpl, TOKEN, 'q/1', { decision: 'ACCEPT' });
 
-    assert.deepEqual(result, { ok: true, maskedEmail: 'c***@acme.com' });
+    assert.deepEqual(result, { ok: true, email: 'contact@acme.com' });
     assert.equal(calls[0].path, '/sws/portal/quotations/q%2F1/decision');
     assert.deepEqual(calls[0].options, {
       method: 'POST',
@@ -626,6 +634,20 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
     ]);
   });
 
+  it('reads the summary the confirmation page shows', async () => {
+    const { fetchImpl } = recordingFetch(() => jsonResponse({
+      state: 'confirmed', appliedNow: true, decision: 'ACCEPT', date: '2026-10-01',
+      grandTotal: '2450.00', currency: 'EUR', documentStatus: 'ETGO_AC',
+    }));
+
+    const result = await confirmPortalDecision(fetchImpl, DECISION_TOKEN);
+
+    assert.deepEqual(
+      [result.date, result.grandTotal, result.currency, result.documentStatus],
+      ['2026-10-01', 2450, 'EUR', 'ETGO_AC'],
+    );
+  });
+
   for (const [label, body, expected] of [
     [
       'reads the applied decision, appliedNow included',
@@ -637,6 +659,7 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
         state: 'confirmed', appliedNow: true, decision: 'REJECT', reasonCode: 'OTHER',
         reasonText: 'Ya no', documentNo: 'PR/0001', tenantName: 'Acme SA',
         portalToken: null, quotationId: null,
+        date: null, grandTotal: null, currency: null, documentStatus: null,
       },
     ],
     [
@@ -645,6 +668,7 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
       {
         state: 'confirmed', appliedNow: true, decision: 'ACCEPT', reasonCode: null, reasonText: null,
         documentNo: null, tenantName: null, portalToken: 'tok-new', quotationId: 'q-1',
+        date: null, grandTotal: null, currency: null, documentStatus: null,
       },
     ],
     [
@@ -653,6 +677,7 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
       {
         state: 'confirmed', appliedNow: false, decision: null, reasonCode: null, reasonText: null,
         documentNo: null, tenantName: null, portalToken: null, quotationId: null,
+        date: null, grandTotal: null, currency: null, documentStatus: null,
       },
     ],
     [
@@ -661,6 +686,7 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
       {
         state: 'not_pending', appliedNow: false, decision: null, reasonCode: null, reasonText: null,
         documentNo: null, tenantName: null, portalToken: null, quotationId: null,
+        date: null, grandTotal: null, currency: null, documentStatus: null,
       },
     ],
   ]) {
@@ -668,6 +694,21 @@ describe('fetchPortalDecision / confirmPortalDecision', () => {
       const { fetchImpl } = recordingFetch(() => jsonResponse(body));
 
       assert.deepEqual(await confirmPortalDecision(fetchImpl, DECISION_TOKEN), expected);
+    });
+  }
+
+  // QA BUG-3: a 200 whose body was cut is a lost answer, never "no longer pending".
+  for (const [label, call] of [
+    ['confirmation', confirmPortalDecision],
+    ['view', fetchPortalDecision],
+  ]) {
+    it(`maps an unreadable ${label} body to loadFailed, never to a state`, async () => {
+      const { fetchImpl } = recordingFetch(() => unparseableResponse());
+
+      await assert.rejects(
+        call(fetchImpl, DECISION_TOKEN),
+        expectPortalError(PORTAL_ERROR.loadFailed, { status: 200 }),
+      );
     });
   }
 

@@ -1,3 +1,4 @@
+import { ArrowLeftIcon, DotsThreeIcon, DotsThreeVerticalIcon, QuestionIcon, SparkleIcon, StarIcon, XIcon } from '@phosphor-icons/react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMenuLabel, useUI } from '@/i18n';
@@ -9,6 +10,7 @@ import { useCopilot } from '@/components/CopilotContext';
 import { WalkthroughLauncher } from '@etendosoftware/app-shell-core/walkthrough';
 import { cn } from '@/lib/utils.js';
 import { useGlobalSearch } from '@/components/global-search/GlobalSearchContext.jsx';
+import { SearchBar } from '@/components/layout/SearchBar.jsx';
 import {
   resolveVectorSearchTargetForPath,
   resolveVectorSearchTargets,
@@ -32,16 +34,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover.jsx';
-import {
-  Search,
-  Sparkles,
-  MoreVertical,
-  MoreHorizontal,
-  Star,
-  HelpCircle,
-  ArrowLeft,
-  X,
-} from 'lucide-react';
+
 import {
   BREADCRUMB_SEPARATOR,
   breadcrumbToText,
@@ -210,7 +203,7 @@ function TopBarBreadcrumb({ breadcrumb, ui }) {
                     className="flex h-4 items-center rounded px-0.5 hover:bg-muted hover:text-foreground"
                     data-testid="topbar-breadcrumb-overflow"
                   >
-                    <MoreHorizontal className="h-3.5 w-3.5" data-testid="MoreHorizontal__topbar-breadcrumb" />
+                    <DotsThreeIcon className="h-3.5 w-3.5" data-testid="MoreHorizontal__topbar-breadcrumb" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
@@ -279,7 +272,7 @@ function QuickActionsOverflowMenu({ actions, extras, ui }) {
           className="flex h-10 w-10 items-center justify-center rounded-lg text-topbar-icon transition-colors hover:bg-muted hover:text-foreground"
           data-testid="topbar-quick-actions-overflow"
         >
-          <MoreVertical className="h-5 w-5" data-testid="MoreVertical__topbar-quick-actions-overflow" />
+          <DotsThreeVerticalIcon className="h-5 w-5" data-testid="MoreVertical__topbar-quick-actions-overflow" />
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -548,7 +541,7 @@ export default function TopBar({
                 data-testid="topbar-back"
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-topbar-icon hover:bg-muted hover:text-foreground transition-colors shrink-0"
               >
-                <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__133e64" />
+                <ArrowLeftIcon className="h-4 w-4" data-testid="ArrowLeft__133e64" />
               </button>
             )}
             {/* ETP-5509: no fixed width cap. This block is content-sized and shrinkable
@@ -591,13 +584,13 @@ export default function TopBar({
                         data-testid="topbar-more-actions"
                         className="-ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-topbar-icon hover:bg-muted hover:text-foreground transition-colors"
                       >
-                        <MoreVertical className="h-4 w-4" data-testid="MoreVertical__133e64" />
+                        <DotsThreeVerticalIcon className="h-4 w-4" data-testid="MoreVertical__133e64" />
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-52" data-testid="DropdownMenuContent__133e64">
                       {onAddToFavorites && (
                         <DropdownMenuItem onClick={onAddToFavorites} data-testid="DropdownMenuItem__133e64">
-                          <Star
+                          <StarIcon
                             className={cn(
                               'h-4 w-4 mr-2',
                               isFavorite
@@ -610,7 +603,7 @@ export default function TopBar({
                       )}
                       {onPageHelp && (
                         <DropdownMenuItem onClick={onPageHelp} data-testid="DropdownMenuItem__133e64">
-                          <HelpCircle
+                          <QuestionIcon
                             className="h-4 w-4 mr-2 text-muted-foreground"
                             data-testid="HelpCircle__133e64" />
                           {ui('pageHelp')}
@@ -646,22 +639,18 @@ export default function TopBar({
             which ignored the Navigation Rail width and covered the title at 1280px. `min-w-0` +
             `max-w-full` let it shrink instead of overlapping if the bar ever gets too narrow. */}
         <div className="col-start-2 flex min-w-0 items-center justify-center" data-testid="topbar-search-slot">
-          <div
-            className="relative flex h-11 w-[392px] max-w-full items-center rounded-full border border-transparent bg-search-bg px-4 text-sm transition-colors hover:bg-search-bg/80 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20"
+          <SearchBar
+            className="w-[392px] max-w-full"
             onClick={(event) => {
               handleSearchClick(event);
               requestAnimationFrame(() => searchInputRef.current?.focus());
             }}
-            data-testid="global-search-trigger"
-            role="button"
-            tabIndex={0}
             onKeyDown={(event) => {
               if (event.target !== event.currentTarget) return;
               if (event.key === 'Enter' || event.key === ' ') handleSearchClick(event);
             }}
-          >
-            <Search className="mr-2 h-5 w-5 shrink-0 text-search-placeholder" data-testid="Search__133e64" />
-            {selectedScope && selectedScope.label && (
+            testId="global-search-trigger"
+            leading={selectedScope && selectedScope.label && (
               <span
                 className="mr-2 inline-flex min-w-0 max-w-[12rem] shrink items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground"
                 data-testid="topbar-vector-search-scope"
@@ -674,27 +663,28 @@ export default function TopBar({
                   className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full hover:bg-accent hover:text-foreground"
                   data-testid="topbar-vector-search-scope-clear"
                 >
-                  <X className="h-3 w-3" aria-hidden="true" data-testid="X__133e64" />
+                  <XIcon className="h-3 w-3" aria-hidden="true" data-testid="X__133e64" />
                 </button>
               </span>
             )}
-            <input
-              ref={searchInputRef}
-              value={searchValue}
-              onChange={(event) => {
-                const nextValue = event.target.value;
-                setSearchValue(nextValue);
-                if (nextValue.length === 0) {
-                  clearCurrentWindowScope();
-                }
-              }}
-              onFocus={handleSearchClick}
-              onMouseDown={() => setSearchOpen(true)}
-              onClick={(event) => {
+            inputRef={searchInputRef}
+            value={searchValue}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setSearchValue(nextValue);
+              if (nextValue.length === 0) {
+                clearCurrentWindowScope();
+              }
+            }}
+            placeholder={resolvedPlaceholder}
+            inputProps={{
+              onFocus: handleSearchClick,
+              onMouseDown: () => setSearchOpen(true),
+              onClick: (event) => {
                 event.stopPropagation();
                 handleSearchClick(event);
-              }}
-              onKeyDown={(event) => {
+              },
+              onKeyDown: (event) => {
                 // When the input owns focus, handle the shortcut here and stop
                 // propagation so the document listener cannot toggle twice.
                 if (event.key.toLowerCase() === 'k' && (event.ctrlKey || event.metaKey)) {
@@ -718,14 +708,11 @@ export default function TopBar({
                 }
                 const result = handleSearchKeyDown(event);
                 if (event.key === 'Enter' && !result?.keepOpen) setSearchOpen(false);
-              }}
-              placeholder={resolvedPlaceholder}
-              aria-label={resolvedPlaceholder}
-              cmdk-input=""
-              className="min-w-0 flex-1 bg-transparent text-left text-sm text-foreground outline-none placeholder:text-search-placeholder"
-              data-testid="global-search-input"
-            />
-          </div>
+              },
+              'cmdk-input': '',
+            }}
+            inputTestId="global-search-input"
+            data-testid="SearchBar__133e64" />
         </div>
 
         {/* Right: action icons */}
@@ -744,7 +731,7 @@ export default function TopBar({
                 aria-label={ui('aiAssistant')}
                 className="copilot-btn flex h-10 w-10 items-center justify-center rounded-lg text-topbar-icon transition-colors"
               >
-                <Sparkles className="h-5 w-5" data-testid="Sparkles__133e64" />
+                <SparkleIcon className="h-5 w-5" data-testid="Sparkles__133e64" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" data-testid="TooltipContent__133e64">{ui('aiAssistant')}</TooltipContent>
