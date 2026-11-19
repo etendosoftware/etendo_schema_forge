@@ -1,5 +1,6 @@
 import { Fragment } from 'react';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import {
   Table, TableBody, TableCell, TableHead, TableRow,
 } from '@/components/ui/table';
@@ -167,7 +168,7 @@ function RateRow({ row, symbol, orgSymbol, onEdit, onDelete, deleting, ui }) {
  * Built like MovementsTable: the shared `Table` / `TableBody` / `TableRow` / `TableHead` /
  * `TableCell` primitives (`@/components/ui/table`) and the shared `RowExpandToggle` (vertical,
  * the orientation of MovementsTable / StatementsTable) in a leading 40px column; sub-rows are
- * plain `TableRow`s under the parent. No card or hand-made table around it.
+ * plain `TableRow`s under the parent, inside the shared `Card` (rounded bordered container).
  */
 export function CurrencyRatesList({
   entries, orgIso, orgSymbol, expanded, onToggle, loading, loaded, error,
@@ -177,53 +178,55 @@ export function CurrencyRatesList({
   return (
     <>
       {loading && loaded ? <ListProgressBar testId="convrate-list-progress" data-testid="ListProgressBar__c0495c" /> : null}
-      <Table aria-label={ui('convRateListRegion')} className={`min-w-[880px] text-sm ${dimWhileRefreshing}`} data-testid="convrate-list-table">
-        <TableBody data-testid="TableBody__convrate">
-          {entries.map((entry) => {
-            const isOpen = expanded.has(entry.currencyId);
-            const symbol = entry.symbol || entry.isoCode;
-            return (
-              <Fragment key={entry.currencyId}>
-                <CurrencyRow
-                  entry={entry}
-                  orgIso={orgIso}
-                  expanded={isOpen}
-                  onToggle={() => onToggle(entry.currencyId)}
-                  onNewRate={onNewRate}
-                  ui={ui}
-                  data-testid="CurrencyRow__c0495c" />
-                {isOpen && <RatesHeader entry={entry} orgIso={orgIso} ui={ui} data-testid="RatesHeader__c0495c" />}
-                {isOpen && entry.rows.map((row) => (
-                  <RateRow
-                    key={row.id}
-                    row={row}
-                    symbol={symbol}
-                    orgSymbol={orgSymbol}
-                    onEdit={onEdit}
-                    onDelete={onDelete}
-                    deleting={deletingId === row.id}
+      <Card className="overflow-hidden" data-testid="convrate-list-card">
+        <Table aria-label={ui('convRateListRegion')} className={`min-w-[880px] text-sm ${dimWhileRefreshing}`} data-testid="convrate-list-table">
+          <TableBody data-testid="TableBody__convrate">
+            {entries.map((entry) => {
+              const isOpen = expanded.has(entry.currencyId);
+              const symbol = entry.symbol || entry.isoCode;
+              return (
+                <Fragment key={entry.currencyId}>
+                  <CurrencyRow
+                    entry={entry}
+                    orgIso={orgIso}
+                    expanded={isOpen}
+                    onToggle={() => onToggle(entry.currencyId)}
+                    onNewRate={onNewRate}
                     ui={ui}
-                    data-testid="RateRow__c0495c" />
-                ))}
-                {isOpen && entry.rows.length === 0 && (
-                  <TableRow className="hover:bg-transparent" data-testid="TableRow__convrate-empty-period">
-                    <TableCell colSpan={COL_COUNT} className="whitespace-normal pl-[52px] text-muted-foreground" data-testid={`convrate-currency-empty-${entry.isoCode}`}>
-                      {ui('convRateNoRatesInPeriod')}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </Fragment>
-            );
-          })}
-          {!loading && entries.length === 0 && (
-            <TableRow className="hover:bg-transparent" data-testid="TableRow__convrate-empty">
-              <TableCell colSpan={COL_COUNT} className="whitespace-normal py-16 text-center text-muted-foreground" data-testid={error ? 'convrate-list-error' : 'convrate-list-empty'}>
-                {error ? ui('convRateLoadError') : ui('convRateListEmpty')}
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+                    data-testid="CurrencyRow__c0495c" />
+                  {isOpen && <RatesHeader entry={entry} orgIso={orgIso} ui={ui} data-testid="RatesHeader__c0495c" />}
+                  {isOpen && entry.rows.map((row) => (
+                    <RateRow
+                      key={row.id}
+                      row={row}
+                      symbol={symbol}
+                      orgSymbol={orgSymbol}
+                      onEdit={onEdit}
+                      onDelete={onDelete}
+                      deleting={deletingId === row.id}
+                      ui={ui}
+                      data-testid="RateRow__c0495c" />
+                  ))}
+                  {isOpen && entry.rows.length === 0 && (
+                    <TableRow className="hover:bg-transparent" data-testid="TableRow__convrate-empty-period">
+                      <TableCell colSpan={COL_COUNT} className="whitespace-normal pl-[52px] text-muted-foreground" data-testid={`convrate-currency-empty-${entry.isoCode}`}>
+                        {ui('convRateNoRatesInPeriod')}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
+              );
+            })}
+            {!loading && entries.length === 0 && (
+              <TableRow className="hover:bg-transparent" data-testid="TableRow__convrate-empty">
+                <TableCell colSpan={COL_COUNT} className="whitespace-normal py-16 text-center text-muted-foreground" data-testid={error ? 'convrate-list-error' : 'convrate-list-empty'}>
+                  {error ? ui('convRateLoadError') : ui('convRateListEmpty')}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </Card>
     </>
   );
 }
