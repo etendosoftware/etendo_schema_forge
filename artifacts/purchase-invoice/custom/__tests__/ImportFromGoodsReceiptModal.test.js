@@ -34,7 +34,7 @@ describe('ImportFromGoodsReceiptModal — source shape', () => {
   });
 
   it('lists goods receipts through the invoice availableReceipts action, covered ones included', () => {
-    assert.match(src, /action: 'availableReceipts', params: \{ \.\.\.CLASSIC_PENDING, includeCovered: true, detail: true \}/);
+    assert.match(src, /action: 'availableReceipts', params: \{ includeCovered: true, detail: true \}/);
     assert.match(src, /eagerLoadLines=\{false\}/);
     assert.match(src, /isDocumentCovered=\{isReceiptCovered\}/);
   });
@@ -49,7 +49,7 @@ describe('ImportFromGoodsReceiptModal — source shape', () => {
   });
 
   it('reads receipt lines on expand through availableReceiptLines and prices on expand and at import', () => {
-    assert.match(src, /action: 'availableReceiptLines', params: \{ \.\.\.CLASSIC_PENDING, receiptId: docId, includeCovered: true, detail: true \}/);
+    assert.match(src, /action: 'availableReceiptLines', params: \{ receiptId: docId, includeCovered: true, detail: true \}/);
     assert.match(src, /const fetchLines[\s\S]*resolveLinePrice/);
     assert.match(src, /const buildLineBody[\s\S]*resolveLinePrice/);
   });
@@ -87,14 +87,14 @@ function installFetch({ receipts = [], receiptLines = [], invoiceHeader = {}, or
   const candidates = receipts.filter(r => r.documentStatus === 'CO' && r.businessPartner === bpId && r.invoiced !== true);
   globalThis.fetch = mock.fn(async (url, options) => {
     if (url.endsWith('/action/availableReceipts')) {
-      // Product decision: the popup keeps the pre-ETP-6099 pending rule (no draft deduction).
-      assert.equal(JSON.parse(options.body).pendingBasis, 'classic');
+      // ETP-5828 QA UI-8: the server's default pending rule (drafts deducted), no `pendingBasis`.
+      assert.equal(JSON.parse(options.body).pendingBasis, undefined);
       const listed = listNothing ? [] : candidates.filter(r => !invoiceHeader.currency || currencyOf(r) === invoiceHeader.currency);
       return { ok: true, json: async () => ({ response: { hasMore: false, data: listed.map(r => ({ ...r, date: r.movementDate, pendingLines: 1 })) } }) };
     }
     if (url.endsWith('/action/availableReceiptLines')) {
       assert.equal(JSON.parse(options.body).includeCovered, true);
-      assert.equal(JSON.parse(options.body).pendingBasis, 'classic');
+      assert.equal(JSON.parse(options.body).pendingBasis, undefined);
       return mockRes(true, receiptLines);
     }
     if (url.includes('/goods-receipt/goodsReceipt?criteria=')) {
@@ -259,10 +259,10 @@ describe('ImportFromGoodsReceiptModal — lines shown on expand', () => {
     return fetchLines({ base: '/b', headers: {}, docId: 'r1', sharedContext: { invoiceId: 'inv1' } });
   };
 
-  // Classic pending (as before ETP-6099): the full movement quantity, whatever draft invoices hold.
-  it('offers the full received quantity and carries the order line under the spec key and its discount', async () => {
-    const [line] = await linesOf([row()]);
-    assert.equal(line._maxQty, 5);
+  // ETP-5828 QA UI-8: what the server says is left (draft invoices deducted), as the sales sibling.
+  it('offers the server pending and carries the order line under the spec key and its discount', async () => {
+    const [line] = await linesOf([row({ pendingQuantity: 3 })]);
+    assert.equal(line._maxQty, 3);
     assert.equal(line._alreadyImported, false);
     assert.equal(line[ORDER_LINE_FK], 'ol1');
     assert.equal(line._orderDiscount, 10);
@@ -272,7 +272,8 @@ describe('ImportFromGoodsReceiptModal — lines shown on expand', () => {
 
   const cases = [
     { name: 'a line this invoice already holds is greyed at its received quantity', over: { importedHere: true, pendingQuantity: 0 }, imported: true, max: 5 },
-    { name: 'a line invoiced elsewhere is still offered on the purchase side', over: { invoicedElsewhere: true }, imported: false, max: 5 },
+    // ETP-5828 QA UI-8: it used to be offered again on the purchase side (invoiced twice).
+    { name: 'a line invoiced elsewhere is greyed, as on the sales side', over: { invoicedElsewhere: true }, imported: true, max: 5 },
     { name: 'a line with nothing left is greyed', over: { pendingQuantity: 0 }, imported: true, max: 5 },
   ];
   for (const c of cases) {
