@@ -2,6 +2,24 @@
 
 `DynamicReportView` (`tools/app-shell/src/components/reports/dynamic/`) is the shared interactive view of every report in `DYNAMIC_REPORT_IDS`, behind the `dynamic-reports` flag. Report-specific behaviour is documented per window (`docs/generated-custom-windows/<report>.md`); what is true for all of them lives here.
 
+## How a report joins the engine (ETP-6084)
+
+Two shapes exist. The period engine (P&L, balance sheet) reads a `report-periods` tree. A **chart-tree** report (Trial Balance) reads the chart of accounts directly; it declares:
+
+- **`tree: 'chart'`** in the contract. Without it nothing below applies.
+- **`sql.treeQuery`**: one row per chart node with a posted descendant up to `__DATETO__`: `node_id, parent_id, value, name, elementlevel, sort_path, account_id`, `dimension_id` (NULL) and its own amounts `opening_balance, activity_debit, activity_credit, closing_balance` (raw sums, may be negative). With grouping, extra rows per (S leaf, dimension value) carry `dimension_id` / `dimension_name`. No LIMIT.
+- **`sql.periodQuery`**: `WITH buckets(idx, f, t, sf, st, pf, pt) AS (VALUES __PERIODS__)`; one row per (idx, account_id[, dimension_id]) with the four amounts for the range, `_sly` and `_prev`. `__DATEFROM__` / `__DATETO__` are the hull and `__COMPARETO__` is `'false'`: use the bucket's own dates.
+- **`amountColumns`**: `[{ field, labelKey, compare: 'never' | 'optional' | 'always' }]`. `always` compares with a variation, `optional` only behind `compareMovements`.
+- **Filters and toggles come from the contract**: visible `search` parameters become pickers, visible `toggle` parameters become option switches (persisted in the URL when they differ from the default), `groupBy` options become the grouping. The view does not read `visibleIf`.
+
+`/query` answers `{ kind: 'tree', rows, totals, balance }`: each row carries `opening/debit/credit/closing` plus `cells[i][field] = { amount, sly, prev }`; `balance` is `{ balanced, debitCreditDiff, closingDiff }`.
+
+**`columns` vs `compareTo`.** `reportOffers` offers Columnas only with a hidden `columns` parameter, and the comparison with `compareTo`. The Trial Balance declares `compareTo` alone (comparison without month/quarter columns); P&L and balance sheet declare both.
+
+**`/render`** takes the chart path only when `expandedNodeIds` is sent and the report is `tree: 'chart'`. Extra inputs: `visibleNodeIds` (comma-joined, dimension rows use composite ids such as `S1|bp1`; wins over `expandedNodeIds` and is the exact set of rows on screen) and `compareMovements`. The response carries `meta.chartTotals`, `meta.chartBalance` and `meta.compareMovements`.
+
+**Descriptor forwarding.** The report descriptor (core `buildReportDescriptor`, dev engine `report-api.js` `listReports`) forwards `tree` and `amountColumns`; if a descriptor drops them the report silently renders as a P&L.
+
 ## Selections in the URL (ETP-6239)
 
 F5, a bookmark or a shared link restore what the panel had. Nothing in this mechanism names a report: `reportUrlState.js` derives what a report persists from its own definition (`report.parameters`, the contract's), so a report joining the engine gets it with no code.
@@ -10,9 +28,12 @@ F5, a bookmark or a shared link restore what the panel had. Nothing in this mech
 |-----|-----------------------------------|
 | `orgId` | an `orgId` parameter |
 | `dateFrom` + `dateTo` | both as `date` parameters (written and read as a pair) |
-| each picker (`bPartnerId`, `productId`, …) | a visible `search` parameter on a selector the panel offers (`PICKER_SELECTORS`); ids comma-joined |
+| each picker (`bPartnerId`, `productId`, …) | a visible `search` parameter on a selector the panel offers (`PICKER_SELECTORS`: contact, product, project, cost centre, account, so also `fromAccountId` / `toAccountId`); ids comma-joined |
 | `columns`, `compare` | `compareTo` (the period engine's marker: Columnas and the comparison travel together) |
 | `splitBy` | `splitBy` |
+| `groupBy` | a chart-tree report (`tree: 'chart'`) with a `groupBy` parameter; only its declared option values are restored (ETP-6084) |
+| each visible option toggle (e.g. `openingEntryAmount`, `showOnlyAccountsWithValue`) | a chart-tree report; written as `true`/`false` only when different from the parameter's default (`compareTo` excluded) |
+| `compareMovements` | a chart-tree report with an `amountColumns` entry `compare: 'optional'`; written only when `true` |
 
 `reportUrlKeys(report)` returns the keys a report owns; it is what a write clears and what the restore reads. Add a key by declaring the parameter, not by editing the helper.
 

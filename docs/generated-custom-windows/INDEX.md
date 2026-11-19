@@ -98,7 +98,7 @@ This folder is the entry point for documentation that describes how generated an
 | [report-journal-entries.md](report-journal-entries.md) | Contract-driven journal book — entries grouped with debit/credit lines for a date range with dimension filters |
 | [report-general-ledger.md](report-general-ledger.md) | Contract-driven General Ledger — per-account movements with opening balance, dimension filters (Product lists every active product) and optional grouping |
 | [profit-loss.md](profit-loss.md) | Contract-driven financial report — the period result as Classic's account-report tree, with contact/product filters and comparison; behind `dynamic-reports`, an interactive view with live filters, columns by month/quarter, a collapsible panel, splits and a ledger/entry/document drill-down; landscape PDF |
-| [report-trial-balance.md](report-trial-balance.md) | Contract-driven trial balance — opening/period/closing balances per account with General Ledger drill-down |
+| [report-trial-balance.md](report-trial-balance.md) | Contract-driven trial balance — opening/period/closing balances per account with General Ledger drill-down; dynamic view with level fold, dimensions, comparison and exports (ETP-6084) |
 
 ## Settings
 
