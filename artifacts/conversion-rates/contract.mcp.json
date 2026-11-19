@@ -1,8 +1,8 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "generatedAt": "2026-05-21T20:22:50.312Z",
-  "updatedAt": "2026-11-19T17:42:25.146Z",
-  "contractChecksum": "010a52292f0cacf2",
+  "updatedAt": "2026-11-19T18:26:13.547Z",
+  "contractChecksum": "9dd3d6236f90cb55",
   "apiPrediction": {
     "specName": "conversion-rates",
     "baseUrl": "/sws/neo/conversion-rates",
@@ -113,6 +113,9 @@
             "readOnly": true,
             "required": true,
             "defaultValue": "S"
+          },
+          "etgoRateStatus": {
+            "readOnly": true
           }
         }
       }
@@ -160,5 +163,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "3f37b567285ee4d0"
+  "checksum": "e86abff91e28493a"
 }

@@ -1,8 +1,8 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "generatedAt": "2026-05-21T20:22:50.312Z",
-  "updatedAt": "2026-11-19T17:42:25.146Z",
-  "checksum": "010a52292f0cacf2",
+  "updatedAt": "2026-11-19T18:26:13.547Z",
+  "checksum": "9dd3d6236f90cb55",
   "frontendContract": {
     "window": {
       "id": "116",
@@ -107,7 +107,7 @@
             "apiKey": "validFromDate",
             "column": "ValidFrom",
             "label": "Valid From Date",
-            "type": "date",
+            "type": "dateTime",
             "tsType": "string",
             "visibility": "editable",
             "required": true,
@@ -116,7 +116,7 @@
             "sourceRequired": true,
             "validation": {
               "required": true,
-              "maxLength": 10
+              "maxLength": 19
             },
             "publicApi": {
               "exposed": true
@@ -132,14 +132,14 @@
             "apiKey": "validToDate",
             "column": "ValidTo",
             "label": "Valid To Date",
-            "type": "date",
+            "type": "dateTime",
             "tsType": "string",
             "visibility": "readOnly",
             "required": false,
             "grid": true,
             "form": true,
             "validation": {
-              "maxLength": 10
+              "maxLength": 19
             },
             "publicApi": {
               "exposed": true
@@ -298,6 +298,37 @@
               "required": true,
               "maxLength": 60
             }
+          },
+          {
+            "name": "etgoRateStatus",
+            "apiKey": "etgoRateStatus",
+            "column": "EM_Etgo_Rate_Status",
+            "label": "Status",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "CURRENT",
+                "name": "Current",
+                "labels": {
+                  "es_ES": "Current"
+                }
+              },
+              {
+                "value": "HISTORIC",
+                "name": "Historic",
+                "labels": {
+                  "es_ES": "Historic"
+                }
+              }
+            ],
+            "validation": {
+              "maxLength": 10
+            }
           }
         ],
         "searchableFields": [
@@ -387,7 +418,7 @@
             "name": "validFromDate",
             "apiKey": "validFromDate",
             "column": "ValidFrom",
-            "type": "date",
+            "type": "dateTime",
             "visibility": "editable",
             "required": true
           },
@@ -395,7 +426,7 @@
             "name": "validToDate",
             "apiKey": "validToDate",
             "column": "ValidTo",
-            "type": "date",
+            "type": "dateTime",
             "visibility": "readOnly",
             "required": false
           },
@@ -486,6 +517,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "etgoRateStatus",
+            "apiKey": "etgoRateStatus",
+            "column": "EM_Etgo_Rate_Status",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": false
           }
         ]
       }
@@ -669,6 +708,14 @@
         "description": "Field 'divideRateBy' should be present in conversionRate"
       },
       {
+        "id": "t-field-presence-conversionRate-etgoRateStatus",
+        "category": "field-presence",
+        "entity": "conversionRate",
+        "field": "etgoRateStatus",
+        "runner": "node",
+        "description": "Field 'etgoRateStatus' should be present in conversionRate"
+      },
+      {
         "id": "t-field-presence-conversionRate-multipleRateBy",
         "category": "field-presence",
         "entity": "conversionRate",
@@ -739,6 +786,14 @@
         "field": "divideRateBy",
         "runner": "node",
         "description": "Field 'divideRateBy' should have type 'number' in conversionRate"
+      },
+      {
+        "id": "t-field-type-conversionRate-etgoRateStatus",
+        "category": "field-type",
+        "entity": "conversionRate",
+        "field": "etgoRateStatus",
+        "runner": "node",
+        "description": "Field 'etgoRateStatus' should have type 'string' in conversionRate"
       },
       {
         "id": "t-field-type-conversionRate-multipleRateBy",
@@ -962,12 +1017,12 @@
       }
     ],
     "summary": {
-      "total": 46,
+      "total": 48,
       "byCategory": {
         "crud-flags": 1,
         "default-value-type": 5,
-        "field-presence": 9,
-        "field-type": 9,
+        "field-presence": 10,
+        "field-type": 10,
         "readonlylogic-evaluable": 3,
         "readonlylogic-valid": 3,
         "rule-declared": 3,
@@ -977,7 +1032,7 @@
         "visibility": 1
       },
       "byRunner": {
-        "node": 46,
+        "node": 48,
         "junit": 0
       }
     }

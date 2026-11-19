@@ -13,12 +13,12 @@ const breadcrumb = 'Finance / Currency Conversion';
 // @sf-generated-start summary:conversionRate
 const summary = [
   { key: 'currency', column: 'C_Currency_ID', type: 'selector' },
-  { key: 'validToDate', column: 'ValidTo', type: 'date' },
+  { key: 'validToDate', column: 'ValidTo', type: 'string' },
   { key: 'divideRateBy', column: 'DivideRate', type: 'number' },
   { key: 'sMFCRSynced', column: 'EM_SMFCR_Is_Synced', type: 'boolean' },
 ];
 
-const statusField = null;
+const statusField = 'etgoRateStatus';
 // @sf-generated-end summary:conversionRate
 
 // @sf-generated-start extraBadges:conversionRate
