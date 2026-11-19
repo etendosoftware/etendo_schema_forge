@@ -40,10 +40,10 @@
         <td>{{../account_value}}</td>
         <td>{{../name}}</td>
         <td>{{../elementlevel}}</td>
-        <td data-cell-type="number">{{cell.opening.amount}}</td>
-        <td data-cell-type="number">{{cell.debit.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#if @root.meta.compareMovements}}{{#with (lookup cell.debit (periodMode @root.meta.params.compareMode))}}<td data-cell-type="number">{{amount}}</td><td data-cell-type="number">{{variationAmount}}</td><td data-cell-type="number">{{variationPct}}</td>{{/with}}{{/if}}{{/if}}
-        <td data-cell-type="number">{{cell.credit.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#if @root.meta.compareMovements}}{{#with (lookup cell.credit (periodMode @root.meta.params.compareMode))}}<td data-cell-type="number">{{amount}}</td><td data-cell-type="number">{{variationAmount}}</td><td data-cell-type="number">{{variationPct}}</td>{{/with}}{{/if}}{{/if}}
-        <td data-cell-type="number">{{cell.closing.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#with (lookup cell.closing (periodMode @root.meta.params.compareMode))}}<td data-cell-type="number">{{amount}}</td><td data-cell-type="number">{{variationAmount}}</td><td data-cell-type="number">{{variationPct}}</td>{{/with}}{{/if}}
+        <td data-cell-type="{{numCellType cell.opening.amount}}">{{round2 cell.opening.amount}}</td>
+        <td data-cell-type="{{numCellType cell.debit.amount}}">{{round2 cell.debit.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#if @root.meta.compareMovements}}{{#with (lookup cell.debit (periodMode @root.meta.params.compareMode))}}<td data-cell-type="{{numCellType amount}}">{{round2 amount}}</td><td data-cell-type="{{numCellType variationAmount}}">{{round2 variationAmount}}</td><td data-cell-type="{{numCellType variationPct}}">{{round2 variationPct}}</td>{{/with}}{{/if}}{{/if}}
+        <td data-cell-type="{{numCellType cell.credit.amount}}">{{round2 cell.credit.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#if @root.meta.compareMovements}}{{#with (lookup cell.credit (periodMode @root.meta.params.compareMode))}}<td data-cell-type="{{numCellType amount}}">{{round2 amount}}</td><td data-cell-type="{{numCellType variationAmount}}">{{round2 variationAmount}}</td><td data-cell-type="{{numCellType variationPct}}">{{round2 variationPct}}</td>{{/with}}{{/if}}{{/if}}
+        <td data-cell-type="{{numCellType cell.closing.amount}}">{{round2 cell.closing.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#with (lookup cell.closing (periodMode @root.meta.params.compareMode))}}<td data-cell-type="{{numCellType amount}}">{{round2 amount}}</td><td data-cell-type="{{numCellType variationAmount}}">{{round2 variationAmount}}</td><td data-cell-type="{{numCellType variationPct}}">{{round2 variationPct}}</td>{{/with}}{{/if}}
       </tr>
       {{/with}}
       {{/each}}
@@ -52,10 +52,10 @@
         <td></td>
         <td>{{@root.meta.ui.total}}</td>
         <td></td>
-        <td data-cell-type="number">{{cell.opening.amount}}</td>
-        <td data-cell-type="number">{{cell.debit.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#if @root.meta.compareMovements}}{{#with (lookup cell.debit (periodMode @root.meta.params.compareMode))}}<td data-cell-type="number">{{amount}}</td><td data-cell-type="number">{{variationAmount}}</td><td data-cell-type="number">{{variationPct}}</td>{{/with}}{{/if}}{{/if}}
-        <td data-cell-type="number">{{cell.credit.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#if @root.meta.compareMovements}}{{#with (lookup cell.credit (periodMode @root.meta.params.compareMode))}}<td data-cell-type="number">{{amount}}</td><td data-cell-type="number">{{variationAmount}}</td><td data-cell-type="number">{{variationPct}}</td>{{/with}}{{/if}}{{/if}}
-        <td data-cell-type="number">{{cell.closing.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#with (lookup cell.closing (periodMode @root.meta.params.compareMode))}}<td data-cell-type="number">{{amount}}</td><td data-cell-type="number">{{variationAmount}}</td><td data-cell-type="number">{{variationPct}}</td>{{/with}}{{/if}}
+        <td data-cell-type="{{numCellType cell.opening.amount}}">{{round2 cell.opening.amount}}</td>
+        <td data-cell-type="{{numCellType cell.debit.amount}}">{{round2 cell.debit.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#if @root.meta.compareMovements}}{{#with (lookup cell.debit (periodMode @root.meta.params.compareMode))}}<td data-cell-type="{{numCellType amount}}">{{round2 amount}}</td><td data-cell-type="{{numCellType variationAmount}}">{{round2 variationAmount}}</td><td data-cell-type="{{numCellType variationPct}}">{{round2 variationPct}}</td>{{/with}}{{/if}}{{/if}}
+        <td data-cell-type="{{numCellType cell.credit.amount}}">{{round2 cell.credit.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#if @root.meta.compareMovements}}{{#with (lookup cell.credit (periodMode @root.meta.params.compareMode))}}<td data-cell-type="{{numCellType amount}}">{{round2 amount}}</td><td data-cell-type="{{numCellType variationAmount}}">{{round2 variationAmount}}</td><td data-cell-type="{{numCellType variationPct}}">{{round2 variationPct}}</td>{{/with}}{{/if}}{{/if}}
+        <td data-cell-type="{{numCellType cell.closing.amount}}">{{round2 cell.closing.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#with (lookup cell.closing (periodMode @root.meta.params.compareMode))}}<td data-cell-type="{{numCellType amount}}">{{round2 amount}}</td><td data-cell-type="{{numCellType variationAmount}}">{{round2 variationAmount}}</td><td data-cell-type="{{numCellType variationPct}}">{{round2 variationPct}}</td>{{/with}}{{/if}}
       </tr>
       {{/with}}
     </tbody>

@@ -357,7 +357,7 @@ describe('report-trial-balance — template-csv.hbs dimension column (ETP-5013)'
 // ── Part 4 (ETP-6084): the chart-tree shape, used when meta.chartTotals is present ─────────────
 // The old flat/grouped shape (Parts 1-3) must stay byte-identical; the dynamic view's tree adds a branch.
 
-function renderChart(file, { mode = '', movements = false, balanced = true, realLabels = false } = {}) {
+function renderChart(file, { mode = '', movements = false, balanced = true, realLabels = false, tweak } = {}) {
   const built = buildJsreportHelpersString(HELPERS_CODE);
   const names = [...built.matchAll(/^function\s+(\w+)\s*\(/gm)].map((m) => m[1]);
   // eslint-disable-next-line no-new-func
@@ -378,6 +378,7 @@ function renderChart(file, { mode = '', movements = false, balanced = true, real
     chartTotals: [{ opening: cell(0), debit: cell(10), credit: cell(10), closing: cell(0) }],
     chartBalance: { balanced, debitCreditDiff: balanced ? 0 : 12.5, closingDiff: 0 },
   };
+  if (tweak) tweak({ rows, meta });
   const src = readFileSync(join(ARTIFACT_DIR, file), 'utf8').replace(/\{\{>\s*document-branding\s*\}\}/g, BRANDING_PARTIAL);
   return hb.compile(src)({ css: '', meta, rows });
 }
@@ -424,6 +425,37 @@ describe('report-trial-balance — chart-tree Excel and CSV (ETP-6084)', () => {
     assert.match(plain, /<td>Total<\/td>/);
   });
 
+  // A compared amount of 0 leaves variationPct null; the totals can carry float noise.
+  const noisy = ({ rows, meta }) => {
+    rows[0].cells[0].closing.sly.variationPct = null;
+    rows[0].cells[0].closing.sly.variationAmount = undefined;
+    rows[1].cells[0].closing.sly.variationPct = -21.0469783271705;
+    meta.chartTotals[0].closing.amount = 1.81898940354586e-12;
+    meta.chartTotals[0].closing.sly.variationPct = 33.3333333333;
+  };
+
+  it('Excel: a null variation is an empty text cell (never NaN), noise rounds to cents', () => {
+    const x = renderChart('template-excel.hbs', { mode: 'sly', movements: true, tweak: noisy });
+    assert.doesNotMatch(x, /NaN|undefined/);
+    assert.match(x, /<td data-cell-type="string"><\/td>/);
+    assert.match(x, /<td data-cell-type="number">-21.05<\/td>/);
+    assert.match(x, /<td data-cell-type="number">33.33<\/td>/);
+    assert.doesNotMatch(x, /e-12|1\.8189/);
+  });
+
+  it('CSV: totals noise reads 0.00 and percentages have 2 decimals, null is empty', () => {
+    const lines = renderChart('template-csv.hbs', { mode: 'sly', movements: true, tweak: noisy }).trim().split('\n');
+    const total = lines[lines.length - 1];
+    assert.doesNotMatch(total, /e-12/);
+    assert.match(total, /,0\.00,/);
+    assert.match(lines[2], /-21\.05/);
+    assert.match(lines[1], /,,$/, 'null variation is an empty field');
+  });
+
+  it('HTML: variation and amount cells never wrap', () => {
+    assert.match(renderChart('template.hbs'), /\.tb-tree \.cell-amount \{ white-space: nowrap; \}/);
+  });
+
   it('Excel: every body row has as many cells as the header has columns, with and without movements', () => {
     for (const movements of [false, true]) {
       const x = renderChart('template-excel.hbs', { mode: 'sly', movements });
@@ -437,10 +469,10 @@ describe('report-trial-balance — chart-tree Excel and CSV (ETP-6084)', () => {
   it('CSV: golden output through csvField, dimension row keeps its parent code, totals line last', () => {
     assert.equal(renderChart('template-csv.hbs'), [
       'Nº Cuenta,Nombre,Nivel,Saldo inicial,Debe,Haber,Saldo final',
-      '43,Deudores,C,0,10,5,5',
-      '430,Clientes,S,0,10,5,5',
-      '430,"Laura, M",DIM,0,10,5,5',
-      ',Total,,0,10,10,0', '',
+      '43,Deudores,C,0.00,10.00,5.00,5.00',
+      '430,Clientes,S,0.00,10.00,5.00,5.00',
+      '430,"Laura, M",DIM,0.00,10.00,5.00,5.00',
+      ',Total,,0.00,10.00,10.00,0.00', '',
     ].join('\n'));
   });
 
