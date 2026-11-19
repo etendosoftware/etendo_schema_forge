@@ -290,6 +290,45 @@ async function countPaymentMethodOptions(page, headers) {
 }
 
 /**
+ * Records whether the tenant still has no financial accounts, for the specs in
+ * `flows/before-financial-accounts/`.
+ *
+ * Those specs live in that folder so they run before every spec that creates an
+ * account (the `integration` project runs files in alphabetical order with one
+ * worker): a fresh tenant has no `FIN_FINACC_PAYMENTMETHOD` row, which is the
+ * case a sales document must still handle (ETP-6377: every payment method was
+ * refused on create). This does not create, skip or fail anything. When the
+ * tenant already has an account — a local run reusing `.auth-credentials.json`,
+ * or a reordered suite — the spec still runs as a happy path, and the report
+ * carries an annotation saying the fresh-tenant case was not exercised.
+ *
+ * @returns {Promise<number|null>} the number of accounts seen (at most 1), or
+ *   `null` when the lookup could not be evaluated.
+ */
+export async function noteFinancialAccountPrecondition(page, testInfo) {
+  let count = null;
+  try {
+    const headers = await getAuthHeaders(page);
+    const res = await page.request.get(ACCOUNT_ENTITY, {
+      params: { _startRow: '0', _endRow: '1' },
+      headers,
+    });
+    if (res.ok()) count = extractRows(await res.json()).length;
+  } catch {
+    count = null;
+  }
+  if (count !== 0) {
+    const description = count == null
+      ? 'Could not read the financial accounts; the fresh-tenant case (no account) is unverified.'
+      : 'The tenant already has a financial account; the fresh-tenant case (no account) was not exercised.';
+    testInfo.annotations.push({ type: 'fresh-tenant', description });
+    // eslint-disable-next-line no-console
+    console.warn(`[noteFinancialAccountPrecondition] ${description}`);
+  }
+  return count;
+}
+
+/**
  * GETs financial accounts named exactly like the fixture.
  *
  * `useCriteria: true` sends the same exact-match AdvancedCriteria filter the
