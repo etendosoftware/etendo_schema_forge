@@ -1,3 +1,4 @@
+import { Badge } from '@/components/ui/badge';
 import { StatusTag } from '@/components/ui/status-tag';
 import { RATE_STATUS } from './conversionRatesModel.js';
 
@@ -35,13 +36,18 @@ export function RateStatusBadge({ status, ui, 'data-testid': testId }) {
   );
 }
 
-/** Currency symbol chip ("$", "£", "CHF"…) in front of the ISO code. */
+/**
+ * Currency symbol ("$", "£", "CHF"…) in front of the ISO code: the shared `Badge`, outline
+ * variant (no shared square symbol chip exists; this is the closest generic piece).
+ */
 export function CurrencySymbolChip({ symbol, ui }) {
   return (
-    <span
+    <Badge
+      variant="outline"
       title={ui('convRateSymbol')}
-      className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg border border-border bg-muted px-1.5 text-sm font-semibold text-muted-foreground">
+      className="h-7 min-w-7 justify-center px-1.5 text-sm text-muted-foreground"
+      data-testid="Badge__convrate-symbol">
       {symbol}
-    </span>
+    </Badge>
   );
 }

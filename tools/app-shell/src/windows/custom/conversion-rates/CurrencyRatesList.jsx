@@ -1,6 +1,9 @@
 import { Fragment } from 'react';
-import { CaretDownIcon, CaretRightIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
+import {
+  Table, TableBody, TableCell, TableHead, TableRow,
+} from '@/components/ui/table';
+import { RowExpandToggle } from '@/components/contract-ui/RowExpandToggle.jsx';
 import { ListModalRowActions } from '@/components/contract-ui/ListModalRowActions.jsx';
 import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
 import { OriginBadge, RateStatusBadge, CurrencySymbolChip } from './ConversionRateBadges.jsx';
@@ -9,7 +12,25 @@ import {
   displayValidTo, formatWallClock, formatWallClockDate, isEditableRate, nowWallClock, wallClockDate, wallClockTime,
 } from './conversionRatesModel.js';
 
-const COL_COUNT = 6;
+/** Expand toggle + the five data columns + actions. */
+const COL_COUNT = 7;
+
+/**
+ * Per-currency column header row, with the header look of MovementsTable / StatementsTable
+ * (40px, 12px semibold foreground labels).
+ */
+const SUB_HEADER_ROW = 'h-10 hover:bg-transparent [&_th]:h-10 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-foreground';
+
+/**
+ * Currency (parent) row, MovementsTable's expandable-row recipe: card background, lifted with a
+ * shadow on hover, the whole row toggles; while open it keeps the design's muted background.
+ */
+function currencyRowClassName(expanded) {
+  return [
+    'group relative cursor-pointer transition-shadow',
+    expanded ? 'z-20 bg-muted hover:bg-muted' : 'bg-card hover:bg-card hover:z-10 hover:shadow-lg',
+  ].join(' ');
+}
 
 /** Second line of a currency header: last download (automatic) or start of the rate in force (manual). */
 export function currencySubtitle(entry, ui, today = wallClockDate(nowWallClock())) {
@@ -23,49 +44,52 @@ export function currencySubtitle(entry, ui, today = wallClockDate(nowWallClock()
   return entry.validFrom ? ui('convRateSince', { date: formatWallClock(entry.validFrom) }) : '';
 }
 
-function CurrencyHeader({ entry, orgIso, expanded, onToggle, onNewRate, ui }) {
+function CurrencyRow({ entry, orgIso, expanded, onToggle, onNewRate, ui }) {
   const iso = entry.isoCode;
   const subtitle = currencySubtitle(entry, ui);
   return (
-    <tr className={`border-t border-border ${expanded ? 'bg-muted/60' : 'bg-card'}`} data-testid={`convrate-currency-${iso}`}>
-      <td colSpan={COL_COUNT} className="px-[18px] py-2.5">
-        <div className="flex items-center">
-          <button
-            type="button"
-            aria-expanded={expanded}
-            onClick={onToggle}
-            className="flex flex-1 items-center gap-2.5 rounded bg-transparent p-0 text-left text-[13px] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-            data-testid={`convrate-currency-toggle-${iso}`}>
-            <span className="inline-flex text-muted-foreground">
-              {expanded
-                ? <CaretDownIcon className="h-4 w-4" aria-hidden="true" data-testid="CaretDownIcon__convrate" />
-                : <CaretRightIcon className="h-4 w-4" aria-hidden="true" data-testid="CaretRightIcon__convrate" />}
-            </span>
-            <CurrencySymbolChip
-              symbol={entry.symbol || iso}
-              ui={ui}
-              data-testid="CurrencySymbolChip__c0495c" />
-            <span className="text-sm font-semibold">{iso}</span>
-            {entry.name && <span className="text-muted-foreground">{entry.name}</span>}
-            <OriginBadge automatic={entry.automatic} ui={ui} data-testid={`convrate-currency-origin-${iso}`} />
-            <span className="flex-1" />
-            {entry.rate != null && (
-              <span className="flex flex-col items-end leading-tight">
-                <span className="text-sm font-semibold" data-testid={`convrate-currency-rate-${iso}`}>
-                  {ui('convRateHeaderRate', { org: orgIso, rate: formatRate(entry.rate), symbol: entry.symbol || iso })}
-                </span>
-                {subtitle && (
-                  <span className="text-xs text-muted-foreground" data-testid={`convrate-currency-subtitle-${iso}`}>{subtitle}</span>
-                )}
+    <TableRow
+      className={currencyRowClassName(expanded)}
+      onClick={onToggle}
+      data-expanded={expanded ? 'true' : 'false'}
+      data-testid={`convrate-currency-${iso}`}>
+      <TableCell className="w-10" data-testid="TableCell__convrate-toggle">
+        <RowExpandToggle
+          expanded={expanded}
+          onToggle={onToggle}
+          stopPropagation
+          iconTestId={`convrate-currency-toggle-icon-${iso}`}
+          data-testid={`convrate-currency-toggle-${iso}`} />
+      </TableCell>
+      <TableCell colSpan={COL_COUNT - 1} className="whitespace-normal" data-testid="TableCell__convrate-currency">
+        <div className="flex items-center gap-2.5 text-foreground">
+          <CurrencySymbolChip
+            symbol={entry.symbol || iso}
+            ui={ui}
+            data-testid="CurrencySymbolChip__c0495c" />
+          <span className="font-semibold">{iso}</span>
+          {entry.name && <span className="text-muted-foreground">{entry.name}</span>}
+          <OriginBadge automatic={entry.automatic} ui={ui} data-testid={`convrate-currency-origin-${iso}`} />
+          <span className="flex-1" />
+          {entry.rate != null && (
+            <span className="flex flex-col items-end leading-tight">
+              <span className="font-semibold" data-testid={`convrate-currency-rate-${iso}`}>
+                {ui('convRateHeaderRate', { org: orgIso, rate: formatRate(entry.rate), symbol: entry.symbol || iso })}
               </span>
-            )}
-          </button>
+              {subtitle && (
+                <span className="text-xs text-muted-foreground" data-testid={`convrate-currency-subtitle-${iso}`}>{subtitle}</span>
+              )}
+            </span>
+          )}
           <span className="ml-5 flex w-24 justify-end">
             {!entry.automatic && (
               <Button
                 type="button"
                 variant="link"
-                onClick={() => onNewRate(entry)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNewRate(entry);
+                }}
                 className="h-auto whitespace-nowrap p-0 text-[13px] font-medium"
                 data-testid={`convrate-currency-new-rate-${iso}`}>
                 {ui('convRateNewRateLink')}
@@ -73,44 +97,48 @@ function CurrencyHeader({ entry, orgIso, expanded, onToggle, onNewRate, ui }) {
             )}
           </span>
         </div>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
 function RatesHeader({ entry, orgIso, ui }) {
   return (
-    <tr className="bg-card text-xs text-muted-foreground">
-      <th scope="col" className="py-2 pl-11 pr-3 text-left font-medium">{ui('convRateValidFromDateTime')}</th>
-      <th scope="col" className="px-3 py-2 text-left font-medium">{ui('convRateValidToDateTime')}</th>
-      <th scope="col" className="px-3 py-2 text-right font-medium">{ui('convRateOneOrg', { currency: orgIso })}</th>
-      <th scope="col" className="px-3 py-2 text-right font-medium">{ui('convRateInverseOf', { currency: entry.isoCode, org: orgIso })}</th>
-      <th scope="col" className="px-3 py-2 text-left font-medium">{ui('convRateStatus')}</th>
-      <th scope="col" className="w-[90px] px-[18px] py-2"><span className="sr-only">{ui('convRateActions')}</span></th>
-    </tr>
+    <TableRow className={SUB_HEADER_ROW} data-testid={`convrate-rates-header-${entry.isoCode}`}>
+      <TableHead className="w-10" data-testid="TableHead__convrate-toggle" />
+      <TableHead data-testid="TableHead__convrate-from">{ui('convRateValidFromDateTime')}</TableHead>
+      <TableHead data-testid="TableHead__convrate-to">{ui('convRateValidToDateTime')}</TableHead>
+      <TableHead className="text-right" data-testid="TableHead__convrate-rate">{ui('convRateOneOrg', { currency: orgIso })}</TableHead>
+      <TableHead className="text-right" data-testid="TableHead__convrate-inverse">{ui('convRateInverseOf', { currency: entry.isoCode, org: orgIso })}</TableHead>
+      <TableHead data-testid="TableHead__convrate-status">{ui('convRateStatus')}</TableHead>
+      <TableHead className="w-[90px]" data-testid="TableHead__convrate-actions">
+        <span className="sr-only">{ui('convRateActions')}</span>
+      </TableHead>
+    </TableRow>
   );
 }
 
 function RateRow({ row, symbol, orgSymbol, onEdit, onDelete, deleting, ui }) {
   const validTo = displayValidTo(row);
   return (
-    <tr className="group/row border-t border-border/60 bg-card hover:shadow-[0_2px_8px_rgba(29,31,36,0.10)]" data-testid={`convrate-row-${row.id}`}>
-      <td className="py-[11px] pl-11 pr-3">{formatWallClock(row.validFromDate)}</td>
-      <td className={`px-3 py-[11px]${validTo ? '' : ' text-muted-foreground'}`}>{validTo ?? '—'}</td>
-      <td className="px-3 py-[11px] text-right tabular-nums">
+    <TableRow className="group/row" data-testid={`convrate-row-${row.id}`}>
+      <TableCell className="w-10" data-testid="TableCell__convrate-indent" />
+      <TableCell data-testid="TableCell__convrate-from">{formatWallClock(row.validFromDate)}</TableCell>
+      <TableCell className={validTo ? undefined : 'text-muted-foreground'} data-testid="TableCell__convrate-to">{validTo ?? '—'}</TableCell>
+      <TableCell className="text-right tabular-nums" data-testid="TableCell__convrate-rate">
         {formatRate(row.multipleRateBy)}
         {' '}
         <span className="text-muted-foreground">{symbol}</span>
-      </td>
-      <td className="px-3 py-[11px] text-right tabular-nums">
+      </TableCell>
+      <TableCell className="text-right tabular-nums" data-testid="TableCell__convrate-inverse">
         {formatRate(row.divideRateBy)}
         {' '}
         <span className="text-muted-foreground">{orgSymbol}</span>
-      </td>
-      <td className="px-3 py-[11px]">
+      </TableCell>
+      <TableCell data-testid="TableCell__convrate-status">
         <RateStatusBadge status={row.etgoRateStatus} ui={ui} data-testid={`convrate-row-status-${row.id}`} />
-      </td>
-      <td className="w-[90px] px-[18px] py-1.5 text-right">
+      </TableCell>
+      <TableCell className="w-[90px] py-1.5 text-right" data-testid="TableCell__convrate-actions">
         {isEditableRate(row) && (
           <ListModalRowActions
             row={row}
@@ -124,83 +152,79 @@ function RateRow({ row, symbol, orgSymbol, onEdit, onDelete, deleting, ui }) {
             ui={ui}
             data-testid="ListModalRowActions__c0495c" />
         )}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
 /**
  * ETP-6365 v3 — "Divisas y tasas": ONE accordion list, a row per currency that has rates
- * (chevron, symbol, ISO, name, origin; on the right the forward rate in force and when it was
- * downloaded or since when it applies; "+ Nueva tasa" on manual currencies). Expanding a currency
- * shows every rate of the period: Válido desde, Válido hasta, `1 EUR =`, `1 <ISO> = EUR`
- * (`divideRateBy`), Estado and the hover actions of manual rows.
+ * (expand toggle, symbol, ISO, name, origin; on the right the forward rate in force and when it
+ * was downloaded or since when it applies; "+ Nueva tasa" on manual currencies). Expanding a
+ * currency shows every rate of the period under its own column header row: Válido desde, Válido
+ * hasta, `1 EUR =`, `1 <ISO> = EUR` (`divideRateBy`), Estado and the hover actions of manual rows.
+ *
+ * Built like MovementsTable: the shared `Table` / `TableBody` / `TableRow` / `TableHead` /
+ * `TableCell` primitives (`@/components/ui/table`) and the shared `RowExpandToggle` (vertical,
+ * the orientation of MovementsTable / StatementsTable) in a leading 40px column; sub-rows are
+ * plain `TableRow`s under the parent. No card or hand-made table around it.
  */
 export function CurrencyRatesList({
   entries, orgIso, orgSymbol, expanded, onToggle, loading, loaded, error,
   onNewRate, onEdit, onDelete, deletingId, ui,
 }) {
+  const dimWhileRefreshing = loading && loaded ? 'opacity-70 transition-opacity duration-200' : 'transition-opacity duration-200';
   return (
-    <section
-      aria-label={ui('convRateListRegion')}
-      className="flex flex-col rounded-[10px] border border-border bg-card"
-      data-testid="convrate-list">
+    <>
       {loading && loaded ? <ListProgressBar testId="convrate-list-progress" data-testid="ListProgressBar__c0495c" /> : null}
-      <div
-        tabIndex={0}
-        role="region"
-        aria-label={ui('convRateListRegion')}
-        className="max-h-[620px] overflow-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-        data-testid="convrate-list-scroll">
-        <table className="w-full min-w-[880px] border-collapse text-[13px]" data-testid="convrate-list-table">
-          <tbody>
-            {entries.map((entry) => {
-              const isOpen = expanded.has(entry.currencyId);
-              const symbol = entry.symbol || entry.isoCode;
-              return (
-                <Fragment key={entry.currencyId}>
-                  <CurrencyHeader
-                    entry={entry}
-                    orgIso={orgIso}
-                    expanded={isOpen}
-                    onToggle={() => onToggle(entry.currencyId)}
-                    onNewRate={onNewRate}
+      <Table aria-label={ui('convRateListRegion')} className={`min-w-[880px] text-sm ${dimWhileRefreshing}`} data-testid="convrate-list-table">
+        <TableBody data-testid="TableBody__convrate">
+          {entries.map((entry) => {
+            const isOpen = expanded.has(entry.currencyId);
+            const symbol = entry.symbol || entry.isoCode;
+            return (
+              <Fragment key={entry.currencyId}>
+                <CurrencyRow
+                  entry={entry}
+                  orgIso={orgIso}
+                  expanded={isOpen}
+                  onToggle={() => onToggle(entry.currencyId)}
+                  onNewRate={onNewRate}
+                  ui={ui}
+                  data-testid="CurrencyRow__c0495c" />
+                {isOpen && <RatesHeader entry={entry} orgIso={orgIso} ui={ui} data-testid="RatesHeader__c0495c" />}
+                {isOpen && entry.rows.map((row) => (
+                  <RateRow
+                    key={row.id}
+                    row={row}
+                    symbol={symbol}
+                    orgSymbol={orgSymbol}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    deleting={deletingId === row.id}
                     ui={ui}
-                    data-testid="CurrencyHeader__c0495c" />
-                  {isOpen && <RatesHeader entry={entry} orgIso={orgIso} ui={ui} data-testid="RatesHeader__c0495c" />}
-                  {isOpen && entry.rows.map((row) => (
-                    <RateRow
-                      key={row.id}
-                      row={row}
-                      symbol={symbol}
-                      orgSymbol={orgSymbol}
-                      onEdit={onEdit}
-                      onDelete={onDelete}
-                      deleting={deletingId === row.id}
-                      ui={ui}
-                      data-testid="RateRow__c0495c" />
-                  ))}
-                  {isOpen && entry.rows.length === 0 && (
-                    <tr>
-                      <td colSpan={COL_COUNT} className="py-3 pl-11 pr-3 text-muted-foreground" data-testid={`convrate-currency-empty-${entry.isoCode}`}>
-                        {ui('convRateNoRatesInPeriod')}
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              );
-            })}
-            {!loading && entries.length === 0 && (
-              <tr>
-                <td colSpan={COL_COUNT} className="px-[18px] py-6 text-center text-muted-foreground" data-testid={error ? 'convrate-list-error' : 'convrate-list-empty'}>
-                  {error ? ui('convRateLoadError') : ui('convRateListEmpty')}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>
+                    data-testid="RateRow__c0495c" />
+                ))}
+                {isOpen && entry.rows.length === 0 && (
+                  <TableRow className="hover:bg-transparent" data-testid="TableRow__convrate-empty-period">
+                    <TableCell colSpan={COL_COUNT} className="whitespace-normal pl-[52px] text-muted-foreground" data-testid={`convrate-currency-empty-${entry.isoCode}`}>
+                      {ui('convRateNoRatesInPeriod')}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </Fragment>
+            );
+          })}
+          {!loading && entries.length === 0 && (
+            <TableRow className="hover:bg-transparent" data-testid="TableRow__convrate-empty">
+              <TableCell colSpan={COL_COUNT} className="whitespace-normal py-16 text-center text-muted-foreground" data-testid={error ? 'convrate-list-error' : 'convrate-list-empty'}>
+                {error ? ui('convRateLoadError') : ui('convRateListEmpty')}
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </>
   );
 }
 
