@@ -21,10 +21,10 @@ function TotalRow({ label, value, testId, first = false }) {
  *
  * @param {{header: object, lines: object[], currency: string, scale?: number}} props `scale` = the currency's decimals
  */
-export default function InvoiceInboxReviewTotals({ header, lines, currency, scale = 2 }) {
+export default function InvoiceInboxReviewTotals({ lines, currency, scale = 2, invoiceTotal = null }) {
   const ui = useUI();
   const totals = computeTotals(lines, scale);
-  const total = documentTotal(header, totals, scale);
+  const total = documentTotal(totals, invoiceTotal, scale);
   return (
     <section className="overflow-hidden rounded-xl border border-border" data-testid="invoice-inbox-review-totals">
       <TotalRow
