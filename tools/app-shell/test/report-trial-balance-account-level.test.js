@@ -537,6 +537,10 @@ describe('report-trial-balance chart tree queries', () => {
     assert.match(src, /chartTree: isChartTreeRender\(contract, params\)/);
     assert.match(src, /buildRenderChartTree\(rows, params/);
     assert.match(src, /\.\.\.chartMeta/);
+    // listReports forwards the chart contract only when the loaded core carries the chart path.
+    assert.match(src, /const CHART_TREE_SUPPORTED = typeof buildRenderChartTree === 'function'/);
+    assert.match(src, /CHART_TREE_SUPPORTED && contract\.tree !== undefined/);
+    assert.match(src, /CHART_TREE_SUPPORTED && contract\.amountColumns !== undefined/);
   });
 });
 

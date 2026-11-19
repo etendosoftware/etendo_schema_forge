@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/pages/ReportViewerPage.jsx
 // ETP-5128: an accordion section (`report.sections[]`) can now carry the same
 // `visibleIf: {param, equals}` shape a field already had (ETP-4899). Unlike a
 // field, a section with a false `visibleIf` disappears ENTIRELY (header gone,
@@ -249,7 +250,7 @@ describe('ReportViewerPage — accordion section visibleIf (ETP-5128, Trial Bala
       sections: [...TRIAL_BALANCE_REPORT.sections, { id: 'comparacion', label: { en_US: 'Comparison' }, dynamicOnly: true }],
       parameters: [
         ...TRIAL_BALANCE_REPORT.parameters,
-        { name: 'showOnlyAccountsWithValue', type: 'toggle', label: { en_US: 'Only with value' }, section: 'agrupacion', dynamicOnly: true },
+        { name: 'showOnlyAccountsWithValue', type: 'toggle', default: true, label: { en_US: 'Only with value' }, section: 'agrupacion', dynamicOnly: true },
         { name: 'compareTo', type: 'toggle', label: { en_US: 'Compare To' }, section: 'comparacion', dynamicOnly: true },
       ],
     };
@@ -266,5 +267,13 @@ describe('ReportViewerPage — accordion section visibleIf (ETP-5128, Trial Bala
     expect(screen.queryByText('Only with value')).not.toBeInTheDocument();
     expect(screen.queryByText('Compare To')).not.toBeInTheDocument();
     expect(screen.getByText('Group results by')).toBeInTheDocument();
+    // ...and their defaults are never seeded, so the export header cannot print them.
+    globalThis.fetch.mockClear();
+    await user.click(screen.getByText('runReport'));
+    await waitFor(() => expect(globalThis.fetch.mock.calls.some(([u]) => String(u).includes('/render'))).toBe(true));
+    const [, init] = globalThis.fetch.mock.calls.find(([u]) => String(u).includes('/render'));
+    const sent = JSON.parse(init.body).params;
+    expect(sent).not.toHaveProperty('showOnlyAccountsWithValue');
+    expect(sent).not.toHaveProperty('compareTo');
   });
 });

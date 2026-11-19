@@ -20,7 +20,9 @@ Two shapes exist. The period engine (P&L, balance sheet) reads a `report-periods
 
 **`/render`** takes the chart path only when `expandedNodeIds` is sent and the report is `tree: 'chart'`. Extra inputs: `visibleNodeIds` (comma-joined, dimension rows use composite ids such as `S1|bp1`; wins over `expandedNodeIds` and is the exact set of rows on screen) and `compareMovements`. The response carries `meta.chartTotals`, `meta.chartBalance` and `meta.compareMovements`.
 
-**Descriptor forwarding.** The report descriptor (core `buildReportDescriptor`, dev engine `report-api.js` `listReports`) forwards `tree` and `amountColumns`; if a descriptor drops them the report silently renders as a P&L.
+**No row cap on the chart `/query`.** `treeQuery` and `periodQuery` are not limited (a cap would drop chart nodes); only the statement timeout applies, so a large account x dimension grouping can be heavy.
+
+**Descriptor forwarding.** The report descriptor (core `buildReportDescriptor`, dev engine `report-api.js` `listReports`, only when the loaded core has the chart path) forwards `tree` and `amountColumns`; if a descriptor drops them the report silently renders as a P&L.
 
 ## Selections in the URL (ETP-6239)
 
@@ -31,7 +33,8 @@ F5, a bookmark or a shared link restore what the panel had. Nothing in this mech
 | `orgId` | an `orgId` parameter |
 | `dateFrom` + `dateTo` | both as `date` parameters (written and read as a pair) |
 | each picker (`bPartnerId`, `productId`, …) | a visible `search` parameter on a selector the panel offers (`PICKER_SELECTORS`: contact, product, project, cost centre, account, so also `fromAccountId` / `toAccountId`); ids comma-joined |
-| `columns`, `compare` | `compareTo` (the period engine's marker: Columnas and the comparison travel together) |
+| `columns` | a `columns` parameter (Mes / Trimestre; own marker since ETP-6084) |
+| `compare` | `compareTo` (the comparison; the Trial Balance declares it without `columns`) |
 | `splitBy` | `splitBy` |
 | `groupBy` | a chart-tree report (`tree: 'chart'`) with a `groupBy` parameter; only its declared option values are restored (ETP-6084) |
 | each visible option toggle (e.g. `openingEntryAmount`, `showOnlyAccountsWithValue`) | a chart-tree report; written as `true`/`false` only when different from the parameter's default (`compareTo` excluded) |

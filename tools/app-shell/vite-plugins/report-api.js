@@ -30,6 +30,7 @@ const { hydrateDocumentBranding, resolveCompanyLogoDataUrl } = await loadReportC
 const { resolveReportSession, reportAuthErrorBody, assertReportOrgAccess, assertReportAccess } = await loadReportCli('report-auth');
 // isChartTreeRender defaults off until the published core carries ETP-6084.
 const { handleReportQuery, runReportSql, isChartTreeRender = () => false } = await loadReportCli('report-query');
+const CHART_TREE_SUPPORTED = typeof buildRenderChartTree === 'function';
 const { buildPeriodMeta, normalizeCompareMode, maxPeriodBucketsFor } = await loadReportCli('report-periods');
 
 const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
@@ -141,8 +142,10 @@ function listReports() {
             parameters: contract.parameters || [],
             sections: contract.sections || [],
             // ETP-6084: the dynamic view's chart-tree contract (mirrors core's buildReportDescriptor).
-            ...(contract.tree !== undefined ? { tree: contract.tree } : {}),
-            ...(contract.amountColumns !== undefined ? { amountColumns: contract.amountColumns } : {}),
+            // Only when the loaded core can serve the chart path: with the published core (no
+            // buildRenderChartTree) forwarding `tree` would open a dynamic view that cannot work.
+            ...(CHART_TREE_SUPPORTED && contract.tree !== undefined ? { tree: contract.tree } : {}),
+            ...(CHART_TREE_SUPPORTED && contract.amountColumns !== undefined ? { amountColumns: contract.amountColumns } : {}),
           });
         }
       } catch { /* skip malformed */ }

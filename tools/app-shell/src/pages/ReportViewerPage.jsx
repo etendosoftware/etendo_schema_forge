@@ -1327,6 +1327,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
   const getDefaultParams = useCallback(() => {
     const defaults = {};
     for (const p of report.parameters || []) {
+      if (p.dynamicOnly) continue; // not shown here, so never seeded (its default would print in the export header)
       if (p.default === '__TODAY__') {
         defaults[p.name] = new Date().toISOString().split('T')[0];
       } else if (p.default === '__FIRST_OF_PREV_MONTH__') {
