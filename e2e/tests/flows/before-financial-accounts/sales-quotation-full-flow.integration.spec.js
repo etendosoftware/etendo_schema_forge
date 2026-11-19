@@ -594,6 +594,15 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
       warehouseName: DEFAULT_WAREHOUSE_NAME,
       minQty: 200,
     });
+    // The baseline POSITIVE line ships stock out, so its product needs stock on hand too.
+    // This spec runs on a tenant fresh from onboarding (flows/before-financial-accounts/),
+    // where nothing has received that product yet; it used to pass only because the
+    // purchase specs, running first, left goods receipts of it behind.
+    await ensureStockOnHand(page, {
+      productName: PRODUCT_FIXTURE_ALPHA.name,
+      warehouseName: DEFAULT_WAREHOUSE_NAME,
+      minQty: 200,
+    });
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 5: Confirm (DR → UE) — SendToEvaluationModal
