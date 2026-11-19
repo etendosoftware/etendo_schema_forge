@@ -140,33 +140,45 @@ function round2(value) {
  * that tax's bases, tax amount 0, with the matching compensatory tax. A group that already has a
  * compensatory row with exactly that base is skipped.
  *
- * @param {object[]} rows the card's rows ({ id, tax, taxLabel, taxableAmount, serverRate })
+ * With Multiple DUA the groups are per import tax AND DUA, and each compensatory line carries
+ * that DUA and its date: the backend refuses a tax line without them on a multi-DUA invoice.
+ *
+ * @param {object[]} rows the card's rows ({ id, tax, taxLabel, taxableAmount, serverRate, aeatsiiDua, aeatsiiFechaDua })
  * @param {(row: object) => number|null} rateOf the rate of a row
  * @param {Array<{id: string, name: string}>} catalog the purchase taxes on offer
+ * @param {boolean} [multiDua=false] whether the invoice is multi-DUA
  * @returns {{ groups: number, toCreate: object[], missing: string[] }}
  */
-export function planCompensatoryLines(rows, rateOf, catalog) {
+export function planCompensatoryLines(rows, rateOf, catalog, multiDua = false) {
   const groups = new Map();
+  const duaOf = row => (multiDua ? String(row?.aeatsiiDua ?? '').trim() : '');
   for (const row of rows ?? []) {
     const rate = rateOf(row);
     if (!row?.id || !row.tax || !isImportTaxName(row.taxLabel) || !(rate > 0)) continue;
-    const group = groups.get(row.tax) ?? { tax: row.tax, name: row.taxLabel, rate, base: 0 };
+    const key = `${row.tax}|${duaOf(row)}`;
+    const group = groups.get(key) ?? {
+      tax: row.tax, name: row.taxLabel, rate, base: 0,
+      aeatsiiDua: duaOf(row), aeatsiiFechaDua: multiDua ? (row.aeatsiiFechaDua ?? '') : '',
+    };
     group.base += Number(row.taxableAmount) || 0;
-    groups.set(row.tax, group);
+    groups.set(key, group);
   }
   const toCreate = [];
   const missing = [];
   for (const group of groups.values()) {
     const compensatory = findCompensatoryTax(group.name, group.rate, catalog);
     if (!compensatory) {
-      missing.push(group.name);
+      if (!missing.includes(group.name)) missing.push(group.name);
       continue;
     }
     const base = round2(-group.base);
     const done = (rows ?? []).some(r => r?.id && r.tax === compensatory.id
-      && round2(r.taxableAmount) === base);
+      && round2(r.taxableAmount) === base && duaOf(r) === group.aeatsiiDua);
     if (!done) {
-      toCreate.push({ tax: compensatory.id, taxLabel: compensatory.name, taxableAmount: base, taxAmount: 0 });
+      toCreate.push({
+        tax: compensatory.id, taxLabel: compensatory.name, taxableAmount: base, taxAmount: 0,
+        ...(multiDua ? { aeatsiiDua: group.aeatsiiDua, aeatsiiFechaDua: group.aeatsiiFechaDua } : {}),
+      });
     }
   }
   return { groups: groups.size, toCreate, missing };
@@ -192,8 +204,7 @@ export function missingImportTaxFields(row, multiDua) {
   const missing = new Set();
   if (!row?.tax) missing.add('tax');
   if (row?.taxableAmount == null) missing.add('taxableAmount');
-  // A compensatory (=0%) line of deferred import VAT carries no DUA of its own.
-  if (multiDua && !isCompensatoryTaxName(row?.taxLabel)) {
+  if (multiDua) {
     if (!String(row?.aeatsiiDua ?? '').trim()) missing.add('aeatsiiDua');
     if (!row?.aeatsiiFechaDua) missing.add('aeatsiiFechaDua');
   }
@@ -692,7 +703,7 @@ function ImportTaxesBlock({
 
   const summary = summarizeImportTaxes(rows);
   const compensation = planCompensatoryLines(rows,
-    row => parseRate(row.tax ? rateMap[row.tax] : null) ?? parseRate(row.serverRate), catalog);
+    row => parseRate(row.tax ? rateMap[row.tax] : null) ?? parseRate(row.serverRate), catalog, multiDua);
   let compensationHint = null;
   if (compensation.missing.length > 0) {
     compensationHint = ui('sifDataTabs.importTaxes.noCompensatoryTax', { taxes: compensation.missing.join(', ') });
@@ -712,6 +723,7 @@ function ImportTaxesBlock({
           method: 'POST',
           body: JSON.stringify({
             tax: line.tax, taxableAmount: line.taxableAmount, taxAmount: 0,
+            ...(multiDua ? { aeatsiiDua: line.aeatsiiDua, aeatsiiFechaDua: line.aeatsiiFechaDua } : {}),
             parentId: recordId, lineNo, recalculate: false,
           }),
         });
