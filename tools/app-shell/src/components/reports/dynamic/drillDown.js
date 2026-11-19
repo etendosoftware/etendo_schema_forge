@@ -19,10 +19,36 @@ export const ENTRY_REQUIRED_PARAMS = Object.freeze(['orgId', 'acctSchemaId', 'fa
  * `range` (`{from, to}`, ETP-6239) replaces the view's period: the bucket of the cell clicked, or the range it was compared with.
  */
 export function ledgerParams(queryParams, row, range = null) {
-  const { acctSchemaId, orgId, bPartnerId, productId } = queryParams;
+  const { acctSchemaId, orgId, bPartnerId, productId, projectId, costCenterId, groupBy, openingEntryAmount } = queryParams;
   const dateFrom = range?.from ?? queryParams.dateFrom;
   const dateTo = range?.to ?? queryParams.dateTo;
-  return { acctSchemaId, orgId, dateFrom, dateTo, bPartnerId, productId, accountId: row.node_id, fromAccountId: row.value, toAccountId: row.value };
+  const params = { acctSchemaId, orgId, dateFrom, dateTo, bPartnerId, productId, projectId, costCenterId, accountId: row.node_id, fromAccountId: row.value, toAccountId: row.value };
+  // ETP-6084: the Trial Balance's opening-entry toggle travels, so the ledger's opening matches the clicked cell.
+  if (openingEntryAmount !== undefined) params.openingEntryAmount = openingEntryAmount;
+  // A dimension row narrows the ledger to its own contact / product / project / cost centre.
+  const dimensionParam = DIMENSION_PARAMS[groupBy];
+  if (row.isDimension && row.dimension_id && dimensionParam) params[dimensionParam] = row.dimension_id;
+  return params;
+}
+
+/** The report's `groupBy` value → the General Ledger parameter that filters by that dimension. */
+export const DIMENSION_PARAMS = Object.freeze({ bpartner: 'bPartnerId', product: 'productId', project: 'projectId', costcenter: 'costCenterId' });
+
+/**
+ * ETP-6084: the row a drill-down opens, as the ledger reads it. A chart-tree row carries the posting account
+ * as `account_id` / `account_value` (a dimension row's own `node_id` is synthetic, never an account); the P&L's
+ * rows have neither, so they pass through unchanged.
+ */
+export function drillRowOf(row) {
+  if (row.account_id == null && row.account_value == null) return row;
+  return { ...row, node_id: row.account_id ?? row.node_id, value: row.account_value ?? row.value };
+}
+
+/** A row whose ledger can open: an account with no sub-accounts (dimension children don't count), or a dimension row that has a value. */
+export function canDrill(row) {
+  if (row.isFormula || !(row.account_value ?? row.value)) return false;
+  if (row.isDimension) return Boolean(row.dimension_id);
+  return !row.hasChildren || Boolean(row.hasDimensionChildren);
 }
 
 /**

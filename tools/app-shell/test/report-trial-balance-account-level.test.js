@@ -1,3 +1,5 @@
+// @covers artifacts/report-trial-balance/report-contract.json
+// @covers tools/app-shell/vite-plugins/report-api.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -473,5 +475,63 @@ describe('report-api.js — activeFilters resolves literal-options selects to th
         assert.equal(chip.value, opt.label?.es_ES || opt.label?.en_US || opt.value, `${p.name}=${opt.value}`);
       }
     }
+  });
+});
+
+// Chart-tree contract: `treeQuery` / `periodQuery` sit next to the untouched `sql.query`; both new queries
+// must carry the same scoping rules (R/C exclusion, opening-entry rule, child-org inclusion) as the old one.
+describe('report-trial-balance chart tree queries', () => {
+  const { treeQuery, periodQuery, query } = CONTRACT.sql;
+  const OPENING_RULE = /(fa\.factaccttype = 'O'|d\.is_o) AND '__OPENINGENTRYAMOUNT__' = 'true'/;
+
+  it('declares a chart tree and the amount columns the dynamic view renders', () => {
+    assert.equal(CONTRACT.tree, 'chart');
+    assert.deepEqual(CONTRACT.amountColumns.map((c) => c.field), ['opening', 'debit', 'credit', 'closing']);
+    const names = CONTRACT.parameters.map((p) => p.name);
+    for (const n of ['compareTo', 'showOnlyAccountsWithValue', 'expandedNodeIds']) assert.ok(names.includes(n), n);
+    assert.equal(CONTRACT.parameters.find((p) => p.name === 'expandedNodeIds').hidden, true);
+  });
+
+  it('keeps sql.query as it was (flag-off viewer, MCP twin): level filter and no child-org inclusion', () => {
+    assert.match(query, /elementlevel = '__ACCOUNTLEVEL__'/);
+    assert.doesNotMatch(query, /ad_isorgincluded/);
+    assert.doesNotMatch(query, /__PERIODS__/);
+  });
+
+  it('treeQuery returns chart nodes plus leaf x dimension rows, not filtered by account level', () => {
+    for (const col of ['node_id', 'parent_id', 'elementlevel', 'sort_path', 'dimension_id', 'dimension_name']) {
+      assert.match(treeQuery, new RegExp(`AS ${col}\\b`), col);
+    }
+    assert.doesNotMatch(treeQuery, /__ACCOUNTLEVEL__|LIMIT\s+\d{2,}/);
+    assert.match(treeQuery, /UNION ALL/);
+  });
+
+  for (const [name, sql] of [['treeQuery', treeQuery], ['periodQuery', periodQuery]]) {
+    it(`${name}: child-org inclusion, R/C exclusion and the opening-entry rule`, () => {
+      assert.match(sql, /ad_isorgincluded\(o\.ad_org_id, '__ORGID__', '__CLIENT_ID__'\) <> -1/);
+      assert.match(sql, /fa\.factaccttype NOT IN \('R', 'C'\)/);
+      assert.match(sql, OPENING_RULE);
+      assert.match(sql, /fa\.dateacct <= '__DATETO__'::date/);
+      for (const ph of ['__ACCTSCHEMAID__', '__FROMACCOUNTID__', '__TOACCOUNTID__', '__BPARTNERID__', '__PRODUCTID__', '__PROJECTID__', '__COSTCENTERID__', '__GROUPBY__']) {
+        assert.ok(sql.includes(ph), ph);
+      }
+    });
+  }
+
+  it('periodQuery reads every range from the buckets CTE and returns the three comparison sets', () => {
+    assert.match(periodQuery, /^WITH buckets\(idx, f, t, sf, st, pf, pt\) AS \(VALUES __PERIODS__\)/);
+    for (const sfx of ['', '_sly', '_prev']) {
+      for (const a of ['opening_balance', 'activity_debit', 'activity_credit', 'closing_balance']) {
+        assert.ok(periodQuery.includes(`AS ${a}${sfx}`), a + sfx);
+      }
+    }
+    assert.doesNotMatch(periodQuery, /__DATEFROM__/, 'a range\'s own dates come from buckets, never the hull');
+  });
+
+  it('the dev engine mirrors the report-server chart branch', () => {
+    const src = readFileSync(join(ROOT, 'tools', 'app-shell', 'vite-plugins', 'report-api.js'), 'utf8');
+    assert.match(src, /chartTree: isChartTreeRender\(contract, params\)/);
+    assert.match(src, /buildRenderChartTree\(rows, params/);
+    assert.match(src, /\.\.\.chartMeta/);
   });
 });

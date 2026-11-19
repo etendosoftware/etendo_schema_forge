@@ -40,14 +40,26 @@ export function exportTooLong(plan, grain) {
 const COLUMNS_WITH_COMPARISON = ['current', 'compared', 'variation', 'variationPct'];
 
 /**
+ * ETP-6084 D3: the sub-columns one amount column shows. Without a comparison, just the amount; with one, the
+ * compared amount and its variation when the column's `compare` is 'always', or 'optional' and the view asked for
+ * the movements too ("Comparar también movimientos", display only).
+ */
+export function amountKinds(amountColumn, mode, compareMovements = false) {
+  const on = mode !== 'none' && (amountColumn.compare === 'always' || (amountColumn.compare === 'optional' && compareMovements));
+  return on ? COLUMNS_WITH_COMPARISON : ['current'];
+}
+
+/**
  * The column groups of a result. `periods` are the answer's (`{idx, dateFrom, dateTo, partial}`),
  * `grain` the `columns` the answer was asked with. Each group: `pos` (its index in `row.cells`),
  * `label` (short, `*` when partial), `partial`, `current` (its range), `compared` (the range the
  * comparison reads, null without one), `comparedLabel` (what Comparado is compared against: the
  * compared month / quarter's short label, or for the Total group and Total mode the compared
  * range's dates; '' without a comparison) and `columns` (the sub-columns it shows).
+ * With `amountColumns` (the contract's, ETP-6084) each group also carries `amounts`: `{ field, labelKey, columns }` per amount
+ * column, and `columns` is their sub-columns in order. Without it a group has the single amount column of the P&L.
  */
-export function columnModel({ periods, grain, mode, locale, quarterPrefix, totalLabel }) {
+export function columnModel({ periods, grain, mode, locale, quarterPrefix, totalLabel, amountColumns = null, compareMovements = false }) {
   const lang = (locale || 'en_US').replace('_', '-');
   const short = (p) => (grain === 'quarter' ? formatCalendarQuarterShort(p.dateFrom, quarterPrefix) : formatCalendarMonthShort(p.dateFrom, lang));
   const comparedLabelOf = (p, compared) => {
@@ -59,6 +71,7 @@ export function columnModel({ periods, grain, mode, locale, quarterPrefix, total
     const partialMark = p.partial ? '*' : '';
     const label = p.idx === 0 ? totalLabel : `${short(p)}${partialMark}`;
     const compared = mode === 'none' ? null : comparedRanges(p, grain)[mode];
+    const amounts = amountColumns?.map((a) => ({ field: a.field, labelKey: a.labelKey, columns: amountKinds(a, mode, compareMovements) }));
     return {
       pos,
       label,
@@ -66,7 +79,8 @@ export function columnModel({ periods, grain, mode, locale, quarterPrefix, total
       current: { from: p.dateFrom, to: p.dateTo },
       compared,
       comparedLabel: comparedLabelOf(p, compared),
-      columns: mode === 'none' ? ['current'] : COLUMNS_WITH_COMPARISON,
+      amounts,
+      columns: amounts ? amounts.flatMap((a) => a.columns) : (mode === 'none' ? ['current'] : COLUMNS_WITH_COMPARISON),
     };
   });
   // Only the last `periodLimit` periods of the mode show; `pos` still indexes the answer's `row.cells`.
@@ -88,8 +102,9 @@ const cellsOf = (r) => r.cells ?? [{
 }];
 
 /** One cell as the table reads it for a mode: the amount, and the compared amount with its variation. */
-export function cellParts(row, pos, mode) {
-  const cell = cellsOf(row)[pos];
+export function cellParts(row, pos, mode, field = null) {
+  const period = cellsOf(row)[pos];
+  const cell = field ? period?.[field] : period; // ETP-6084: a chart-tree cell holds one `{amount, sly, prev}` per amount column
   const ref = mode === 'none' ? null : cell?.[mode];
   return { amount: cell?.amount ?? 0, compared: ref?.amount ?? 0, variationAmount: ref?.variationAmount, variationPct: ref?.variationPct, trend: ref?.trend };
 }

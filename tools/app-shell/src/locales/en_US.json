@@ -26924,7 +26924,16 @@
     "dynamicReportExportTooLong": "Excel and CSV take up to 24 months or 8 quarters. Shorten the period to export them.",
     "dynamicReportHidePanel": "Hide filters panel",
     "dynamicReportShowPanel": "Show filters panel",
-    "dynamicReportActiveFilters": "{count} active filters"
+    "dynamicReportActiveFilters": "{count} active filters",
+    "dynamicReportTotalRow": "TOTALS",
+    "dynamicReportBalanced": "Balanced: total debit equals total credit and the closing balances add up to zero.",
+    "dynamicReportUnbalanced": "Out of balance.",
+    "dynamicReportBalancePartial": "With partial filters (accounts or dimensions) the report may not balance.",
+    "dynamicReportBalanceDiff": "Debit − Credit = {debitCredit}; sum of closing balances = {closing}.",
+    "dynamicReportCompareMovements": "Also compare movements",
+    "dynamicReportNoGrouping": "No grouping",
+    "dynamicReportOptions": "Options",
+    "dynamicReportComparison": "Comparison"
   },
   "menus": {
     "Invoice Inbox": {

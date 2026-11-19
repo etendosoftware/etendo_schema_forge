@@ -1,7 +1,7 @@
 // @covers tools/app-shell/src/pages/ReportViewerPage.jsx
 // @covers tools/app-shell/src/components/reports/dynamic/dynamicReports.js
 // @covers tools/app-shell/src/components/reports/dynamic/DynamicReportBadge.jsx
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { DYNAMIC_REPORT_IDS, opensDynamicView } from '@/components/reports/dynamic/dynamicReports.js';
 
 let mockSearchParams = new URLSearchParams();
@@ -43,7 +43,7 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: vi.fn() }));
 vi.mock('@/components/layout/FavoritesContext', () => ({ useFavorites: () => ({ toggleFavorite: vi.fn(), isFavorite: () => false }) }));
 vi.mock('@/lib/rolesApi.js', () => ({
-  fetchMyReportAccess: () => Promise.resolve({ reportAccess: { 'profit-loss': 'full', 'balance-sheet': 'full' } }),
+  fetchMyReportAccess: () => Promise.resolve({ reportAccess: { 'profit-loss': 'full', 'balance-sheet': 'full', 'report-trial-balance': 'full' } }),
 }));
 let mockFlagOn = false;
 vi.mock('@/lib/flags', async (importOriginal) => ({
@@ -56,6 +56,7 @@ import ReportViewerPage from '../ReportViewerPage.jsx';
 const REPORTS = [
   { id: 'profit-loss', title: { en_US: 'Profit & Loss' }, type: 'grouped', category: 'finance', outputs: ['pdf'], parameters: [] },
   { id: 'balance-sheet', title: { en_US: 'Balance Sheet' }, type: 'grouped', category: 'finance', outputs: ['pdf'], parameters: [] },
+  { id: 'report-trial-balance', title: { en_US: 'Trial Balance' }, type: 'listing', category: 'finance', outputs: ['pdf'], parameters: [] },
 ];
 
 function open(reportId) {
@@ -79,6 +80,17 @@ describe('ReportViewerPage — dynamic-reports switch (ETP-6080)', () => {
   it('flag off: Profit & Loss opens the old viewer', async () => {
     mockFlagOn = false;
     open('profit-loss');
+    await waitFor(() => expect(screen.getByTestId('action-cancel')).toBeInTheDocument());
+    expect(screen.queryByTestId('DynamicReportView')).not.toBeInTheDocument();
+  });
+
+  it('flag on: the Trial Balance opens the dynamic view (ETP-6084); flag off keeps the old viewer', async () => {
+    mockFlagOn = true;
+    open('report-trial-balance');
+    expect(await screen.findByTestId('DynamicReportView')).toBeInTheDocument();
+    cleanup();
+    mockFlagOn = false;
+    open('report-trial-balance');
     await waitFor(() => expect(screen.getByTestId('action-cancel')).toBeInTheDocument());
     expect(screen.queryByTestId('DynamicReportView')).not.toBeInTheDocument();
   });
@@ -123,8 +135,8 @@ describe('ReportViewerPage — the catalog marks interactive reports', () => {
     render(<ReportViewerPage />);
     await screen.findByText('Balance Sheet');
     const tags = screen.getAllByTestId('DynamicReportBadge');
-    expect(tags).toHaveLength(1);
-    expect(tags[0].closest('button')).toHaveTextContent('Profit & Loss');
+    expect(tags).toHaveLength(2);
+    expect(tags.map((t) => t.closest('button').textContent).join('|')).toMatch(/Profit & Loss.*Trial Balance|Trial Balance.*Profit & Loss/);
     expect(tags[0]).toHaveAttribute('aria-label', 'dynamicReportBadge: dynamicReportBadgeHint');
   });
 
@@ -182,7 +194,8 @@ describe('ReportViewerPage — URL selections do not leak between reports (ETP-6
 
 describe('opensDynamicView', () => {
   it('needs both the flag and a listed report', () => {
-    expect([...DYNAMIC_REPORT_IDS]).toEqual(['profit-loss']);
+    expect([...DYNAMIC_REPORT_IDS]).toEqual(['profit-loss', 'report-trial-balance']);
+    expect(opensDynamicView('report-trial-balance', true)).toBe(true);
     expect(opensDynamicView('profit-loss', true)).toBe(true);
     expect(opensDynamicView('profit-loss', false)).toBe(false);
     expect(opensDynamicView('balance-sheet', true)).toBe(false);

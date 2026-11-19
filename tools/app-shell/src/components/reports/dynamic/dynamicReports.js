@@ -1,8 +1,9 @@
 /**
  * ETP-6080 — reports that open the interactive view when the `dynamic-reports` flag is on.
- * Balance Sheet and Trial Balance join when their stories land (plan decision Q4).
+ * Balance Sheet joins when its story lands (plan decision Q4). ETP-6084: Trial Balance joined, with its own
+ * contract-declared columns, filters and totals (`tree: 'chart'`).
  */
-export const DYNAMIC_REPORT_IDS = Object.freeze(new Set(['profit-loss']));
+export const DYNAMIC_REPORT_IDS = Object.freeze(new Set(['profit-loss', 'report-trial-balance']));
 
 /** True when `reportId` has an interactive view and the flag is on. */
 export function opensDynamicView(reportId, flagOn) {

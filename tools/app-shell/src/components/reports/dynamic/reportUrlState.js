@@ -9,8 +9,8 @@ import { parseCalendarDate, todayCalendarISO } from '@/lib/dateOnly.js';
  *   - `dateFrom` + `dateTo`      when it declares both as date parameters (written and read as a pair);
  *   - each picker                every visible `search` parameter on a selector the panel offers
  *                                (`PICKER_SELECTORS`), its ids comma-joined;
- *   - `columns` + `compare`      when it declares `compareTo` (the period engine's marker: Columnas and
- *                                the comparison are one feature, they travel together);
+ *   - `columns`                  when it declares a `columns` parameter (Mes / Trimestre);
+ *   - `compare`                  when it declares `compareTo`;
  *   - `splitBy`                  when it declares `splitBy`.
  *
  * Only what differs from the default is written, so an untouched period stays out and tomorrow still
@@ -19,7 +19,7 @@ import { parseCalendarDate, todayCalendarISO } from '@/lib/dateOnly.js';
  * shown as a label and printed in the export header): the view resolves them by id.
  */
 
-export const PICKER_SELECTORS = Object.freeze(['bpartner', 'product', 'product-all']);
+export const PICKER_SELECTORS = Object.freeze(['bpartner', 'product', 'product-all', 'project', 'costcenter', 'account']);
 const ENUMS = {
   compare: ['same-last-year', 'previous'],
   columns: ['month', 'quarter'], // 'total' is the default, never written
@@ -32,11 +32,12 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * The controls `report` offers (the panel shows exactly these, and the URL persists exactly these):
- * Columnas and the comparison travel together (`compareTo`), the split is `splitBy`.
+ * ETP-6084: Columnas (month / quarter, ETP-6293) has its own marker, the `columns` parameter, apart from the
+ * comparison (`compareTo`): a report can offer the comparison without the period columns. The split is `splitBy`.
  */
 export function reportOffers(report) {
   const has = (name) => (report?.parameters || []).some((p) => p.name === name);
-  return { columns: has('compareTo'), compare: has('compareTo'), splitBy: has('splitBy') };
+  return { columns: has('columns'), compare: has('compareTo'), splitBy: has('splitBy') };
 }
 
 /** What `report` persists, derived from its parameters. */
