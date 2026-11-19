@@ -138,6 +138,14 @@ funcionalidades pasan sus tres casos. Hallazgos que corrigió ETP-5850 en el cam
 - **Un filtro con un valor que no existe devolvía 0 filas** (`status: "pending"` en la bandeja). Ahora
   el MCP responde 422 con los códigos válidos (ver *Mejoras*).
 
+## Modelo
+
+Todas las mediciones del OKR (KR2.1 y KR2.2) usan **`gemini/gemini-3.8-flash`** por
+`llm.etendo.software`. Los pilotos de 48-68 del 17 al 19 nov se corrieron por error con
+`openai/gpt-5.2` (el valor de entonces de `config.example.toml`); la comparación del KR2.1 y las
+pruebas de permisos se repitieron con gemini, y el ejemplo del harness ahora trae gemini. `gpt-5.2` no
+puede correr Holded: el gateway acepta hasta 128 tools y Holded expone ~388.
+
 ## Flags para la corrida oficial
 
 Los flags son por cuenta. En producción hoy están prendidos solo para una lista de cuentas; para
