@@ -49,8 +49,8 @@ export function isMrnLengthOff(value) {
 
 function DuaField({ label, htmlFor, required, aside, helper, children }) {
   return (
-    <div className="space-y-1.5" data-testid={`DuaField__${htmlFor}`}>
-      <div className="flex items-center justify-between gap-2" data-testid={`DuaField__${htmlFor}_labelRow`}>
+    <div className="space-y-1 min-w-0" data-testid={`DuaField__${htmlFor}`}>
+      <div className="flex items-baseline justify-between gap-2" data-testid={`DuaField__${htmlFor}_labelRow`}>
         <Label
           htmlFor={htmlFor}
           className="text-sm text-foreground font-medium"
@@ -100,7 +100,7 @@ export default function SiiImportDuaSection({ ui, siiTypeKey, getVal, getDateVal
       testId="SiiImportDuaSection__card"
       data-testid="SiiPanelCard__siiImportDua">
       {!multiDua && (
-        <div className="grid grid-cols-2 gap-x-5 gap-y-4" data-testid="SiiImportDuaSection__fields">
+        <div className="grid grid-cols-2 gap-3" data-testid="SiiImportDuaSection__fields">
           <DuaField
             label={ui('sifDataTabs.dua.mrnLabel')}
             htmlFor="sif-dua"

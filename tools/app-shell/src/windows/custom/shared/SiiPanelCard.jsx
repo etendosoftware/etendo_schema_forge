@@ -11,7 +11,7 @@ export default function SiiPanelCard({ step, title, subtitle, action, children, 
       className="col-span-2 rounded-lg border border-border bg-card p-4 space-y-4"
       data-testid={testId}>
       <header className="flex items-start justify-between gap-3" data-testid={`${testId}__header`}>
-        <div className="flex items-start gap-2 min-w-0" data-testid={`${testId}__heading`}>
+        <div className="flex items-baseline gap-2 min-w-0" data-testid={`${testId}__heading`}>
           {step != null && (
             <span
               className="text-xs font-medium text-muted-foreground tabular-nums leading-5"

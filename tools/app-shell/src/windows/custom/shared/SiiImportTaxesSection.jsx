@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Plus, Trash2 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
@@ -171,86 +172,128 @@ function createdId(body) {
   return data?.id ?? body?.id ?? null;
 }
 
-function rateLabel(row, rateMap) {
-  const prefix = row.tax ? rateMap[row.tax] : null;
-  if (prefix != null && prefix !== '') return `${prefix} %`;
-  if (row.serverRate != null) return `${formatGroupedNumber(row.serverRate, { maximumFractionDigits: 4 })} %`;
-  return '—';
+/**
+ * Parses a rate as the selector or the record carries it — a number, or a `labelPrefix` string
+ * such as "10", "10%" or "5,2 %" — into a number. Null when there is nothing numeric.
+ */
+export function parseRate(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const cleaned = String(value).replace(/[%\s]/g, '').replace(',', '.');
+  if (!/^-?\d+(\.\d+)?$/.test(cleaned)) return null;
+  return Number(cleaned);
+}
+
+/** The Tipo cell: the selector's rate for the chosen tax, else the saved `tax.rate`; one "%". */
+export function rateLabel(row, rateMap) {
+  const rate = parseRate(row.tax ? rateMap?.[row.tax] : null) ?? parseRate(row.serverRate);
+  return rate == null ? '—' : `${formatGroupedNumber(rate, { maximumFractionDigits: 2 })}%`;
+}
+
+// One horizontal padding for th and td, so a header's text edge matches its cells' content edge.
+const CELL_X = 'px-3';
+const CONTROL = 'h-9 text-sm';
+const COLUMN_ALIGN = { left: 'text-left', right: 'text-right' };
+
+/**
+ * Fixed column widths (table-layout: fixed) so header and body cells share their geometry:
+ * Impuesto takes the remaining width, Tipo / Base / Cuota are right-aligned fixed columns.
+ */
+function ImportTaxColGroup({ editable }) {
+  return (
+    <colgroup data-testid="SiiImportTaxesSection__colgroup">
+      <col data-testid="SiiImportTaxesSection__colTax" />
+      <col className="w-16" data-testid="SiiImportTaxesSection__colRate" />
+      <col className="w-32" data-testid="SiiImportTaxesSection__colBase" />
+      <col className="w-32" data-testid="SiiImportTaxesSection__colAmount" />
+      {editable && <col className="w-12" data-testid="SiiImportTaxesSection__colActions" />}
+    </colgroup>
+  );
 }
 
 function HeaderCell({ children, required, align = 'left', testId }) {
   return (
-    <th className={`px-2 py-1.5 text-xs font-medium text-muted-foreground text-${align} whitespace-nowrap`} data-testid={testId}>
+    <th
+      className={`${CELL_X} py-2 text-xs font-medium text-muted-foreground whitespace-nowrap ${COLUMN_ALIGN[align]}`}
+      data-testid={testId}>
       {children}
       {required && <RequiredMark aria-hidden="true" data-testid={`${testId}_required`} />}
     </th>
   );
 }
 
+/**
+ * The read-only Cuota box: same height, radius, border and right-aligned tabular amount as the
+ * Base input, on the muted read-only fill. `pr-3` puts the currency symbol formatCurrency renders
+ * at the same right inset as the Base input's symbol.
+ */
 function ReadOnlyAmount({ currency, value, testId }) {
   return (
     <div
-      className="h-8 w-full rounded-lg bg-muted px-2 flex items-center justify-end text-sm tabular-nums text-muted-foreground"
+      className={`${CONTROL} w-full rounded-lg border border-border-control bg-muted pl-2 pr-3 flex items-center justify-end tabular-nums text-text-primary`}
       data-testid={testId}>
       {value == null ? '—' : formatCurrency(currency, value)}
     </div>
   );
 }
 
-function DuaSubRowLabel({ ui, labelKey, required, testId }) {
+function DuaSubRowField({ ui, htmlFor, labelKey, required, children }) {
   return (
-    <span className="text-xs font-medium text-muted-foreground whitespace-nowrap" data-testid={testId}>
-      {ui(labelKey)}
-      {required && <RequiredMark aria-hidden="true" data-testid={`${testId}_required`} />}
-    </span>
+    <div className="space-y-1 min-w-0" data-testid={`SiiImportTaxesSection__duaField_${htmlFor}`}>
+      <Label htmlFor={htmlFor} className="text-sm text-foreground font-medium" data-testid={`Label__siiImportTax_${htmlFor}`}>
+        {ui(labelKey)}
+        {required && <RequiredMark aria-hidden="true" data-testid={`RequiredMark__siiImportTax_${htmlFor}`} />}
+      </Label>
+      {children}
+    </div>
   );
 }
 
 /**
  * "Varios DUA": the line's DUA and DUA date live on a sub-row right below it (same `<tbody>` row
- * group, indented under Impuesto, spanning the table), so the table keeps its 4 columns + delete
- * and never needs a horizontal scroll.
+ * group, no separator between the two rows), starting at the Impuesto column's content edge, with
+ * stacked labels and two equal-width controls — so the table keeps its 4 columns + delete and
+ * never needs a horizontal scroll.
  */
 function DuaSubRow({ ui, row, editable, locale, missing, disabled, colSpan, onDuaChange, onDuaBlur, onDateChange }) {
+  const duaId = `sif-importTax-dua-${row.key}`;
+  const dateId = `sif-importTax-duaDate-${row.key}`;
   return (
-    <tr className="border-b border-border/20" data-testid={`SiiImportTaxesSection__duaRow_${row.key}`}>
-      <td colSpan={colSpan} className="pl-6 pr-2 pb-2 pt-0" data-testid="SiiImportTaxesSection__tdDuaGroup">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="SiiImportTaxesSection__duaFields">
-          <div className="flex items-center gap-2 min-w-0" data-testid="SiiImportTaxesSection__tdDua">
-            <DuaSubRowLabel ui={ui} labelKey="sifDataTabs.field.dua" required={editable} testId="SiiImportTaxesSection__duaLabel" data-testid="DuaSubRowLabel__dua" />
+    <tr data-testid={`SiiImportTaxesSection__duaRow_${row.key}`}>
+      <td colSpan={colSpan} className={`${CELL_X} pt-0 pb-3`} data-testid="SiiImportTaxesSection__tdDuaGroup">
+        <div className="grid grid-cols-2 gap-3 max-w-md" data-testid="SiiImportTaxesSection__duaFields">
+          <DuaSubRowField ui={ui} htmlFor={duaId} labelKey="sifDataTabs.field.dua" required={editable} data-testid="DuaSubRowField__dua">
             {editable ? (
               <Input
+                id={duaId}
                 type="text"
                 maxLength={255}
                 value={row.aeatsiiDua}
                 onChange={e => onDuaChange(row, e.target.value)}
                 onBlur={() => onDuaBlur(row)}
                 disabled={disabled}
-                aria-label={ui('sifDataTabs.field.dua')}
                 aria-invalid={missing.has('aeatsiiDua') || undefined}
-                className={`h-8 w-48 bg-card ${missing.has('aeatsiiDua') ? ERROR_OUTLINE : ''}`}
+                className={`${CONTROL} bg-card ${missing.has('aeatsiiDua') ? ERROR_OUTLINE : ''}`}
                 data-testid="Input__siiImportTaxDua" />
             ) : (
-              <span className="text-sm" data-testid="SiiImportTaxesSection__duaValue">{row.aeatsiiDua || '—'}</span>
+              <p className="text-sm text-text-primary" data-testid="SiiImportTaxesSection__duaValue">{row.aeatsiiDua || '—'}</p>
             )}
-          </div>
-          <div className="flex items-center gap-2 min-w-0" data-testid="SiiImportTaxesSection__tdDuaDate">
-            <DuaSubRowLabel ui={ui} labelKey="sifDataTabs.field.duaDate" required={editable} testId="SiiImportTaxesSection__duaDateLabel" data-testid="DuaSubRowLabel__duaDate" />
+          </DuaSubRowField>
+          <DuaSubRowField ui={ui} htmlFor={dateId} labelKey="sifDataTabs.field.duaDate" required={editable} data-testid="DuaSubRowField__duaDate">
             {editable ? (
-              <div className="w-44" data-testid="SiiImportTaxesSection__duaDateField">
-                <DateField
-                  value={row.aeatsiiFechaDua}
-                  onChange={iso => onDateChange(row, iso ?? '')}
-                  disabled={disabled}
-                  className={missing.has('aeatsiiFechaDua') ? ERROR_OUTLINE : undefined}
-                  data-testid="DateField__siiImportTaxDuaDate" />
-              </div>
+              <DateField
+                id={dateId}
+                value={row.aeatsiiFechaDua}
+                onChange={iso => onDateChange(row, iso ?? '')}
+                disabled={disabled}
+                className={missing.has('aeatsiiFechaDua') ? ERROR_OUTLINE : undefined}
+                data-testid="DateField__siiImportTaxDuaDate" />
             ) : (
-              <span className="text-sm" data-testid="SiiImportTaxesSection__duaDateValue">
+              <p className="text-sm text-text-primary" data-testid="SiiImportTaxesSection__duaDateValue">
                 {row.aeatsiiFechaDua ? formatCalendarDate(row.aeatsiiFechaDua, locale) : '—'}
-              </span>
+              </p>
             )}
-          </div>
+          </DuaSubRowField>
         </div>
       </td>
     </tr>
@@ -261,10 +304,9 @@ function ImportTaxRow({
   ui, row, multiDua, editable, currency, locale, rateMap, selectorUrl, selectorContext, token,
   onTaxChange, onBaseCommit, onDuaChange, onDuaBlur, onDateChange, onDelete,
 }) {
-  const cell = 'px-2 py-1.5 align-middle';
+  const cell = `${CELL_X} py-2 align-middle`;
   const missing = editable ? missingImportTaxFields(row, multiDua) : new Set();
   const disabled = Boolean(row.saving);
-  const mainRowClass = multiDua ? '' : 'border-b border-border/20';
   const subRow = multiDua && (
     <DuaSubRow
       ui={ui}
@@ -279,12 +321,14 @@ function ImportTaxRow({
       onDateChange={onDateChange}
       data-testid="DuaSubRow__siiImportTax" />
   );
+  // The separator sits between row GROUPS (one tax line + its DUA sub-row), never inside one.
+  const groupClass = 'border-b border-border/60 last:border-b-0';
   if (!editable) {
     return (
-      <tbody data-testid={`SiiImportTaxesSection__group_${row.key}`}>
-        <tr className={mainRowClass} data-testid={`SiiImportTaxesSection__row_${row.key}`}>
-          <td className={cell} data-testid="SiiImportTaxesSection__tdTax">{row.taxLabel || row.tax}</td>
-          <td className={`${cell} tabular-nums`} data-testid="SiiImportTaxesSection__tdRate">{rateLabel(row, rateMap)}</td>
+      <tbody className={groupClass} data-testid={`SiiImportTaxesSection__group_${row.key}`}>
+        <tr data-testid={`SiiImportTaxesSection__row_${row.key}`}>
+          <td className={`${cell} truncate`} data-testid="SiiImportTaxesSection__tdTax">{row.taxLabel || row.tax}</td>
+          <td className={`${cell} text-right tabular-nums`} data-testid="SiiImportTaxesSection__tdRate">{rateLabel(row, rateMap)}</td>
           <td className={`${cell} text-right tabular-nums`} data-testid="SiiImportTaxesSection__tdBase">
             {formatCurrency(currency, row.taxableAmount)}
           </td>
@@ -297,9 +341,9 @@ function ImportTaxRow({
     );
   }
   return (
-    <tbody data-testid={`SiiImportTaxesSection__group_${row.key}`}>
-      <tr className={mainRowClass} data-testid={`SiiImportTaxesSection__row_${row.key}`}>
-        <td className={`${cell} min-w-40`} data-testid="SiiImportTaxesSection__tdTax">
+    <tbody className={groupClass} data-testid={`SiiImportTaxesSection__group_${row.key}`}>
+      <tr data-testid={`SiiImportTaxesSection__row_${row.key}`}>
+        <td className={cell} data-testid="SiiImportTaxesSection__tdTax">
           <SelectorInput
             entityName="tax"
             field={TAX_FIELD}
@@ -312,13 +356,13 @@ function ImportTaxRow({
             selectorContext={selectorContext}
             token={token}
             compact
-            triggerClassName={`w-full h-8 text-sm text-text-primary bg-card focus:ring-2 focus:ring-primary ${missing.has('tax') ? ERROR_OUTLINE : ''}`}
+            triggerClassName={`w-full ${CONTROL} text-text-primary bg-card ${missing.has('tax') ? ERROR_OUTLINE : ''}`}
             data-testid="SelectorInput__siiImportTax" />
         </td>
-        <td className={`${cell} tabular-nums text-muted-foreground whitespace-nowrap`} data-testid="SiiImportTaxesSection__tdRate">
+        <td className={`${cell} text-right tabular-nums text-text-secondary whitespace-nowrap`} data-testid="SiiImportTaxesSection__tdRate">
           {rateLabel(row, rateMap)}
         </td>
-        <td className={`${cell} w-32`} data-testid="SiiImportTaxesSection__tdBase">
+        <td className={cell} data-testid="SiiImportTaxesSection__tdBase">
           <MaskedAmountInput
             bare
             currency={currency}
@@ -327,13 +371,13 @@ function ImportTaxRow({
             disabled={disabled}
             aria-label={ui('sifDataTabs.importTaxes.taxableAmount')}
             aria-invalid={missing.has('taxableAmount') || undefined}
-            className={`h-8 ${missing.has('taxableAmount') ? ERROR_OUTLINE : ''}`}
+            className={`${CONTROL} bg-card ${missing.has('taxableAmount') ? ERROR_OUTLINE : ''}`}
             data-testid="MaskedAmountInput__siiImportTaxBase" />
         </td>
-        <td className={`${cell} w-28`} data-testid="SiiImportTaxesSection__tdAmount">
+        <td className={cell} data-testid="SiiImportTaxesSection__tdAmount">
           <ReadOnlyAmount currency={currency} value={row.taxAmount} testId="SiiImportTaxesSection__amount" data-testid="ReadOnlyAmount__siiImportTax" />
         </td>
-        <td className={`${cell} w-10 text-right`} data-testid="SiiImportTaxesSection__tdActions">
+        <td className={`${cell} pl-0 text-right`} data-testid="SiiImportTaxesSection__tdActions">
           <Button
             type="button"
             variant="ghost"
@@ -550,12 +594,13 @@ function ImportTaxesBlock({ ui, multiDua, recordId, data, apiBaseUrl, token, rea
       ) : (
         <>
           {rows.length > 0 && (
-            <div className="overflow-x-auto" data-testid="SiiImportTaxesSection__tableWrap">
-              <table className="w-full table-auto text-sm" data-testid="SiiImportTaxesSection__table">
-                <thead data-testid="SiiImportTaxesSection__thead">
-                  <tr className="border-b border-border/40" data-testid="SiiImportTaxesSection__headRow">
+            <div className="overflow-hidden rounded-lg border border-border" data-testid="SiiImportTaxesSection__tableWrap">
+              <table className="w-full table-fixed text-sm" data-testid="SiiImportTaxesSection__table">
+                <ImportTaxColGroup editable={editable} data-testid="ImportTaxColGroup__siiImportTax" />
+                <thead className="bg-muted" data-testid="SiiImportTaxesSection__thead">
+                  <tr className="border-b border-border/60" data-testid="SiiImportTaxesSection__headRow">
                     <HeaderCell required={editable} testId="SiiImportTaxesSection__thTax" data-testid="HeaderCell__tax">{ui('tax')}</HeaderCell>
-                    <HeaderCell testId="SiiImportTaxesSection__thRate" data-testid="HeaderCell__rate">{ui('sifDataTabs.importTaxes.rate')}</HeaderCell>
+                    <HeaderCell align="right" testId="SiiImportTaxesSection__thRate" data-testid="HeaderCell__rate">{ui('sifDataTabs.importTaxes.rate')}</HeaderCell>
                     <HeaderCell required={editable} align="right" testId="SiiImportTaxesSection__thBase" data-testid="HeaderCell__base">
                       {ui('sifDataTabs.importTaxes.taxableAmount')}
                     </HeaderCell>
