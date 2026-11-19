@@ -14,7 +14,7 @@ name: Full Pipeline
 #                smartbuild), Tomcat, jsreport and E2E_SUITE=integration.
 #   public-api   ETP-6370: the public API suite (gateway/e2e) on its own environment, signed in as
 #                GOAdmin of GOClient; only when a PR touches the public API (always on a push).
-#   cell-report  after mocked and integration: the TESTS POR CÉLULA report with the E2E columns only (cell-report.mjs,
+#   cell-report  after every test job: the TESTS POR CÉLULA report with the E2E columns only (cell-report.mjs,
 #                from com.etendoerp.jenkins.pipelines), the run summary and, when DD_API_KEY exists,
 #                the run sent to Datadog as etendo.ci.pilot.* metrics. Reporting only: it never turns
 #                the run red.
@@ -734,7 +734,9 @@ jobs:
 
   cell-report:
     name: Cell report
-    needs: [route, mocked, integration]
+    # Every test job, though it reads only the E2E results: the run's duration and the job durations
+    # sent to Datadog are measured here, and a job still running would be left out of both.
+    needs: [route, unit-tests, mocked, integration, public-api]
     if: ${{ !cancelled() && needs.route.outputs.validated_run == '' && (github.event_name != 'pull_request' || startsWith(github.head_ref, 'mergeblock/') || startsWith(github.head_ref, 'hotfix/')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
