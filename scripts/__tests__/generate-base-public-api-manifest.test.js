@@ -580,7 +580,7 @@ describe('buildEntity — a decisions `type` override reaches the manifest', () 
     assert.deepEqual(entity.fields.legacy_rate.dataType, { type: 'string' });
   });
 
-  it('keeps the committed conversion-rates artifacts in step: decisions override, contract type, manifest type', async () => {
+  it('publishes the committed conversion-rates rates as numbers from their native AD type, with no decisions override', async () => {
     const root = new URL('../../artifacts/conversion-rates/', import.meta.url);
     const decisions = JSON.parse(readFileSync(new URL('decisions.json', root), 'utf8'));
     const contract = JSON.parse(readFileSync(new URL('contract.json', root), 'utf8'));
@@ -589,9 +589,10 @@ describe('buildEntity — a decisions `type` override reaches the manifest', () 
       policy: exposurePolicyOf(decisions, 'conversionRate'),
     });
     for (const [internal, published] of [['multipleRateBy', 'multiple_rate_by'], ['divideRateBy', 'divide_rate_by']]) {
-      assert.equal(decisions.entities.header.fields[internal].type, 'number', `decisions overrides ${internal}`);
+      assert.equal(decisions.entities.header.fields[internal].type, undefined, `${internal} needs no decisions type override`);
       const field = contract.frontendContract.entities.conversionRate.fields.find((candidate) => candidate.name === internal);
-      assert.equal(field.type, 'number', `contract carries the override for ${internal} (regenerate after changing decisions)`);
+      // AD reference 800019 (General Quantity) is extracted as decimal since schema_forge_core 0.3.110.
+      assert.equal(field.type, 'decimal', `contract types ${internal} from its AD reference (regenerate after changing decisions)`);
       assert.deepEqual(entity.fields[published].dataType, { type: 'number', format: 'double' });
       assert.equal(entity.fields[published].direction, 'out');
     }
