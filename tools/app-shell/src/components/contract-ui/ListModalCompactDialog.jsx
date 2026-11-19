@@ -1,4 +1,4 @@
-import { Save, X } from 'lucide-react';
+import { FloppyDiskIcon, XIcon } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
 import { EntityForm } from './EntityForm.jsx';
 
@@ -95,7 +95,7 @@ export function ListModalCompactDialog({
             <div
               role="alert"
               className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              <X size={16} className="mt-0.5 flex-shrink-0" data-testid="X__c0a1d4" />
+              <XIcon size={16} className="mt-0.5 flex-shrink-0" data-testid="X__c0a1d4" />
               <span>{formError}</span>
             </div>
           )}
@@ -116,7 +116,7 @@ export function ListModalCompactDialog({
             disabled={submitDisabled}
             data-testid="list-modal-submit"
             className={SAVE_PILL}>
-            <Save className="h-5 w-5" aria-hidden="true" data-testid="Save__c0a1d4" />
+            <FloppyDiskIcon className="h-5 w-5" aria-hidden="true" data-testid="Save__c0a1d4" />
             {submitting ? ui('saving') : submitLabel}
           </button>
         </div>
@@ -131,7 +131,7 @@ export function ListModalCompactDialog({
             aria-label={ui('close')}
             data-testid="list-modal-close"
             className="inline-flex h-8 w-8 items-center justify-center rounded-full text-icon-secondary transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring">
-            <X className="h-5 w-5" aria-hidden="true" data-testid="X__c0a1d4" />
+            <XIcon className="h-5 w-5" aria-hidden="true" data-testid="X__c0a1d4" />
           </button>
         </div>
       </DialogContent>

@@ -9,10 +9,12 @@ import { join } from 'node:path';
 import {
   assertNoFieldMapping,
   buildEntity,
+  decisionsEntityOf,
   enumOf,
   generateManifest,
   inputFieldsOf,
   isCurated,
+  isPublishedWindow,
   exposurePolicyOf,
   isLinesEntity,
   isPublicField,
@@ -21,6 +23,8 @@ import {
   publicDescriptionOf,
   publicFieldName,
   publicFunctionalText,
+  publicResourceNames,
+  publicResourceOf,
 } from '../generate-base-public-api-manifest.mjs';
 
 const functional = {
@@ -450,6 +454,7 @@ describe('buildEntity — public names', () => {
     assert.equal(publicFieldName('movementQuantity'), 'movement_quantity');
     assert.equal(publicFieldName('pOPaymentTerms'), 'purchase_payment_terms');
     assert.equal(publicFieldName('etgoCurrency'), 'currency');
+    assert.equal(publicFieldName('etgoIscustomer'), 'is_customer');
   });
 });
 
@@ -493,6 +498,123 @@ describe('generateManifest', () => {
       foreignKey: 'business_partner',
     });
     assert.deepEqual(Object.keys(manifest.entities.contacts.fields).sort(), ['id', 'name', 'updated']);
+  });
+});
+
+describe('generateManifest — window selection and public resource names', () => {
+  let root;
+  const withCategory = (contract, category) => {
+    contract.frontendContract.window.category = category;
+    return contract;
+  };
+  const writeDecisions = (specName, decisions) => writeFileSync(join(root, specName, 'decisions.json'), JSON.stringify(decisions));
+
+  before(() => {
+    root = mkdtempSync(join(tmpdir(), 'public-api-manifest-selection-'));
+    // Allowlisted windows whose category is excluded by default.
+    writeArtifact(root, 'tax-category', withCategory(contractFor('tax-category', formFields, { entityName: 'taxCategory' }), 'configuration'));
+    writeArtifact(root, 'conversion-rates', withCategory(contractFor('conversion-rates', formFields, { entityName: 'conversionRate' }), 'finance'));
+    // decisions.json keys the entity `header` and renames it to the contract name.
+    writeDecisions('conversion-rates', { entities: { header: { name: 'conversionRate', publicApi: { readOnly: true } } } });
+    // Not allowlisted, same excluded category.
+    writeArtifact(root, 'payment-term', withCategory(contractFor('payment-term', formFields, { entityName: 'paymentTerm' }), 'configuration'));
+    // Renamed resource, and a window that references it.
+    writeArtifact(root, 'business-partner-category', withCategory(contractFor('business-partner-category', [
+      { name: 'name', visibility: 'editable', form: true, type: 'string' },
+    ], { entityName: 'businessPartnerCategory' }), 'contact'));
+    writeArtifact(root, 'contacts', contractFor('contacts', [
+      { name: 'name', visibility: 'editable', form: true, type: 'string', publicApi: { exposed: true } },
+      { name: 'businessPartnerCategory', visibility: 'editable', form: true, type: 'foreignKey', reference: 'BusinessPartnerCategory', publicApi: { exposed: true } },
+    ], { entityName: 'businessPartner' }));
+    writeDecisions('contacts', { entities: { businessPartner: { fields: { businessPartnerCategory: { publicApi: { lookup: true } } } } } });
+  });
+
+  after(() => rmSync(root, { recursive: true, force: true }));
+
+  it('publishes an allowlisted window whatever its category, and never a window outside the allowlist', async () => {
+    const { entities, policy } = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
+    assert.ok(entities['tax-category'], 'allowlisted configuration window');
+    assert.ok(entities['conversion-rates'], 'allowlisted finance window');
+    assert.equal(entities['payment-term'], undefined, 'configuration window outside the allowlist');
+    assert.ok(policy.excludedCategories.includes('configuration'));
+    assert.equal(policy.windowSelection, 'allowlist-overrides-excluded-categories');
+    assert.equal(isPublishedWindow('payment-term'), false);
+    assert.equal(isPublishedWindow('tax'), true);
+    assert.equal(isPublishedWindow('business-partner'), false, 'excludedWindows still wins');
+  });
+
+  it('reads publicApi.readOnly from a decisions entity keyed under another name', async () => {
+    const { entities } = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
+    const rates = entities['conversion-rates'];
+    assert.deepEqual(rates.operations, ['GET', 'LIST']);
+    assert.ok(Object.values(rates.fields).every((field) => field.direction === 'out'));
+    assert.deepEqual(entities['tax-category'].operations.includes('POST'), true, 'no readOnly declared: writable');
+  });
+
+  it('publishes a renamed window under its public name and keeps its NEO spec', async () => {
+    const { entities, policy } = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
+    assert.equal(entities['business-partner-category'], undefined);
+    const category = entities['contact-category'];
+    assert.equal(category.publicName, 'contact-category');
+    assert.equal(category.specName, 'business-partner-category');
+    assert.equal(category.source.artifact, 'business-partner-category');
+    assert.deepEqual(policy.publicResourceNames, publicResourceNames);
+  });
+
+  it('links a reference to the renamed resource by its public name, lookup type included', async () => {
+    const { entities } = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
+    const field = entities.contacts.fields.category;
+    assert.deepEqual(field.relationship, { resource: 'contact-category', cardinality: 'one', foreignKey: 'category' });
+    assert.equal(field.lookup.type, 'contact-category');
+  });
+});
+
+describe('buildEntity — a decisions `type` override reaches the manifest', () => {
+  it('publishes a string-extracted field as number/double once decisions declares "type": "number"', () => {
+    // resolve-curated applies the override and stamps explicitType; the manifest reads the contract type.
+    const entity = build('conversion-rates', [
+      { name: 'multipleRateBy', visibility: 'editable', form: true, type: 'number', explicitType: true },
+      { name: 'legacyRate', visibility: 'editable', form: true, type: 'string' },
+    ], { entityName: 'conversionRate' });
+    assert.deepEqual(entity.fields.multiple_rate_by.dataType, { type: 'number', format: 'double' });
+    assert.deepEqual(entity.fields.legacy_rate.dataType, { type: 'string' });
+  });
+
+  it('keeps the committed conversion-rates artifacts in step: decisions override, contract type, manifest type', async () => {
+    const root = new URL('../../artifacts/conversion-rates/', import.meta.url);
+    const decisions = JSON.parse(readFileSync(new URL('decisions.json', root), 'utf8'));
+    const contract = JSON.parse(readFileSync(new URL('contract.json', root), 'utf8'));
+    const entity = buildEntity({
+      specName: 'conversion-rates', entityName: 'conversionRate', contract, functional, parent: null, rawEntity: null,
+      policy: exposurePolicyOf(decisions, 'conversionRate'),
+    });
+    for (const [internal, published] of [['multipleRateBy', 'multiple_rate_by'], ['divideRateBy', 'divide_rate_by']]) {
+      assert.equal(decisions.entities.header.fields[internal].type, 'number', `decisions overrides ${internal}`);
+      const field = contract.frontendContract.entities.conversionRate.fields.find((candidate) => candidate.name === internal);
+      assert.equal(field.type, 'number', `contract carries the override for ${internal} (regenerate after changing decisions)`);
+      assert.deepEqual(entity.fields[published].dataType, { type: 'number', format: 'double' });
+      assert.equal(entity.fields[published].direction, 'out');
+    }
+    assert.equal(entity.fields.s_mfcr_synced, undefined, 'the curated entity leaves the sync flag out');
+  });
+});
+
+describe('publicResourceOf / decisionsEntityOf', () => {
+  it('maps only the declared renames', () => {
+    assert.equal(publicResourceOf('business-partner-category'), 'contact-category');
+    assert.equal(publicResourceOf('tax'), 'tax');
+    assert.ok(Object.isFrozen(publicResourceNames));
+  });
+
+  it('finds the decisions entity by key first, then by its declared name', () => {
+    const decisions = { entities: { header: { name: 'conversionRate', publicApi: { readOnly: true } }, conversionRate: undefined } };
+    assert.equal(decisionsEntityOf(decisions, 'conversionRate'), undefined, 'an own key wins, even when empty');
+    const renamed = { entities: { header: { name: 'conversionRate', publicApi: { readOnly: true } } } };
+    assert.equal(decisionsEntityOf(renamed, 'conversionRate'), renamed.entities.header);
+    assert.equal(decisionsEntityOf(renamed, 'header'), renamed.entities.header);
+    assert.equal(decisionsEntityOf(renamed, 'lines'), undefined);
+    assert.equal(decisionsEntityOf(null, 'header'), undefined);
+    assert.equal(exposurePolicyOf(renamed, 'conversionRate').readOnly, true);
   });
 });
 

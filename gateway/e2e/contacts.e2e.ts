@@ -2,7 +2,7 @@
 import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { api, cleanupCreated, createRecord, expectErrorDocument, expectStatus, resource } from './support/client.ts';
-import { CONTACT_HINT, createAddress, createContact, personAttributes } from './support/fixtures.ts';
+import { CONTACT_HINT, createAddress, createContact, createContactCategory, personAttributes } from './support/fixtures.ts';
 import {
   expectDeleted, expectListed, expectMissingIfMatchRefused, expectPatchWithEtag, expectStaleEtagRefused,
   readWithEtag, type LifecycleSpec,
@@ -161,11 +161,21 @@ describe('contacts as a person or a company', () => {
     expectStatus(lookup, 200, 'the category selector offers no value');
     const first = lookup.json.data?.[0];
     assert.ok(first, 'no contact category available');
-    assert.equal(first.type, 'business-partner-category');
+    assert.equal(first.type, 'contact-category', 'a lookup value is sent back as the relationship as is');
     assert.equal(typeof first.attributes.label, 'string');
-    const created = await createContact('category', { category: first.id });
-    const read = (await api('GET', `contacts/${created.id}`)).json.data.attributes;
-    assert.equal(read.category, first.id);
+    const created = await createContact('category', {}, { category: [first.type, first.id] });
+    const read = (await api('GET', `contacts/${created.id}`)).json.data;
+    assert.deepEqual(read.relationships.category.data, { type: 'contact-category', id: first.id });
+    assert.equal(read.attributes.category, undefined, 'a relationship is never an attribute');
+  });
+
+  it('refuses the category as an attribute: it is a relationship', async () => {
+    const lookup = await api('GET', 'contacts/lookups/category?page[size]=1');
+    expectStatus(lookup, 200);
+    const error = expectErrorDocument(await api('POST', 'contacts', {
+      body: resource('contacts', { name: 'e2e-category-as-attribute', category: lookup.json.data[0].id }),
+    }), 400);
+    assert.match(error.detail, /relationship/);
   });
 
   it('accepts tax_id_key with a valid NIF and reads the key back', async () => {
@@ -183,5 +193,70 @@ describe('contacts as a person or a company', () => {
     expectErrorDocument(await api('POST', 'contacts', {
       body: resource('contacts', { name: 'e2e-invalid-nif-default-key', tax_id: '12345678A' }),
     }), 400);
+  });
+});
+
+describe('contact categories', () => {
+  let category: LifecycleSpec;
+
+  it('creates a contact category and reads it back with an ETag', async () => {
+    const created = await createContactCategory('category', { description: 'initial' });
+    category = {
+      collection: 'contact-category', type: 'contact-category', id: created.id,
+      firstPatch: { description: 'changed' }, secondPatch: { name: 'renamed' },
+    };
+    assert.equal(created.data.type, 'contact-category');
+    const { res } = await readWithEtag(`contact-category/${category.id}`);
+    const attributes = res.json.data.attributes;
+    assert.equal(attributes.search_key, created.data.attributes.search_key);
+    assert.equal(attributes.description, 'initial');
+    assert.equal(attributes.is_customer, true);
+    assert.equal(attributes.default, false);
+  });
+
+  it('lists the contact category', async () => {
+    await expectListed(category);
+  });
+
+  it('PATCH with the ETag from the read updates only the sent field', async () => {
+    const before = (await readWithEtag(`contact-category/${category.id}`)).res.json.data.attributes;
+    await expectPatchWithEtag(category);
+    const after = (await readWithEtag(`contact-category/${category.id}`)).res.json.data.attributes;
+    assert.equal(after.description, 'changed');
+    assert.equal(after.name, before.name);
+  });
+
+  it('a stale ETag is 412 and a missing If-Match is 428', async () => {
+    await expectStaleEtagRefused(category);
+    await expectMissingIfMatchRefused(category);
+  });
+
+  it('creates a contact in a new contact category and reads the relationship back', async () => {
+    const own = await createContactCategory('category-of-contact');
+    const contact = await createContact('in-new-category', {}, { category: ['contact-category', own.id] });
+    const read = (await api('GET', `contacts/${contact.id}`)).json.data;
+    assert.deepEqual(read.relationships.category.data, { type: 'contact-category', id: own.id });
+    assert.equal(read.relationships.category.links.related, `/api/v1/contact-category/${own.id}`);
+  });
+
+  it('refuses a contact category linked with the type of the NEO spec', async () => {
+    const own = await createContactCategory('category-wrong-type');
+    const res = await api('POST', 'contacts', {
+      body: resource('contacts', { name: 'e2e-category-wrong-type' }, { category: ['business-partner-category', own.id] }),
+    });
+    expectErrorDocument(res, 409);
+  });
+
+  it('refuses a contact category without a name: search_key and name are required', async () => {
+    const res = await api('POST', 'contact-category', {
+      body: resource('contact-category', { search_key: `e2e-category-no-name-${Date.now()}`, is_customer: true }),
+    });
+    // The gateway forwards the create; Etendo refuses the missing mandatory column (400 or 422).
+    assert.ok([400, 422].includes(res.status), `expected 400 or 422, got ${res.status}: ${res.text.slice(0, 400)}`);
+    expectErrorDocument(res, res.status);
+  });
+
+  it('deletes the contact category and it answers 404 afterwards', async () => {
+    await expectDeleted(category);
   });
 });

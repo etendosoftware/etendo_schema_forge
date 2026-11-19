@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button.jsx';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { CaretDownIcon, CaretUpIcon } from '@phosphor-icons/react';
 import { SummaryBar } from './SummaryBar.jsx';
 
 /**
@@ -58,9 +58,9 @@ export function CompactHeader({
             onClick={() => setExpanded(!expanded)}
             data-testid="Button__e10eb7">
             {expanded ? (
-              <>Close <ChevronUp className="h-3 w-3" data-testid="ChevronUp__e10eb7" /></>
+              <>Close <CaretUpIcon className="h-3 w-3" data-testid="ChevronUp__e10eb7" /></>
             ) : (
-              <>Edit <ChevronDown className="h-3 w-3" data-testid="ChevronDown__e10eb7" /></>
+              <>Edit <CaretDownIcon className="h-3 w-3" data-testid="ChevronDown__e10eb7" /></>
             )}
           </Button>
         </div>

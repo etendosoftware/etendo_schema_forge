@@ -26,12 +26,12 @@ const apiFetchMock = vi.fn();
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => apiFetchMock }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('lucide-react', () => ({
-  X: () => <span data-testid="icon-x" />,
-  Loader2: () => <span data-testid="icon-loader" />,
-  AlertTriangle: () => <span data-testid="icon-alert" />,
-  ChevronDown: () => <span data-testid="icon-chevron-down" />,
-  ChevronUp: () => <span data-testid="icon-chevron-up" />,
+vi.mock('@phosphor-icons/react', () => ({
+  XIcon: () => <span data-testid="icon-x" />,
+  CircleNotchIcon: () => <span data-testid="icon-loader" />,
+  WarningIcon: () => <span data-testid="icon-alert" />,
+  CaretDownIcon: () => <span data-testid="icon-chevron-down" />,
+  CaretUpIcon: () => <span data-testid="icon-chevron-up" />,
 }));
 vi.mock('../FmPrimitives.jsx', () => ({
   StatusPill: ({ estado }) => <span data-testid="status-pill">{estado}</span>,

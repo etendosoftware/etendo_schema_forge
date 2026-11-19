@@ -40,9 +40,22 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import {
-  Calculator, CalendarDays, CircleAlert, CircleCheck, ClipboardCheck, Download, FileCheck, Loader2, OctagonAlert, RefreshCw, Save,
-  TrendingDown, TrendingUp, TriangleAlert, ReceiptText,
-} from 'lucide-react';
+  CalculatorIcon,
+  CalendarBlankIcon,
+  WarningCircleIcon,
+  CheckCircleIcon,
+  ClipboardTextIcon,
+  DownloadSimpleIcon,
+  SealCheckIcon,
+  CircleNotchIcon,
+  WarningOctagonIcon,
+  ArrowsClockwiseIcon,
+  FloppyDiskIcon,
+  TrendDownIcon,
+  TrendUpIcon,
+  WarningIcon,
+  ReceiptIcon,
+} from '@phosphor-icons/react';
 import { KpiWidget, Tabs } from '../../FmCommon.jsx';
 import {
   FmStatusChip, FmDetailHeader, FmDetailActionBar, FmDetailButton, useFmDetailPageMeta, buildDeclTitle,
@@ -171,7 +184,7 @@ function SubstitutiveBanner({ identification, concurso, onChange, disabled, show
     <div style={{ padding: '8px 20px', flexShrink: 0 }}>
       <div className="fm-349-substitutive-banner fm-substitutive-banner" data-testid="FmModel390Page__substitutiveBanner">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: '1 1 300px', minWidth: 0 }}>
-          <RefreshCw size={18} strokeWidth={1.75} style={{ color: 'var(--status-warning-fg)', flexShrink: 0 }} data-testid="RefreshCw__fm390" />
+          <ArrowsClockwiseIcon size={18} style={{ color: 'var(--status-warning-fg)', flexShrink: 0 }} data-testid="RefreshCw__fm390" />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{t('fm.m349.substitutive_banner.title')}</div>
             <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>{t('fm.m390.substitutive.sub')}</div>
@@ -247,16 +260,16 @@ function DetailActions390({
   return isSubmitted ? (
     <FmDetailButton onClick={onCreateSubstitute} disabled={busy} data-testid="FmModel390Page__createSubstitute">
       {pending.creatingSubstitute
-        ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__substitute390" />
-        : <RefreshCw size={16} strokeWidth={1.75} data-testid="RefreshCw__substitute390" />}
+        ? <CircleNotchIcon size={16} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__substitute390" />
+        : <ArrowsClockwiseIcon size={16} data-testid="RefreshCw__substitute390" />}
       {t('fm.m390.substitute.action')}
     </FmDetailButton>
   ) : (
     <>
       <FmDetailButton onClick={onCompute} disabled={busy} data-testid="FmModel390Page__compute">
         {pending.computing
-          ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__compute390" />
-          : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__compute390" />}
+          ? <CircleNotchIcon size={16} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__compute390" />
+          : <CalculatorIcon size={16} data-testid="Calculator__compute390" />}
         {pending.computing ? t('fm.action.computing') : t('fm.action.compute')}
       </FmDetailButton>
       {/* Like the 303: a blocked Generar / Presentar stays clickable and says why in a
@@ -268,11 +281,10 @@ function DetailActions390({
         data-testid="FmModel390Page__generate"
       >
         {pending.generating
-          ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__generate390" />
+          ? <CircleNotchIcon size={16} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__generate390" />
           : (
-            <Download
+            <DownloadSimpleIcon
               size={16}
-              strokeWidth={1.75}
               style={{ color: ruleBlocking > 0 ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
               data-testid="Download__generate390" />
           )}
@@ -280,8 +292,8 @@ function DetailActions390({
       </FmDetailButton>
       <FmDetailButton onClick={onSave} disabled={busy} aria-label={t('fm.action.save')} data-testid="FmModel390Page__save">
         {pending.saving
-          ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__save390" />
-          : <Save size={16} strokeWidth={1.75} data-testid="Save__save390" />}
+          ? <CircleNotchIcon size={16} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__save390" />
+          : <FloppyDiskIcon size={16} data-testid="Save__save390" />}
         {t('fm.action.save')}
       </FmDetailButton>
       <FmDetailButton
@@ -290,7 +302,7 @@ function DetailActions390({
         disabled={busy || !hasBoxes}
         data-testid="FmModel390Page__present"
       >
-        <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__present390" />
+        <CheckCircleIcon size={16} data-testid="CircleCheck__present390" />
         {t('fm.action.submit')}
       </FmDetailButton>
     </>
@@ -310,7 +322,7 @@ function BoxesTabBody390({
     <>
       {!hasBoxes && computing && (
         <FmEmptyState
-          icon={<Loader2 size={20} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__empty390" />}
+          icon={<CircleNotchIcon size={20} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__empty390" />}
           title={t('fm.m390.empty.computing_title', { year })}
           sub={t('fm.m390.empty.sub')}
           data-testid="FmModel390Page__computing" />
@@ -321,13 +333,13 @@ function BoxesTabBody390({
         <div className="fm-390-notices fm-390-notices--gutter">
           <InfoBanner
             tone={incompleteYear ? 'warning' : 'danger'}
-            icon={incompleteYear ? TriangleAlert : CircleAlert}
+            icon={incompleteYear ? WarningIcon : WarningCircleIcon}
             dismissible={false}
             role="alert"
             data-testid="FmModel390Page__computeError"
             action={incompleteYear && (
               <button type="button" className="fm-btn fm-btn--cancel-pill fm-390-reconcile__btn" onClick={onGoToFiscalCalendar} data-testid="FmModel390Page__goToFiscalCalendar">
-                <CalendarDays size={14} strokeWidth={1.75} data-testid="CalendarDays__empty390" />
+                <CalendarBlankIcon size={14} data-testid="CalendarDays__empty390" />
                 {t(GO_TO_FISCAL_CALENDAR_KEY)}
               </button>
             )}
@@ -338,12 +350,12 @@ function BoxesTabBody390({
       )}
       {!hasBoxes && !computing && (
         <FmEmptyState
-          icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__empty390" />}
+          icon={<CalculatorIcon size={20} data-testid="Calculator__empty390" />}
           title={t('fm.m390.empty.title', { year })}
           sub={t('fm.m390.empty.sub')}
           cta={!isSubmitted && (
             <FmDetailButton onClick={onCompute} disabled={busy} data-testid="FmModel390Page__emptyCompute">
-              <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__emptyCta390" />
+              <CalculatorIcon size={16} data-testid="Calculator__emptyCta390" />
               {t('fm.action.compute')}
             </FmDetailButton>
           )}
@@ -357,8 +369,8 @@ function BoxesTabBody390({
 /** The Incidencias card icon: an octagon while something blocks, a triangle otherwise. */
 function IncidentsKpiIcon({ blocking }) {
   return blocking > 0
-    ? <OctagonAlert size={20} strokeWidth={1.75} data-testid="OctagonAlert__fm390" />
-    : <TriangleAlert size={20} strokeWidth={1.75} data-testid="TriangleAlert__fm390kpi" />;
+    ? <WarningOctagonIcon size={20} data-testid="OctagonAlert__fm390" />
+    : <WarningIcon size={20} data-testid="TriangleAlert__fm390kpi" />;
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -832,10 +844,10 @@ export default function FmModel390Page({
   const blockedTitle = ruleBlocking > 0 ? t('fm.m390.blocked_by_incidents') : undefined;
 
   const tabs = [
-    { id: 'boxes', label: t('fm.tab.boxes'), icon: <ClipboardCheck size={16} strokeWidth={1.75} data-testid="ClipboardCheck__fm390" /> },
-    { id: 'sources', label: t('fm.tab.sources'), badge: isSubmitted ? null : tabCount(sourcesCount), icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__fm390tab" /> },
-    { id: 'incidents', label: t('fm.tab.incidents'), ...incidentsTabBadge(blocking, warning), icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__fm390tab" /> },
-    { id: 'receipt', label: t('fm.tab.receipt'), badge: tabCount(receiptCount), icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__fm390" /> },
+    { id: 'boxes', label: t('fm.tab.boxes'), icon: <ClipboardTextIcon size={16} data-testid="ClipboardCheck__fm390" /> },
+    { id: 'sources', label: t('fm.tab.sources'), badge: isSubmitted ? null : tabCount(sourcesCount), icon: <ReceiptIcon size={16} data-testid="ReceiptText__fm390tab" /> },
+    { id: 'incidents', label: t('fm.tab.incidents'), ...incidentsTabBadge(blocking, warning), icon: <WarningIcon size={16} data-testid="TriangleAlert__fm390tab" /> },
+    { id: 'receipt', label: t('fm.tab.receipt'), badge: tabCount(receiptCount), icon: <SealCheckIcon size={16} data-testid="FileCheck__fm390" /> },
   ];
 
   const hasBoxes = payload?.boxes != null;
@@ -948,7 +960,7 @@ export default function FmModel390Page({
             badgeColor={incidentVariants.badgeColor}
             data-testid="KpiWidget__74d2aa" />
           <KpiWidget
-            icon={<TrendingUp size={20} strokeWidth={1.75} data-testid="TrendingUp__fm390kpi" />}
+            icon={<TrendUpIcon size={20} data-testid="TrendingUp__fm390kpi" />}
             iconColor="hsl(var(--foreground))"
             label={t('fm.m390.kpi.accrued')}
             value={formatAmount(summary.accrued)}
@@ -957,7 +969,7 @@ export default function FmModel390Page({
             badgeColor="hsl(var(--muted-foreground))"
             data-testid="KpiWidget__74d2aa" />
           <KpiWidget
-            icon={<TrendingDown size={20} strokeWidth={1.75} data-testid="TrendingDown__fm390kpi" />}
+            icon={<TrendDownIcon size={20} data-testid="TrendingDown__fm390kpi" />}
             iconColor="hsl(var(--foreground))"
             label={t('fm.m390.kpi.deductible')}
             value={formatAmount(summary.deductible)}
@@ -968,7 +980,7 @@ export default function FmModel390Page({
           {/* Resultado — [86], or [94] when filing to several administrations. The "cuadre con
               los 303" banner (Reconciliation390) goes right under the cards. */}
           <KpiWidget
-            icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__fm390kpi" />}
+            icon={<CalculatorIcon size={20} data-testid="Calculator__fm390kpi" />}
             iconColor="hsl(var(--foreground))"
             label={t(display.mode === 'territory' ? 'fm.m390.kpi.result_territory' : 'fm.m390.kpi.result')}
             value={formatAmount(summary.result)}

@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react';
+import { CircleNotchIcon } from '@phosphor-icons/react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog.jsx';
@@ -126,7 +126,7 @@ export function DeleteConfirmDialog({
             {deleting && (
               // 14px, white (`currentColor` on the destructive button), 0.8s linear turn — the
               // design mock. `!size-3.5` beats Button's own `[&_svg]:size-4`.
-              <Loader2
+              <CircleNotchIcon
                 aria-hidden="true"
                 className="!size-3.5 animate-spin [animation-duration:0.8s]"
                 data-testid={`${scope}-spinner`} />

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Building2, Landmark, Wallet, CreditCard } from 'lucide-react';
+import { BuildingsIcon, BankIcon, WalletIcon, CreditCardIcon } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { ACCOUNT_TYPE } from './tokens';
 
 const TYPE_ICON = {
-  [ACCOUNT_TYPE.BANK]: Landmark,
-  [ACCOUNT_TYPE.CASH]: Wallet,
-  [ACCOUNT_TYPE.CARD]: CreditCard,
+  [ACCOUNT_TYPE.BANK]: BankIcon,
+  [ACCOUNT_TYPE.CASH]: WalletIcon,
+  [ACCOUNT_TYPE.CARD]: CreditCardIcon,
 };
 
 /**
@@ -42,7 +42,7 @@ export function AccountLogoAvatar({ account, className }) {
   // on the previous failure.
   useEffect(() => setImgFailed(false), [logoUrl]);
   const showLogo = Boolean(logoUrl) && !imgFailed;
-  const Icon = TYPE_ICON[account?.type] ?? Building2;
+  const Icon = TYPE_ICON[account?.type] ?? BuildingsIcon;
 
   return (
     <div

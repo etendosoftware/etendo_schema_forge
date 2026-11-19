@@ -1,4 +1,4 @@
-import { RefreshCw } from 'lucide-react';
+import { ArrowsClockwiseIcon } from '@phosphor-icons/react';
 
 /**
  * Icon-only refresh button, matching ListView's own private one (see ListView.jsx).
@@ -25,7 +25,7 @@ export function RefreshButton({ onRefresh, label, className = '' }) {
       className={className ? `${REFRESH_BUTTON_CLASS} ${className}` : REFRESH_BUTTON_CLASS}
       data-testid="finance-refresh-button"
     >
-      <RefreshCw className="h-5 w-5" data-testid="RefreshCw__finance-refresh" />
+      <ArrowsClockwiseIcon className="h-5 w-5" data-testid="RefreshCw__finance-refresh" />
     </button>
   );
 }

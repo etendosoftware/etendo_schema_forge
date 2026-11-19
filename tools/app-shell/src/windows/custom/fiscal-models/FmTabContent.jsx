@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
-  TriangleAlert, OctagonAlert, CircleCheck, ChevronRight, ReceiptText,
-} from 'lucide-react';
+  WarningIcon,
+  WarningOctagonIcon,
+  CheckCircleIcon,
+  CaretRightIcon,
+  ReceiptIcon,
+} from '@phosphor-icons/react';
 import { EmptyState } from './FmCommon.jsx';
 import { formatAmount } from './fiscalModelsUtils.js';
 
@@ -73,7 +77,7 @@ export function SourcesTab({ decl, t, showTaxColumns = true, keyColumn = null, h
             style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}
             onClick={() => setOnlyIncidents(v => !v)}
           >
-            <TriangleAlert size={11} strokeWidth={2} data-testid="TriangleAlert__931756" />
+            <WarningIcon size={11} data-testid="TriangleAlert__931756" />
             {t('fm.sources.filter.incidents') ?? 'Con incidencias'}
             <span className="fm-toolbar__count-badge">{incidentRowCount}</span>
           </button>
@@ -82,7 +86,7 @@ export function SourcesTab({ decl, t, showTaxColumns = true, keyColumn = null, h
       {sources.length === 0 ? (
         // ETP-5584 (P11) — the window's one empty state (icon + title + text).
         <EmptyState
-          icon={<ReceiptText size={28} strokeWidth={1.5} data-testid="ReceiptText__931756" />}
+          icon={<ReceiptIcon size={28} data-testid="ReceiptText__931756" />}
           title={t('fm.sources.empty') ?? 'Sin facturas'}
           sub={t('fm.sources.empty_sub')}
           data-testid="fm-sources-empty" />
@@ -145,8 +149,8 @@ export function SourcesTab({ decl, t, showTaxColumns = true, keyColumn = null, h
                           title={tooltip}
                         >
                           {hasBlock
-                            ? <OctagonAlert size={12} strokeWidth={2} data-testid="OctagonAlert__931756" />
-                            : <TriangleAlert size={12} strokeWidth={2} data-testid="TriangleAlert__931756" />
+                            ? <WarningOctagonIcon size={12} data-testid="OctagonAlert__931756" />
+                            : <WarningIcon size={12} data-testid="TriangleAlert__931756" />
                           }
                         </span>
                       )}
@@ -172,7 +176,7 @@ function defaultIncidentAction(inc, onGoToSources, t) {
       onClick={() => onGoToSources()}
       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, color: 'hsl(var(--foreground))', display: 'inline-flex', alignItems: 'center', gap: 2, textDecoration: 'underline' }}
     >
-      {t('fm.sources.title')} <ChevronRight size={13} strokeWidth={2} data-testid="ChevronRight__931756" />
+      {t('fm.sources.title')} <CaretRightIcon size={13} data-testid="ChevronRight__931756" />
     </button>
   );
 }
@@ -204,7 +208,7 @@ export function IncidentsTab({ decl, blocking, warning, gatingBlocking = blockin
     // ETP-5584 (P11) — same empty state (icon + title + text) as every other tab.
     return (
       <EmptyState
-        icon={<CircleCheck size={28} strokeWidth={1.5} data-testid="CircleCheck__incidentsEmpty" />}
+        icon={<CheckCircleIcon size={28} data-testid="CircleCheck__incidentsEmpty" />}
         title={t('fm.incidents.empty') ?? 'Sin incidencias'}
         sub={t('fm.incidents.empty_sub')}
         data-testid="fm-incidents-empty" />
@@ -296,7 +300,7 @@ export function IncidentsTab({ decl, blocking, warning, gatingBlocking = blockin
         </div>
       ) : (
         <EmptyState
-          icon={<CircleCheck size={28} strokeWidth={1.5} data-testid="CircleCheck__931756" />}
+          icon={<CheckCircleIcon size={28} data-testid="CircleCheck__931756" />}
           title={t('fm.incidents.empty')}
           sub={t('fm.incidents.empty_sub')}
           data-testid="EmptyState__931756" />

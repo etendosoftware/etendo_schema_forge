@@ -33,14 +33,8 @@ vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, showIaeActivityReminder: vi.fn() };
 });
-vi.mock('lucide-react', () => ({
-  Loader2: () => null,
-  TriangleAlert: () => null,
-  OctagonAlert: () => null,
-  CircleCheck: () => null,
-  Download: () => null,
-  Landmark: () => null,
-}));
+import { allIconsAs } from '@/test/iconMock.js';
+vi.mock('@phosphor-icons/react', async importOriginal => allIconsAs(() => null, importOriginal));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AeatSubmitFlow from '../AeatSubmitFlow.jsx';

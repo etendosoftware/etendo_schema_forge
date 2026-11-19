@@ -4,7 +4,7 @@ import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { Loader2, TriangleAlert, OctagonAlert, CircleCheck, Download, Landmark } from 'lucide-react';
+import { BankIcon, CheckCircleIcon, CircleNotchIcon, DownloadSimpleIcon, WarningIcon, WarningOctagonIcon } from '@phosphor-icons/react';
 import { AeatResultBanner as Banner } from './AeatResultBanner.jsx';
 import { formatAmount, formatPeriod, triggerBase64Download, applyIdentParams, applyBoxParams, isBankIbanRequired, withBox111NonZeroFlag, DECLARATION_TYPE_INGRESO, showIaeActivityReminder } from '../../fiscalModelsUtils.js';
 import { isLastPeriodOfYear } from './fm303Layouts.js';
@@ -512,7 +512,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
               >
                 <Banner
                   tone="warning"
-                  icon={<TriangleAlert size={16} data-testid="TriangleAlert__aeat" />}
+                  icon={<WarningIcon size={16} data-testid="TriangleAlert__aeat" />}
                   title={t('fm.aeat.test_mode.warning') ?? 'This option only validates the file with the AEAT. The declaration is not filed.'}
                   data-testid="Banner__aeatTestWarning" />
               </div>
@@ -527,7 +527,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                       none of which have a dedicated settings screen to link to. */}
                   <Banner
                     tone="danger"
-                    icon={<OctagonAlert size={16} data-testid="OctagonAlert__aeatConn" />}
+                    icon={<WarningOctagonIcon size={16} data-testid="OctagonAlert__aeatConn" />}
                     title={connError}
                     data-testid="Banner__aeatConnError" />
                 </div>
@@ -539,7 +539,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
             <>
               <Banner
                 tone="success"
-                icon={<CircleCheck size={18} data-testid="CircleCheck__aeatSuccess" />}
+                icon={<CheckCircleIcon size={18} data-testid="CircleCheck__aeatSuccess" />}
                 title={t('fm.aeat.result.success.title') ?? 'Declaration submitted successfully'}
                 data-testid="Banner__aeatSuccess" />
               <div style={{ marginTop: 16 }}>
@@ -564,7 +564,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                 <div style={{ marginTop: 16 }}>
                   <Banner
                     tone="warning"
-                    icon={<TriangleAlert size={16} data-testid="TriangleAlert__aeatPdfFailed" />}
+                    icon={<WarningIcon size={16} data-testid="TriangleAlert__aeatPdfFailed" />}
                     title={t('fm.aeat.result.pdf_failed') ?? 'The declaration was submitted successfully, but the receipt PDF could not be retrieved.'}
                     data-testid="Banner__aeatPdfFailed" />
                 </div>
@@ -578,7 +578,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                     adapter.pdfName(decl, 'justificante'),
                   )}
                 >
-                  <Download size={14} data-testid="Download__aeatPdf" />
+                  <DownloadSimpleIcon size={14} data-testid="Download__aeatPdf" />
                   {t('fm.aeat.action.download_pdf') ?? 'Download receipt (PDF)'}
                 </button>
               )}
@@ -597,7 +597,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
             <>
               <Banner
                 tone="warning"
-                icon={<TriangleAlert size={18} data-testid="TriangleAlert__aeatTest" />}
+                icon={<WarningIcon size={18} data-testid="TriangleAlert__aeatTest" />}
                 title={t('fm.aeat.result.test.title') ?? 'Test submission — declaration NOT filed'}
                 body={t('fm.aeat.result.test.body') ?? 'This was a validation-only test against the AEAT test service. Nothing was actually submitted.'}
                 data-testid="Banner__aeatTestSuccess" />
@@ -611,7 +611,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                     adapter.pdfName(decl, 'borrador'),
                   )}
                 >
-                  <Download size={14} data-testid="Download__aeatDraftPdf" />
+                  <DownloadSimpleIcon size={14} data-testid="Download__aeatDraftPdf" />
                   {t('fm.aeat.action.download_pdf') ?? 'Download receipt (PDF)'}
                 </button>
               )}
@@ -637,7 +637,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
               <>
                 <Banner
                   tone="danger"
-                  icon={<OctagonAlert size={18} data-testid="OctagonAlert__aeatError" />}
+                  icon={<WarningOctagonIcon size={18} data-testid="OctagonAlert__aeatError" />}
                   title={response?.stage === 'validation' && !specificKey
                     // ETP-5716: the server validates before a real presentation; the validator's
                     // errors stopped it — nothing was presented.
@@ -653,7 +653,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
                     style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
                     onClick={() => navigate('/fiscal-config')}
                   >
-                    <Landmark size={14} data-testid="Landmark__aeatGoToCertConfig" />
+                    <BankIcon size={14} data-testid="Landmark__aeatGoToCertConfig" />
                     {t('fm.aeat.action.go_to_cert_config') ?? 'Go to Fiscal configuration'}
                   </button>
                 )}
@@ -667,7 +667,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
           {step === 'result' && outcome === 'unknown' && (
             <Banner
               tone="danger"
-              icon={<OctagonAlert size={18} data-testid="OctagonAlert__aeatUnknown" />}
+              icon={<WarningOctagonIcon size={18} data-testid="OctagonAlert__aeatUnknown" />}
               title={t('fm.aeat.result.error.title') ?? 'The submission could not be completed'}
               body={t('fm.aeat.error.generic') ?? 'Unknown error. Please try again.'}
               data-testid="Banner__aeatUnknown" />
@@ -689,8 +689,8 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
               {submitting
-                ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__aeatSubmitting" />
-                : <Landmark size={14} data-testid="Landmark__aeatSubmit" />}
+                ? <CircleNotchIcon size={14} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__aeatSubmitting" />
+                : <BankIcon size={14} data-testid="Landmark__aeatSubmit" />}
               {submitting
                 ? (t(submittingKey) ?? 'Submitting to AEAT…')
                 : (t('fm.aeat.action.submit') ?? 'Submit to AEAT')}

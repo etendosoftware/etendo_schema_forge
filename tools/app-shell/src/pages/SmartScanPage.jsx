@@ -8,15 +8,15 @@ import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import {
-  ScanLine,
-  Upload,
-  FileCheck,
-  Clock,
-  AlertTriangle,
-  CheckCircle2,
-  FileText,
-  Activity,
-} from 'lucide-react';
+  ScanIcon,
+  UploadSimpleIcon,
+  SealCheckIcon,
+  ClockIcon,
+  WarningIcon,
+  CheckCircleIcon,
+  FileTextIcon,
+  PulseIcon,
+} from '@phosphor-icons/react';
 
 const STATUS_VARIANT = {
   Matched: 'default',
@@ -31,10 +31,10 @@ export default function SmartScanPage() {
   const tMenu = useMenuLabel();
 
   const KPIS = React.useMemo(() => ([
-    { label: ui('smartScanDocumentsScanned'), value: '1,284', icon: FileCheck, trend: '+12%' },
-    { label: ui('smartScanPendingReview'), value: '23', icon: Clock, trend: '-3' },
-    { label: ui('smartScanAutoMatched'), value: '94%', icon: CheckCircle2, trend: '+2%' },
-    { label: ui('smartScanExceptions'), value: '7', icon: AlertTriangle, trend: '-1' },
+    { label: ui('smartScanDocumentsScanned'), value: '1,284', icon: SealCheckIcon, trend: '+12%' },
+    { label: ui('smartScanPendingReview'), value: '23', icon: ClockIcon, trend: '-3' },
+    { label: ui('smartScanAutoMatched'), value: '94%', icon: CheckCircleIcon, trend: '+2%' },
+    { label: ui('smartScanExceptions'), value: '7', icon: WarningIcon, trend: '-1' },
   ]), [ui]);
 
   const RECENT_SCANS = React.useMemo(() => ([
@@ -100,7 +100,7 @@ export default function SmartScanPage() {
               <p className="text-sm text-muted-foreground">{ui('smartScanSubtitle')}</p>
             </div>
             <Button data-testid="Button__d92e96">
-              <ScanLine className="h-4 w-4 mr-2" data-testid="ScanLine__d92e96" />
+              <ScanIcon className="h-4 w-4 mr-2" data-testid="ScanLine__d92e96" />
               {ui('newScan')}
             </Button>
           </div>
@@ -109,7 +109,7 @@ export default function SmartScanPage() {
           <Card data-testid="Card__d92e96">
             <CardContent className="p-8" data-testid="CardContent__d92e96">
               <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-10 text-center space-y-3">
-                <Upload
+                <UploadSimpleIcon
                   className="h-10 w-10 mx-auto text-muted-foreground"
                   data-testid="Upload__d92e96" />
                 <p className="text-sm font-medium">{translatedUploadTitle}</p>
@@ -149,7 +149,7 @@ export default function SmartScanPage() {
           <Card data-testid="Card__d92e96">
             <CardHeader data-testid="CardHeader__d92e96">
               <CardTitle className="flex items-center gap-2" data-testid="CardTitle__d92e96">
-                <FileText className="h-5 w-5 text-muted-foreground" data-testid="FileText__d92e96" />
+                <FileTextIcon className="h-5 w-5 text-muted-foreground" data-testid="FileText__d92e96" />
                 {translatedRecentScans}
               </CardTitle>
             </CardHeader>
@@ -195,7 +195,7 @@ export default function SmartScanPage() {
               <CardTitle
                 className="flex items-center gap-2 text-base"
                 data-testid="CardTitle__d92e96">
-                <Activity className="h-5 w-5 text-muted-foreground" data-testid="Activity__d92e96" />
+                <PulseIcon className="h-5 w-5 text-muted-foreground" data-testid="Activity__d92e96" />
                 {translatedActivityTitle}
               </CardTitle>
             </CardHeader>

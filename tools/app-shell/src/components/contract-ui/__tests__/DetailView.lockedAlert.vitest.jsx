@@ -112,7 +112,6 @@ vi.mock('../SummaryBar.jsx', () => ({ SummaryBar: () => null }));
 vi.mock('../DocumentTotalsPanel.jsx', () => ({ default: () => null }));
 vi.mock('../LinesSelectionBar.jsx', () => ({ default: () => null }));
 vi.mock('../DocumentStatusPill.jsx', () => ({ default: ({ status }) => <span data-testid="status-pill">{status}</span> }));
-vi.mock('@/components/attachments/AttachmentIcon', () => ({ AttachmentIcon: () => <span>📎</span> }));
 
 import { DetailView } from '../DetailView.jsx';
 

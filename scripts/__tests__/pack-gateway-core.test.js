@@ -2,7 +2,7 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,7 +65,8 @@ describe('pack-gateway-core', () => {
     // A stand-in npm on PATH: records "cwd | argv" per call, and `npm pack` leaves a tarball in
     // --pack-destination as the real one does.
     before(() => {
-      root = mkdtempSync(join(tmpdir(), 'pack-gateway-core-'));
+      // realpath: on macOS tmpdir() is under /var, a link to /private/var, and the CLI's cwd is the real path.
+      root = realpathSync(mkdtempSync(join(tmpdir(), 'pack-gateway-core-')));
       bin = join(root, 'bin');
       calls = join(root, 'calls.log');
       mkdirSync(bin);

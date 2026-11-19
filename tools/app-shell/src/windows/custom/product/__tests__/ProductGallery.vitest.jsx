@@ -15,10 +15,6 @@ vi.mock('@/lib/resolveIdentifier.js', () => ({
   resolveIdentifier: (row, key) => row?.[key + '$_identifier'] ?? '',
 }));
 
-vi.mock('../ProductListCells', () => ({
-  BoxIcon: (props) => <svg data-testid="BoxIcon__a29533" {...props} />,
-}));
-
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ProductGallery from '../ProductGallery.jsx';

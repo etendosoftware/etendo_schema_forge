@@ -3,7 +3,15 @@ import { gridViewColumnId, useGridView } from '@/hooks/useGridView.js';
 import { useFeatureFlag, GRID_COLUMN_VIEWS } from '@/lib/flags';
 import { GridViewControls } from './GridViewControls.jsx';
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from './GridColumnHeaderControls.jsx';
-import { ArrowLeft, CircleCheckBig, CheckCircle, X, ChevronDown, Minus, Unlink, SearchX } from 'lucide-react';
+import {
+  ArrowLeftIcon,
+  CheckCircleIcon,
+  XIcon,
+  CaretDownIcon,
+  MinusIcon,
+  LinkBreakIcon,
+  MagnifyingGlassMinusIcon,
+} from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -335,7 +343,7 @@ function renderRows({ loading, items, colSpan, emptyTitle, emptyHint, renderRow 
             {/* Same 40px circled icon the right panel uses, so the two empty states in one
                 screen read as one design rather than two. */}
             <div className="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--text-disabled))]">
-              <SearchX className="h-6 w-6" data-testid="SearchX__d0f4d5" />
+              <MagnifyingGlassMinusIcon className="h-6 w-6" data-testid="SearchX__d0f4d5" />
             </div>
             <p className="text-[20px] font-semibold leading-7 text-[hsl(var(--foreground))]">{emptyTitle}</p>
             {emptyHint ? (
@@ -671,7 +679,7 @@ function StatementLinesPanel({
         onClick={onBack}
         className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-[#828FA3] transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
       >
-        <ArrowLeft className="h-5 w-5" data-testid="ArrowLeft__d0f4d5" />
+        <ArrowLeftIcon className="h-5 w-5" data-testid="ArrowLeft__d0f4d5" />
       </button>
       <ReconciliationStatusFilter value={status} onChange={onStatusChange} counts={statusCounts} codes={statusCodes} data-testid="ReconciliationStatusFilter__d0f4d5" />
       <DateRangePopover value={dateRange} onChange={onDateRangeChange} placeholder={ui('dateRangeAnyTime')} data-testid="DateRangePopover__d0f4d5" />
@@ -832,7 +840,7 @@ function ReconciledOperationsSection({ line, currency, onRemove, open, onToggle,
           <span className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">
             {formatCurrency(currency, reconciled)}
           </span>
-          <ChevronDown
+          <CaretDownIcon
             className={cn('h-4 w-4 text-[hsl(var(--muted-foreground))] transition-transform', open ? '' : '-rotate-90')}
             data-testid="recon-matched-chevron" />
         </div>
@@ -871,7 +879,7 @@ function ReconciledOperationsSection({ line, currency, onRemove, open, onToggle,
                     data-testid={`recon-unlink-${t.transactionId}`}
                     className="flex h-[26px] w-[26px] items-center justify-center rounded-lg border border-border bg-card text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
                   >
-                    <Minus className="h-4 w-4" data-testid="Minus__d0f4d5" />
+                    <MinusIcon className="h-4 w-4" data-testid="Minus__d0f4d5" />
                   </button>
                 )}
               </div>
@@ -906,7 +914,7 @@ function CandidateOperationsPanel({
       <div className="flex min-w-[30%] flex-1 flex-col items-center justify-center px-0 text-center" data-testid="recon-right-empty">
         <div className="flex w-full flex-col items-center gap-1 px-5">
           <div className="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--text-disabled))]">
-            <CircleCheckBig className="h-6 w-6" data-testid="CircleCheckBig__d0f4d5" />
+            <CheckCircleIcon className="h-6 w-6" data-testid="CircleCheckBig__d0f4d5" />
           </div>
           <p className="w-full text-[20px] font-semibold leading-7 text-[hsl(var(--foreground))]">{ui('financeReconcileRightEmptyTitle')}</p>
           <p className="w-full text-xs leading-4 text-[hsl(var(--foreground))]">{ui('financeReconcileRightEmptyHint')}</p>
@@ -1007,7 +1015,7 @@ function CandidateOperationsPanel({
                   data-testid={`recon-unlink-${cand.id}`}
                   className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg border border-border bg-card text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
                 >
-                  <Minus className="h-4 w-4" data-testid="Minus__d0f4d5" />
+                  <MinusIcon className="h-4 w-4" data-testid="Minus__d0f4d5" />
                 </button>
               )}
             </div>
@@ -1193,7 +1201,7 @@ function ReconciliationActionBar({
           data-testid="recon-action-cancel"
           className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium text-[hsl(var(--foreground))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
         >
-          <X className="h-4 w-4" data-testid="X__d0f4d5" />
+          <XIcon className="h-4 w-4" data-testid="X__d0f4d5" />
           {ui('financeReconcileActionCancel')}
         </button>
         {/* ETP-5135: a processed reconciliation is a FINAL state. The only way out from the UI is
@@ -1209,7 +1217,7 @@ function ReconciliationActionBar({
           data-testid="recon-action-reconcile"
           className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-primary-foreground"
         >
-          <CheckCircle className="h-4 w-4" data-testid="CheckCircle__d0f4d5" />
+          <CheckCircleIcon className="h-4 w-4" data-testid="CheckCircle__d0f4d5" />
           {isReconciledLine
             ? ui('financeReconcileActionRemoveCount', { count: removeCount })
             : ui('financeReconcileActionReconcileCount', { count: reconcileCount })}
@@ -1331,14 +1339,11 @@ function RemoveOperationConfirmDialog({
       warning={warning}
       confirmLabel={confirmLabel}
       cancelLabel={ui('cancel')}
-      // Unlink, not a bare Minus: the cartel's whole point is that the link to the statement line
-      // is broken, and a lone dash reads as a stray rule next to the label. This is the variant
-      // with the burst marks — the sibling `Unlink2` used by AccountRowMenu / EditAccountModal is a
-      // single gapped stroke that turns to mush at the 15px these confirm icons render at.
-      confirmIcon={<Unlink
+      // LinkBreak, not a bare Minus: the cartel's whole point is that the link to the statement
+      // line is broken, and a lone dash reads as a stray rule next to the label.
+      confirmIcon={<LinkBreakIcon
         width={15}
         height={15}
-        strokeWidth={2.2}
         data-testid="Unlink__recon-remove" />}
       onConfirm={busy ? NOOP : onConfirm}
       onClose={onClose}

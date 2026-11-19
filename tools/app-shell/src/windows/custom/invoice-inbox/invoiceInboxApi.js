@@ -232,8 +232,9 @@ export async function markReviewed(apiFetch, id, updated, signal) {
  * @param {string|null} [updated] optimistic-lock token, sent only when known
  * @returns {Promise<{status: 'confirmed', result: object} | {status: 'failed', code: string|null,
  *   httpStatus: number, missing: string[]|null, updated: string|null, detail: string|null,
- *   invoice: object|null}>} `detail` is the reason of `confirm_failed`, `invoice` the existing one of
- *   `duplicate_invoice`
+ *   detailInfo: {code: string, params: object}|null, invoice: object|null}>} `detail` is the English reason of
+ *   `confirm_failed` and `detailInfo` its identifier (`error.detailCode` / `error.detailParams`, translated by
+ *   `confirmFailedDetail`), `invoice` the existing one of `duplicate_invoice`
  */
 export async function confirmInboxDocument(apiFetch, id, updated = null) {
   const path = `${LIST_PATH}/${encodeURIComponent(id)}/action/${CONFIRM_ACTION}`;
@@ -243,7 +244,12 @@ export async function confirmInboxDocument(apiFetch, id, updated = null) {
   const json = await readJson(res);
   if (res.ok && json) return { status: 'confirmed', result: json };
   const error = json?.error ?? {};
-  return { ...failedOutcome(res, json), detail: error.detail ?? null, invoice: error.invoice ?? null };
+  return {
+    ...failedOutcome(res, json),
+    detail: error.detail ?? null,
+    detailInfo: error.detailCode ? { code: error.detailCode, params: error.detailParams ?? {} } : null,
+    invoice: error.invoice ?? null,
+  };
 }
 
 /**

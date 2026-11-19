@@ -31,7 +31,7 @@ vi.mock('@/components/attachments', () => ({
 }));
 // ETP-5584 — FmBoxes303 renders the app's Radix Select; drive it as a native <select>.
 vi.mock('@/components/ui/select', () => import('../../../__tests__/testUtils/nativeSelectMock.jsx'));
-vi.mock('lucide-react', async (importOriginal) => {
+vi.mock('@phosphor-icons/react', async (importOriginal) => {
   const actual = await importOriginal();
   const mocked = {};
   for (const key of Object.keys(actual)) mocked[key] = () => null;

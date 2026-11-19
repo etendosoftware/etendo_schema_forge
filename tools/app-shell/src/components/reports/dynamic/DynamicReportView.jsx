@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FileDown, FileSpreadsheet, FileText, Loader2, X } from 'lucide-react';
+import { CircleNotchIcon, DownloadSimpleIcon, FileTextIcon, FileXlsIcon, XIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -25,11 +25,16 @@ import { useRestoredPickerNames } from './useRestoredPickerNames.js';
 import { expandedNodeIdsParam, foldExpansion, visibleRows } from './reportTree.js';
 
 const EXPORTS = [
-  { format: 'pdf', label: 'PDF', icon: FileDown },
-  { format: 'xlsx', label: 'Excel', icon: FileSpreadsheet },
-  { format: 'csv', label: 'CSV', icon: FileText },
+  { format: 'pdf', label: 'PDF', icon: DownloadSimpleIcon },
+  { format: 'xlsx', label: 'Excel', icon: FileXlsIcon },
+  { format: 'csv', label: 'CSV', icon: FileTextIcon },
 ];
 const SPLIT_DIMENSIONS = [['org', 'orgId'], ['bpartner', 'bPartnerId'], ['product', 'productId']];
+
+/** Same rule as the org picker: the Organización split only exists for a role with several orgs. */
+function splitDimensionsFor(multiOrg, label) {
+  return SPLIT_DIMENSIONS.filter(([value]) => value !== 'org' || multiOrg).map(([value, name]) => ({ value, label: label(name) }));
+}
 const COLUMN_LABELS = { total: 'dynamicReportColumnsTotal', month: 'dynamicReportColumnsMonth', quarter: 'dynamicReportColumnsQuarter' };
 const ERROR_KEYS = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess',
   period_range_too_long: 'reportErrorPeriodRangeTooLong', invalid_periods: 'reportErrorInvalidPeriods',
@@ -62,11 +67,12 @@ async function downloadRender(apiFetch, reportId, format, body) {
 }
 
 /** The chips under the title: the active filters, each one with a `clear` removable. */
-function buildChips({ state, ui, label, fmt, orgName, reference, splitDimensions }) {
+function buildChips({ state, ui, label, fmt, orgName, multiOrg, reference, splitDimensions }) {
   return [
     { key: 'period', label: ui('dynamicReportPeriodChip'), value: `${fmt(state.dateFrom)} – ${fmt(state.dateTo)}` },
     // The org has no `clear` on purpose: the query requires one, so it is changed in the panel, never removed.
-    orgName && { key: 'org', label: label('orgId'), value: orgName },
+    // Shown only for a multi-org role (the export header keeps the name regardless).
+    multiOrg && orgName && { key: 'org', label: label('orgId'), value: orgName },
     state.bPartnerId && { key: 'bp', label: label('bPartnerId'), value: state._display_bPartnerId || state.bPartnerId, clear: { bPartnerId: '', _display_bPartnerId: '', _names_bPartnerId: null } },
     state.productId && { key: 'product', label: label('productId'), value: state._display_productId || state.productId, clear: { productId: '', _display_productId: '', _names_productId: null } },
     state.columns !== 'total' && { key: 'columns', label: ui('dynamicReportColumns'), value: ui(COLUMN_LABELS[state.columns]), clear: { columns: 'total' } },
@@ -110,13 +116,16 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const params = report.parameters || [];
   const paramOf = (name) => params.find((p) => p.name === name);
   const label = (name) => pick(paramOf(name)?.label, locale) || name;
+  const selectorOf = (name) => paramOf(name)?.selector;
   const sectionLabel = (id) => pick((report.sections || []).find((s) => s.id === id)?.label, locale);
   const levelParam = paramOf('accountLevel');
   const defaultLevel = levelParam?.default || 'C';
   const levelOptions = (levelParam?.options || []).map((o) => ({ value: o.value, label: pick(o.label, locale) }));
-  const splitDimensions = SPLIT_DIMENSIONS.map(([value, name]) => ({ value, label: label(name) }));
   // Q7: the org picker only when the role reaches more than one org; `0` (*) is not an org to pick.
   const orgs = useMemo(() => roleOrgs.filter((o) => o?.id && o.id !== '0'), [roleOrgs]);
+  // Same rule for the Organización split and chip: with one org there is nothing to tell apart.
+  const multiOrg = orgs.length > 1;
+  const splitDimensions = splitDimensionsFor(multiOrg, label);
 
   useSetPageMeta({
     title,
@@ -301,7 +310,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   };
 
   const fmt = (d) => (d ? formatCalendarDate(d, locale.replace('_', '-')) : '');
-  const chips = buildChips({ state, ui, label, fmt, orgName, reference, splitDimensions });
+  const chips = buildChips({ state, ui, label, fmt, orgName, multiOrg, reference, splitDimensions });
 
   // The strip's badge counts what the user chose to narrow; the period and the (required) org are always on.
   const activeFilterCount = chips.filter((c) => c.clear).length;
@@ -323,7 +332,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
               onClick={() => exportAs(format)}
               data-testid={`DynamicReportView__export-${format}`}
             >
-              {exporting === format ? <Loader2 className="w-4 h-4 animate-spin" data-testid="Loader2__c51cea" /> : <Icon className="w-4 h-4" data-testid="Icon__c51cea" />}
+              {exporting === format ? <CircleNotchIcon className="w-4 h-4 animate-spin" data-testid="Loader2__c51cea" /> : <Icon className="w-4 h-4" data-testid="Icon__c51cea" />}
               {text}
             </Button>
           ))}
@@ -332,6 +341,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row">
         <DynamicReportPanel
+          selectorOf={selectorOf}
           collapsed={panel.collapsed}
           onToggleCollapsed={togglePanel}
           activeFilterCount={activeFilterCount}
@@ -361,7 +371,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
           <div className="bg-card rounded-xl border border-border/40 p-6">
             <div className="flex items-center gap-2">
               <h2 className="text-base font-semibold" data-testid="DynamicReportView__title">{title}</h2>
-              {loading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" data-testid="DynamicReportView__loading" />}
+              {loading && <CircleNotchIcon className="w-4 h-4 animate-spin text-muted-foreground" data-testid="DynamicReportView__loading" />}
             </div>
 
             <div className="flex flex-wrap gap-x-4 gap-y-1 my-3 text-xs text-muted-foreground" data-testid="DynamicReportView__chips">
@@ -376,7 +386,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
                       onClick={() => userChange(c.clear)}
                       data-testid={`DynamicReportView__chipRemove-${c.key}`}
                     >
-                      <X className="w-3 h-3" data-testid="X__c51cea" />
+                      <XIcon className="w-3 h-3" data-testid="X__c51cea" />
                     </button>
                   )}
                 </span>

@@ -21,7 +21,7 @@
 // invoice-open assertions here vacuous) — this file mocks isPendingStatus to
 // mirror the real "estado === 'Pendiente'" contract instead.
 
-import { allIconsAs } from '@/test/lucideIconMock.js';
+import { allIconsAs } from '@/test/iconMock.js';
 // Rows served by the mocked apiFetch below — set per-test before render().
 let currentRows = [];
 
@@ -39,7 +39,7 @@ const stableSetSelectedIds = vi.fn();
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
-vi.mock('lucide-react', async (importOriginal) => allIconsAs(() => null, importOriginal));
+vi.mock('@phosphor-icons/react', async (importOriginal) => allIconsAs(() => null, importOriginal));
 vi.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ checked, onChange }) => <input type="checkbox" checked={!!checked} onChange={onChange ?? (() => {})} />,
 }));

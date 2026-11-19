@@ -1,5 +1,12 @@
 import { useState, useCallback } from 'react';
-import { Edit2, Eye, Mail, Download, Loader2, AlertCircle } from 'lucide-react';
+import {
+  PencilSimpleIcon,
+  EyeIcon,
+  EnvelopeSimpleIcon,
+  DownloadSimpleIcon,
+  CircleNotchIcon,
+  WarningCircleIcon,
+} from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button.jsx';
 import PdfViewer from './PdfViewer.jsx';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
@@ -14,7 +21,7 @@ export default function PreviewActionButtons({
   editLabel,
   readOnly = false,
 }) {
-  const EditIcon = readOnly ? Eye : Edit2;
+  const EditIcon = readOnly ? EyeIcon : PencilSimpleIcon;
   return (
     <>
       {onEmail && (
@@ -23,7 +30,7 @@ export default function PreviewActionButtons({
           className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[hsl(var(--foreground))] hover:bg-[hsl(var(--foreground))] text-primary-foreground [&_svg]:size-5"
           onClick={onEmail}
           data-testid="preview-action-send">
-          <Mail data-testid="Mail__9ccdc3" />
+          <EnvelopeSimpleIcon data-testid="Mail__9ccdc3" />
           {sendLabel}
         </Button>
       )}
@@ -34,7 +41,7 @@ export default function PreviewActionButtons({
         disabled={!hasPdf || !onDownloadPdf}
         onClick={hasPdf && onDownloadPdf ? onDownloadPdf : undefined}
         data-testid="preview-action-download">
-        <Download className="text-[hsl(var(--text-disabled))]" data-testid="Download__9ccdc3" />
+        <DownloadSimpleIcon className="text-[hsl(var(--text-disabled))]" data-testid="Download__9ccdc3" />
         {downloadLabel}
       </Button>
       <Button
@@ -130,13 +137,13 @@ export function PreviewPdfPanel({ pdfLoading, pdfError, pdfUrl, generatingText, 
     <div className="flex flex-col h-full min-h-0 w-full overflow-hidden">
       {pdfLoading && (
         <div className="flex flex-1 items-center justify-center gap-2 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__9ccdc3" />
+          <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__9ccdc3" />
           <span className="text-sm">{generatingText}</span>
         </div>
       )}
       {pdfError && !pdfLoading && (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-          <AlertCircle className="h-8 w-8 text-status-warning-foreground" data-testid="AlertCircle__9ccdc3" />
+          <WarningCircleIcon className="h-8 w-8 text-status-warning-foreground" data-testid="AlertCircle__9ccdc3" />
           <p className="text-sm text-muted-foreground">{errorText}</p>
           <p className="text-xs text-muted-foreground/60">{pdfError}</p>
         </div>

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LineChart, BarChart2, Check, X, Plus } from 'lucide-react';
+import { ChartLineIcon, ChartBarIcon, CheckIcon, XIcon, PlusIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n';
 import {
@@ -127,11 +127,11 @@ function growthBadgeColors(isNegative) {
 /** ETP-5011: the growth status icon (red X when declining, green Check otherwise). */
 function GrowthStatusIcon({ isNegative }) {
   return isNegative ? (
-    <X
+    <XIcon
       style={{ width: '12.5px', height: '12.5px', color: 'hsl(var(--destructive))' }}
       data-testid="X__14828e" />
   ) : (
-    <Check
+    <CheckIcon
       style={{ width: '12.5px', height: '12.5px', color: 'var(--status-success-fg)' }}
       data-testid="Check__14828e" />
   );
@@ -410,7 +410,7 @@ export function FinancialTrendChart({
                 className="flex items-center justify-center"
                 style={{ padding: '4px 8px', height: '32px', background: 'hsl(var(--foreground))', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
               >
-                <Plus
+                <PlusIcon
                   style={{ width: '20px', height: '20px', color: 'hsl(var(--background))' }}
                   data-testid="Plus__14828e" />
                 <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: 'hsl(var(--background))' }}>
@@ -425,7 +425,7 @@ export function FinancialTrendChart({
                 className="flex items-center justify-center"
                 style={{ padding: '4px 8px', height: '32px', background: 'hsl(var(--foreground))', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
               >
-                <Plus
+                <PlusIcon
                   style={{ width: '20px', height: '20px', color: 'hsl(var(--background))' }}
                   data-testid="Plus__14828e" />
                 <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: 'hsl(var(--background))' }}>
@@ -473,7 +473,7 @@ export function FinancialTrendChart({
 
           {/* Toggle */}
           <div style={{ display: 'flex', alignItems: 'center', padding: '4px', gap: '4px', width: '96px', height: '40px', background: 'hsl(var(--muted))', borderRadius: '12px', flexShrink: 0 }}>
-            {[['line', LineChart], ['bar', BarChart2]].map(([type, Icon]) => (
+            {[['line', ChartLineIcon], ['bar', ChartBarIcon]].map(([type, Icon]) => (
               <button
                 key={type}
                 onClick={() => switchChartType(type)}

@@ -1,14 +1,14 @@
-import { AlertCircle, CheckCircle2, Loader2, X } from 'lucide-react';
+import { WarningCircleIcon, CheckCircleIcon, CircleNotchIcon, XIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
 import { errorCodeLabelKey } from './invoiceInboxMessages.js';
 import { resultState } from './invoiceInboxUploadResult.js';
 
 const STATE_ICONS = {
-  reading: { Icon: Loader2, className: 'animate-spin text-muted-foreground' },
-  mixed: { Icon: Loader2, className: 'animate-spin text-muted-foreground' },
-  done: { Icon: CheckCircle2, className: 'text-status-success-foreground' },
-  doneWithErrors: { Icon: AlertCircle, className: 'text-destructive' },
+  reading: { Icon: CircleNotchIcon, className: 'animate-spin text-muted-foreground' },
+  mixed: { Icon: CircleNotchIcon, className: 'animate-spin text-muted-foreground' },
+  done: { Icon: CheckCircleIcon, className: 'text-status-success-foreground' },
+  doneWithErrors: { Icon: WarningCircleIcon, className: 'text-destructive' },
 };
 
 /** The headline of the panel for its state. */
@@ -67,7 +67,7 @@ function DismissButton({ ui, onDismiss }) {
       className="flex h-7 w-7 flex-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
       data-testid="invoice-inbox-result-dismiss"
     >
-      <X className="h-4 w-4" aria-hidden="true" data-testid="X__6b19e6" />
+      <XIcon className="h-4 w-4" aria-hidden="true" data-testid="X__6b19e6" />
     </button>
   );
 }

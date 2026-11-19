@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftRight, FileText, Loader2 } from 'lucide-react';
+import { ArrowsLeftRightIcon, FileTextIcon, CircleNotchIcon } from '@phosphor-icons/react';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -83,7 +83,7 @@ function DocumentLink({ row, label, openInNewTab }) {
       data-testid="product-movements-doc-link"
       className="inline-flex shrink-0 items-center gap-1 rounded-sm text-xs text-[hsl(var(--foreground))] underline underline-offset-2 transition-colors hover:text-primary"
     >
-      <FileText
+      <FileTextIcon
         className="h-3.5 w-3.5 text-muted-foreground"
         aria-hidden="true"
         data-testid="FileText__763719" />
@@ -194,7 +194,7 @@ function resolveTotalRow({ entry, state, pageEmpty }) {
 function NoMovementsYet({ ui }) {
   return (
     <div className="flex flex-col items-center gap-2 p-10 text-center" data-testid="product-movements-empty">
-      <ArrowLeftRight className="h-8 w-8 text-muted-foreground" aria-hidden="true" data-testid="ArrowLeftRight__763719" />
+      <ArrowsLeftRightIcon className="h-8 w-8 text-muted-foreground" aria-hidden="true" data-testid="ArrowLeftRight__763719" />
       <p className="text-base font-semibold">{ui('noStockMovements')}</p>
       <p className="max-w-md text-sm text-muted-foreground">{ui('productMovementsEmptyText')}</p>
     </div>
@@ -588,7 +588,7 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
           data-testid="MovementRow__763719" />)}
 
         {state.loadingMore ? (
-          <div className="flex justify-center py-3"><Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__763719" /></div>
+          <div className="flex justify-center py-3"><CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__763719" /></div>
         ) : null}
 
         <MovementsTotalRow ui={ui} row={totalRow} data-testid="MovementsTotalRow__763719" />

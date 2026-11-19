@@ -373,7 +373,7 @@ describe('editing — currency scale and tax mode (ETP-6050 S2)', () => {
     await mountLoaded(review);
     const yen = (v) => formatCurrency('JPY', v, { minimumFractionDigits: 0, maximumFractionDigits: 0 }).replace(/\s+/g, ' ');
     expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(yen(101));
-    expect(tid('invoice-inbox-review-total')).toHaveTextContent(yen(125));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(yen(122)); // the lines total, not the printed 125
     expect(tid('invoice-inbox-review-total-tax-21')).toHaveTextContent(yen(21));
     // lines total 122 vs printed 125: 3 units apart -> warning; 1 unit apart would not warn
     expect(tid('invoice-inbox-review-banner-mismatch')).toHaveTextContent(yen(122));
@@ -1195,7 +1195,7 @@ describe('editing — currency scale end to end (ETP-6050 S2)', () => {
     expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(money('KWD', 3.704, 3));
     expect(tid('invoice-inbox-review-total-base')).toHaveTextContent(money('KWD', 3.704, 3));
     expect(tid('invoice-inbox-review-total-tax-10')).toHaveTextContent(money('KWD', 0.37, 3));
-    expect(tid('invoice-inbox-review-total')).toHaveTextContent(money('KWD', 4.075, 3));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(money('KWD', 4.074, 3)); // the lines total, not the printed 4.075
     expect(maybe('invoice-inbox-review-banner-mismatch')).toBeNull();
     ok.unmount();
     await mountLoaded(make(4.077));
@@ -1336,7 +1336,7 @@ describe('editing — any sign, zero and missing values (ETP-6050 S2)', () => {
     }));
     expect(tid('invoice-inbox-review-total-base')).toHaveTextContent(M(-121));
     expect(tid('invoice-inbox-review-total-tax-21')).toHaveTextContent(M(-25.41));
-    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(-150));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(-146.41)); // the lines total, not the printed -150
     expect(tid('invoice-inbox-review-banner-mismatch')).toHaveTextContent(M(-146.41));
     expect(tid('invoice-inbox-review-banner-mismatch')).toHaveTextContent(M(-150));
   });

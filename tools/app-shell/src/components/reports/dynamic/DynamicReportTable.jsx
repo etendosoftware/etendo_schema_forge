@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { CaretRightIcon, CircleNotchIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { cn } from '@/lib/utils';
@@ -65,7 +65,7 @@ function SplitRows({ split, groups, mode, depth, ui }) {
   if (split.loading) {
     return (
       <tr><td colSpan={colSpan} className="px-3 py-1.5" style={pad}>
-        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" data-testid="DynamicReportTable__splitLoading" />
+        <CircleNotchIcon className="w-4 h-4 animate-spin text-muted-foreground" data-testid="DynamicReportTable__splitLoading" />
       </td></tr>
     );
   }
@@ -123,7 +123,7 @@ function RowToggle({ row, name, open, split, splittable, onToggle, onToggleSplit
       onClick={() => (parent ? onToggle(row.node_id) : onToggleSplit(row))}
       data-testid={parent ? 'DynamicReportTable__toggle' : 'DynamicReportTable__splitToggle'}
     >
-      <ChevronRight
+      <CaretRightIcon
         className={cn('w-3.5 h-3.5 transition-transform', rotated && 'rotate-90')}
         data-testid="ChevronRight__2e8fe9" />
     </button>

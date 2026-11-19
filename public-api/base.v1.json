@@ -27,7 +27,23 @@
       "sales-quotation": [
         "quotation",
         "quotationLine"
+      ],
+      "tax": [
+        "tax"
+      ],
+      "tax-category": [
+        "taxCategory"
+      ],
+      "conversion-rates": [
+        "conversionRate"
+      ],
+      "business-partner-category": [
+        "businessPartnerCategory"
       ]
+    },
+    "windowSelection": "allowlist-overrides-excluded-categories",
+    "publicResourceNames": {
+      "business-partner-category": "contact-category"
     },
     "fieldSelection": "curated-publicApi-else-form-plus-readonly-list",
     "excludedCategories": [
@@ -42,7 +58,6 @@
     "excludedWindows": [
       "absence",
       "business-partner",
-      "business-partner-category",
       "bp-location",
       "bom-production",
       "commission-payment",
@@ -90,6 +105,104 @@
     "failClosed": true
   },
   "entities": {
+    "contact-category": {
+      "publicName": "contact-category",
+      "specName": "business-partner-category",
+      "entityName": "businessPartnerCategory",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "search_key": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "searchKey",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "required": true
+        },
+        "name": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "name",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "required": true
+        },
+        "description": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "description",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null
+        },
+        "default": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "default",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null
+        },
+        "is_customer": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "etgoIscustomer",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null
+        },
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Business Partner Category",
+        "functionalSummary": "Business Partner Category lets users maintain the category master record used to classify business partners (customers, vendors, employees, etc.): its search key, name, description, whether it is the default category, and whether its contacts are customers.",
+        "functionalCapabilities": [
+          "browse and search contact categories by Search Key and Name",
+          "open a category and maintain its header fields: Search Key, Name, Description, Default",
+          "mark a category as a customer category"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/business-partner-category.md"
+      },
+      "source": {
+        "artifact": "business-partner-category",
+        "contractVersion": "0.11.0",
+        "backendEntity": true
+      }
+    },
     "contacts": {
       "publicName": "contacts",
       "specName": "contacts",
@@ -134,8 +247,13 @@
           "description": "Category of the contact. When omitted on create, Etendo assigns the default category.",
           "lookup": {
             "selector": "businessPartnerCategory",
-            "type": "business-partner-category",
+            "type": "contact-category",
             "context": {}
+          },
+          "relationship": {
+            "resource": "contact-category",
+            "cardinality": "one",
+            "foreignKey": "category"
           }
         },
         "first_name": {
@@ -638,6 +756,110 @@
         "backendEntity": true
       }
     },
+    "conversion-rates": {
+      "publicName": "conversion-rates",
+      "specName": "conversion-rates",
+      "entityName": "conversionRate",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "LIST"
+      ],
+      "fields": {
+        "currency": {
+          "sourceVisibility": "editable",
+          "direction": "out",
+          "internalPath": "currency",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Currency"
+        },
+        "to_currency": {
+          "sourceVisibility": "editable",
+          "direction": "out",
+          "internalPath": "toCurrency",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "Currency"
+        },
+        "valid_from_date": {
+          "sourceVisibility": "editable",
+          "direction": "out",
+          "internalPath": "validFromDate",
+          "dataType": {
+            "type": "string",
+            "format": "date"
+          },
+          "reference": null
+        },
+        "valid_to_date": {
+          "sourceVisibility": "editable",
+          "direction": "out",
+          "internalPath": "validToDate",
+          "dataType": {
+            "type": "string",
+            "format": "date"
+          },
+          "reference": null
+        },
+        "multiple_rate_by": {
+          "sourceVisibility": "editable",
+          "direction": "out",
+          "internalPath": "multipleRateBy",
+          "dataType": {
+            "type": "number",
+            "format": "double"
+          },
+          "reference": null
+        },
+        "divide_rate_by": {
+          "sourceVisibility": "editable",
+          "direction": "out",
+          "internalPath": "divideRateBy",
+          "dataType": {
+            "type": "number",
+            "format": "double"
+          },
+          "reference": null
+        },
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Conversion Rates",
+        "functionalSummary": "Maintain the general currency conversion rates the system uses when a document currency differs from the organization's base currency. Each record defines, for a `Currency → To Currency` pair over a validity window, the multiply rate and its inverse divide rate.",
+        "functionalCapabilities": [
+          "list the conversion rates of each currency pair (Currency, To Currency) with their validity dates",
+          "review the multiply rate and the divide rate of a pair for a validity window"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/conversion-rates.md"
+      },
+      "source": {
+        "artifact": "conversion-rates",
+        "contractVersion": "0.7.0",
+        "backendEntity": true
+      }
+    },
     "product": {
       "publicName": "product",
       "specName": "product",
@@ -753,7 +975,7 @@
       },
       "source": {
         "artifact": "product",
-        "contractVersion": "0.18.0",
+        "contractVersion": "0.19.0",
         "backendEntity": true
       }
     },
@@ -841,7 +1063,7 @@
       },
       "source": {
         "artifact": "product",
-        "contractVersion": "0.18.0",
+        "contractVersion": "0.19.0",
         "backendEntity": true
       }
     },
@@ -1062,6 +1284,7 @@
           "dataType": {
             "type": "string",
             "enum": [
+              "ETGO_AC",
               "AE",
               "CO",
               "CL",
@@ -1083,6 +1306,7 @@
           },
           "reference": null,
           "enumLabels": {
+            "ETGO_AC": "Accepted",
             "AE": "Automatic Evaluation",
             "CO": "Booked",
             "CL": "Closed",
@@ -1187,7 +1411,7 @@
       },
       "source": {
         "artifact": "purchase-order",
-        "contractVersion": "0.58.0",
+        "contractVersion": "0.60.0",
         "backendEntity": true
       }
     },
@@ -1265,7 +1489,12 @@
           "dataType": {
             "type": "string"
           },
-          "reference": "Tax"
+          "reference": "Tax",
+          "relationship": {
+            "resource": "tax",
+            "cardinality": "one",
+            "foreignKey": "tax"
+          }
         },
         "line_gross_amount": {
           "sourceVisibility": "readOnly",
@@ -1329,7 +1558,7 @@
       },
       "source": {
         "artifact": "purchase-order",
-        "contractVersion": "0.58.0",
+        "contractVersion": "0.60.0",
         "backendEntity": true
       }
     },
@@ -1444,6 +1673,7 @@
           "dataType": {
             "type": "string",
             "enum": [
+              "ETGO_AC",
               "AE",
               "CO",
               "CL",
@@ -1465,6 +1695,7 @@
           },
           "reference": null,
           "enumLabels": {
+            "ETGO_AC": "Accepted",
             "AE": "Automatic Evaluation",
             "CO": "Booked",
             "CL": "Closed",
@@ -1569,7 +1800,7 @@
       },
       "source": {
         "artifact": "sales-order",
-        "contractVersion": "0.41.0",
+        "contractVersion": "0.43.0",
         "backendEntity": true
       }
     },
@@ -1647,7 +1878,12 @@
           "dataType": {
             "type": "string"
           },
-          "reference": "Tax"
+          "reference": "Tax",
+          "relationship": {
+            "resource": "tax",
+            "cardinality": "one",
+            "foreignKey": "tax"
+          }
         },
         "line_gross_amount": {
           "sourceVisibility": "readOnly",
@@ -1711,7 +1947,7 @@
       },
       "source": {
         "artifact": "sales-order",
-        "contractVersion": "0.41.0",
+        "contractVersion": "0.43.0",
         "backendEntity": true
       }
     },
@@ -1818,8 +2054,8 @@
           "reference": "PaymentTerm"
         },
         "reject_reason": {
-          "sourceVisibility": "readOnly",
-          "direction": "out",
+          "sourceVisibility": "editable",
+          "direction": "inout",
           "internalPath": "rejectReason",
           "dataType": {
             "type": "string"
@@ -1833,6 +2069,7 @@
           "dataType": {
             "type": "string",
             "enum": [
+              "ETGO_AC",
               "AE",
               "CO",
               "CL",
@@ -1854,6 +2091,7 @@
           },
           "reference": null,
           "enumLabels": {
+            "ETGO_AC": "Accepted",
             "AE": "Automatic Evaluation",
             "CO": "Booked",
             "CL": "Closed",
@@ -1929,7 +2167,7 @@
       },
       "source": {
         "artifact": "sales-quotation",
-        "contractVersion": "0.31.0",
+        "contractVersion": "0.36.0",
         "backendEntity": true
       }
     },
@@ -2007,7 +2245,12 @@
           "dataType": {
             "type": "string"
           },
-          "reference": "Tax"
+          "reference": "Tax",
+          "relationship": {
+            "resource": "tax",
+            "cardinality": "one",
+            "foreignKey": "tax"
+          }
         },
         "line_gross_amount": {
           "sourceVisibility": "readOnly",
@@ -2071,7 +2314,319 @@
       },
       "source": {
         "artifact": "sales-quotation",
-        "contractVersion": "0.31.0",
+        "contractVersion": "0.36.0",
+        "backendEntity": true
+      }
+    },
+    "tax": {
+      "publicName": "tax",
+      "specName": "tax",
+      "entityName": "tax",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "LIST"
+      ],
+      "fields": {
+        "name": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "name",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null
+        },
+        "valid_from": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "validFrom",
+          "dataType": {
+            "type": "string",
+            "format": "date"
+          },
+          "reference": null
+        },
+        "tax_category": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "taxCategory",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "TaxCategory",
+          "relationship": {
+            "resource": "tax-category",
+            "cardinality": "one",
+            "foreignKey": "tax_category"
+          }
+        },
+        "rate": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "rate",
+          "dataType": {
+            "type": "number",
+            "format": "double"
+          },
+          "reference": null
+        },
+        "applicable_to": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "applicableTo",
+          "dataType": {
+            "type": "string",
+            "enum": [
+              "B",
+              "P",
+              "S"
+            ]
+          },
+          "reference": null,
+          "enumLabels": {
+            "B": "Both",
+            "P": "Purchase Tax",
+            "S": "Sales Tax"
+          }
+        },
+        "doc_tax_amount": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "docTaxAmount",
+          "dataType": {
+            "type": "string",
+            "enum": [
+              "D",
+              "L"
+            ]
+          },
+          "reference": null,
+          "enumLabels": {
+            "D": "Document based amount by rate",
+            "L": "Line based amount by rate"
+          }
+        },
+        "base_amount": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "baseAmount",
+          "dataType": {
+            "type": "string",
+            "enum": [
+              "TBA",
+              "TBATAX",
+              "LNA",
+              "LNATAX",
+              "TAX"
+            ]
+          },
+          "reference": null,
+          "enumLabels": {
+            "TBA": "Alternate Tax Base Amount",
+            "TBATAX": "Alternate Tax Base Amount + Tax Amount",
+            "LNA": "Line Net Amount",
+            "LNATAX": "Line Net Amount + Tax Amount",
+            "TAX": "Tax Amount"
+          }
+        },
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Tax Rate",
+        "functionalSummary": "Define reusable tax-rate records that describe the percentage to apply, whether the tax is meant for sales, purchases, or both, and which amount should be treated as the taxable base.",
+        "functionalCapabilities": [
+          "name the tax rate record",
+          "view the Tax Category the rate belongs to (read-only, `C_TaxCategory_ID`)",
+          "enter the rate as a numeric percentage value",
+          "choose whether the tax applies to both flows, sales only, or purchases only",
+          "set a valid-from date",
+          "choose whether document-level or line-level amounts drive tax calculation",
+          "choose the base amount definition, including line net amount, line net amount plus tax, tax amount, alternative base amount, or alternative base plus tax"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/tax.md"
+      },
+      "source": {
+        "artifact": "tax",
+        "contractVersion": "0.21.0",
+        "backendEntity": true
+      }
+    },
+    "tax-category": {
+      "publicName": "tax-category",
+      "specName": "tax-category",
+      "entityName": "taxCategory",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "LIST"
+      ],
+      "fields": {
+        "name": {
+          "sourceVisibility": "editable",
+          "direction": "out",
+          "internalPath": "name",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null
+        },
+        "description": {
+          "sourceVisibility": "editable",
+          "direction": "out",
+          "internalPath": "description",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null
+        },
+        "default": {
+          "sourceVisibility": "editable",
+          "direction": "out",
+          "internalPath": "default",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null
+        },
+        "obspti_taxtype": {
+          "sourceVisibility": "editable",
+          "direction": "out",
+          "internalPath": "obsptiTaxtype",
+          "dataType": {
+            "type": "string",
+            "enum": [
+              "IGIC",
+              "IPSI",
+              "IVA",
+              "VAT"
+            ]
+          },
+          "reference": null,
+          "enumLabels": {
+            "IGIC": "IGIC",
+            "IPSI": "IPSI",
+            "IVA": "IVA",
+            "VAT": "VAT"
+          }
+        },
+        "obspti_transactiontype": {
+          "sourceVisibility": "editable",
+          "direction": "out",
+          "internalPath": "obsptiTransactiontype",
+          "dataType": {
+            "type": "string",
+            "enum": [
+              "BI",
+              "SE",
+              "IN"
+            ]
+          },
+          "reference": null,
+          "enumLabels": {
+            "BI": "Entrega/Adquisición de bienes",
+            "SE": "Prestación de Servicios",
+            "IN": "Transmisión/Adquisición B.Inmuebles"
+          }
+        },
+        "obspti_ratetype": {
+          "sourceVisibility": "editable",
+          "direction": "out",
+          "internalPath": "obsptiRatetype",
+          "dataType": {
+            "type": "string",
+            "enum": [
+              "CE",
+              "EX",
+              "GE",
+              "I1",
+              "I2",
+              "NS",
+              "NO",
+              "RE",
+              "SR"
+            ]
+          },
+          "reference": null,
+          "enumLabels": {
+            "CE": "Cero",
+            "EX": "Exento",
+            "GE": "General",
+            "I1": "Incrementado 1",
+            "I2": "Incrementado 2",
+            "NS": "No sujeto",
+            "NO": "Normal",
+            "RE": "Reducido",
+            "SR": "Super reducido"
+          }
+        },
+        "aeatsii_declarable": {
+          "sourceVisibility": "editable",
+          "direction": "out",
+          "internalPath": "aeatsiiDeclarable",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null
+        },
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Tax Category",
+        "functionalSummary": "Define reusable tax-category records that group related tax-rate definitions under a named category, so that transactional documents can reference a category rather than individual rates.",
+        "functionalCapabilities": [
+          "name the tax-category record",
+          "add an optional description",
+          "mark a category as the system default",
+          "flag the category as applying to bills-of-materials (`As per BOM`)",
+          "choose the tax type (enum)",
+          "choose the transaction type (enum)",
+          "choose the rate type (enum)",
+          "flag whether the category is SII-declarable (`SII declarable` / `aeatsiiDeclarable`)"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/tax-category.md"
+      },
+      "source": {
+        "artifact": "tax-category",
+        "contractVersion": "0.6.0",
         "backendEntity": true
       }
     }

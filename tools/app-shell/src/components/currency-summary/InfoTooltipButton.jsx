@@ -1,4 +1,4 @@
-import { Info } from 'lucide-react';
+import { InfoIcon } from '@phosphor-icons/react';
 import {
   Tooltip,
   TooltipContent,
@@ -32,7 +32,7 @@ export function InfoTooltipButton({
             data-testid={testId}
             className="flex h-6 w-6 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))]"
           >
-            <Info className="h-4 w-4" data-testid="Info__5d6a4a" />
+            <InfoIcon className="h-4 w-4" data-testid="Info__5d6a4a" />
           </button>
         </TooltipTrigger>
         <TooltipContent className="max-w-[260px]" data-testid={contentTestId}>

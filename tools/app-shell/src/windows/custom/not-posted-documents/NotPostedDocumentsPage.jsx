@@ -3,7 +3,7 @@ import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { FileCheck, Link2 } from 'lucide-react';
+import { SealCheckIcon, LinkSimpleIcon } from '@phosphor-icons/react';
 import { useUI, useLabel } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { DistinctValuesFilter } from '@etendosoftware/app-shell-core/components/ui/distinct-values-filter.jsx';
@@ -516,7 +516,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           aria-label={ui('copyLink')}
           className={ICON_BUTTON_CLASS}
           data-testid="npd-share">
-          <Link2 className="h-5 w-5" data-testid="Link2__npd" />
+          <LinkSimpleIcon className="h-5 w-5" data-testid="Link2__npd" />
         </button>
         <ListSortPopover
           columns={columns}
@@ -589,7 +589,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           className="inline-flex items-center gap-1 rounded-md px-3 py-[7px] text-sm font-medium transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)] disabled:cursor-not-allowed disabled:opacity-50"
           style={{ color: 'hsl(var(--floating-toolbar-fg))' }}
           data-testid="npd-post-selected">
-          <FileCheck className="h-3.5 w-3.5" data-testid="FileCheck__npd" />
+          <SealCheckIcon className="h-3.5 w-3.5" data-testid="FileCheck__npd" />
           {ui('post')}
         </button>
       </SelectionToolbar>

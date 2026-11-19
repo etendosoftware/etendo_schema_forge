@@ -18,6 +18,7 @@
 // LocaleProvider in scope (an existing, harmless test-infra gap, not something
 // this file needs to fix). This file mocks the path FmListPage.jsx actually
 // imports ('@/i18n') so the real locale dictionary is genuinely exercised.
+import { allIconsAs } from '@/test/iconMock.js';
 import { render, screen, act } from '@testing-library/react';
 import { PageMetaProvider, useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { lastMeta, MetaProbe, renderWithMeta, describeTopBarKebab } from './testUtils/topBarMetaTestUtils.jsx';
@@ -58,13 +59,7 @@ vi.mock('../FmCatalogPage.jsx', () => ({
 vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
   CheckboxField: () => null,
 }));
-vi.mock('lucide-react', () => ({
-  LayoutGrid: () => null, Settings: () => null, ListFilter: () => null,
-  ArrowUpDown: () => null, ChevronDown: () => null, MoreHorizontal: () => null,
-  MoreVertical: () => null, Calendar: () => null, Clock: () => null,
-  TriangleAlert: () => null, OctagonAlert: () => null, ArrowUpRight: () => null,
-  Search: () => null, Play: () => null, Check: () => null,
-}));
+vi.mock('@phosphor-icons/react', async importOriginal => allIconsAs(() => null, importOriginal));
 vi.mock('../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
   ResultPill: () => null,

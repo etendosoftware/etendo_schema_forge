@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { CheckCircle2, Building2, AlertCircle, Loader2, Lock, User, Mail, ArrowRight } from 'lucide-react';
+import {
+  CheckCircleIcon,
+  BuildingsIcon,
+  WarningCircleIcon,
+  CircleNotchIcon,
+  LockIcon,
+  UserIcon,
+  EnvelopeSimpleIcon,
+  ArrowRightIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -588,7 +597,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         ]}
         data-testid="AuthShell__fa3cd9">
         <div className="flex flex-col items-center justify-center py-12 text-center" data-testid="invite-loading">
-          <Loader2
+          <CircleNotchIcon
             className="h-8 w-8 animate-spin text-primary"
             data-testid="Loader2__fa3cd9" />
           <p className="mt-4 text-base text-muted-foreground">{ui('invitePageLoading')}</p>
@@ -603,7 +612,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     return (
       <AuthShell {...shellProps} data-testid="AuthShell__fa3cd9">
         <div className="flex flex-col items-center justify-center py-12 text-center" data-testid="invite-session-checking">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" data-testid="Loader2__fa3cd9" />
+          <CircleNotchIcon className="h-8 w-8 animate-spin text-primary" data-testid="Loader2__fa3cd9" />
           <p className="mt-4 text-base text-muted-foreground">{ui('inviteSessionCheckLoading')}</p>
         </div>
       </AuthShell>
@@ -647,7 +656,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       <AuthShell {...shellProps} data-testid="AuthShell__fa3cd9">
         <div className="text-center" data-testid="invite-session-deferred">
           <div className="mx-auto mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-primary/10 text-primary">
-            <Mail className="h-8 w-8" data-testid="invite-session-deferred-icon" />
+            <EnvelopeSimpleIcon className="h-8 w-8" data-testid="invite-session-deferred-icon" />
           </div>
           <h1 className="text-3xl font-semibold tracking-[-0.06em] text-foreground sm:text-[2.7rem] sm:leading-[1.04]">
             {ui('inviteSessionDeferredTitle')}
@@ -719,7 +728,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         data-testid="AuthShell__fa3cd9">
         <div className="text-center" data-testid="invite-error-state">
           <div className="mx-auto mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-destructive/10 text-destructive">
-            <AlertCircle className="h-8 w-8" data-testid="invite-error-icon" />
+            <WarningCircleIcon className="h-8 w-8" data-testid="invite-error-icon" />
           </div>
           <h1 className="text-3xl font-semibold tracking-[-0.06em] text-foreground sm:text-[2.7rem] sm:leading-[1.04]">
             {ui('invitePageInvalidTitle')}
@@ -754,7 +763,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         data-testid="AuthShell__fa3cd9">
         <div className="text-center">
           <div className="mx-auto mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-status-success">
-            <CheckCircle2 className="h-8 w-8 text-status-success-foreground" data-testid="invite-success-icon" strokeWidth={3} />
+            <CheckCircleIcon className="h-8 w-8 text-status-success-foreground" data-testid="invite-success-icon" />
           </div>
           <h1 className="text-3xl font-semibold tracking-[-0.06em] text-foreground sm:text-[2.7rem] sm:leading-[1.04]" data-testid="invite-success-state">
             {successData.alreadyAccepted
@@ -781,7 +790,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
             data-testid="action-go-to-app"
           >
             {entering
-              ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__fa3cd9" />
+              ? <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__fa3cd9" />
               : (
                 <>
                   <span>
@@ -789,7 +798,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
                       ? ui('invitePageEnterCompany').replace('{companyName}', companyName)
                       : ui('invitePageGoToApp')}
                   </span>
-                  <ArrowRight className="h-4 w-4" data-testid="ArrowRight__fa3cd9" />
+                  <ArrowRightIcon className="h-4 w-4" data-testid="ArrowRight__fa3cd9" />
                 </>
               )}
           </Button>
@@ -852,8 +861,8 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
             data-testid="action-accept-invitation"
           >
             {submitting
-              ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__fa3cd9" />
-              : <><span>{ui('invitePageAcceptButton')}</span><ArrowRight className="h-4 w-4" data-testid="ArrowRight__fa3cd9" /></>}
+              ? <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__fa3cd9" />
+              : <><span>{ui('invitePageAcceptButton')}</span><ArrowRightIcon className="h-4 w-4" data-testid="ArrowRight__fa3cd9" /></>}
           </Button>
         </div>
       </AuthShell>
@@ -866,7 +875,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         {/* Brand Header */}
         <div className="flex flex-col items-center text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Building2 className="h-6 w-6" data-testid="Building2__fa3cd9" />
+            <BuildingsIcon className="h-6 w-6" data-testid="Building2__fa3cd9" />
           </div>
           <h2 className="mt-4 text-2xl font-bold tracking-tight text-foreground">
             {companyName}
@@ -879,7 +888,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
             className="flex flex-col items-center justify-center rounded-xl border border-border bg-card p-8 shadow-sm space-y-3"
             data-testid="invite-loading"
           >
-            <Loader2
+            <CircleNotchIcon
               className="h-8 w-8 animate-spin text-primary"
               data-testid="Loader2__fa3cd9" />
             <p className="text-sm text-muted-foreground">{ui('invitePageLoading')}</p>
@@ -893,7 +902,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
             data-testid="invite-error-state"
           >
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-              <AlertCircle className="h-6 w-6" data-testid="AlertCircle__fa3cd9" />
+              <WarningCircleIcon className="h-6 w-6" data-testid="AlertCircle__fa3cd9" />
             </div>
             <div>
               <h3 className="text-lg font-semibold text-foreground">
@@ -930,7 +939,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
             data-testid="AuthShell__fa3cd9">
             <div className="text-center">
               <div className="mx-auto mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-status-success">
-                <CheckCircle2 className="h-8 w-8 text-status-success-foreground" data-testid="invite-success-icon" strokeWidth={3} />
+                <CheckCircleIcon className="h-8 w-8 text-status-success-foreground" data-testid="invite-success-icon" />
               </div>
               <h1 className="text-3xl font-semibold tracking-[-0.06em] text-foreground sm:text-[2.7rem] sm:leading-[1.04]" data-testid="invite-success-state">
                 {successData.alreadyAccepted
@@ -948,7 +957,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
                 data-testid="action-go-to-app"
               >
                 <span>{ui('invitePageGoToApp')}</span>
-                <ArrowRight className="h-4 w-4" data-testid="ArrowRight__fa3cd9" />
+                <ArrowRightIcon className="h-4 w-4" data-testid="ArrowRight__fa3cd9" />
               </Button>
             </div>
           </AuthShell>
@@ -971,7 +980,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
 
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm space-y-2">
               <div className="flex items-center gap-2 font-medium text-foreground">
-                <Mail className="h-4 w-4 text-primary shrink-0" data-testid="Mail__fa3cd9" />
+                <EnvelopeSimpleIcon className="h-4 w-4 text-primary shrink-0" data-testid="Mail__fa3cd9" />
                 <span>{invitationData.maskedEmail || invitationData.email}</span>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -987,7 +996,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
               className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
                 data-testid="invite-action-error"
               >
-                <AlertCircle className="h-4 w-4 shrink-0" data-testid="AlertCircle__fa3cd9" />
+                <WarningCircleIcon className="h-4 w-4 shrink-0" data-testid="AlertCircle__fa3cd9" />
                 <span>{actionError}</span>
               </div>
             )}
@@ -996,7 +1005,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
               <div className="space-y-3" data-testid="invite-authenticated-step">
                 <p className="text-sm text-muted-foreground">{ui('invitePageAuthenticatedNotice')}</p>
                 <Button className="w-full gap-2" onClick={handleAcceptExisting} disabled={submitting} data-testid="action-accept-invitation">
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__fa3cd9" /> : <><span>{ui('invitePageAcceptButton')}</span><ArrowRight className="h-4 w-4" data-testid="ArrowRight__fa3cd9" /></>}
+                  {submitting ? <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__fa3cd9" /> : <><span>{ui('invitePageAcceptButton')}</span><ArrowRightIcon className="h-4 w-4" data-testid="ArrowRight__fa3cd9" /></>}
                 </Button>
               </div>
             ) : null}
@@ -1023,7 +1032,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
                 className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
                 data-testid="invite-action-error"
               >
-                <AlertCircle className="h-4 w-4 shrink-0" data-testid="AlertCircle__fa3cd9" />
+                <WarningCircleIcon className="h-4 w-4 shrink-0" data-testid="AlertCircle__fa3cd9" />
                 <span>{actionError}</span>
               </div>
             )}
@@ -1041,7 +1050,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
                     className="bg-muted text-muted-foreground cursor-not-allowed pl-9"
                     data-testid="invite-email"
                   />
-                  <Mail
+                  <EnvelopeSimpleIcon
                     className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground"
                     data-testid="Mail__fa3cd9" />
                 </div>
@@ -1061,7 +1070,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
                     className="pl-9"
                     data-testid="invite-name"
                   />
-                  <User
+                  <UserIcon
                     className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground"
                     data-testid="User__fa3cd9" />
                 </div>
@@ -1081,7 +1090,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
                     className="pl-9"
                     data-testid="invite-password"
                   />
-                  <Lock
+                  <LockIcon
                     className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground"
                     data-testid="Lock__fa3cd9" />
                 </div>
@@ -1101,13 +1110,13 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
               >
                 {submitting ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__fa3cd9" />
+                    <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__fa3cd9" />
                     {ui('invitePageCreatingAccount')}
                   </>
                 ) : (
                   <>
                     <span>{ui('invitePageRegisterAndAcceptButton')}</span>
-                    <ArrowRight className="h-4 w-4" data-testid="ArrowRight__fa3cd9" />
+                    <ArrowRightIcon className="h-4 w-4" data-testid="ArrowRight__fa3cd9" />
                   </>
                 )}
               </Button>

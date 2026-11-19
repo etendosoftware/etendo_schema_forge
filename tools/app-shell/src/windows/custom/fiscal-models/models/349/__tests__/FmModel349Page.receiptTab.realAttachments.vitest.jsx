@@ -59,7 +59,7 @@ vi.mock('../../../FmTabContent.jsx', () => ({
   SourcesTab: () => null, IncidentsTab: () => null,
 }));
 vi.mock('../../../fiscal-models.css', () => ({}));
-// lucide-react is intentionally left UNMOCKED (unlike the sibling suite) —
+// @phosphor-icons/react is intentionally left UNMOCKED (unlike the sibling suite) —
 // the real AttachmentsTab tree (ConfirmDeleteDialog -> Dialog, AttachmentsTable)
 // needs real icon exports (X, FileX, Trash2, ...) that a narrow mock would miss.
 // Real icons are cheap, side-effect-free SVG components — safe to render as-is.

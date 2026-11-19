@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useUI } from '@/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { RotateCcw, Package } from 'lucide-react';
+import { ArrowCounterClockwiseIcon, PackageIcon } from '@phosphor-icons/react';
 
 export default function PreviousOrdersTab({ supplierId, onRepeatOrder, orders: allOrders = [] }) {
   const ui = useUI();
@@ -15,7 +15,7 @@ export default function PreviousOrdersTab({ supplierId, onRepeatOrder, orders: a
   if (orders.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-        <Package
+        <PackageIcon
           className="h-10 w-10 text-muted-foreground/30 mb-3"
           data-testid="Package__1c6dc4" />
         <p className="text-sm font-medium text-muted-foreground">{ui('qpoNoPreviousOrders')}</p>
@@ -66,7 +66,7 @@ export default function PreviousOrdersTab({ supplierId, onRepeatOrder, orders: a
               className="h-7 text-xs gap-1"
               onClick={() => onRepeatOrder(order)}
               data-testid="Button__1c6dc4">
-              <RotateCcw className="h-3 w-3" data-testid="RotateCcw__1c6dc4" />
+              <ArrowCounterClockwiseIcon className="h-3 w-3" data-testid="RotateCcw__1c6dc4" />
               {ui('qpoRepeatOrder')}
             </Button>
           </div>
