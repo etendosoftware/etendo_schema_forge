@@ -53,6 +53,7 @@ configured_feature_flags() {
     json+="${json:+,}\"$key\":$value"
   done < "$ETENDO_ROOT/worktree.conf"
   [[ -n "$json" ]] && printf '{%s}\n' "$json"
+  return 0
 }
 
 # The `feature-flag` lines of worktree.conf with a boolean value, for the backend: com.etendoerp.go's

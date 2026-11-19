@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Info, Lock } from 'lucide-react';
+import { WarningIcon, InfoIcon, LockIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -89,13 +89,13 @@ function CreditorIdRow({ info, ui, alignToInput = false }) {
     <div className={`${INLINE_ROW}${alignToInput ? ' md:min-h-9 md:self-start' : ''}`} data-testid="remittance-sepa-creditor">
       <Label className={`${FIELD_LABEL} inline-flex items-center gap-1`} data-testid="Label__sepa-creditor">
         {ui('remittanceSepaCreditorId')}
-        <Info
+        <InfoIcon
           className="h-3.5 w-3.5 shrink-0 cursor-help align-middle text-[hsl(var(--muted-foreground))]"
           role="img"
           aria-label={tip}
           data-testid="remittance-sepa-creditor-info">
           <title>{tip}</title>
-        </Info>
+        </InfoIcon>
       </Label>
       {info.creditorIdAvailable ? (
         <span className={`${VALUE} tabular-nums`} data-testid="remittance-sepa-creditor-value">{info.creditorId}</span>
@@ -105,7 +105,7 @@ function CreditorIdRow({ info, ui, alignToInput = false }) {
           className="inline-flex min-w-0 items-center gap-1.5 text-sm text-[hsl(var(--status-warning-fg))]"
           data-testid="remittance-sepa-creditor-missing"
         >
-          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="AlertTriangle__sepa-creditor" />
+          <WarningIcon className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="AlertTriangle__sepa-creditor" />
           <span>{ui('remittanceSepaCreditorIdUnavailable', { missing: missingCreditorParts(info.missing, ui) })}</span>
         </span>
       )}
@@ -159,7 +159,7 @@ function IbanEditor({ info, ui, saving, onSave }) {
           className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-0.5 font-medium text-destructive"
           data-testid="remittance-sepa-save-blocked"
         >
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" data-testid="AlertTriangle__sepa-blocked" />
+          <WarningIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" data-testid="AlertTriangle__sepa-blocked" />
           {ui('remittanceSepaIbanRequiredToSave')}
         </span>
       </div>
@@ -179,7 +179,7 @@ function IbanReadOnly({ info, ui }) {
 function LockHint({ info, ui }) {
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))]" data-testid="remittance-sepa-iban-lock">
-      <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" data-testid="Lock__sepa-iban" />
+      <LockIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" data-testid="Lock__sepa-iban" />
       <span className="truncate">{ui('remittanceSepaFromAccount', { account: info.accountName })}</span>
     </span>
   );

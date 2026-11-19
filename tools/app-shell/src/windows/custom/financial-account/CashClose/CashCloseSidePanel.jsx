@@ -1,4 +1,4 @@
-import { Lock } from 'lucide-react';
+import { LockIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { DateField } from '@/components/ui/date-field';
@@ -210,7 +210,7 @@ export function CashCloseSidePanel({
           onClick={onConfirm}
           data-testid="cash-close-confirm"
         >
-          <Lock className="h-4 w-4" data-testid="Lock__2219ac" />
+          <LockIcon className="h-4 w-4" data-testid="Lock__2219ac" />
           {ui('financeAccountCashCloseConfirm')}
         </button>
         <button

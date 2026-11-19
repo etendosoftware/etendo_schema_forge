@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { CaretLeftIcon, CaretRightIcon } from '@phosphor-icons/react';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTH_NAMES = [
@@ -148,7 +148,7 @@ export function CalendarView({
           onClick={() => changeMonth(-1)}
           aria-label="Previous month"
           data-testid="Button__936aad">
-          <ChevronLeft className="h-5 w-5" data-testid="ChevronLeft__936aad" />
+          <CaretLeftIcon className="h-5 w-5" data-testid="ChevronLeft__936aad" />
         </Button>
 
         <h2 className="text-lg font-semibold">
@@ -161,7 +161,7 @@ export function CalendarView({
           onClick={() => changeMonth(1)}
           aria-label="Next month"
           data-testid="Button__936aad">
-          <ChevronRight className="h-5 w-5" data-testid="ChevronRight__936aad" />
+          <CaretRightIcon className="h-5 w-5" data-testid="ChevronRight__936aad" />
         </Button>
       </div>
       {/* Day-of-week header */}

@@ -2,11 +2,23 @@ import React, { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import {
-  Download, CircleCheck, Search,
-  Loader2, Globe, ChevronDown, Users, FileEdit,
-  TriangleAlert, ReceiptText, Calculator, PenLine, ShieldAlert, FileCheck,
-  X, Save, RefreshCw,
-} from 'lucide-react';
+  DownloadSimpleIcon,
+  CheckCircleIcon,
+  MagnifyingGlassIcon,
+  CircleNotchIcon,
+  GlobeIcon,
+  CaretDownIcon,
+  UsersIcon,
+  WarningIcon,
+  ReceiptIcon,
+  CalculatorIcon,
+  PencilSimpleIcon,
+  ShieldWarningIcon,
+  SealCheckIcon,
+  XIcon,
+  FloppyDiskIcon,
+  ArrowsClockwiseIcon,
+} from '@phosphor-icons/react';
 import { KpiWidget, Tabs, FmInfoTooltip } from '../../FmCommon.jsx';
 import { FmStatusChip, FmDetailHeader, FmDetailActionBar, FmDetailButton, useFmDetailPageMeta, buildDeclTitle, tabCount, incidentsTabBadge, FmEmptyState } from '../../FmDetailChrome.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
@@ -310,9 +322,8 @@ function KeyFilterDropdown({ value, onChange, t }) {
         aria-haspopup="listbox"
       >
         {selectedLabel}
-        <ChevronDown
+        <CaretDownIcon
           size={12}
-          strokeWidth={1.75}
           style={{ opacity: .6 }}
           data-testid="ChevronDown__346dd5" />
       </button>
@@ -421,9 +432,8 @@ function ViesBanner({ viesPending, dismissed, onDismiss, onValidate, validating,
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '10px 12px', borderRadius: 8, background: 'var(--status-info-bg)',
       }}>
-        <Globe
+        <GlobeIcon
           size={14}
-          strokeWidth={1.75}
           style={{ color: 'var(--status-info-fg)', flexShrink: 0 }}
           data-testid="Globe__346dd5" />
         <span style={{ fontSize: 14, flex: 1 }}>
@@ -501,7 +511,7 @@ function OriginFilterChip({ nif, count, onClear, t, testId }) {
       >
         {t('fm.m349.origin_filter.operator', { nif })}
         <span className="fm-toolbar__count-badge">{count}</span>
-        <X size={11} strokeWidth={2} data-testid="X__346dd5" />
+        <XIcon size={11} data-testid="X__346dd5" />
       </button>
     </div>
   );
@@ -514,7 +524,7 @@ function OriginFilterEmpty({ message, testId }) {
   // ETP-5584 (P11) — the window's one empty state; the message is the filter-specific title.
   return (
     <FmEmptyState
-      icon={<Search size={28} strokeWidth={1.5} data-testid="Search__originFilterEmpty" />}
+      icon={<MagnifyingGlassIcon size={28} data-testid="Search__originFilterEmpty" />}
       title={message}
       data-testid={testId} />
   );
@@ -592,7 +602,7 @@ function RectificationsTabContent({ rows, t, originFilter, onClearOriginFilter }
     // ETP-5584 (P11) — the window's one empty state (icon + title + text).
     return (
       <FmEmptyState
-        icon={<FileEdit size={28} strokeWidth={1.5} data-testid="FileEdit__rectifEmpty" />}
+        icon={<PencilSimpleIcon size={28} data-testid="FileEdit__rectifEmpty" />}
         title={t('fm.m349.rectif.empty_title') ?? 'Sin rectificaciones'}
         sub={t('fm.m349.rectif.empty')}
         data-testid="fm349-rectif-empty" />
@@ -784,9 +794,8 @@ function SubstitutiveBanner({ identChecks, onChange, isSubmitted, isBusy = false
         data-testid="FmModel349Page__substitutiveBanner"
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: '1 1 320px', minWidth: 0 }}>
-          <RefreshCw
+          <ArrowsClockwiseIcon
             size={18}
-            strokeWidth={1.75}
             style={{ color: 'var(--status-warning-fg)', flexShrink: 0 }}
             data-testid="RefreshCw__substitutiveBanner" />
           <div style={{ minWidth: 0 }}>
@@ -1470,11 +1479,11 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   const TABS = [
     // P12 (ETP-5584) — every list tab shows its count, 0 included, with the same counter and
     // the same incident rule as 303 (FmDetailChrome's tabCount / incidentsTabBadge).
-    { id:'operators', label: t('fm.m349.tab.operators'), badge: tabCount(operators.length), icon: <Users size={16} strokeWidth={1.75} data-testid="Users__346dd5" /> },
-    { id:'rectif',    label: t('fm.m349.tab.rectif'),    badge: tabCount(rectifications),   icon: <FileEdit size={16} strokeWidth={1.75} data-testid="FileEdit__346dd5" /> },
-    { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: tabCount(invoicesTabBadge(snapshotServed, submittedSnapshot, liveInvoices)), icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__346dd5" /> },
-    { id:'incidents', label: t('fm.m349.tab.incidents'), ...incidentsTabBadge(blocking, warning), icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__346dd5" /> },
-    { id:'receipt',   label: t('fm.tab.receipt') ?? 'Justificante', badge: tabCount(receiptCount), icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__346dd5" /> },
+    { id:'operators', label: t('fm.m349.tab.operators'), badge: tabCount(operators.length), icon: <UsersIcon size={16} data-testid="Users__346dd5" /> },
+    { id:'rectif',    label: t('fm.m349.tab.rectif'),    badge: tabCount(rectifications),   icon: <PencilSimpleIcon size={16} data-testid="FileEdit__346dd5" /> },
+    { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: tabCount(invoicesTabBadge(snapshotServed, submittedSnapshot, liveInvoices)), icon: <ReceiptIcon size={16} data-testid="ReceiptText__346dd5" /> },
+    { id:'incidents', label: t('fm.m349.tab.incidents'), ...incidentsTabBadge(blocking, warning), icon: <WarningIcon size={16} data-testid="TriangleAlert__346dd5" /> },
+    { id:'receipt',   label: t('fm.tab.receipt') ?? 'Justificante', badge: tabCount(receiptCount), icon: <SealCheckIcon size={16} data-testid="FileCheck__346dd5" /> },
   ];
 
   // ETP-5584 — the declaration title lives in the app top bar (title, breadcrumb subtitle,
@@ -1544,8 +1553,8 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
             <>
               <FmDetailButton onClick={handleCompute} disabled={computing} data-testid="FmModel349Page__compute">
                 {computing
-                  ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__346dd5" />
-                  : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__346dd5" />}
+                  ? <CircleNotchIcon size={16} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__346dd5" />
+                  : <CalculatorIcon size={16} data-testid="Calculator__346dd5" />}
                 {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
               </FmDetailButton>
               {/* ETP-5597 (W4) — Generar / Guardar / Registrar are locked while any of them is in
@@ -1570,7 +1579,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                 }}
                 disabled={actionBusy}
                 data-testid="FmModel349Page__generate">
-                <Download size={16} strokeWidth={1.75} data-testid="Download__346dd5" />
+                <DownloadSimpleIcon size={16} data-testid="Download__346dd5" />
                 {t('fm.action.gen349') ?? 'Generar fichero 349'}
               </FmDetailButton>
               {/* "Guardar" (see `handleSave`, ETP-5456): PUTs the pending identification edits
@@ -1584,8 +1593,8 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                 data-testid="FmModel349Page__save"
               >
                 {isSavingManualData
-                  ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__save" />
-                  : <Save size={16} strokeWidth={1.75} data-testid="Save__save" />}
+                  ? <CircleNotchIcon size={16} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__save" />
+                  : <FloppyDiskIcon size={16} data-testid="Save__save" />}
                 {t('fm.action.save') ?? 'Guardar'}
               </FmDetailButton>
               <FmDetailButton
@@ -1617,7 +1626,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                   : undefined}
                 data-testid="FmModel349Page__present"
               >
-                <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__346dd5" />
+                <CheckCircleIcon size={16} data-testid="CircleCheck__346dd5" />
                 {t('fm.action.present') ?? 'Registrar/Presentar'}
               </FmDetailButton>
             </>
@@ -1652,7 +1661,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
           flexShrink: 0,
         }}>
           <KpiWidget
-            icon={<Users size={20} strokeWidth={1.75} data-testid="Users__346dd5" />}
+            icon={<UsersIcon size={20} data-testid="Users__346dd5" />}
             iconColor="hsl(var(--text-disabled))"
             label={t('fm.m349.kpi.operators') ?? 'Operadores'}
             value={String(operatorCount)}
@@ -1661,7 +1670,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
             badgeColor="hsl(var(--text-disabled))"
             data-testid="KpiWidget__346dd5" />
           <KpiWidget
-            icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__346dd5" />}
+            icon={<CalculatorIcon size={20} data-testid="Calculator__346dd5" />}
             iconColor="hsl(var(--text-disabled))"
             label={t('fm.m349.kpi.total_ops') ?? 'Total operaciones'}
             value={formatAmount(totalBase)}
@@ -1670,7 +1679,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
             badgeColor="hsl(var(--text-disabled))"
             data-testid="KpiWidget__346dd5" />
           <KpiWidget
-            icon={<PenLine size={20} strokeWidth={1.75} data-testid="PenLine__346dd5" />}
+            icon={<PencilSimpleIcon size={20} data-testid="PenLine__346dd5" />}
             iconColor="hsl(var(--text-disabled))"
             label={t('fm.m349.kpi.rectif') ?? 'Rectificaciones'}
             value={String(rectifications)}
@@ -1684,7 +1693,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
               SAME --status-info-* pair as that banner. The genuinely-invalid VIES
               state stays red — that lives in ViesBadge (.fm-vies--invalid). */}
           <KpiWidget
-            icon={<ShieldAlert size={20} strokeWidth={1.75} data-testid="ShieldAlert__346dd5" />}
+            icon={<ShieldWarningIcon size={20} data-testid="ShieldAlert__346dd5" />}
             iconColor="hsl(var(--text-disabled))"
             label={t('fm.m349.kpi.vies_pending') ?? 'Pendientes VIES'}
             value={String(viesPending)}
@@ -1735,9 +1744,8 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                   data-testid="KeyFilterDropdown__346dd5" />
                 <div style={{ flex: 1 }} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', border: `1px solid ${searchQuery ? 'hsl(var(--focus-ring))' : 'hsl(var(--border-subtle))'}`, borderRadius: 8, fontSize: 14, color: 'hsl(var(--muted-foreground))', background: 'hsl(var(--card))', minWidth: 240 }}>
-                  <Search
+                  <MagnifyingGlassIcon
                     size={15}
-                    strokeWidth={1.75}
                     style={{ flexShrink: 0, color: 'hsl(var(--muted-foreground))' }}
                     data-testid="Search__346dd5" />
                   <input
@@ -1859,7 +1867,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                     {/* ETP-5584 (P11) — the window's one empty state, under the column header. */}
                     {filteredOps.length === 0 && (
                       <FmEmptyState
-                        icon={<Users size={28} strokeWidth={1.5} data-testid="Users__operatorsEmpty" />}
+                        icon={<UsersIcon size={28} data-testid="Users__operatorsEmpty" />}
                         title={operators.length === 0
                           ? (t('fm.m349.operators.empty') ?? 'Sin operadores')
                           : (t('fm.m349.operators.no_match') ?? 'Ningún operador coincide con el filtro')}

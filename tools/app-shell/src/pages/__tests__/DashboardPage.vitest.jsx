@@ -1,3 +1,4 @@
+import { allIconsAs } from '@/test/iconMock.js';
 import { render, screen } from '@testing-library/react';
 
 // Mock i18n
@@ -121,14 +122,9 @@ vi.mock('@/components/dashboard/DashboardSkeleton', () => ({
   DashboardSkeleton: () => <div data-testid="dashboard-skeleton">Loading...</div>,
 }));
 
-// Mock lucide-react
-vi.mock('lucide-react', () => ({
-  FileText: (props) => <svg {...props} />,
-  ShoppingCart: (props) => <svg {...props} />,
-  Users: (props) => <svg {...props} />,
-  DollarSign: (props) => <svg {...props} />,
-  TrendingUp: (props) => <svg {...props} />,
-}));
+// Mock @phosphor-icons/react
+vi.mock('@phosphor-icons/react', async importOriginal =>
+  allIconsAs(props => <svg {...props} />, importOriginal));
 
 import DashboardPage from '../DashboardPage.jsx';
 

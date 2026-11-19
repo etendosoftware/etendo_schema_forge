@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Landmark } from 'lucide-react';
+import { BankIcon } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -137,7 +137,7 @@ export function AccountFormStep({
       {isBank && bankName ? (
         <div className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[hsl(var(--border-subtle))] text-[hsl(var(--text-disabled))]">
-            <Landmark className="h-4 w-4" data-testid="Landmark__5e0d1d" />
+            <BankIcon className="h-4 w-4" data-testid="Landmark__5e0d1d" />
           </span>
           <span className="text-sm font-semibold leading-5 text-[hsl(var(--foreground))]">{bankName}</span>
         </div>

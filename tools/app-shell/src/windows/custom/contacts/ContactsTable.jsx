@@ -9,7 +9,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog.jsx';
 import { extractApiErrorMessage } from '@/lib/apiError';
-import { Link2 } from 'lucide-react';
+import { LinkSimpleIcon } from '@phosphor-icons/react';
 import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { stripUrlScheme, toWebsiteHref } from './contactsWebUrl.js';
@@ -91,7 +91,7 @@ function WebsiteCell({ value }) {
         variant="neutral"
         className="gap-1 max-w-full !rounded-md transition-shadow duration-300 ease-out group-hover/web:shadow-[inset_0_0_0_999px_rgba(18,18,23,0.05)]"
         data-testid="Tag__5c74a8">
-        <Link2 className="h-4 w-4 shrink-0 text-[#828FA3]" aria-hidden="true" data-testid="Link2__5c74a8" />
+        <LinkSimpleIcon className="h-4 w-4 shrink-0 text-[#828FA3]" aria-hidden="true" data-testid="Link2__5c74a8" />
         <span className="min-w-0 truncate">{label}</span>
       </Tag>
     </a>

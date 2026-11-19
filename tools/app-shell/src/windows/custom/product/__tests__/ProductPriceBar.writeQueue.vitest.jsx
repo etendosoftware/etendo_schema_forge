@@ -12,12 +12,12 @@ vi.mock('@/i18n', () => ({
   useMenuLabel: () => (key) => key,
 }));
 
-vi.mock('lucide-react', () => {
+vi.mock('@phosphor-icons/react', () => {
   const named = {
-    Loader2: (props) => <span {...props} data-testid="loader" />,
-    Minus: (props) => <span {...props} data-testid="minus-icon" />,
-    Plus: (props) => <span {...props} data-testid="plus-icon" />,
-    Trash2: (props) => <span {...props} data-testid="trash-icon" />,
+    CircleNotchIcon: (props) => <span {...props} data-testid="loader" />,
+    MinusIcon: (props) => <span {...props} data-testid="minus-icon" />,
+    PlusIcon: (props) => <span {...props} data-testid="plus-icon" />,
+    TrashIcon: (props) => <span {...props} data-testid="trash-icon" />,
   };
   const isReserved = (prop) =>
     typeof prop !== 'string' || prop === 'then' || prop === '__esModule';

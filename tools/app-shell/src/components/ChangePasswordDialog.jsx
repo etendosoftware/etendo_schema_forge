@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, Lock } from 'lucide-react';
+import { CircleNotchIcon, LockIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -94,7 +94,7 @@ export function ChangePasswordDialog({ open, onOpenChange, onSuccess, hasPasswor
         <form onSubmit={handleSubmit} className="space-y-4">
           <DialogHeader data-testid="DialogHeader__c015d3">
             <DialogTitle className="flex items-center gap-2" data-testid="DialogTitle__c015d3">
-              <Lock className="h-4 w-4" data-testid="Lock__c015d3" />
+              <LockIcon className="h-4 w-4" data-testid="Lock__c015d3" />
               {enrolling ? ui('accountCreatePasswordTitle') : ui('onboardingChangePasswordTitle')}
             </DialogTitle>
             <DialogDescription data-testid="DialogDescription__c015d3">{enrolling ? ui('createPasswordLogoutNotice') : ui('changePasswordLogoutNotice')}</DialogDescription>
@@ -165,7 +165,7 @@ export function ChangePasswordDialog({ open, onOpenChange, onSuccess, hasPasswor
               data-testid="change-password-submit">
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" data-testid="Loader2__c015d3" />
+                  <CircleNotchIcon className="mr-2 h-4 w-4 animate-spin" data-testid="Loader2__c015d3" />
                   {ui('onboardingSavingPassword')}
                 </>
               ) : (

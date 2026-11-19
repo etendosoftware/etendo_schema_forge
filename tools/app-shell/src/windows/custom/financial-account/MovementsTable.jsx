@@ -1,6 +1,6 @@
 import { FinancialGridView, FinancialTableRow as TableRow } from './FinancialGridView.jsx';
 import { Fragment, useState, useEffect } from 'react';
-import { ArrowUpRight, ArrowLeftRight } from 'lucide-react';
+import { ArrowUpRightIcon, ArrowsLeftRightIcon } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
@@ -145,7 +145,7 @@ const MOVEMENT_CELL_RENDERERS = {
               value={m.documentNo}
               className="min-w-0 flex-1 text-left"
               data-testid="MovementTruncatedText__ae5a16" />
-            <ArrowUpRight className="h-3 w-3 shrink-0" data-testid="ArrowUpRight__ae5a16" />
+            <ArrowUpRightIcon className="h-3 w-3 shrink-0" data-testid="ArrowUpRight__ae5a16" />
           </button>
         ) : (
           <MovementTruncatedText
@@ -319,7 +319,7 @@ const MOVEMENT_PANEL_RENDERERS = {
         className="inline-flex h-10 items-center gap-1 self-start text-sm font-semibold text-[hsl(var(--foreground))] underline decoration-[hsl(var(--border-control))] underline-offset-4 hover:decoration-[hsl(var(--foreground))]"
       >
         {m.transferAccountName || m.transferTxnId}
-        <ArrowUpRight className="h-3 w-3" data-testid="ArrowUpRight__ae5a16" />
+        <ArrowUpRightIcon className="h-3 w-3" data-testid="ArrowUpRight__ae5a16" />
       </button>
     ),
   },
@@ -365,7 +365,7 @@ function renderBody({ loading, movements, ui, renderRow }) {
         <TableCell colSpan={COL_COUNT} className="whitespace-normal py-16" data-testid="TableCell__ae5a16">
           <div className="flex flex-col items-center gap-2 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[hsl(var(--muted))]">
-              <ArrowLeftRight className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ArrowLeftRight__ae5a16" />
+              <ArrowsLeftRightIcon className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ArrowLeftRight__ae5a16" />
             </div>
             <p className="text-sm font-medium text-[hsl(var(--foreground))]">
               {ui('financeAccountMovementsEmpty')}

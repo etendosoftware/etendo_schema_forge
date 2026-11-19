@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Check, CircleAlert, CreditCard, Loader2, Rocket } from 'lucide-react';
+import {
+  ArrowRightIcon,
+  CheckIcon,
+  WarningCircleIcon,
+  CreditCardIcon,
+  CircleNotchIcon,
+  RocketLaunchIcon,
+} from '@phosphor-icons/react';
 import { initialSetupSteps, applyProgressMessage, fetchEnvironments } from '@etendosoftware/etendo-go-core/onboarding';
 import { useUI, getStoredLocale } from '@/i18n';
 import { detectBaseUrl } from '@/auth/api.js';
@@ -418,14 +425,14 @@ function PlanCard({ plan, selected, onSelect, ui }) {
           data-testid="upgrade-plan-select"
         >
           {ui('upgradeCheckoutSelectPlan')}
-          <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
+          <ArrowRightIcon className="h-4 w-4" data-testid="ArrowRight__58bad7" />
         </Button>
       </CardHeader>
       <CardContent className="flex-1 p-6 pt-0" data-testid="CardContent__58bad7">
         <ul className="space-y-3 text-sm" data-testid="upgrade-plan-features">
           {planFeatures(ui, plan).map(feature => (
             <li key={feature.key} className="flex items-start gap-2">
-              <Check
+              <CheckIcon
                 className={`mt-0.5 h-4 w-4 shrink-0 ${recommended ? 'text-background' : 'text-primary'}`}
                 data-testid="Check__58bad7" />
               <span>{feature.label}</span>
@@ -541,7 +548,7 @@ function AddonsStep({ ui, selectedPlan, dataTransfer, onDataTransferChange, onCo
           <div className="grid gap-2">
             <Button type="button" onClick={onContinue} data-testid="upgrade-addons-continue">
               {ui('upgradeCheckoutContinue')}
-              <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
+              <ArrowRightIcon className="h-4 w-4" data-testid="ArrowRight__58bad7" />
             </Button>
           </div>
         </CardContent>
@@ -565,11 +572,11 @@ function ProgressPanel({ steps, ui }) {
               className="flex items-center gap-2"
               data-testid={`upgrade-progress-step-${step.name}`}
             >
-              {step.status === 'running' && <Loader2
+              {step.status === 'running' && <CircleNotchIcon
                 className="h-4 w-4 animate-spin text-primary"
                 data-testid="Loader2__58bad7" />}
-              {step.status === 'done' && <Check className="h-4 w-4 text-primary" data-testid="Check__58bad7" />}
-              {step.status === 'failed' && <CircleAlert className="h-4 w-4 text-destructive" data-testid="CircleAlert__58bad7" />}
+              {step.status === 'done' && <CheckIcon className="h-4 w-4 text-primary" data-testid="Check__58bad7" />}
+              {step.status === 'failed' && <WarningCircleIcon className="h-4 w-4 text-destructive" data-testid="CircleAlert__58bad7" />}
               {step.status === 'pending' && <span className="h-4 w-4 rounded-full border border-border" />}
               <span className={step.status === 'pending' ? 'text-muted-foreground' : ''}>
                 {ui(STEP_LABELS[step.name] || 'upgradeStepSetup')}
@@ -600,7 +607,7 @@ function PlanCatalogStatus({ state, plans, onRetry, onSignInAgain, ui }) {
         className="flex items-center gap-2 text-sm text-muted-foreground"
         data-testid="upgrade-plans-loading"
       >
-        <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__58bad7" />
+        <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__58bad7" />
         {ui('upgradePlansLoading')}
       </p>
     );
@@ -625,7 +632,7 @@ function PlanCatalogStatus({ state, plans, onRetry, onSignInAgain, ui }) {
       }}
       data-testid={state === 'no-session' ? 'upgrade-plans-session-expired' : 'upgrade-plans-unavailable'}
     >
-      <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" data-testid="CircleAlert__58bad7" />
+      <WarningCircleIcon className="mt-0.5 h-4 w-4 shrink-0" data-testid="CircleAlert__58bad7" />
       <div className="space-y-2">
         <p>{ui(messageKey)}</p>
         {state === 'unavailable' && (
@@ -796,7 +803,7 @@ function FirstTenantFreePanel({ ui, onContinue }) {
         <p className="text-sm text-muted-foreground">{ui('upgradeFirstTenantFreeBody')}</p>
         <Button onClick={onContinue} data-testid="upgrade-first-tenant-free-continue">
           {ui('upgradeFirstTenantFreeAction')}
-          <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
+          <ArrowRightIcon className="h-4 w-4" data-testid="ArrowRight__58bad7" />
         </Button>
       </CardContent>
     </Card>
@@ -809,7 +816,7 @@ function SuccessPanel({ ui, onContinue, entering, enterError }) {
       <CardHeader data-testid="CardHeader__58bad7">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
-            <Rocket className="h-5 w-5 text-primary" data-testid="Rocket__58bad7" />
+            <RocketLaunchIcon className="h-5 w-5 text-primary" data-testid="Rocket__58bad7" />
           </div>
           <CardTitle className="text-base" data-testid="CardTitle__58bad7">{ui('upgradeSuccessTitle')}</CardTitle>
         </div>
@@ -822,8 +829,8 @@ function SuccessPanel({ ui, onContinue, entering, enterError }) {
           </p>
         )}
         <Button className="w-full sm:w-auto" onClick={() => onContinue()} disabled={entering} data-testid="upgrade-enter-productive">
-          {entering ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__58bad7" /> : ui('upgradeMigrationContinue')}
-          {!entering && <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />}
+          {entering ? <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__58bad7" /> : ui('upgradeMigrationContinue')}
+          {!entering && <ArrowRightIcon className="h-4 w-4" data-testid="ArrowRight__58bad7" />}
         </Button>
       </CardContent>
     </Card>
@@ -859,7 +866,7 @@ function BillingOverviewPanel({ purchases, onResume, resumingPurchaseId, ui }) {
                     data-testid={`upgrade-resume-purchase-${purchase.purchaseId}`}
                   >
                     {resumingPurchaseId === purchase.purchaseId
-                      ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__58bad7" />
+                      ? <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__58bad7" />
                       : ui('upgradeResumePurchase')}
                   </Button>
                 )}
@@ -1485,7 +1492,7 @@ export default function UpgradePage() {
       <header className="sticky top-0 z-10 flex min-h-[76px] items-center justify-between gap-6 border-b bg-card px-6 py-4 shadow-sm md:px-8">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Rocket className="h-5 w-5" data-testid="Rocket__58bad7" />
+            <RocketLaunchIcon className="h-5 w-5" data-testid="Rocket__58bad7" />
           </div>
           <span className="text-xl font-bold tracking-tight">{ui('brandEtendo')}</span>
         </div>
@@ -1548,7 +1555,7 @@ export default function UpgradePage() {
             disabled={!selectedPlan}
             data-testid="upgrade-plan-continue">
             {ui('upgradeCheckoutContinue')}
-            <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
+            <ArrowRightIcon className="h-4 w-4" data-testid="ArrowRight__58bad7" />
           </Button>
         </div>
       )}
@@ -1599,14 +1606,14 @@ export default function UpgradePage() {
             </p>
             <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive"
               data-testid="upgrade-error">
-              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" data-testid="upgrade-provisioning-recovery-error-icon" />
+              <WarningCircleIcon className="mt-0.5 h-4 w-4 shrink-0" data-testid="upgrade-provisioning-recovery-error-icon" />
               <span>{ui(formError || RECOVERY_ERROR_KEYS[recoveryPurchase.failureCode]
                 || 'upgradeProvisioningRecoveryError')}</span>
             </div>
             {recoveryPurchase.retryAllowed === true && (
               <Button type="button" onClick={retryPaidProvisioning} disabled={Boolean(resumingPurchaseId)}
                 data-testid="upgrade-provisioning-retry">
-                {resumingPurchaseId ? <Loader2 className="h-4 w-4 animate-spin" data-testid="upgrade-provisioning-retry-spinner" /> : ui('upgradeProvisioningRetry')}
+                {resumingPurchaseId ? <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="upgrade-provisioning-retry-spinner" /> : ui('upgradeProvisioningRetry')}
               </Button>
             )}
           </CardContent>
@@ -1664,7 +1671,7 @@ export default function UpgradePage() {
           <CardContent
             className="flex items-center gap-2 py-6 text-sm text-muted-foreground"
             data-testid="CardContent__58bad7">
-            <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__58bad7" />
+            <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__58bad7" />
             {ui('upgradeCheckingAccount')}
           </CardContent>
         </Card>
@@ -1683,7 +1690,7 @@ export default function UpgradePage() {
         <Card className="w-full border-border shadow-sm" data-testid="upgrade-checkout">
           <CardHeader data-testid="CardHeader__58bad7">
             <div className="flex items-center gap-2">
-                <CreditCard
+                <CreditCardIcon
                   className="h-4 w-4 text-muted-foreground"
                   data-testid="CreditCard__58bad7" />
                 <CardTitle className="text-base" data-testid="CardTitle__58bad7">{ui('upgradeCheckoutTitle')}</CardTitle>
@@ -1784,7 +1791,7 @@ export default function UpgradePage() {
                   }}
                   data-testid="upgrade-environments-unavailable"
                 >
-                  <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" data-testid="CircleAlert__58bad7" />
+                  <WarningCircleIcon className="mt-0.5 h-4 w-4 shrink-0" data-testid="CircleAlert__58bad7" />
                   <div className="space-y-2">
                     <p>{ui('upgradeEnvironmentsUnavailable')}</p>
                     <Button
@@ -1826,7 +1833,7 @@ export default function UpgradePage() {
                   className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive"
                   data-testid="upgrade-error"
                 >
-                  <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" data-testid="CircleAlert__58bad7" />
+                  <WarningCircleIcon className="mt-0.5 h-4 w-4 shrink-0" data-testid="CircleAlert__58bad7" />
                   <div className="space-y-3">
                     <p>{ui(formError)}</p>
                     {replacementPurchase

@@ -15,7 +15,8 @@ vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({
 
 vi.mock('sonner', () => ({ toast: toastMocks }));
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
-vi.mock('@/components/ui/custom-icons', () => ({
+vi.mock('@phosphor-icons/react', async (importOriginal) => ({
+  ...(await importOriginal()),
   TrashIcon: (props) => <span data-testid="trash-icon" {...props} />,
 }));
 

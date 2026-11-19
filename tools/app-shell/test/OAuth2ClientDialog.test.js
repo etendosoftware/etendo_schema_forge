@@ -94,7 +94,7 @@ describe('OAuth2ClientDialog source', () => {
   it('loading spinner shown during submission', () => {
     const src = readFileSync(SOURCE, 'utf8');
     assert.ok(src.includes('submitting'), 'should track submitting state');
-    assert.ok(src.includes('Loader2'), 'should render Loader2 spinner while submitting');
+    assert.ok(src.includes('CircleNotchIcon'), 'should render the CircleNotchIcon spinner while submitting');
   });
 });
 

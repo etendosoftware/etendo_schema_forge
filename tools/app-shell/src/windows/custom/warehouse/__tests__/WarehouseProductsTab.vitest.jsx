@@ -17,8 +17,8 @@ vi.mock('../useWarehouseStock', () => ({
   useWarehouseStock: vi.fn(),
 }));
 
-vi.mock('lucide-react', () => ({
-  Loader2: (props) => <span data-testid="Loader2__215b73" {...props} />,
+vi.mock('@phosphor-icons/react', () => ({
+  CircleNotchIcon: (props) => <span data-testid="Loader2__215b73" {...props} />,
 }));
 
 // --- Imports ---

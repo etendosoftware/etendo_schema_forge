@@ -1,4 +1,4 @@
-import { Ban, EyeOff, RotateCcw } from 'lucide-react';
+import { ProhibitIcon, EyeSlashIcon, ArrowCounterClockwiseIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -301,7 +301,7 @@ export function BouncePairPanel({
               onClick={onDismiss}
               className={SECONDARY_BTN}
               data-testid="recon-bounce-dismiss">
-              <EyeOff className="h-4 w-4" data-testid="EyeOff__bounce-dismiss" />
+              <EyeSlashIcon className="h-4 w-4" data-testid="EyeOff__bounce-dismiss" />
               {ui('financeReconcileBounceDismiss')}
             </Button>
           )}
@@ -312,7 +312,7 @@ export function BouncePairPanel({
               disabled={busy || windowReadOnly || !line?.id}
               className={PILL_BTN}
               data-testid="recon-bounce-restore">
-              <RotateCcw className="h-4 w-4" data-testid="RotateCcw__bounce-restore" />
+              <ArrowCounterClockwiseIcon className="h-4 w-4" data-testid="RotateCcw__bounce-restore" />
               {ui(model.paired ? 'financeReconcileBounceRestore' : 'financeReconcileBounceRestoreLine')}
             </Button>
           ) : (
@@ -322,7 +322,7 @@ export function BouncePairPanel({
               disabled={busy || windowReadOnly || !model.discard}
               className={PILL_BTN}
               data-testid="recon-bounce-discard">
-              <Ban className="h-4 w-4" data-testid="Ban__bounce-discard" />
+              <ProhibitIcon className="h-4 w-4" data-testid="Ban__bounce-discard" />
               {ui('financeReconcileBounceDiscard')}
             </Button>
           )}

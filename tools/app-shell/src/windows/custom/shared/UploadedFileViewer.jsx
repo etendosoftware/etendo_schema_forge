@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { MoreVertical, Maximize, Upload, Trash2 } from 'lucide-react';
+import {
+  DotsThreeVerticalIcon,
+  ArrowsOutIcon,
+  UploadSimpleIcon,
+  TrashIcon,
+} from '@phosphor-icons/react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -32,7 +37,7 @@ function FileMoreMenu({ onReplace, onDelete, disabled }) {
           title={ui('more')}
           data-testid="file-viewer-more"
         >
-          <MoreVertical
+          <DotsThreeVerticalIcon
             size={20}
             className="text-[hsl(var(--text-disabled))]"
             data-testid="MoreVertical__688c6e" />
@@ -42,7 +47,7 @@ function FileMoreMenu({ onReplace, onDelete, disabled }) {
       <DropdownMenuContent align="end" className="z-[60] w-[204px]" data-testid="file-viewer-menu">
         {onReplace && (
           <DropdownMenuItem disabled={disabled} onSelect={onReplace} data-testid="file-viewer-replace">
-            <Upload
+            <UploadSimpleIcon
               className="h-5 w-5 text-[hsl(var(--text-disabled))]"
               data-testid="Upload__688c6e" />
             <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
@@ -53,7 +58,7 @@ function FileMoreMenu({ onReplace, onDelete, disabled }) {
         {onReplace && onDelete && <DropdownMenuSeparator data-testid="DropdownMenuSeparator__688c6e" />}
         {onDelete && (
           <DropdownMenuItem disabled={disabled} onSelect={onDelete} data-testid="file-viewer-delete">
-            <Trash2
+            <TrashIcon
               className="h-5 w-5 text-[hsl(var(--destructive))]"
               data-testid="Trash2__688c6e" />
             <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
@@ -133,7 +138,7 @@ export default function UploadedFileViewer({
         <PdfViewer
           url={file.objectUrl}
           toolbarExtra={moreMenu}
-          fitIcon={Maximize}
+          fitIcon={ArrowsOutIcon}
           onExpand={openLightbox}
           data-testid="PdfViewer__688c6e" />
       )}

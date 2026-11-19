@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Loader2, Search, SquareCheck, X } from 'lucide-react';
+import {
+  CircleNotchIcon,
+  MagnifyingGlassIcon,
+  CheckSquareIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
@@ -262,7 +267,7 @@ export function DocumentPickerModal({
     if (loading) {
       return (
         <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground" data-testid="document-picker-loading">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" data-testid="Loader2__document-picker" />
+          <CircleNotchIcon className="h-4 w-4 animate-spin" aria-hidden="true" data-testid="Loader2__document-picker" />
           {ui('loading')}
         </div>
       );
@@ -291,7 +296,7 @@ export function DocumentPickerModal({
         </div>
         {loadingMore && (
           <div className="flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground" data-testid="document-picker-loading-more">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" data-testid="Loader2__document-picker-more" />
+            <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" aria-hidden="true" data-testid="Loader2__document-picker-more" />
             {ui('loadingMore')}
           </div>
         )}
@@ -324,7 +329,7 @@ export function DocumentPickerModal({
           className={cn('absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted', ICON)}
           data-testid="document-picker-close"
         >
-          <X size={20} aria-hidden="true" data-testid="X__document-picker" />
+          <XIcon size={20} aria-hidden="true" data-testid="X__document-picker" />
         </button>
         <header className="flex shrink-0 flex-col gap-0.5 py-3 pl-7 pr-12">
           <h2 className="font-['Plus_Jakarta_Sans',Inter,sans-serif] text-xl font-semibold leading-7 tracking-[-0.005em]">{ui(titleKey)}</h2>
@@ -333,7 +338,7 @@ export function DocumentPickerModal({
         <div className="flex min-h-0 flex-1 flex-col gap-2 px-7 pb-3">
           <div className="flex h-10 shrink-0 items-center gap-3">
             <label className="relative flex h-10 min-w-0 flex-1 items-center">
-              <Search size={20} aria-hidden="true" className={cn('pointer-events-none absolute left-2', ICON)} data-testid="Search__document-picker" />
+              <MagnifyingGlassIcon size={20} aria-hidden="true" className={cn('pointer-events-none absolute left-2', ICON)} data-testid="Search__document-picker" />
               <input
                 type="text"
                 value={search}
@@ -351,7 +356,7 @@ export function DocumentPickerModal({
               className="inline-flex h-10 shrink-0 items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium leading-6 transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="document-picker-select-all"
             >
-              <SquareCheck size={20} aria-hidden="true" className={ICON} data-testid="SquareCheck__document-picker" />
+              <CheckSquareIcon size={20} aria-hidden="true" className={ICON} data-testid="SquareCheck__document-picker" />
               {ui(allSelected ? 'deselectAll' : 'selectAll')}
             </button>
           </div>
@@ -379,7 +384,7 @@ export function DocumentPickerModal({
               className={cn(PILL, 'bg-primary text-primary-foreground enabled:hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/40')}
               data-testid="document-picker-confirm"
             >
-              {confirming && <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" data-testid="Loader2__document-picker-confirm" />}
+              {confirming && <CircleNotchIcon className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" data-testid="Loader2__document-picker-confirm" />}
               {ui(confirmKey, { count: selected.size > 0 ? ` (${selected.size})` : '' })}
             </button>
           </div>

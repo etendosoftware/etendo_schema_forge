@@ -8,11 +8,11 @@ vi.mock('@/lib/utils', () => ({
   cn: (...args) => args.filter(Boolean).join(' '),
 }));
 
-vi.mock('lucide-react', () => ({
-  Upload: (props) => <svg data-testid="upload-icon" {...props} />,
-  X: (props) => <svg data-testid="x-icon" {...props} />,
-  File: (props) => <svg data-testid="file-icon" {...props} />,
-  AlertCircle: (props) => <svg data-testid="alert-icon" {...props} />,
+vi.mock('@phosphor-icons/react', () => ({
+  UploadSimpleIcon: (props) => <svg data-testid="upload-icon" {...props} />,
+  XIcon: (props) => <svg data-testid="x-icon" {...props} />,
+  FileIcon: (props) => <svg data-testid="file-icon" {...props} />,
+  WarningCircleIcon: (props) => <svg data-testid="alert-icon" {...props} />,
 }));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';

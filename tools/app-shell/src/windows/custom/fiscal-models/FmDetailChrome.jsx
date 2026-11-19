@@ -8,7 +8,7 @@ import { useFavorites } from '@/components/layout/FavoritesContext';
 import { useSupportChatSafe } from '@/components/support/SupportChatContext.jsx';
 import { StatusTag } from '@/components/ui/status-tag';
 import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
-import { Check } from 'lucide-react';
+import { CheckIcon } from '@phosphor-icons/react';
 
 // Shared chrome of the Modelo 303 / 349 detail pages (ETP-5584): the app top-bar meta (title,
 // breadcrumb, model badge, kebab), the status chip (also used by the list's "Estado" column), the
@@ -83,7 +83,7 @@ function DetailStatusPill({ tone, label }) {
       style={{ ...DETAIL_PILL_STYLE, background: palette.background, color: palette.color }}
     >
       {tone === 'success' && (
-        <Check size={16} color={DETAIL_ICON_COLOR.success} aria-hidden="true" data-testid="FmStatusChip__icon" />
+        <CheckIcon size={16} color={DETAIL_ICON_COLOR.success} aria-hidden="true" data-testid="FmStatusChip__icon" />
       )}
       <span style={{ padding: '0 4px' }}>{label}</span>
     </span>

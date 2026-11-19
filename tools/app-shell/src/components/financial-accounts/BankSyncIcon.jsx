@@ -1,4 +1,4 @@
-import { FileDown } from 'lucide-react';
+import { FileArrowDownIcon } from '@phosphor-icons/react';
 
 /** The bob, as an arbitrary Tailwind animation so the `motion-reduce:` variant applies to it. */
 const BOB_CLASS = 'animate-[bank-sync-bob_1s_ease-in-out_infinite] motion-reduce:animate-none';
@@ -6,7 +6,7 @@ const BOB_CLASS = 'animate-[bank-sync-bob_1s_ease-in-out_infinite] motion-reduce
 /**
  * ETP-6154 — the icon of every PSD2 "traer extractos" entry point (list row button, row kebab
  * item, Imported statements toolbar, Edit account modal button) and of the in-progress pill and
- * banner: lucide `FileDown`, a document with a down arrow — "bring the statements in from the bank".
+ * banner: Phosphor `FileArrowDownIcon`, a document with a down arrow — "bring the statements in from the bank".
  *
  * Deliberately NOT circular arrows (every window's refresh button) nor up/down arrows (the list's
  * sort control): the first version, a bank with an `ArrowDownUp` badge, read as "sort".
@@ -37,7 +37,7 @@ export function BankSyncIcon({
       data-spinning={spinning ? 'true' : 'false'}
       className={`inline-flex shrink-0 ${className}`}
     >
-      <FileDown
+      <FileArrowDownIcon
         className={`h-full w-full ${spinning ? BOB_CLASS : ''}`}
         aria-hidden="true"
         data-testid="FileDown__banksync" />

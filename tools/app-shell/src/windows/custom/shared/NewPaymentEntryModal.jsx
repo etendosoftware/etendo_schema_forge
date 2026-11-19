@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { AlertTriangle } from 'lucide-react';
+import { WarningIcon } from '@phosphor-icons/react';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { DateField } from '@/components/ui/date-field';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -812,7 +812,7 @@ function Psd2InactiveWarning({ ui, accountId }) {
   return (
     <InfoBanner
       tone="warning"
-      icon={AlertTriangle}
+      icon={WarningIcon}
       // ETP-5245 — the documented exception to banners being dismissible by default: this one
       // does not accompany the form, it REPLACES it (`{psd2Blocked && <Psd2InactiveWarning/>}`
       // against `{!psd2Blocked && (<>…form…</>)}` below). Dismissing it would leave the modal

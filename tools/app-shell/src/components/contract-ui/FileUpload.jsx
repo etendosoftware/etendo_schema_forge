@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Upload, X, File, AlertCircle } from 'lucide-react';
+import { UploadSimpleIcon, XIcon, FileIcon, WarningCircleIcon } from '@phosphor-icons/react';
 
 /**
  * Format bytes into a human-readable string (e.g. "1.2 MB").
@@ -184,7 +184,7 @@ export function FileUpload({
       >
         {children ?? (
           <>
-            <Upload
+            <UploadSimpleIcon
               className={cn(
                 'h-8 w-8',
                 dragOver ? 'text-primary' : 'text-muted-foreground',
@@ -221,7 +221,7 @@ export function FileUpload({
               className="flex items-start gap-1.5 text-sm text-destructive"
               role="alert"
             >
-              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" data-testid="AlertCircle__ac379a" />
+              <WarningCircleIcon className="h-4 w-4 mt-0.5 shrink-0" data-testid="AlertCircle__ac379a" />
               <span>{err}</span>
             </div>
           ))}
@@ -235,7 +235,7 @@ export function FileUpload({
               key={`${file.name}-${file.size}-${index}`}
               className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm bg-muted/30"
             >
-              <File
+              <FileIcon
                 className="h-4 w-4 shrink-0 text-muted-foreground"
                 data-testid="File__ac379a" />
               <span className="truncate flex-1 font-medium">{file.name}</span>
@@ -252,7 +252,7 @@ export function FileUpload({
                 }}
                 aria-label={`Remove ${file.name}`}
                 data-testid="Button__ac379a">
-                <X className="h-3.5 w-3.5" data-testid="X__ac379a" />
+                <XIcon className="h-3.5 w-3.5" data-testid="X__ac379a" />
               </Button>
             </li>
           ))}

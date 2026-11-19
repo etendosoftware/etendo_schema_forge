@@ -141,4 +141,15 @@ describe('AssistantSelector', () => {
     expect(screen.queryByText('Alpha Agent')).not.toBeInTheDocument();
     expect(screen.getByText('copilotLoadingAssistants')).toBeInTheDocument();
   });
+
+  it('the featured-only toggle looks different when active (colour, not a fill weight)', () => {
+    render(<AssistantSelector {...BASE_PROPS} />);
+    const toggle = screen.getByLabelText('copilotFeaturedOnly');
+    const star = () => toggle.querySelector('svg');
+    const before = star().getAttribute('class');
+    fireEvent.click(toggle);
+    const after = star().getAttribute('class');
+    expect(after).not.toBe(before);
+    expect([before, after].filter((c) => c.includes('text-status-warning-foreground'))).toHaveLength(1);
+  });
 });

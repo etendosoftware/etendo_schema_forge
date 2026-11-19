@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { FileText, Upload, Eye, EyeOff, Lock, TriangleAlert, Check, Info } from 'lucide-react';
+import { CheckIcon, EyeIcon, EyeSlashIcon, FileTextIcon, InfoIcon, LockIcon, UploadSimpleIcon, WarningIcon } from '@phosphor-icons/react';
 import { CircularProgress, useSimulatedProgress } from './CircularProgress.jsx';
 import FiscalStepItem from './FiscalStepItem.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
@@ -13,7 +13,7 @@ function AlertBox({ type, title, body, onDismiss }) {
   if (type === 'error') {
     return (
       <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-destructive/10 border border-destructive/30 text-sm text-destructive">
-        <TriangleAlert
+        <WarningIcon
           size={16}
           className="text-destructive flex-shrink-0"
           data-testid="TriangleAlert__a22bc2" />
@@ -27,7 +27,7 @@ function AlertBox({ type, title, body, onDismiss }) {
   const styles = {
     success: {
       wrap: 'bg-status-success border-l-[3px] border-l-green-500',
-      icon: <div className="w-6 h-6 rounded-full bg-status-success flex items-center justify-center flex-shrink-0 mt-0.5"><Check
+      icon: <div className="w-6 h-6 rounded-full bg-status-success flex items-center justify-center flex-shrink-0 mt-0.5"><CheckIcon
         size={13}
         strokeWidth={2.5}
         className="text-primary-foreground"
@@ -37,7 +37,7 @@ function AlertBox({ type, title, body, onDismiss }) {
     },
     warning: {
       wrap: 'bg-status-warning border-l-[3px] border-l-amber-400',
-      icon: <div className="w-6 h-6 rounded-full bg-status-warning flex items-center justify-center flex-shrink-0 mt-0.5"><Info
+      icon: <div className="w-6 h-6 rounded-full bg-status-warning flex items-center justify-center flex-shrink-0 mt-0.5"><InfoIcon
         size={13}
         strokeWidth={2.5}
         className="text-primary-foreground"
@@ -243,12 +243,12 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                 <div className={`w-11 h-11 mx-auto mb-3 rounded-xl flex items-center justify-center
                   ${file ? 'bg-[hsl(var(--foreground))]' : 'bg-muted text-foreground'}`}>
                   {file
-                    ? <FileText
+                    ? <FileTextIcon
                     size={20}
                     strokeWidth={1.5}
                     className="text-primary-foreground"
                     data-testid="FileText__a22bc2" />
-                    : <Upload size={20} strokeWidth={1.5} data-testid="Upload__a22bc2" />}
+                    : <UploadSimpleIcon size={20} strokeWidth={1.5} data-testid="Upload__a22bc2" />}
                 </div>
                 {file ? (
                   <>
@@ -327,12 +327,12 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                       className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground"
                       aria-label={showPwd ? ui('fiscal.cert.pwd.hide') : ui('fiscal.cert.pwd.show')}
                     >
-                      {showPwd ? <EyeOff size={14} strokeWidth={1.75} data-testid="EyeOff__a22bc2" /> : <Eye size={14} strokeWidth={1.75} data-testid="Eye__a22bc2" />}
+                      {showPwd ? <EyeSlashIcon size={14} strokeWidth={1.75} data-testid="EyeOff__a22bc2" /> : <EyeIcon size={14} strokeWidth={1.75} data-testid="Eye__a22bc2" />}
                     </button>
                   </div>
                 </form>
                 <p className="text-xs text-[hsl(var(--foreground))] mt-1.5 flex items-center gap-1">
-                  <Lock size={11} strokeWidth={2} data-testid="Lock__a22bc2" /> {ui('fiscal.cert.pwd.hint')}
+                  <LockIcon size={11} strokeWidth={2} data-testid="Lock__a22bc2" /> {ui('fiscal.cert.pwd.hint')}
                 </p>
               </div>
 
@@ -399,7 +399,7 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
               </div>
 
               <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Lock size={11} strokeWidth={2} data-testid="Lock__a22bc2" /> {ui('fiscal.cert.success.encrypted')}
+                <LockIcon size={11} strokeWidth={2} data-testid="Lock__a22bc2" /> {ui('fiscal.cert.success.encrypted')}
               </p>
             </div>
           )}
@@ -414,7 +414,7 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                 disabled={!file || !pwd}
                 className="rounded-full"
                 data-testid="Button__a22bc2">
-                <Check size={14} className="mr-1.5" data-testid="Check__a22bc2" />{ui('fiscal.cert.btn.verify')}
+                <CheckIcon size={14} className="mr-1.5" data-testid="Check__a22bc2" />{ui('fiscal.cert.btn.verify')}
               </Button>
             </div>
           )}

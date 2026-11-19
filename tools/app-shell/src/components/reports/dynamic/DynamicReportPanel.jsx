@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
+import { CaretLeftIcon, CaretRightIcon, SlidersHorizontalIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { PopupMultiSelector } from '@/pages/ReportViewerPage.jsx';
@@ -61,8 +61,8 @@ export default function DynamicReportPanel({
           onClick={() => onToggleCollapsed?.(false)}
           data-testid="DynamicReportPanel__expand"
         >
-          <ChevronRight className="w-4 h-4 hidden md:block" data-testid="ChevronRight__panel" />
-          <SlidersHorizontal className="w-4 h-4 md:hidden" data-testid="SlidersHorizontal__panel" />
+          <CaretRightIcon className="w-4 h-4 hidden md:block" data-testid="ChevronRight__panel" />
+          <SlidersHorizontalIcon className="w-4 h-4 md:hidden" data-testid="SlidersHorizontal__panel" />
           {activeFilterCount > 0 && (
             <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-foreground text-background text-[10px] leading-4 text-center" aria-label={ui('dynamicReportActiveFilters', { count: activeFilterCount })} data-testid="DynamicReportPanel__activeCount">
               {activeFilterCount}
@@ -92,7 +92,7 @@ export default function DynamicReportPanel({
             onClick={() => onToggleCollapsed(true)}
             data-testid="DynamicReportPanel__collapse"
           >
-            <ChevronLeft className="w-4 h-4" data-testid="ChevronLeft__panel" />
+            <CaretLeftIcon className="w-4 h-4" data-testid="ChevronLeft__panel" />
           </button>
         )}
       </div>

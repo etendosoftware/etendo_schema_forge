@@ -50,15 +50,15 @@ vi.mock('@/components/ui/dialog', () => ({
   DialogTitle: ({ children }) => <div>{children}</div>,
 }));
 
-vi.mock('lucide-react', () => ({
-  ExternalLink: (props) => <span {...props} data-testid="icon-external" />,
-  Maximize2: (props) => <span {...props} data-testid="icon-maximize" />,
-  Box: (props) => <span {...props} data-testid="icon-box" />,
-  Calendar: (props) => <span {...props} data-testid="icon-calendar" />,
-  ChevronDown: (props) => <span {...props} data-testid="icon-chevron" />,
-  ArrowRightToLine: (props) => <span {...props} data-testid="icon-arrow-to-line" />,
-  Package: (props) => <span {...props} data-testid="icon-package" />,
-  Warehouse: (props) => <span {...props} data-testid="icon-warehouse" />,
+vi.mock('@phosphor-icons/react', () => ({
+  ArrowSquareOutIcon: (props) => <span {...props} data-testid="icon-external" />,
+  ArrowsOutIcon: (props) => <span {...props} data-testid="icon-maximize" />,
+  CubeIcon: (props) => <span {...props} data-testid="icon-box" />,
+  CalendarBlankIcon: (props) => <span {...props} data-testid="icon-calendar" />,
+  CaretDownIcon: (props) => <span {...props} data-testid="icon-chevron" />,
+  ArrowLineRightIcon: (props) => <span {...props} data-testid="icon-arrow-to-line" />,
+  PackageIcon: (props) => <span {...props} data-testid="icon-package" />,
+  WarehouseIcon: (props) => <span {...props} data-testid="icon-warehouse" />,
 }));
 
 // --- Import under test ---

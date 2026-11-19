@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Check, ChevronRight, ChevronDown, Warehouse } from 'lucide-react';
+import { CheckIcon, CaretRightIcon, CaretDownIcon, WarehouseIcon } from '@phosphor-icons/react';
 import ProductDrawerShell from './ProductDrawerShell.jsx';
 import { ProductAvatar, formatQty, resolveImageId } from './productSelectorDrawerShared.jsx';
 import { nextActiveIndex, arrowStartIndexFor } from './selectorSelection.js';
@@ -181,7 +181,7 @@ function useStockVariant(ctx) {
 
   const toolbar = availableWarehouses.length > 0 ? (
     <div className="flex items-center gap-1.5 px-4 py-2 border-b border-border overflow-x-auto shrink-0">
-      <Warehouse
+      <WarehouseIcon
         className="h-3.5 w-3.5 text-muted-foreground shrink-0"
         data-testid="Warehouse__pssd" />
       <button
@@ -245,13 +245,13 @@ function useStockVariant(ctx) {
                 {group.locations.length} {group.locations.length === 1 ? 'location' : 'locations'}
               </span>
               {String(group.productId) === committedGroupId && (
-                <Check className="h-4 w-4 text-primary shrink-0" data-testid="product-stock-group-check" />
+                <CheckIcon className="h-4 w-4 text-primary shrink-0" data-testid="product-stock-group-check" />
               )}
               {isExpanded
-                ? <ChevronDown
+                ? <CaretDownIcon
                 className="h-4 w-4 text-muted-foreground shrink-0"
                 data-testid="ChevronDown__pssd" />
-                : <ChevronRight
+                : <CaretRightIcon
                 className="h-4 w-4 text-muted-foreground shrink-0"
                 data-testid="ChevronRight__pssd" />
               }
@@ -288,8 +288,8 @@ function useStockVariant(ctx) {
                         <span className="text-xs tabular-nums text-muted-foreground shrink-0">{qty} ud</span>
                       )}
                       {isCommitted
-                        ? <Check className="h-3.5 w-3.5 text-primary shrink-0" data-testid="Check__pssd" />
-                        : <ChevronRight
+                        ? <CheckIcon className="h-3.5 w-3.5 text-primary shrink-0" data-testid="Check__pssd" />
+                        : <CaretRightIcon
                         className="h-3.5 w-3.5 text-muted-foreground shrink-0"
                         data-testid="ChevronRight__pssd" />
                       }

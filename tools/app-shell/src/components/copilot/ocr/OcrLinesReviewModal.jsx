@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
+import { XIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import KindRenderer from './kinds/KindRenderer.jsx';
 
@@ -51,7 +51,7 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], initialR
             aria-label={ui('ocrReviewCancel')}
             className="text-muted-foreground hover:text-muted-foreground"
           >
-            <X size={18} data-testid="X__cdff87" />
+            <XIcon size={18} data-testid="X__cdff87" />
           </button>
         </div>
 

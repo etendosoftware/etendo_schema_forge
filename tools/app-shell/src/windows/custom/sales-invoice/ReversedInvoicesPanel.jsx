@@ -2,7 +2,15 @@ import { useFlaggedGridView } from '@/hooks/useFlaggedGridView.js';
 import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx';
 import { renderGridViewCells } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { ChevronDown, FileText, Loader2, Plus, Search, Trash2, Info } from 'lucide-react';
+import {
+  CaretDownIcon,
+  FileTextIcon,
+  CircleNotchIcon,
+  PlusIcon,
+  MagnifyingGlassIcon,
+  TrashIcon,
+  InfoIcon,
+} from '@phosphor-icons/react';
 import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { parseCalendarDate } from '@/lib/dateOnly.js';
@@ -185,7 +193,7 @@ function InfoTooltip({ text }) {
         tabIndex={-1}
         aria-label={ui('rectMoreInfo')}
       >
-        <Info className="h-3.5 w-3.5" data-testid="Info__4395d6" />
+        <InfoIcon className="h-3.5 w-3.5" data-testid="Info__4395d6" />
       </button>
       {visible && (
         <div className="absolute left-6 top-0 z-50 w-72 rounded-lg bg-inverse px-3 py-2 text-xs text-inverse-foreground shadow-lg">
@@ -575,7 +583,7 @@ function ExpandedForm({
               ? ui('rectifySelectedCount', { count: draftSelectedCount })
               : (lineData?.['reversedInvoice$_identifier'] || ui('rectifySelectInvoices'))}
           </span>
-          <Search className="h-4 w-4 text-muted-foreground shrink-0" data-testid="Search__4395d6" />
+          <MagnifyingGlassIcon className="h-4 w-4 text-muted-foreground shrink-0" data-testid="Search__4395d6" />
         </button>
         {picker(false)}
       </>
@@ -597,7 +605,7 @@ function ExpandedForm({
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border-control bg-card text-muted-foreground hover:text-foreground transition-colors"
             aria-label={ui('rectSearchAria')}
           >
-            <Search className="h-4 w-4" data-testid="Search__4395d6" />
+            <MagnifyingGlassIcon className="h-4 w-4" data-testid="Search__4395d6" />
           </button>
         </div>
         {picker(true)}
@@ -643,7 +651,7 @@ function ExpandedForm({
               data-testid="checkbox__isCorrective"
             >
               {aeatSaving && (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="checkbox__isCorrective-saving" />
+                <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="checkbox__isCorrective-saving" />
               )}
               {!aeatSaving && corrective && (
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
@@ -686,7 +694,7 @@ function ExpandedForm({
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             data-testid="btn__saveNewLine"
           >
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__4395d6" />}
+            {saving && <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__4395d6" />}
             {ui('save')}
           </button>
           <button
@@ -1146,7 +1154,7 @@ export default function ReversedInvoicesPanel({
             {loading && (
               <tr>{renderGridCells(<>
                 <td colSpan={rowColSpan} className="py-10 text-center text-sm text-muted-foreground">
-                  <Loader2
+                  <CircleNotchIcon
                     className="h-4 w-4 animate-spin inline mr-1.5"
                     data-testid="Loader2__4395d6" />
                   {ui('loading')}
@@ -1186,7 +1194,7 @@ export default function ReversedInvoicesPanel({
                         className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border-control bg-card hover:bg-page-bg transition-colors"
                         aria-label={isExpanded ? ui('rectCollapse') : ui('rectExpand')}
                       >
-                        <ChevronDown
+                        <CaretDownIcon
                           className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                           data-testid="ChevronDown__4395d6" />
                       </button>
@@ -1224,8 +1232,8 @@ export default function ReversedInvoicesPanel({
                           data-testid="btn__deleteLine"
                         >
                           {deleting === line.id
-                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__4395d6" />
-                            : <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__4395d6" />}
+                            ? <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__4395d6" />
+                            : <TrashIcon className="h-3.5 w-3.5" data-testid="Trash2__4395d6" />}
                         </button>
                       )}
                     </td>
@@ -1302,7 +1310,7 @@ export default function ReversedInvoicesPanel({
           className="flex items-center gap-1.5 mt-1 px-3 py-2 text-sm text-primary underline-offset-2 hover:underline transition-colors"
           data-testid="btn__addReversedInvoice"
         >
-          <Plus className="h-4 w-4" data-testid="Plus__4395d6" />
+          <PlusIcon className="h-4 w-4" data-testid="Plus__4395d6" />
           {ui('rectAddInvoice')}
         </button>
       )}
@@ -1310,9 +1318,8 @@ export default function ReversedInvoicesPanel({
       {showEmptyState && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <div className="w-10 h-10 rounded-xl bg-page-bg flex items-center justify-center">
-            <FileText
+            <FileTextIcon
               className="h-5 w-5 text-muted-foreground"
-              strokeWidth={1.5}
               data-testid="FileText__4395d6" />
           </div>
           <p className="text-sm font-medium text-foreground">{ui('rectEmptyTitle')}</p>
@@ -1323,7 +1330,7 @@ export default function ReversedInvoicesPanel({
               className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 transition-colors"
               data-testid="btn__addFirstRectificacion"
             >
-              <Plus className="h-4 w-4" data-testid="Plus__4395d6" />
+              <PlusIcon className="h-4 w-4" data-testid="Plus__4395d6" />
               {ui('rectAddInvoice')}
             </button>
           )}
