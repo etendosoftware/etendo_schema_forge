@@ -7,6 +7,10 @@
 // Mock all heavy imports before loading App
 const runtimeSession = vi.hoisted(() => ({ onSessionChange: null }));
 const clearAccountIdentityMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const clearIdentityContextMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('@/lib/observability/identityContext.js', () => ({
+  clearIdentityContext: clearIdentityContextMock,
+}));
 vi.mock('@/lib/flags/bootstrap.js', () => ({
   clearAccountIdentity: clearAccountIdentityMock,
 }));
@@ -211,6 +215,7 @@ describe('App', () => {
 describe('session changes preserve feature-flag identity until logout', () => {
   beforeEach(() => {
     clearAccountIdentityMock.mockClear();
+    clearIdentityContextMock.mockClear();
     runtimeSession.onSessionChange = null;
   });
 
@@ -258,6 +263,19 @@ describe('session changes preserve feature-flag identity until logout', () => {
     runtimeSession.onSessionChange({ token: null, username: undefined, clientId: undefined });
 
     expect(clearAccountIdentityMock).toHaveBeenCalledTimes(1);
+  });
+
+  // ETP-6228 — the shell can stay mounted when the session is lost, so the analytics identity
+  // (ad_user_id, ad_client_id, etgo_account_id) is cleared from the session-loss signal too.
+  it('clears the analytics identity context when the session is lost, not on a company switch', () => {
+    render(<App />);
+
+    runtimeSession.onSessionChange({ token: null, username: 'erp-admin', clientId: 'company-a' });
+    runtimeSession.onSessionChange({ token: null, username: 'erp-admin', clientId: 'company-b' });
+    expect(clearIdentityContextMock).not.toHaveBeenCalled();
+
+    runtimeSession.onSessionChange({ token: null, username: undefined, clientId: undefined });
+    expect(clearIdentityContextMock).toHaveBeenCalledTimes(1);
   });
 });
 
