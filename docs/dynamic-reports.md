@@ -14,6 +14,8 @@ Two shapes exist. The period engine (P&L, balance sheet) reads a `report-periods
 
 `/query` answers `{ kind: 'tree', rows, totals, balance }`: each row carries `opening/debit/credit/closing` plus `cells[i][field] = { amount, sly, prev }`; `balance` is `{ balanced, debitCreditDiff, closingDiff }`.
 
+**`dynamicOnly`.** A parameter or section with `"dynamicOnly": true` is skipped by the old viewer's panel and shown only by the dynamic one (the Trial Balance's `compareTo`, `showOnlyAccountsWithValue` and "Comparación"). A report with `tree: 'chart'` opens the dynamic view only when its descriptor carries `tree` (`opensDynamicView`), else the old viewer.
+
 **`columns` vs `compareTo`.** `reportOffers` offers Columnas only with a hidden `columns` parameter, and the comparison with `compareTo`. The Trial Balance declares `compareTo` alone (comparison without month/quarter columns); P&L and balance sheet declare both.
 
 **`/render`** takes the chart path only when `expandedNodeIds` is sent and the report is `tree: 'chart'`. Extra inputs: `visibleNodeIds` (comma-joined, dimension rows use composite ids such as `S1|bp1`; wins over `expandedNodeIds` and is the exact set of rows on screen) and `compareMovements`. The response carries `meta.chartTotals`, `meta.chartBalance` and `meta.compareMovements`.

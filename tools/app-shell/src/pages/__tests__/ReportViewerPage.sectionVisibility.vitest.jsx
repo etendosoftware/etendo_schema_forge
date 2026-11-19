@@ -240,4 +240,31 @@ describe('ReportViewerPage — accordion section visibleIf (ETP-5128, Trial Bala
     await waitFor(() => expect(screen.queryByText('Dimensions')).not.toBeInTheDocument());
     expect(screen.getByText('Scope')).toBeInTheDocument();
   });
+
+  // ETP-6084: `dynamicOnly` controls (and their section) only the interactive view acts on stay out of the old viewer.
+  it('(e) skips a dynamicOnly section and a dynamicOnly parameter, keeping their siblings', async () => {
+    const user = userEvent.setup();
+    const report = {
+      ...TRIAL_BALANCE_REPORT,
+      sections: [...TRIAL_BALANCE_REPORT.sections, { id: 'comparacion', label: { en_US: 'Comparison' }, dynamicOnly: true }],
+      parameters: [
+        ...TRIAL_BALANCE_REPORT.parameters,
+        { name: 'showOnlyAccountsWithValue', type: 'toggle', label: { en_US: 'Only with value' }, section: 'agrupacion', dynamicOnly: true },
+        { name: 'compareTo', type: 'toggle', label: { en_US: 'Compare To' }, section: 'comparacion', dynamicOnly: true },
+      ],
+    };
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse([report]));
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
+    });
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('Scope')).toBeInTheDocument());
+    await user.click(screen.getByText('Grouping'));
+    await waitFor(() => expect(screen.getByTestId('field-accountLevel-chip')).toBeInTheDocument());
+    expect(screen.queryByText('Comparison')).not.toBeInTheDocument();
+    expect(screen.queryByText('Only with value')).not.toBeInTheDocument();
+    expect(screen.queryByText('Compare To')).not.toBeInTheDocument();
+    expect(screen.getByText('Group results by')).toBeInTheDocument();
+  });
 });

@@ -84,12 +84,23 @@ describe('ReportViewerPage — dynamic-reports switch (ETP-6080)', () => {
     expect(screen.queryByTestId('DynamicReportView')).not.toBeInTheDocument();
   });
 
-  it('flag on: the Trial Balance opens the dynamic view (ETP-6084); flag off keeps the old viewer', async () => {
+  it('flag on: the Trial Balance opens the dynamic view only when its descriptor carries tree "chart"; otherwise (or flag off) the old viewer (ETP-6084)', async () => {
+    const chart = { ...REPORTS[2], tree: 'chart' };
     mockFlagOn = true;
+    globalThis.fetch.mockResolvedValue({ ok: true, json: () => Promise.resolve([REPORTS[0], REPORTS[1], chart]) });
     open('report-trial-balance');
     expect(await screen.findByTestId('DynamicReportView')).toBeInTheDocument();
     cleanup();
+    // An older core: no `tree` in the descriptor, so the old viewer.
+    open('report-trial-balance');
+    cleanup();
+    globalThis.fetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(REPORTS) });
+    open('report-trial-balance');
+    await waitFor(() => expect(screen.getByTestId('action-cancel')).toBeInTheDocument());
+    expect(screen.queryByTestId('DynamicReportView')).not.toBeInTheDocument();
+    cleanup();
     mockFlagOn = false;
+    globalThis.fetch.mockResolvedValue({ ok: true, json: () => Promise.resolve([REPORTS[0], REPORTS[1], chart]) });
     open('report-trial-balance');
     await waitFor(() => expect(screen.getByTestId('action-cancel')).toBeInTheDocument());
     expect(screen.queryByTestId('DynamicReportView')).not.toBeInTheDocument();
@@ -135,8 +146,8 @@ describe('ReportViewerPage — the catalog marks interactive reports', () => {
     render(<ReportViewerPage />);
     await screen.findByText('Balance Sheet');
     const tags = screen.getAllByTestId('DynamicReportBadge');
-    expect(tags).toHaveLength(2);
-    expect(tags.map((t) => t.closest('button').textContent).join('|')).toMatch(/Profit & Loss.*Trial Balance|Trial Balance.*Profit & Loss/);
+    expect(tags).toHaveLength(1); // the Trial Balance's descriptor here has no `tree`: not interactive
+    expect(tags[0].closest('button')).toHaveTextContent('Profit & Loss');
     expect(tags[0]).toHaveAttribute('aria-label', 'dynamicReportBadge: dynamicReportBadgeHint');
   });
 
@@ -195,7 +206,9 @@ describe('ReportViewerPage — URL selections do not leak between reports (ETP-6
 describe('opensDynamicView', () => {
   it('needs both the flag and a listed report', () => {
     expect([...DYNAMIC_REPORT_IDS]).toEqual(['profit-loss', 'report-trial-balance']);
-    expect(opensDynamicView('report-trial-balance', true)).toBe(true);
+    expect(opensDynamicView('report-trial-balance', true)).toBe(false); // needs tree: 'chart'
+    expect(opensDynamicView('report-trial-balance', true, { tree: 'chart' })).toBe(true);
+    expect(opensDynamicView('report-trial-balance', false, { tree: 'chart' })).toBe(false);
     expect(opensDynamicView('profit-loss', true)).toBe(true);
     expect(opensDynamicView('profit-loss', false)).toBe(false);
     expect(opensDynamicView('balance-sheet', true)).toBe(false);

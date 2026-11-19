@@ -421,6 +421,16 @@ describe('report-trial-balance — chart-tree Excel and CSV (ETP-6084)', () => {
     assert.match(plain, /<td>Total<\/td>/);
   });
 
+  it('Excel: every body row has as many cells as the header has columns, with and without movements', () => {
+    for (const movements of [false, true]) {
+      const x = renderChart('template-excel.hbs', { mode: 'sly', movements });
+      const th = (x.match(/<th>/g) || []).length;
+      const rows = x.match(/<tr>[\s\S]*?<\/tr>/g).slice(1);
+      assert.equal(rows.length, 4);
+      for (const r of rows) assert.equal((r.match(/<td/g) || []).length, th, `movements=${movements}`);
+    }
+  });
+
   it('CSV: golden output through csvField, dimension row keeps its parent code, totals line last', () => {
     assert.equal(renderChart('template-csv.hbs'), [
       'Nº Cuenta,Nombre,Nivel,Saldo inicial,Debe,Haber,Saldo final',

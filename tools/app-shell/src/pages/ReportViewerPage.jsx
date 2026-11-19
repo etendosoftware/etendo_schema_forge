@@ -773,7 +773,8 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
 
   const grouped = {};
   for (const p of report.parameters || []) {
-    if (p.hidden || !isParamVisible(p, params)) continue;
+    // `dynamicOnly` (ETP-6084): a control only the interactive view acts on; here it would do nothing.
+    if (p.hidden || p.dynamicOnly || !isParamVisible(p, params)) continue;
     const sec = p.section || 'primary';
     if (!grouped[sec]) grouped[sec] = [];
     grouped[sec].push(p);
@@ -1042,7 +1043,8 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
       </div>
       <div className="flex-1 overflow-y-auto">
         {useAccordion ? (
-          report.sections.map(({ id, label, visibleIf }) => {
+          report.sections.map(({ id, label, visibleIf, dynamicOnly }) => {
+            if (dynamicOnly) return null;
             // A section carrying `visibleIf` (same {param, equals} shape as a
             // field's own, ETP-5128) disappears ENTIRELY while the condition
             // doesn't hold — e.g. Trial Balance's "Dimensions" section only
@@ -1982,7 +1984,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 <ReportListRow
                   key={r.id}
                   report={r}
-                  interactive={opensDynamicView(r.id, dynamicReportsOn)}
+                  interactive={opensDynamicView(r.id, dynamicReportsOn, r)}
                   onRun={selectReport}
                   locale={locale}
                   data-testid="ReportListRow__3c998a" />
@@ -2007,7 +2009,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 <ReportCard
                   key={r.id}
                   report={r}
-                  interactive={opensDynamicView(r.id, dynamicReportsOn)}
+                  interactive={opensDynamicView(r.id, dynamicReportsOn, r)}
                   onRun={selectReport}
                   data-testid="ReportCard__3c998a" />
               ))}
@@ -2159,7 +2161,7 @@ export default function ReportViewerPage() {
     );
   }
 
-  if (selectedReport && opensDynamicView(selectedReport.id, dynamicReportsOn)) {
+  if (selectedReport && opensDynamicView(selectedReport.id, dynamicReportsOn, selectedReport)) {
     return (
       <Suspense
         fallback={<CircleNotchIcon

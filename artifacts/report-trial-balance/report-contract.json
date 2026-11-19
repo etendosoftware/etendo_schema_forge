@@ -33,7 +33,7 @@
     { "id": "agrupacion", "label": { "en_US": "Grouping", "es_ES": "Agrupación" } },
     { "id": "dimensiones", "label": { "en_US": "Dimensions", "es_ES": "Dimensiones" }, "visibleIf": { "param": "accountLevel", "equals": "S" } },
     { "id": "opciones", "label": { "en_US": "Options", "es_ES": "Opciones" } },
-    { "id": "comparacion", "label": { "en_US": "Comparison", "es_ES": "Comparación" } }
+    { "id": "comparacion", "label": { "en_US": "Comparison", "es_ES": "Comparación" }, "dynamicOnly": true }
   ],
   "parameters": [
     { "name": "dateFrom", "label": { "en_US": "From Date", "es_ES": "Desde" }, "type": "date", "required": true, "section": "periodo" },
@@ -55,8 +55,8 @@
     ] },
     { "name": "groupBy", "label": { "en_US": "Group results by", "es_ES": "Agrupar por" }, "type": "select", "section": "agrupacion", "visibleIf": { "param": "accountLevel", "equals": "S" } },
     { "name": "openingEntryAmount", "label": { "en_US": "Opening Entry Amount to Initial Balance", "es_ES": "Importe del asiento de apertura al saldo inicial" }, "type": "toggle", "default": true, "section": "opciones" },
-    {"name": "showOnlyAccountsWithValue", "label": {"en_US": "Show only accounts with value", "es_ES": "Mostrar solo cuentas con valor"}, "type": "toggle", "default": true, "section": "agrupacion"},
-    {"name": "compareTo", "label": {"en_US": "Compare To", "es_ES": "Comparar con"}, "type": "toggle", "default": false, "section": "comparacion"},
+    {"name": "showOnlyAccountsWithValue", "label": {"en_US": "Show only accounts with value", "es_ES": "Mostrar solo cuentas con valor"}, "type": "toggle", "default": true, "section": "agrupacion", "dynamicOnly": true},
+    {"name": "compareTo", "label": {"en_US": "Compare To", "es_ES": "Comparar con"}, "type": "toggle", "default": false, "section": "comparacion", "dynamicOnly": true},
     {"name": "expandedNodeIds", "label": {"en_US": "Expanded rows", "es_ES": "Filas desplegadas"}, "type": "string", "hidden": true}
   ],
   "labels": {

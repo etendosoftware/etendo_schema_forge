@@ -67,7 +67,7 @@ export function expansionForLevel(rows, level, { nested = false } = {}) {
 /**
  * ETP-6084 D6: with `nested`, the rows the level fold hides although their parent is open: the deeper
  * children of a same-level parent that is open only to show its same-level nodes. Empty otherwise.
- * shortcut: the exports' `expandedNodeIds` cannot say it, so a PDF/Excel prints those children; needs a core `hiddenNodeIds`.
+ * The exports send the visible rows as `visibleNodeIds`, so they print what this hides too.
  */
 export function levelHiddenIds(rows, level) {
   const cutoff = LEVEL_RANK[level] ?? LEVEL_RANK.S;
