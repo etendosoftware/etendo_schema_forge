@@ -605,8 +605,8 @@ kebab. Repeat on another quotation with «Facturar directamente» and verify «F
 
 **Automated evidence.** `tools/app-shell/src/windows/custom/sales-quotation/__tests__/QuotationConfirmModal.goToDoc.vitest.jsx`,
 `tools/app-shell/src/windows/custom/sales-quotation/__tests__/QuotationActionModals.etp5398.vitest.jsx`,
-`e2e/tests/flows/sales/sales-quotation-happy-path.integration.spec.js`,
-`e2e/tests/flows/sales/sales-quotation-full-flow.integration.spec.js`.
+`e2e/tests/flows/before-financial-accounts/sales-quotation-happy-path.integration.spec.js`,
+`e2e/tests/flows/before-financial-accounts/sales-quotation-full-flow.integration.spec.js`.
 
 ## Unit column in the lines grid (ETP-5696)
 
