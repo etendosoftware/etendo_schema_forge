@@ -1,22 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { WarningCircleIcon, XIcon } from '@phosphor-icons/react';
+import { InfoIcon, WarningCircleIcon, XIcon } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog.jsx';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
 import { DateField } from '@/components/ui/date-field';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { FIELD_HEIGHT } from '@/components/ui/formDensity';
+import { Field, MaskedAmountInput } from '@/components/forms/fields.jsx';
+import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
-import { formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { extractErrorMessage } from '@/hooks/useEntity.js';
 import { OriginBadge } from './ConversionRateBadges.jsx';
 import { formatRate } from './CurrentRatesSection.jsx';
 import {
-  fetchManualCurrencyOptions, previewManualRate, createManualRate, updateManualRate,
+  fetchManualCurrencyOptions, fetchServerClock, previewManualRate, createManualRate, updateManualRate,
 } from './conversionRatesApi.js';
 import {
   formatWallClock, formatWallClockDate, nowWallClock, parseWallClock, toWallClock,
-  wallClockDate, wallClockTime, isOpenEnded,
+  wallClockDate, wallClockTime, isOpenEnded, displayValidTo, addMillisToWallClock, isAfterWallClock,
 } from './conversionRatesModel.js';
 
 /** Debounce of the preview request while the user types. */
@@ -29,7 +29,7 @@ const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
  * - `newCurrency` — "Nueva divisa": the destination is picked among the active currencies that
  *   have no rates yet (`manualCurrencyOptions {withoutRates: true}`);
  * - `newRate` — "Nueva tasa · CHF": the destination is fixed (a manual card or group header);
- * - `edit` — "Modificar tasa · CHF": PATCH of a manual, unlocked row's rate and start.
+ * - `edit` — "Modificar tasa · CHF": PATCH of a manual row's rate and/or start (any state).
  */
 export const DIALOG_MODES = Object.freeze({ NEW_CURRENCY: 'newCurrency', NEW_RATE: 'newRate', EDIT: 'edit' });
 
@@ -47,16 +47,24 @@ export function parseRateInput(text) {
   return isValid && value != null && value > 0 ? value : null;
 }
 
-function initialState(mode, row) {
+/**
+ * Initial form. A new rate starts at `now` — the SERVER's minute (`serverClock`) once it is
+ * known; the browser's minute is only the fallback while it loads or when it cannot be read.
+ */
+function initialState(mode, row, now = nowWallClock()) {
   if (mode === DIALOG_MODES.EDIT && row) {
     return {
-      rateText: formatPlainDecimal(row.multipleRateBy),
+      rateText: row.multipleRateBy == null ? '' : String(row.multipleRateBy),
       dateIso: wallClockDate(row.validFromDate),
       time: wallClockTime(row.validFromDate),
     };
   }
-  const now = nowWallClock();
   return { rateText: '', dateIso: wallClockDate(now), time: wallClockTime(now) };
+}
+
+/** The inverse of a rate, for the edit summary only (the server stores the real one). */
+function inverseOf(rate) {
+  return rate ? 1 / rate : null;
 }
 
 function PreviewLine({ item, ui }) {
@@ -99,6 +107,36 @@ function PreviewSummary({ preview, mode, destIso, orgIso, ui }) {
   );
 }
 
+/** Edit summary: both directions, old value → new value. */
+function EditSummary({ row, rate, destIso, orgIso, ui }) {
+  const newRate = rate ?? Number(row.multipleRateBy);
+  return (
+    <div className="flex flex-col gap-1.5 rounded-[10px] bg-muted/60 px-3.5 py-3 text-[13px]" data-testid="convrate-dialog-summary">
+      <div className="font-semibold">{ui('convRateEditSummaryTitle')}</div>
+      <div data-testid="convrate-dialog-summary-forward">
+        {`${orgIso} → ${destIso} · ${formatRate(row.multipleRateBy)} → ${formatRate(newRate)}`}
+      </div>
+      <div data-testid="convrate-dialog-summary-inverse">
+        {`${destIso} → ${orgIso} · ${formatRate(row.divideRateBy)} → ${formatRate(inverseOf(newRate))}`}
+      </div>
+    </div>
+  );
+}
+
+/** Amber note of the edit dialog: posted invoices keep their rate. */
+function EditNote({ ui }) {
+  return (
+    <div
+      role="note"
+      className="flex items-start gap-2.5 rounded-[10px] px-3.5 py-3 text-[13px]"
+      style={{ background: '#FFF6E5', color: '#7A3E00' }}
+      data-testid="convrate-dialog-edit-note">
+      <InfoIcon className="mt-px h-4 w-4 shrink-0" aria-hidden="true" data-testid="InfoIcon__convrate" />
+      <span>{ui('convRateEditNote')}</span>
+    </div>
+  );
+}
+
 function ErrorBox({ message }) {
   if (!message) return null;
   return (
@@ -112,8 +150,8 @@ function ErrorBox({ message }) {
   );
 }
 
-const READONLY_INPUT = 'flex h-10 w-full rounded-lg border border-border bg-muted px-3 text-sm text-muted-foreground';
-const LABEL = 'flex flex-col gap-1.5 text-[13px] font-medium';
+/** Field descriptor of the "Moneda destino" picker (the shared form selector needs a key/id). */
+const DESTINATION_FIELD = { key: 'convRateToCurrency', id: 'convRateToCurrency', required: true };
 
 /**
  * ETP-6365 — "Nueva divisa" / "Nueva tasa · X" / "Modificar tasa · X". The server owns every
@@ -143,6 +181,10 @@ export function ManualRateDialog({
   const isNewCurrency = mode === DIALOG_MODES.NEW_CURRENCY;
 
   const [form, setForm] = useState(() => initialState(mode, row));
+  // Server clock read when the dialog opened, and the browser time of that read, so "now" can be
+  // aged while the dialog stays open without trusting the browser's own clock.
+  const [serverNow, setServerNow] = useState(null);
+  const serverNowReadAt = useRef(0);
   const [destId, setDestId] = useState(null);
   const [options, setOptions] = useState([]);
   const [optionsLoaded, setOptionsLoaded] = useState(false);
@@ -161,6 +203,24 @@ export function ManualRateDialog({
     setSubmitError(null);
     setSubmitting(false);
   }, [open, mode, row]);
+
+  // The server's "now": default of Válido desde (new rates) and its upper bound (every mode).
+  useEffect(() => {
+    if (!open) return undefined;
+    const ctrl = new AbortController();
+    setServerNow(null);
+    fetchServerClock(apiFetch, ctrl.signal)
+      .then((now) => {
+        if (!now) return;
+        serverNowReadAt.current = Date.now();
+        setServerNow(now);
+        if (mode !== DIALOG_MODES.EDIT) {
+          setForm((f) => ({ ...f, dateIso: wallClockDate(now), time: wallClockTime(now) }));
+        }
+      })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [open, mode, apiFetch]);
 
   // "Nueva divisa": the currencies that can still receive a first manual rate.
   useEffect(() => {
@@ -185,14 +245,24 @@ export function ManualRateDialog({
     const opt = options.find((o) => o.id === destId);
     return opt ? { currencyId: opt.id, isoCode: opt.isoCode, name: opt.name } : null;
   }, [isNewCurrency, currency, options, destId]);
+  const destinationOptions = useMemo(
+    () => options.map((o) => ({ id: o.id, name: [o.isoCode, o.name].filter(Boolean).join(' · ') })),
+    [options],
+  );
   const destIso = dest?.isoCode ?? '';
   const destCurrencyId = dest?.currencyId ?? null;
 
   const rate = parseRateInput(form.rateText);
   const validFrom = composeValidFrom(form.dateIso, form.time);
   const rateError = touched.rate && rate == null ? ui('convRateRateRequired') : null;
-  const dateError = touched.date && validFrom == null ? ui('convRateValidFromRequired') : null;
-  const inputsValid = Boolean(dest && rate != null && validFrom);
+  // No future starts: the server refuses them, so they are refused here first (field error,
+  // confirm disabled). The bound is the server clock aged by the time the dialog has been open.
+  const nowBound = serverNow ? addMillisToWallClock(serverNow, Date.now() - serverNowReadAt.current) : null;
+  const inFuture = Boolean(validFrom && nowBound && isAfterWallClock(validFrom, nowBound));
+  let dateError = null;
+  if (touched.date && validFrom == null) dateError = ui('convRateValidFromRequired');
+  else if (inFuture) dateError = ui('convRateValidFromFuture');
+  const inputsValid = Boolean(dest && rate != null && validFrom && !inFuture);
 
   // Debounced preview of what creating the rate would do; stale answers are aborted.
   const previewSeq = useRef(0);
@@ -262,7 +332,7 @@ export function ManualRateDialog({
   if (isEdit) title = ui('convRateEditTitle', { currency: destIso });
   let submitLabel = ui('convRateCreateCurrency');
   if (mode === DIALOG_MODES.NEW_RATE) submitLabel = ui('convRateCreateRate');
-  if (isEdit) submitLabel = ui('save');
+  if (isEdit) submitLabel = ui('convRateSaveChanges');
 
   const orgText = orgName ? `${orgIso} · ${orgName}` : orgIso;
   const destText = dest ? [dest.isoCode, dest.name].filter(Boolean).join(' · ') : '';
@@ -282,54 +352,68 @@ export function ManualRateDialog({
               <DialogTitle className="m-0 text-[17px] font-semibold" data-testid="convrate-dialog-title">{title}</DialogTitle>
               <OriginBadge automatic={false} ui={ui} data-testid="convrate-dialog-badge" />
             </div>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={onClose}
               disabled={submitting}
               aria-label={ui('close')}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+              title={ui('close')}
+              className="h-11 w-11 rounded-full text-muted-foreground"
               data-testid="convrate-dialog-close">
               <XIcon className="h-[18px] w-[18px]" aria-hidden="true" data-testid="XIcon__convrate" />
-            </button>
+            </Button>
           </DialogHeader>
           <DialogDescription className="sr-only" data-testid="DialogDescription__51f9a2">{ui('convRateDialogDescription')}</DialogDescription>
 
           <div className="flex flex-col gap-4 px-[22px] py-5">
             <div className="grid grid-cols-2 gap-3">
-              <label className={LABEL}>
-                {ui('convRateOriginCurrency')}
-                <input value={orgText ?? ''} readOnly tabIndex={-1} className={READONLY_INPUT} data-testid="convrate-dialog-origin" />
-              </label>
-              {isNewCurrency ? (
-                <div className={LABEL}>
-                  <span id="convrate-dest-label">{ui('convRateDestinationCurrency')}</span>
-                  <Select value={destId ?? ''} onValueChange={setDestId} data-testid="Select__convrate-dest">
-                    <SelectTrigger
-                      aria-labelledby="convrate-dest-label"
+              <Field label={ui('convRateOriginCurrency')} data-testid="Field__convrate-origin">
+                <Input
+                  value={orgText ?? ''}
+                  readOnly
+                  disabled
+                  aria-label={ui('convRateOriginCurrency')}
+                  data-testid="convrate-dialog-origin" />
+              </Field>
+              <Field label={ui('convRateDestinationCurrency')} required={isNewCurrency} data-testid="Field__convrate-destination">
+                {isNewCurrency ? (
+                  <div data-testid="convrate-dialog-destination">
+                    <CreatableSearchSelect
+                      // Seeds its options from staticOptions on mount only: remount once they load.
+                      key={optionsLoaded ? 'convrate-dest-loaded' : 'convrate-dest-loading'}
+                      field={DESTINATION_FIELD}
+                      value={destId ?? ''}
+                      displayValue={dest ? destText : ''}
+                      onChange={(id) => setDestId(id || null)}
+                      resolvedLabel={ui('convRateDestinationCurrency')}
+                      placeholderOverride={ui('convRateSelectCurrency')}
+                      staticOptions={destinationOptions}
                       disabled={optionsLoaded && options.length === 0}
-                      data-testid="convrate-dialog-destination">
-                      <SelectValue placeholder={ui('convRateSelectCurrency')} data-testid="SelectValue__convrate-dest" />
-                    </SelectTrigger>
-                    <SelectContent data-testid="SelectContent__convrate-dest">
-                      {options.map((o) => (
-                        <SelectItem key={o.id} value={o.id} data-testid={`convrate-dest-option-${o.isoCode}`}>
-                          {[o.isoCode, o.name].filter(Boolean).join(' · ')}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <label className={LABEL}>
-                  {ui('convRateDestinationCurrency')}
-                  <input value={destText} readOnly tabIndex={-1} className={READONLY_INPUT} data-testid="convrate-dialog-destination" />
-                </label>
-              )}
+                      data-testid="CreatableSearchSelect__convrate-dest" />
+                  </div>
+                ) : (
+                  <Input
+                    value={destText}
+                    readOnly
+                    disabled
+                    aria-label={ui('convRateDestinationCurrency')}
+                    data-testid="convrate-dialog-destination" />
+                )}
+              </Field>
             </div>
 
             {isNewCurrency && (
               <div className="-mt-1.5 text-xs text-muted-foreground" data-testid="convrate-dialog-hint">
                 {optionsLoaded && options.length === 0 ? ui('convRateNoCurrencyAvailable') : ui('convRateNewCurrencyHint')}
+              </div>
+            )}
+            {isEdit && row && (
+              <div className="-mt-1.5 text-xs text-muted-foreground" data-testid="convrate-dialog-range">
+                {isOpenEnded(row.validToDate)
+                  ? ui('convRateEditRangeOpen', { from: formatWallClock(row.validFromDate) })
+                  : ui('convRateEditRangeClosed', { from: formatWallClock(row.validFromDate), to: displayValidTo(row) })}
               </div>
             )}
             {mode === DIALOG_MODES.NEW_RATE && currency?.rate != null && (
@@ -344,34 +428,32 @@ export function ManualRateDialog({
             )}
 
             <div className="grid grid-cols-2 gap-3">
-              <div className={LABEL}>
-                <label htmlFor="convrate-rate-input">{ui('convRateRate')}</label>
-                <span
-                  className={`flex h-10 items-center gap-1.5 rounded-lg border bg-card px-3 font-normal focus-within:ring-2 focus-within:ring-focus-ring ${rateError ? 'border-destructive' : 'border-border-control'}`}>
+              <Field label={ui('convRateRate')} required data-testid="Field__convrate-rate">
+                <div
+                  className={`flex ${FIELD_HEIGHT} items-center gap-1.5 rounded-lg border bg-card px-3 text-sm shadow-[0px_1px_2px_rgba(18,18,23,0.05)] focus-within:ring-2 focus-within:ring-focus-ring ${rateError ? 'border-destructive' : 'border-[hsl(var(--border-control))]'}`}>
                   <span className="whitespace-nowrap text-muted-foreground">{ui('convRateOneOrg', { currency: orgIso })}</span>
-                  <input
-                    id="convrate-rate-input"
+                  <MaskedAmountInput
+                    bare
+                    grouping={false}
                     value={form.rateText}
-                    onChange={(e) => setForm((f) => ({ ...f, rateText: e.target.value }))}
+                    onChange={(clean) => setForm((f) => ({ ...f, rateText: clean }))}
                     onBlur={() => setTouched((t) => ({ ...t, rate: true }))}
-                    inputMode="decimal"
-                    autoComplete="off"
-                    required
+                    isRawAllowed={(raw) => !String(raw).includes('-')}
+                    aria-label={ui('convRateRate')}
                     aria-invalid={rateError ? true : undefined}
                     aria-describedby={rateError ? 'convrate-rate-error' : undefined}
-                    className="w-full min-w-0 border-0 bg-transparent text-sm outline-none"
+                    className="w-full min-w-0 border-0 bg-transparent p-0 outline-none focus-visible:ring-0 tabular-nums"
                     data-testid="convrate-dialog-rate" />
                   <span className="text-muted-foreground">{destIso}</span>
-                </span>
+                </div>
                 {rateError && (
-                  <span id="convrate-rate-error" className="text-xs font-normal text-destructive" data-testid="convrate-dialog-rate-error">
+                  <span id="convrate-rate-error" className="block text-xs font-normal text-destructive" data-testid="convrate-dialog-rate-error">
                     {rateError}
                   </span>
                 )}
-              </div>
-              <div className={LABEL}>
-                <span id="convrate-from-label">{ui('convRateValidFromDateTime')}</span>
-                <div className="flex gap-2" role="group" aria-labelledby="convrate-from-label">
+              </Field>
+              <Field label={ui('convRateValidFromDateTime')} required data-testid="Field__convrate-from">
+                <div className="flex gap-2">
                   <DateField
                     value={form.dateIso}
                     onChange={(iso) => {
@@ -380,7 +462,7 @@ export function ManualRateDialog({
                     }}
                     required
                     data-testid="convrate-dialog-date" />
-                  <input
+                  <Input
                     type="time"
                     value={form.time}
                     onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
@@ -388,19 +470,31 @@ export function ManualRateDialog({
                     required
                     aria-label={ui('convRateTime')}
                     aria-invalid={dateError ? true : undefined}
-                    className={`h-10 w-[92px] shrink-0 rounded-lg border bg-card px-2 text-sm font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring ${dateError ? 'border-destructive' : 'border-border-control'}`}
+                    className={`w-[96px] shrink-0 bg-card${dateError ? ' border-destructive' : ''}`}
                     data-testid="convrate-dialog-time" />
                 </div>
                 {dateError ? (
-                  <span className="text-xs font-normal text-destructive" data-testid="convrate-dialog-date-error">{dateError}</span>
+                  <span className="block text-xs font-normal text-destructive" data-testid="convrate-dialog-date-error">{dateError}</span>
                 ) : (
                   mode === DIALOG_MODES.NEW_RATE && (
-                    <span className="text-xs font-normal text-muted-foreground">{ui('convRateValidFromHint')}</span>
+                    <span className="block text-xs font-normal text-muted-foreground">{ui('convRateValidFromHint')}</span>
                   )
                 )}
-              </div>
+              </Field>
             </div>
 
+            {isEdit && row && (
+              <>
+                <EditSummary
+                  row={row}
+                  rate={rate}
+                  destIso={destIso}
+                  orgIso={orgIso}
+                  ui={ui}
+                  data-testid="EditSummary__51f9a2" />
+                <EditNote ui={ui} data-testid="EditNote__51f9a2" />
+              </>
+            )}
             {!isEdit && (
               <PreviewSummary
                 preview={preview}

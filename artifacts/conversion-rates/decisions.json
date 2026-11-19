@@ -22,8 +22,7 @@
         "divideRateBy": { "grid": true, "form": true, "visibility": "readOnly", "type": "number", "publicApi": { "exposed": true }, "_note": "Explicit numeric type, same reason as multipleRateBy. Read-only since ETP-6365: the server derives it from multipleRateBy." },
         "active": { "grid": false, "form": false },
         "sMFCRSynced": { "visibility": "readOnly", "grid": true, "form": true, "section": "principal" },
-        "etgoRateStatus": { "visibility": "readOnly", "grid": true, "form": true, "_note": "ETP-6365: virtual column served by com.etendoerp.go (CURRENT | POSTED | UNUSED); filterable." },
-        "etgoUsedInAccounting": { "visibility": "readOnly", "grid": true, "form": true, "_note": "ETP-6365: virtual column, true when the rate already has posted documents (the lock); filterable." }
+        "etgoRateStatus": { "visibility": "readOnly", "grid": true, "form": true, "_note": "ETP-6365: column served by com.etendoerp.go (CURRENT = rules now | HISTORIC = no longer rules); filterable." }
       }
     }
   },

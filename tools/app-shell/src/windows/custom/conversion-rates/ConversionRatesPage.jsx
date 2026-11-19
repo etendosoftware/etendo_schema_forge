@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { FunnelSimpleIcon, LinkSimpleIcon, PlusIcon } from '@phosphor-icons/react';
+import { FunnelSimpleIcon, LinkSimpleIcon, PlusIcon, PrinterIcon } from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -13,16 +13,19 @@ import { Button } from '@/components/ui/button';
 import { RefreshButton } from '@/components/contract-ui/RefreshButton.jsx';
 import { ListSortPopover } from '@/components/contract-ui/ListSortPopover.jsx';
 import { DeleteConfirmDialog } from '@/components/contract-ui/DeleteConfirmDialog.jsx';
+import ReportDrawer from '@/components/contract-ui/ReportDrawer.jsx';
 import { CurrentRatesSection } from './CurrentRatesSection.jsx';
 import { RateHistorySection } from './RateHistorySection.jsx';
 import { ManualRateDialog, DIALOG_MODES } from './ManualRateDialog.jsx';
 import { fetchCurrentRates, fetchHistory, deleteManualRate } from './conversionRatesApi.js';
 import {
   DEFAULT_PERIOD, PERIODS, ORIGINS, STATUSES,
-  buildHistoryCriteria, groupRatesByCurrency, periodBounds,
+  buildHistoryCriteria, groupRatesByCurrency, periodBounds, displayValidTo, formatWallClock,
 } from './conversionRatesModel.js';
+import { formatRate } from './CurrentRatesSection.jsx';
 
-const ICON_BUTTON_CLASS = 'h-10 w-10 flex items-center justify-center rounded-lg border border-border text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors';
+// Same chrome as ListView's toolbar icon buttons (outline Button, 40px square, grey icon).
+const ICON_BUTTON_CLASS = 'h-10 w-10 rounded-lg bg-card p-0 font-normal text-[#828FA3] hover:bg-[hsl(var(--muted))] hover:text-[#828FA3] [&_svg]:size-5';
 const DEFAULT_SORT = { key: 'validFromDate', direction: 'desc' };
 
 /** History filters, kept in the URL so "Copiar enlace" shares them and Back restores them. */
@@ -61,15 +64,44 @@ function currencyDisplayName(iso, locale) {
   }
 }
 
+/** Legend, worded exactly as the design (Main.dc.html v2). */
 function Legend({ ui }) {
   return (
     <section aria-label={ui('convRateLegend')} className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground" data-testid="convrate-legend">
       <span><b className="font-semibold text-[#17663A]">{ui('convRateStatusCurrent')}</b>{ui('convRateLegendCurrent')}</span>
-      <span><b className="font-semibold text-foreground">{ui('convRateStatusUnused')}</b>{ui('convRateLegendUnused')}</span>
-      <span><b className="font-semibold text-[#8A6100]">{ui('convRateStatusPosted')}</b>{ui('convRateLegendPosted')}</span>
-      <span>{ui('convRateLegendActions')}</span>
+      <span><b className="font-semibold text-foreground">{ui('convRateStatusHistoric')}</b>{ui('convRateLegendHistoric')}</span>
+      <span>
+        {ui('convRateLegendActions1')}
+        <b className="font-semibold">{ui('convRateLegendEdit')}</b>
+        {ui('convRateLegendActions2')}
+        <b className="font-semibold">{ui('convRateLegendDelete')}</b>
+        {ui('convRateLegendActions3')}
+      </span>
     </section>
   );
+}
+
+/**
+ * Print rows: every forward rate matching the filters, in the history's group order, as display
+ * strings (the drawer prints what it is given). Not limited to the 3 most recent per currency.
+ */
+export function buildPrintRows(groups, currencyInfo, ui) {
+  const out = [];
+  for (const group of groups) {
+    const iso = currencyInfo.get(group.currencyId)?.isoCode ?? group.identifier;
+    for (const row of group.rows) {
+      out.push({
+        currency: iso,
+        origin: ui(row.sMFCRSynced === true ? 'convRateOriginAuto' : 'convRateOriginManual'),
+        validFrom: formatWallClock(row.validFromDate),
+        validTo: displayValidTo(row) ?? '—',
+        rate: formatRate(row.multipleRateBy),
+        inverse: formatRate(row.divideRateBy),
+        status: row.etgoRateStatus === 'CURRENT' ? ui('convRateStatusCurrent') : ui('convRateStatusHistoric'),
+      });
+    }
+  }
+  return out;
 }
 
 /**
@@ -255,6 +287,39 @@ export default function ConversionRatesPage({ apiBaseUrl }) {
   }, [title, rows.length, historyLoaded]);
   const copyPageLink = useCopyPageLink();
 
+  // ── Imprimir: the app's list print drawer, fed with the filtered history ────
+  const [printOpen, setPrintOpen] = useState(false);
+  const printColumns = useMemo(() => [
+    { key: 'currency', label: ui('convRateCurrency') },
+    { key: 'origin', label: ui('convRateOrigin') },
+    { key: 'validFrom', label: ui('convRateValidFromDateTime') },
+    { key: 'validTo', label: ui('convRateValidToDateTime') },
+    { key: 'rate', label: ui('convRateOneOrg', { currency: orgIso ?? '' }) },
+    { key: 'inverse', label: ui('convRateInverseHeader', { currency: orgIso ?? '' }) },
+    { key: 'status', label: ui('convRateStatus') },
+  ], [ui, orgIso]);
+  const printRows = useMemo(
+    () => (printOpen ? buildPrintRows(groups, currencyInfo, ui) : null),
+    [printOpen, groups, currencyInfo, ui],
+  );
+  const printFilters = useMemo(() => {
+    const list = [];
+    if (filters.currencyId) {
+      list.push({ label: ui('convRateCurrency'), value: currencyInfo.get(filters.currencyId)?.isoCode ?? filters.currencyId });
+    }
+    const periodKey = {
+      last30: 'convRatePeriodLast30', thisMonth: 'convRatePeriodThisMonth', thisYear: 'convRatePeriodThisYear', custom: 'convRatePeriodCustom',
+    }[filters.period];
+    list.push({ label: ui('convRatePeriod'), value: ui(periodKey) });
+    if (filters.origin !== 'all') {
+      list.push({ label: ui('convRateOrigin'), value: ui(filters.origin === 'auto' ? 'convRateOriginAuto' : 'convRateOriginManual') });
+    }
+    if (filters.status !== 'all') {
+      list.push({ label: ui('convRateStatus'), value: ui(filters.status === 'CURRENT' ? 'convRateStatusCurrent' : 'convRateStatusHistoric') });
+    }
+    return list;
+  }, [filters, currencyInfo, ui]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-auto rounded-tl-2xl bg-card" data-testid="convrate-page">
       <div className="flex flex-col gap-5 px-4 pb-8 pt-3">
@@ -271,15 +336,17 @@ export default function ConversionRatesPage({ apiBaseUrl }) {
             {ui('filters')}
           </Button>
           <div className="flex items-center gap-2">
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={copyPageLink}
               title={ui('copyLink')}
               aria-label={ui('copyLink')}
               className={ICON_BUTTON_CLASS}
               data-testid="convrate-share">
               <LinkSimpleIcon className="h-5 w-5" data-testid="LinkSimpleIcon__convrate" />
-            </button>
+            </Button>
             <ListSortPopover
               columns={sortColumns}
               sortColumn={sort.key}
@@ -289,6 +356,17 @@ export default function ConversionRatesPage({ apiBaseUrl }) {
               isDefaultSort={sort.key === DEFAULT_SORT.key && sort.direction === DEFAULT_SORT.direction}
               data-testid="ListSortPopover__convrate" />
             <RefreshButton onRefresh={reloadAll} label={ui('refresh')} data-testid="RefreshButton__convrate" />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setPrintOpen(true)}
+              aria-label={ui('print')}
+              title={ui('print')}
+              className={ICON_BUTTON_CLASS}
+              data-testid="convrate-print">
+              <PrinterIcon className="h-5 w-5" data-testid="PrinterIcon__convrate" />
+            </Button>
             <Button
               type="button"
               onClick={openNewCurrency}
@@ -355,8 +433,24 @@ export default function ConversionRatesPage({ apiBaseUrl }) {
         onConfirm={confirmDelete}
         onClose={() => setPendingDelete(null)}
         testIdScope="convrate-delete"
+        title={ui('convRateDeleteTitle')}
+        message={pendingDelete ? ui('convRateDeleteMessage', {
+          currency: currencyInfo.get(pendingDelete.toCurrency)?.isoCode ?? pendingDelete['toCurrency$_identifier'] ?? '',
+          from: formatWallClock(pendingDelete.validFromDate),
+        }) : null}
         notice={<p className="text-sm text-muted-foreground" data-testid="convrate-delete-notice">{ui('convRateDeleteNotice')}</p>}
         data-testid="DeleteConfirmDialog__86dbea" />
+      <ReportDrawer
+        open={printOpen}
+        onClose={() => setPrintOpen(false)}
+        windowName="conversion-rates"
+        title={title}
+        columns={printColumns}
+        rows={printRows}
+        activeFilters={printFilters}
+        apiBaseUrl={apiBaseUrl}
+        entity="conversionRate"
+        data-testid="ReportDrawer__convrate" />
     </div>
   );
 }

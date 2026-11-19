@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button';
 import { formatGroupedNumber } from '@/lib/formatCurrency.js';
 import { OriginBadge, CurrencySymbolChip } from './ConversionRateBadges.jsx';
 import {
@@ -56,13 +57,14 @@ function RateCard({ rate, orgIso, ui, onNewRate }) {
           <span data-testid={`convrate-card-footer-${iso}`}>
             {ui('convRateManualSince', { date: formatWallClock(rate.validFrom) })}
           </span>
-          <button
+          <Button
             type="button"
             onClick={() => onNewRate(rate)}
-            className="shrink-0 whitespace-nowrap font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded"
+            variant="link"
+            className="h-auto p-0 text-xs shrink-0 whitespace-nowrap font-medium"
             data-testid={`convrate-card-new-rate-${iso}`}>
             {ui('convRateNewRateLink')}
-          </button>
+          </Button>
         </div>
       )}
     </article>

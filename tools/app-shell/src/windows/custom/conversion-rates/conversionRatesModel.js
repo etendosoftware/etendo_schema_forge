@@ -21,8 +21,8 @@ export const RECENT_ROWS_PER_CURRENCY = 3;
 /** Upper bound of one history read; the history is grouped client-side from a single read. */
 export const HISTORY_MAX_ROWS = 5000;
 
-/** `etgoRateStatus` values (computed by the backend). */
-export const RATE_STATUS = Object.freeze({ CURRENT: 'CURRENT', POSTED: 'POSTED', UNUSED: 'UNUSED' });
+/** `etgoRateStatus` values (computed by the backend): the rate rules now, or it no longer does. */
+export const RATE_STATUS = Object.freeze({ CURRENT: 'CURRENT', HISTORIC: 'HISTORIC' });
 
 /** Period filter ids of the history. */
 export const PERIODS = Object.freeze(['last30', 'thisMonth', 'thisYear', 'custom']);
@@ -32,7 +32,7 @@ export const DEFAULT_PERIOD = 'last30';
 export const ORIGINS = Object.freeze(['all', 'auto', 'manual']);
 
 /** Status filter ids of the history (`all` plus every `RATE_STATUS`). */
-export const STATUSES = Object.freeze(['all', RATE_STATUS.CURRENT, RATE_STATUS.UNUSED, RATE_STATUS.POSTED]);
+export const STATUSES = Object.freeze(['all', RATE_STATUS.CURRENT, RATE_STATUS.HISTORIC]);
 
 const WALL_CLOCK_RE = /^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?/;
 
@@ -102,6 +102,24 @@ export function nowWallClock(reference = new Date()) {
     hour: reference.getHours(),
     minute: reference.getMinutes(),
   });
+}
+
+/**
+ * Wall clock `raw` moved forward by `ms` milliseconds (local-time arithmetic on its parts), as
+ * `yyyy-MM-ddTHH:mm:00`. Used to age the server clock read when a dialog opened.
+ */
+export function addMillisToWallClock(raw, ms) {
+  const p = parseWallClock(raw);
+  if (!p) return null;
+  return nowWallClock(new Date(new Date(p.year, p.month - 1, p.day, p.hour, p.minute).getTime() + Math.max(0, ms || 0)));
+}
+
+/** True when the wall-clock `value` is later than the wall-clock `now` (same minute = not later). */
+export function isAfterWallClock(value, now) {
+  const a = parseWallClock(value);
+  const b = parseWallClock(now);
+  if (!a || !b) return false;
+  return toWallClock(a) > toWallClock(b);
 }
 
 /** True when the validity end is missing or is the open range (year >= {@link OPEN_END_YEAR}). */
@@ -180,7 +198,9 @@ export function periodBounds(period, custom = {}, reference = new Date()) {
 }
 
 /**
- * NEO criteria of the history list. Only FORWARD rows are listed (`currency` = the
+ * NEO criteria of the history list. The period keeps every range IN FORCE during it —
+ * `validFromDate < periodEnd AND validToDate >= periodStart` — so a rate that started before the
+ * period and is still open (`9999-12-31`) is listed too. Only FORWARD rows are listed (`currency` = the
  * organization currency); the inverse row of each period is never shown, its value is the
  * forward row's `divideRateBy`. Every filter is a real column, so it runs in the backend.
  *
@@ -199,8 +219,8 @@ export function buildHistoryCriteria({ orgCurrencyId, currencyId, origin = 'all'
   if (origin === 'auto') criteria.push({ fieldName: 'sMFCRSynced', operator: 'equals', value: true });
   if (origin === 'manual') criteria.push({ fieldName: 'sMFCRSynced', operator: 'equals', value: false });
   if (status && status !== 'all') criteria.push({ fieldName: 'etgoRateStatus', operator: 'equals', value: status });
-  if (bounds?.from) criteria.push({ fieldName: 'validFromDate', operator: 'greaterOrEqual', value: bounds.from });
   if (bounds?.to) criteria.push({ fieldName: 'validFromDate', operator: 'lessThan', value: bounds.to });
+  if (bounds?.from) criteria.push({ fieldName: 'validToDate', operator: 'greaterOrEqual', value: bounds.from });
   return criteria;
 }
 
@@ -215,9 +235,9 @@ export function buildHistoryQuery(criteria) {
   return params.toString();
 }
 
-/** Whether the hover actions (Modificar / Eliminar) apply: manual and not locked by accounting. */
+/** Whether the hover actions (Modificar / Eliminar) apply: every manual row, whatever its state. */
 export function isEditableRate(row) {
-  return Boolean(row) && row.sMFCRSynced !== true && row.etgoUsedInAccounting !== true;
+  return Boolean(row) && row.sMFCRSynced !== true;
 }
 
 function compareValues(a, b) {

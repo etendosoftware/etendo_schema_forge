@@ -1,14 +1,13 @@
+import { Button } from '@/components/ui/button';
 import { CaretDownIcon, CaretRightIcon } from '@phosphor-icons/react';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+import { DistinctValuesFilter } from '@etendosoftware/app-shell-core/components/ui/distinct-values-filter.jsx';
 import { DateField } from '@/components/ui/date-field';
 import { ListModalRowActions } from '@/components/contract-ui/ListModalRowActions.jsx';
 import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
 import { OriginBadge, RateStatusBadge, CurrencySymbolChip } from './ConversionRateBadges.jsx';
 import { formatRate } from './CurrentRatesSection.jsx';
 import {
-  PERIODS, ORIGINS, STATUSES, displayValidTo, formatWallClock, isEditableRate, hasHiddenRows,
+  PERIODS, ORIGINS, STATUSES, DEFAULT_PERIOD, displayValidTo, formatWallClock, isEditableRate, hasHiddenRows,
 } from './conversionRatesModel.js';
 
 const PERIOD_LABEL = {
@@ -21,63 +20,63 @@ const ORIGIN_LABEL = { all: 'convRateAllMasculine', auto: 'convRateOriginAuto', 
 const STATUS_LABEL = {
   all: 'convRateAllMasculine',
   CURRENT: 'convRateStatusCurrent',
-  UNUSED: 'convRateStatusUnused',
-  POSTED: 'convRateStatusPosted',
+  HISTORIC: 'convRateStatusHistoric',
 };
-const ALL = '__all__';
-
-function FilterSelect({ id, label, value, onChange, options, minWidth, testId }) {
+/**
+ * One history filter: a caption over the app's shared list filter (`DistinctValuesFilter`, the
+ * one Not Posted Documents and the advanced filters use), which opens on the committed value.
+ * `allLabel` null = no "all" row (Periodo always has a value).
+ */
+function HistoryFilter({ caption, value, onChange, codes, labelFor, allLabel, testId, ui }) {
   return (
     <div className="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
-      <span id={id}>{label}</span>
-      <Select value={value} onValueChange={onChange} data-testid={`Select__${testId}`}>
-        <SelectTrigger
-          aria-labelledby={id}
-          className="h-[34px] text-[13px] text-foreground"
-          style={{ minWidth }}
-          data-testid={testId}>
-          <SelectValue data-testid={`SelectValue__${testId}`} />
-        </SelectTrigger>
-        <SelectContent data-testid={`SelectContent__${testId}`}>
-          {options.map((o) => (
-            <SelectItem key={o.value} value={o.value} data-testid={`${testId}-option-${o.value}`}>{o.label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <span>{caption}</span>
+      <DistinctValuesFilter
+        value={value}
+        onChange={onChange}
+        codes={codes}
+        labelFor={labelFor}
+        allLabel={allLabel}
+        heading={caption}
+        searchable={false}
+        searchPlaceholder={ui('searchValues')}
+        popoverWidth="w-56"
+        triggerTestId={testId}
+        data-testid={`DistinctValuesFilter__${testId}`} />
     </div>
   );
 }
 
 function HistoryFilters({ filters, onChange, currencies, ui }) {
-  const currencyOptions = [
-    { value: ALL, label: ui('convRateAllFeminine') },
-    ...currencies.map((c) => ({ value: c.currencyId, label: c.isoCode })),
-  ];
+  const isoById = new Map(currencies.map((c) => [c.currencyId, c.isoCode]));
+  const nonAll = (list) => list.filter((code) => code !== 'all');
   return (
     <div id="convrate-history-filters" className="flex flex-wrap items-end gap-2" data-testid="convrate-history-filters">
-      <FilterSelect
-        id="convrate-filter-currency-label"
-        label={ui('convRateCurrency')}
-        value={filters.currencyId ?? ALL}
-        onChange={(v) => onChange({ currencyId: v === ALL ? null : v })}
-        options={currencyOptions}
-        minWidth={150}
+      <HistoryFilter
+        caption={ui('convRateCurrency')}
+        value={filters.currencyId}
+        onChange={(v) => onChange({ currencyId: v || null })}
+        codes={currencies.map((c) => c.currencyId)}
+        labelFor={(id) => isoById.get(id) ?? id}
+        allLabel={ui('convRateAllFeminine')}
         testId="convrate-filter-currency"
-        data-testid="FilterSelect__afdfa2" />
-      <FilterSelect
-        id="convrate-filter-period-label"
-        label={ui('convRatePeriod')}
+        ui={ui}
+        data-testid="HistoryFilter__afdfa2" />
+      <HistoryFilter
+        caption={ui('convRatePeriod')}
         value={filters.period}
-        onChange={(v) => onChange({ period: v })}
-        options={PERIODS.map((p) => ({ value: p, label: ui(PERIOD_LABEL[p]) }))}
-        minWidth={150}
+        onChange={(v) => onChange({ period: v || DEFAULT_PERIOD })}
+        codes={[...PERIODS]}
+        labelFor={(p) => ui(PERIOD_LABEL[p])}
+        allLabel={null}
         testId="convrate-filter-period"
-        data-testid="FilterSelect__afdfa2" />
+        ui={ui}
+        data-testid="HistoryFilter__afdfa2" />
       {filters.period === 'custom' && (
         <>
           <div className="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
             <span>{ui('convRatePeriodFrom')}</span>
-            <div className="w-[150px]">
+            <div className="w-[160px]">
               <DateField
                 value={filters.customFrom ?? ''}
                 onChange={(iso) => onChange({ customFrom: iso || null })}
@@ -86,7 +85,7 @@ function HistoryFilters({ filters, onChange, currencies, ui }) {
           </div>
           <div className="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
             <span>{ui('convRatePeriodTo')}</span>
-            <div className="w-[150px]">
+            <div className="w-[160px]">
               <DateField
                 value={filters.customTo ?? ''}
                 onChange={(iso) => onChange({ customTo: iso || null })}
@@ -95,24 +94,26 @@ function HistoryFilters({ filters, onChange, currencies, ui }) {
           </div>
         </>
       )}
-      <FilterSelect
-        id="convrate-filter-origin-label"
-        label={ui('convRateOrigin')}
-        value={filters.origin}
-        onChange={(v) => onChange({ origin: v })}
-        options={ORIGINS.map((o) => ({ value: o, label: ui(ORIGIN_LABEL[o]) }))}
-        minWidth={130}
+      <HistoryFilter
+        caption={ui('convRateOrigin')}
+        value={filters.origin === 'all' ? null : filters.origin}
+        onChange={(v) => onChange({ origin: v || 'all' })}
+        codes={nonAll(ORIGINS)}
+        labelFor={(o) => ui(ORIGIN_LABEL[o])}
+        allLabel={ui('convRateAllMasculine')}
         testId="convrate-filter-origin"
-        data-testid="FilterSelect__afdfa2" />
-      <FilterSelect
-        id="convrate-filter-status-label"
-        label={ui('convRateStatus')}
-        value={filters.status}
-        onChange={(v) => onChange({ status: v })}
-        options={STATUSES.map((s) => ({ value: s, label: ui(STATUS_LABEL[s]) }))}
-        minWidth={130}
+        ui={ui}
+        data-testid="HistoryFilter__afdfa2" />
+      <HistoryFilter
+        caption={ui('convRateStatus')}
+        value={filters.status === 'all' ? null : filters.status}
+        onChange={(v) => onChange({ status: v || 'all' })}
+        codes={nonAll(STATUSES)}
+        labelFor={(st) => ui(STATUS_LABEL[st])}
+        allLabel={ui('convRateAllMasculine')}
         testId="convrate-filter-status"
-        data-testid="FilterSelect__afdfa2" />
+        ui={ui}
+        data-testid="HistoryFilter__afdfa2" />
     </div>
   );
 }
@@ -156,13 +157,14 @@ function GroupHeader({ group, info, orgIso, expanded, onToggle, onNewRate, ui })
             </span>
           </button>
           {!automatic && (
-            <button
+            <Button
               type="button"
               onClick={() => onNewRate(group.currencyId)}
-              className="ml-4 whitespace-nowrap text-[13px] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded"
+              variant="link"
+              className="h-auto p-0 ml-4 whitespace-nowrap text-[13px] font-medium"
               data-testid={`convrate-group-new-rate-${iso}`}>
               {ui('convRateNewRateLink')}
-            </button>
+            </Button>
           )}
         </div>
       </td>
@@ -190,7 +192,6 @@ function RateRow({ row, symbol, orgSymbol, onEdit, onDelete, deleting, ui }) {
       <td className="px-3 py-[11px]">
         <RateStatusBadge
           status={row.etgoRateStatus}
-          locked={row.etgoUsedInAccounting === true}
           ui={ui}
           data-testid={`convrate-row-status-${row.id}`} />
       </td>
@@ -303,13 +304,14 @@ export function RateHistorySection({
           <span data-testid="convrate-history-show-all-line">
             {ui(showAll ? 'convRateShowingAll' : 'convRateShowingRecent')}
             {' · '}
-            <button
+            <Button
               type="button"
               onClick={onToggleShowAll}
-              className="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded"
+              variant="link"
+              className="h-auto p-0 text-xs font-medium"
               data-testid="convrate-history-show-all">
               {ui(showAll ? 'convRateShowRecent' : 'convRateShowAll')}
-            </button>
+            </Button>
           </span>
         )}
       </div>

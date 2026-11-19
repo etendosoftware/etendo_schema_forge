@@ -1556,6 +1556,9 @@ rule" and the Movimientos kebab bullet) and the `resolveStateKey` entry in `docs
 
 ---
 
+
+**Copy override (ETP-6365).** `DeleteConfirmDialog` takes optional `title` and `message` that replace "Eliminar registros" and the "¿Estás seguro…?" question for a host whose copy must differ (Currency Conversion words it impersonally and names the rate). Omitted, every other surface is unchanged.
+
 ### 10. `window.dateFilterKey` — date range filter column
 
 Declares which list column the date range shortcut in the list toolbar targets.
@@ -1798,6 +1801,8 @@ I want row quick actions on my window
 **Custom action content in hand-built tables.** A hand-built window that needs domain-specific row actions can reuse `DataTable`'s same reserved column, hover-sticky positioning, background mask and horizontal-scroll behavior instead of appending a synthetic actions column. Pass `rowQuickActions.render(row)` for the custom content and `rowQuickActions.buttonCount` for the maximum number of 32px buttons it renders. If the content does not follow the canonical button geometry, pass `rowQuickActions.reservedWidthPx` instead; it takes priority over `buttonCount`. These are direct `DataTable` props for custom React tables, not `decisions.json` keys. Without `render`, the standard `RowQuickActions` behavior is unchanged.
 
 **Edit / delete hover buttons without `DataTable` — `ListModalRowActions` (ETP-6365).** A custom table that does not render through `DataTable` (e.g. the grouped history of Currency Conversion, whose group header rows `DataTable` cannot draw) reuses the list-modal hover buttons: `contract-ui/ListModalRowActions.jsx`, extracted unchanged from `ListModalWindow` (payment terms, match rules). Pencil + trash on the shared 32px `rowVisuals.js` buttons, a spinner while `deleting`, hidden at rest and shown on hover of the nearest `group/row` ancestor (put `group/row` on the `<tr>`) or on keyboard focus. Each button renders only when its handler (`onEdit` / `onClone` / `onDelete`) is passed. Optional props, defaulting to what `ListModalWindow` always rendered: `editLabel` / `deleteLabel` (accessible names, default `ui('edit')` / `ui('delete')`) and `testIdPrefix` (default `list-modal`, so the buttons are `${prefix}-edit-${row.id}` / `${prefix}-delete-${row.id}`).
+
+**Printing a custom list — `ReportDrawer`'s `rows` prop (ETP-6365).** `contract-ui/ReportDrawer.jsx` (the list print drawer `ListView` opens: preview, PDF, Excel, CSV, the organization's list-print design) normally reads every record of `entity` itself. A custom page whose list is a filtered or grouped view (Currency Conversion) passes `rows` — the display rows to print, keyed by the `columns`' `key`s — plus `activeFilters` (`[{label, value}]`), and the drawer prints them as given. Without `rows` nothing changes.
 
 **Visibility is inherited from the edit view.** When an action does not apply to a record (AD permission, document state, `documentPreview` absent, delete gate), it is **hidden** — never rendered as a disabled, greyed-out button. Disabled state is reserved exclusively for the in-flight case (see below). The Delete visibility gate (`hideDeleteWhenComplete` + status check) lives in the shared utility `tools/app-shell/src/utils/recordActions.js`, which is the single source of truth used by both `DetailView` and `RowQuickActions`. Custom `visibleWhen` predicates are AND-chained with that base visibility — they refine, never force-show.
 

@@ -11,6 +11,8 @@
  *     manualCurrencyOptions {withoutRates?} → [{id, isoCode, name, symbol}]
  *     previewManualRate {toCurrency, multipleRateBy, validFromDate} → {creates, closes, error?, errorKey?}
  *     currentRates → [{currencyId, isoCode, name, symbol, origin, rate, validFrom, lastDownloadAt}]
+ *     serverClock → {now: "yyyy-MM-ddTHH:mm:00"} (the server's wall clock: default and upper bound
+ *       of "Válido desde", which can never be later than now)
  *
  * The server creates the inverse rate, closes the previous open range at `start − 1 minute`
  * and refuses overlaps; the UI never computes any of that, it only shows the preview.
@@ -63,6 +65,12 @@ export async function fetchHistory(apiFetch, criteria, signal) {
 export async function fetchCurrentRates(apiFetch, signal) {
   const data = await postAction(apiFetch, 'currentRates', {}, signal);
   return Array.isArray(data) ? data : [];
+}
+
+/** The server's current minute, `yyyy-MM-ddTHH:mm:00` wall clock, or null when unavailable. */
+export async function fetchServerClock(apiFetch, signal) {
+  const data = await postAction(apiFetch, 'serverClock', {}, signal);
+  return typeof data?.now === 'string' ? data.now : null;
 }
 
 /** Active currencies that can still receive a FIRST manual rate (no rates yet, never USD/GBP). */
