@@ -2872,3 +2872,12 @@ completion is refused by the server exactly as before.
 ## Rate and cost fields are numeric — ETP-6342
 
 Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. The header `eTGOCurrencyRate` (`EM_ETGO_Currency_Rate`) is now `decimal` in the contract (`tsType: number`).
+
+## Agent prompt: invoice in another currency — ETP-5850
+
+The `header` entity's `agentPrompt` says how to invoice in another currency: send `currency` on the
+create; the server sets the rate (`eTGOCurrencyRate`) from the conversion rate valid on the invoice
+date (ETP-5840) and the default price list stays valid. Without it, the agent of MCP test
+`f-foreign-currency-invoice` read currencies, price lists and conversion rates first (22 calls against
+Holded's 11). The text lives in this window's `decisions.json` and in `com.etendoerp.go`'s
+`ETGO_SF_ENTITY` sourcedata; keep both equal.
