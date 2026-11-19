@@ -32,7 +32,7 @@ import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
 import { useDocumentCurrency, resolveDualCurrencyDisplay } from './useDocumentCurrency.js';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
 import { getArSubtype } from '@generated/sales-invoice/custom/invoiceSubtype.js';
-import { isCompletedStatus, isDraftStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus, isDraftStatus } from '../../../lib/docStatus.js';
 
 // ETP-4841: a credit instrument is identified by the SIGN of its total, not by its
 // document type. This used to compare `arInvoiceSubtype` against the pre-ETP-4737

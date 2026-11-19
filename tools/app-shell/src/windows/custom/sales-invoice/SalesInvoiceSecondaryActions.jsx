@@ -1,5 +1,5 @@
 import DocumentSecondaryActions from '@/windows/custom/shared/DocumentSecondaryActions';
-import { isCompletedStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 /**
  * Adapts the shared `DocumentSecondaryActions` group to sales-invoice (ETP-5260).

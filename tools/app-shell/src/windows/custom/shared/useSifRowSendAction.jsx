@@ -4,7 +4,7 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { getPendingSifTargets, getSifBodyKey, getSifButtonLabelKey } from './sifSending.js';
 import SifSendingModal from './SifSendingModal.jsx';
-import { isCompletedStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 /**
  * Row-kebab descriptor for "send this invoice to its fiscal system", or `null` when the

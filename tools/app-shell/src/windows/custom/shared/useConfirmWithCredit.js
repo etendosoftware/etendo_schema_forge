@@ -5,7 +5,7 @@ import { useUI } from '@/i18n';
 import { buildHeaders } from '@/auth/api.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { translateQuotaRefusalBody } from '@/lib/backendErrors.js';
-import { isVoidedStatus } from '@/lib/docStatus.js';
+import { isVoidedStatus } from '../../../lib/docStatus.js';
 export function useConfirmWithCredit({
   data,
   recordId,

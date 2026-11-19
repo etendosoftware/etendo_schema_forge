@@ -29,7 +29,7 @@ import SendToEvaluationModal from '@generated/sales-quotation/custom/SendToEvalu
 import QuotationConfirmModal from '@generated/sales-quotation/custom/QuotationConfirmModal';
 import RejectQuotationModal from '@generated/sales-quotation/custom/RejectQuotationModal';
 import CreateRejectReasonModal from '@generated/sales-quotation/custom/CreateRejectReasonModal';
-import { isDraftStatus } from '@/lib/docStatus.js';
+import { isDraftStatus } from '../../../lib/docStatus.js';
 
 // The statuses whose Confirmar opens a modal: DR sends to evaluation; UE, CO (legacy) and ETGO_AC
 // (accepted by the customer from the portal, ETP-6209) convert into an order or an invoice.

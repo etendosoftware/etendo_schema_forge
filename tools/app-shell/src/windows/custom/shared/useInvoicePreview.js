@@ -8,7 +8,7 @@ import { getPendingSifTargets, getSifBodyKey, getSifButtonLabelKey } from './sif
 import { resolveInvoiceOrgId } from './resolveInvoiceOrgId.js';
 import { getStatusBadgeProps, statusLabel } from '@/lib/statusBadge.js';
 import { isPaymentProcessed } from './paymentStatuses.js';
-import { isCompletedStatus, isDraftStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus, isDraftStatus } from '../../../lib/docStatus.js';
 
 /**
  * useInvoicePreview — all data-fetching, state, and handlers for an invoice preview.
@@ -155,9 +155,9 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
   const totalOutstanding = installments.length > 0
     ? installments.reduce((s, i) => s + Math.max(0, Number(i.outstandingAmount ?? 0)), 0)
     : grandTotal;
-  const isDraft = isDraftStatus(status) || status === 'draft';
+  const isDraft = isDraftStatus(status);
   const isFullyPaid = totalOutstanding <= 0 && installments.length > 0;
-  const isCompleted = isCompletedStatus(status) || status === 'complete' || status === 'completed';
+  const isCompleted = isCompletedStatus(status);
   // A draft payment does not lower the invoice's outstanding, but it is already earmarked against
   // it. Offering the whole outstanding again over-pays the invoice the moment both drafts are
   // confirmed, so what is really free is the outstanding minus everything the drafts reserve.

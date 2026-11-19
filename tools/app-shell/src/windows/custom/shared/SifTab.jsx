@@ -20,7 +20,7 @@ import RequiredMark from '@/components/ui/required-mark.jsx';
 import { isSifFieldRequired } from '@/windows/custom/shared/sifRequiredFields.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { isVoidedStatus } from '@/lib/docStatus.js';
+import { isVoidedStatus } from '../../../lib/docStatus.js';
 function Field({ label, htmlFor, children, required = false }) {
   return (
     <div className="space-y-1.5">

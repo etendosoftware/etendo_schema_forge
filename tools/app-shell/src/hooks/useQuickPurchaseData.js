@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { isCompletedStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus } from '../lib/docStatus.js';
 
 // -- Helpers ------------------------------------------------------------------
 

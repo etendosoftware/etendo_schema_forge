@@ -15,7 +15,7 @@ import {
   PORTAL_KIND_GROUPS, PORTAL_KIND_META, documentLabelKey, initialPortalRange, quotationValidity,
   toCalendarParam,
 } from './portalPresentation.js';
-import { isCompletedStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus } from '../../lib/docStatus.js';
 
 const SEARCH_DEBOUNCE_MS = 300;
 

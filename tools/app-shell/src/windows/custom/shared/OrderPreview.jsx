@@ -13,7 +13,7 @@ import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
 import { getSalesRelatedDocs, getPurchaseRelatedDocs } from '@/components/related-documents';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
-import { isCompletedStatus, isDraftStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus, isDraftStatus } from '../../../lib/docStatus.js';
 
 // ── General tab content ───────────────────────────────────────────────────────
 

@@ -7,7 +7,7 @@ import { useReturnReceiptPdf } from './useReturnReceiptPdf.js';
 import { downloadBlobAsFile } from '../shared/pdfUtils.js';
 import { buildReturnPreviewContent } from '../shared/preview-cards/buildReturnPreviewContent.jsx';
 import { SALES_RELATED_DOCS } from '@/components/related-documents/salesRelatedDocs.js';
-import { isCompletedStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUrl, windowName, onClose, onEdit, readOnly = false }) {
   const ui = useUI();

@@ -1,5 +1,5 @@
 import { useUI } from '@/i18n';
-import { isDraftStatus } from '@/lib/docStatus.js';
+import { isEditableStatus } from '../../lib/docStatus.js';
 
 export default function LinesEmptyState({
   data,
@@ -11,7 +11,7 @@ export default function LinesEmptyState({
   padding = '32px 24px',
 }) {
   const ui = useUI();
-  const isDraft = !data?.documentStatus || isDraftStatus(data.documentStatus);
+  const isDraft = !data?.documentStatus || isEditableStatus(data.documentStatus);
   if (!isDraft) return null;
 
   const primaryButton = canAddLine ? (

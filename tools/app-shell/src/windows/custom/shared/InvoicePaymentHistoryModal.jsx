@@ -10,7 +10,7 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { openCenteredPopup } from '@/lib/popupWindow.js';
 import { isPaymentProcessed, paymentDisplayState } from './paymentStatuses';
 import NewPaymentEntryModal from './NewPaymentEntryModal.jsx';
-import { isCompletedStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 function fmtDate(raw) {
   if (!raw) return '—';

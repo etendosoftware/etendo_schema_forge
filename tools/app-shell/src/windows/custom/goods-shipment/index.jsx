@@ -21,7 +21,7 @@ import GoodsShipmentConfirmModal from '@generated/goods-shipment/custom/GoodsShi
 import { useShipmentPdf } from './useShipmentPdf';
 import GoodsShipmentPreview from './GoodsShipmentPreview';
 import { ACCOUNTING_CAPABILITY } from '@/lib/capabilityVisibility.js';
-import { isCompletedStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 const LABEL_OVERRIDES = {
   es_ES: { InvoiceStatus: 'Estado de facturación' },

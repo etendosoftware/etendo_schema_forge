@@ -1,7 +1,7 @@
 import { useUI } from '@/i18n';
 import { requestSifSendModal } from './sifSending.js';
 import { useInvoiceSifSending } from './useInvoiceSifSending.js';
-import { isCompletedStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 /**
  * Form-view kebab (⋮) entry that sends the open invoice to its fiscal system(s).

@@ -1,5 +1,5 @@
 import { listAll, listLines } from './importActionClient.js';
-import { isCompletedStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 /**
  * The data side of the four «Importar desde…» popups of a goods shipment / goods receipt

@@ -3,7 +3,7 @@ import { isBack } from '../ocrFlowSignals.js';
 import { buildSearchUrl, deriveSelectorUrl, deriveSpecBase, readSearchRows } from '../ocrQuery.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
-import { isVoidedStatus } from '@/lib/docStatus.js';
+import { isVoidedStatus } from '../../../../lib/docStatus.js';
 
 /**
  * Translate the vision-LLM extracted JSON for a purchase invoice into a list

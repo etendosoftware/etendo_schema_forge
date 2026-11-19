@@ -1,7 +1,7 @@
 import {
   ImportLoadError, MAX_ACTION_PAGE, actionErrorMessage, actionUrl, listAll, listLines, newestCreatedFirst,
 } from './importActionClient.js';
-import { isCompletedStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 // ETP-6099: the read-action client, the load-error class and its sentence moved to the shared
 // `importActionClient.js` every «Importar desde…» popup uses; re-exported so this module's callers

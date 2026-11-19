@@ -10,7 +10,7 @@ import { useRowEmailModal } from './useRowEmailModal.jsx';
 import OrderPreview from './OrderPreview.jsx';
 import { SEND_VISIBLE_WHEN_CONFIRMED } from './sendActionVisibility.js';
 import { readOrderPendingDocs } from './orderPendingDocs.js';
-import { isCompletedStatus, isDraftStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus, isDraftStatus } from '../../../lib/docStatus.js';
 
 export function useOrderWindow({
   windowName,

@@ -1,7 +1,7 @@
 import { getProgressTone } from '@/lib/progressTone';
 import DocumentStatusPill from '@/components/contract-ui/DocumentStatusPill';
 import ProgressRing from '@/components/contract-ui/ProgressRing';
-import { isCompletedStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 /**
  * Header progress badge backed by a 0..100 percentage field (delivered, received,

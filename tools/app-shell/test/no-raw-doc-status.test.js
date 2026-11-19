@@ -19,11 +19,23 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const SRC = join(__dirname, '..', 'src');
 const OPT_OUT = 'doc-status-ok';
 
-// `<something mentioning status> ===|!== 'DR'|'CO'|'VO'` (either operand order).
-const CODE = `(['"\`])(?:DR|CO|VO)\\1`;
-const RAW = new RegExp(
-  `(?:[Ss]tatus\\w*\\)?\\s*[!=]==?\\s*${CODE})|(?:${CODE}\\s*[!=]==?\\s*[\\w.?]*[Ss]tatus)`,
-);
+// A line is an offender when it compares with `===`/`!==`/`==`/`!=` (either operand order) a raw
+// DR/CO/VO literal AND names a status somewhere on the line, so `statusOf(r) === 'DR'`,
+// `'CO' === row.documentStatus` and `row.status !== 'VO'` are caught while a SII state such as
+// `aeatsiiEstado === 'CO'` is not. Also flagged: `case 'DR':` and `['DR', ...].includes(` forms.
+// Known gaps (documented, not caught): a status compared through an intermediate variable that is
+// not named *status* (`const s = row.x; s === 'DR'`), array constants not followed by
+// `.includes(`/`.some(` on the same line, and status arguments built by string concatenation.
+const LIT = `['"\`](?:DR|CO|VO)['"\`]`;
+const CMP = new RegExp(`(?:[!=]==?\\s*${LIT})|(?:${LIT}\\s*[!=]==?)`);
+const CASE = new RegExp(`\\bcase\\s+${LIT}\\s*:`);
+const ARRAY_INCLUDES = new RegExp(`\\[[^\\]]*${LIT}[^\\]]*\\]\\s*\\.(?:includes|some)\\([^)]*status`, 'i');
+
+export function isRawDocStatusLine(line) {
+  if (CASE.test(line)) return true;
+  if (ARRAY_INCLUDES.test(line)) return true;
+  return CMP.test(line) && /status/i.test(line);
+}
 
 const ALLOWED = new Set([
   'lib/docStatus.js',
@@ -49,19 +61,50 @@ function blankComments(source) {
     .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length));
 }
 
+function scan(source) {
+  const raw = source.split('\n');
+  const out = [];
+  blankComments(source).split('\n').forEach((line, i) => {
+    if (!isRawDocStatusLine(line)) return;
+    if (raw[i].includes(OPT_OUT) || (raw[i - 1] || '').includes(OPT_OUT)) return;
+    out.push(`${i + 1}: ${raw[i].trim()}`);
+  });
+  return out;
+}
+
 describe('no raw docStatus literal comparisons (ETP-6232)', () => {
   it('uses lib/docStatus.js helpers instead', () => {
     const offenders = [];
     for (const file of collect(SRC)) {
       const rel = relative(SRC, file).split(sep).join('/');
       if (ALLOWED.has(rel)) continue;
-      const raw = readFileSync(file, 'utf8').split('\n');
-      blankComments(raw.join('\n')).split('\n').forEach((line, i) => {
-        if (!RAW.test(line)) return;
-        if (raw[i].includes(OPT_OUT) || (raw[i - 1] || '').includes(OPT_OUT)) return;
-        offenders.push(`${rel}:${i + 1}: ${raw[i].trim()}`);
-      });
+      for (const o of scan(readFileSync(file, 'utf8'))) offenders.push(`${rel}:${o}`);
     }
     assert.deepEqual(offenders, [], `Raw docStatus comparisons found; use src/lib/docStatus.js:\n${offenders.join('\n')}`);
+  });
+});
+
+describe('isRawDocStatusLine matcher (self-test)', () => {
+  for (const line of [
+    "if (row.documentStatus === 'DR') {}",
+    "if (data?.documentStatus !== \"CO\") {}",
+    "const x = 'CO' === row.docStatus;",
+    "rows.some((r) => statusOf(r) === 'DR')",
+    "switch (s) { case 'DR': break; }",
+    "['DR', 'CO'].includes(row.documentStatus)",
+  ]) it(`flags ${line}`, () => assert.equal(isRawDocStatusLine(line), true));
+
+  for (const line of [
+    "isDraftStatus(row.documentStatus)",
+    "{ field: 'documentStatus', operator: 'equals', value: 'CO' }",
+    "await post({ docAction: 'CO' })",
+    "!['CO', 'AE'].includes(data?.aeatsiiEstado ?? '')",
+    "const cls = documentStatus === DOC_STATUS.DRAFT;",
+  ]) it(`ignores ${line}`, () => assert.equal(isRawDocStatusLine(line), false));
+
+  it('ignores comments and honours the opt-out via the scan', () => {
+    const src = ["// documentStatus === 'DR'", "x = status === 'CO'; // doc-status-ok: fixture"].join('\n');
+    assert.deepEqual(scan(src), []);
+    assert.equal(scan("x = status === 'CO';").length, 1);
   });
 });

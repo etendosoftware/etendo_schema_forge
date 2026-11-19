@@ -7,7 +7,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { extractErrorMessage, readMessageKeys, PROCESS_FAILURE_TOAST_DURATION_MS } from '@/hooks/useEntity.js';
 import { documentPeriodDate, periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { buildDocumentRowQuickActionsPostMenu } from '../shared/buildDocumentRowQuickActions.js';
-import { isDraftStatus } from '@/lib/docStatus.js';
+import { isDraftStatus } from '../../../lib/docStatus.js';
 
 // ETP-5445 — the form's draftMode "Confirmar" is not a DocAction: it POSTs the
 // `processNow` AD button with the mandatory M_Internal_Consumption_Post `action`

@@ -7,7 +7,7 @@ import { ConfirmResultModal } from '@/components/contract-ui';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { buildHeaders } from '@/auth/api.js';
-import { isDraftStatus } from '@/lib/docStatus.js';
+import { isDraftStatus } from '../../../lib/docStatus.js';
 
 /**
  * ETP-5378 — "Confirmar" in the grid's row-hover kebab for the two albarán windows,

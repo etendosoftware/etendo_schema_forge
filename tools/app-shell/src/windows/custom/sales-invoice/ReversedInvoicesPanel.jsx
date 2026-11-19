@@ -20,7 +20,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
 import SharedInvoicePickerModal from '@/components/contract-ui/InvoicePickerModal.jsx';
 import { useFiscalModelsCatalog, isModelActive } from '@/windows/custom/fiscal-models/useFiscalModelsCatalog.js';
-import { isVoidedStatus } from '@/lib/docStatus.js';
+import { isVoidedStatus } from '../../../lib/docStatus.js';
 /* eslint-disable react/prop-types */
 
 // ETP-5059 — the 349 period of a corrective is NOT free: AEAT349_CINVREV_TRG0 (module

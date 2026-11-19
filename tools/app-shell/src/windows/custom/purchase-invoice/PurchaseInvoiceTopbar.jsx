@@ -7,7 +7,7 @@ import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.j
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 import FollowUpDocumentButton from '@/components/follow-up-documents/FollowUpDocumentButton.jsx';
 import { PURCHASE_INVOICE_FOLLOW_UP } from '../shared/invoiceFollowUp.js';
-import { isCompletedStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 // ETP-5260 — Clone/SendToSif/Copy-link moved to the topbarSecondary slot
 // (PurchaseInvoiceSecondaryActions). This component now only renders the

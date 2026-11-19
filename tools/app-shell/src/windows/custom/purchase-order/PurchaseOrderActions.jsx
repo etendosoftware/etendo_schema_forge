@@ -8,7 +8,7 @@ import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { isCompletedStatus, isDraftStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus, isDraftStatus } from '../../../lib/docStatus.js';
 /* eslint-disable react/prop-types */
 
 /**

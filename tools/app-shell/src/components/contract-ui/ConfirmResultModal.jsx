@@ -10,7 +10,7 @@ import {
 import { useUI } from '@/i18n';
 import { StatusTag } from '@/components/ui/status-tag';
 import { isOwnEscape, useDialogFocusTrap } from './ActionChoiceModal.jsx';
-import { isCompletedStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus } from '../../lib/docStatus.js';
 
 // ── Type config ───────────────────────────────────────────────────────────────
 // One row per document type: card label, single-document title, «Ver ...» button label, card

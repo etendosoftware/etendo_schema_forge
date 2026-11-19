@@ -14,7 +14,7 @@ import EmailsCard from '../shared/preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from '../shared/preview-cards/RelatedDocumentsCard.jsx';
 
 import { SALES_RELATED_DOCS } from '@/components/related-documents/salesRelatedDocs.js';
-import { isCompletedStatus, isDraftStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus, isDraftStatus } from '../../../lib/docStatus.js';
 // ── Tab content components ────────────────────────────────────────────────────
 
 function ShipmentStatsPanel({ shipment, partnerName, movementDate, ui }) {

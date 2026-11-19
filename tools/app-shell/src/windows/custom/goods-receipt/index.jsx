@@ -23,7 +23,7 @@ import ConfirmGoodsReceiptModal from '@generated/goods-receipt/custom/ConfirmGoo
 
 import { buildHeaders } from '@/auth/api.js';
 import { ACCOUNTING_CAPABILITY } from '@/lib/capabilityVisibility.js';
-import { isCompletedStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 const HEADER_COLUMNS = [
   { key: 'movementDate', column: 'MovementDate', type: 'date', dot: false, required: true },
   { key: 'orderReference', column: 'POReference', type: 'string' },

@@ -1,4 +1,3 @@
-import { isCompletedStatus } from '@/lib/docStatus.js';
 // Single source of truth for the "Saldo pendiente" badge state of an invoice
 // (list grid + detail topbar, AR and AP alike).
 //
@@ -17,6 +16,8 @@ import { isCompletedStatus } from '@/lib/docStatus.js';
 // `const isCreditInstrument = grandTotal < 0`.
 
 /** Amounts below this are treated as zero — guards against float dust in sums. */
+import { isCompletedStatus } from '../../../lib/docStatus.js';
+
 const EPSILON = 0.001;
 
 /**

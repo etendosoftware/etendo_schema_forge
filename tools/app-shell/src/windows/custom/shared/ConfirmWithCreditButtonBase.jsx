@@ -6,7 +6,7 @@ import ConfirmInOutModal from '@/components/contract-ui/ConfirmInOutModal';
 import { documentPeriodDate } from '@/lib/periodNotAvailable.js';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { useConfirmWithCredit } from './useConfirmWithCredit';
-import { isCompletedStatus, isDraftStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus, isDraftStatus } from '../../../lib/docStatus.js';
 
 /**
  * Confirm flow + completed-state actions shared by the two return windows

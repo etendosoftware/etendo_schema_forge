@@ -294,6 +294,7 @@ A computed column that reads a table from **another module** needs that module d
 **Never compare a document status against a raw literal (`documentStatus === 'DR'`, `status !== 'CO'`).** The lifecycle (DR draft -> CO completed -> VO voided, plus UE) and the rule "editable only in draft" live in one place: `tools/app-shell/src/lib/docStatus.js` (`isDraftStatus`, `isCompletedStatus`, `isVoidedStatus`, `isEditableStatus`, `docStatusCode`, `DOC_STATUS`). A new edge status (VO, UE, IP) must change behaviour there, not in dozens of files.
 
 - Guardrail: `tools/app-shell/test/no-raw-doc-status.test.js` fails on new raw comparisons. Opt out only with a visible `doc-status-ok: <reason>` comment on or above the line.
+- "Editable only in draft" lives only in `isEditableStatus`: use it wherever the question is "can the user edit"; use `isDraftStatus` for lifecycle checks (print exclusion, PDF caching). Modules loaded by plain `node --test` must import the helper by relative path, not `@/`.
 - Filter payloads (`value: 'CO'`) and action codes (`docAction: 'CO'`) are not comparisons and are unaffected.
 
 ## Currency & Amount Formatting

@@ -12,7 +12,7 @@ import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
 import { SALES_RELATED_DOCS } from '@/components/related-documents';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
-import { isDraftStatus } from '@/lib/docStatus.js';
+import { isDraftStatus } from '../../../lib/docStatus.js';
 
 // Statuses that mean the quotation is no longer editable
 

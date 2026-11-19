@@ -7,7 +7,7 @@ import { useReturnToVendorPdf } from './useReturnToVendorPdf.js';
 import { downloadBlobAsFile } from '../shared/pdfUtils.js';
 import { PURCHASE_RELATED_DOCS } from '@/components/related-documents';
 import { buildReturnPreviewContent } from '../shared/preview-cards/buildReturnPreviewContent.jsx';
-import { isCompletedStatus, isDraftStatus } from '@/lib/docStatus.js';
+import { isCompletedStatus, isDraftStatus } from '../../../lib/docStatus.js';
 
 export default function ReturnToVendorShipmentPreview({ shipment, token, apiBaseUrl, windowName, onClose, onEdit, readOnly = false }) {
   const ui = useUI();

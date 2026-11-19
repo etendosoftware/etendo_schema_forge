@@ -14,7 +14,7 @@ import { hasClientPdf, buildClientPdfBlob, buildClientHtml } from '@/windows/cus
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch as ambientApiFetch } from '@/auth/api.js';
-import { isDraftStatus } from '@/lib/docStatus.js';
+import { isDraftStatus } from '../../lib/docStatus.js';
 /**
  * Posts rendered HTML to jsreport (through the Vite `/jsreport` proxy) and
  * returns the resulting PDF blob.
