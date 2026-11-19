@@ -13,7 +13,7 @@
 //      compose correctly through the real component, not just through a mocked stand-in.
 //
 // FmBoxes303 is deliberately left UNMOCKED here — only its heavier siblings (FmOverlays,
-// AeatSubmitFlow, FmTabContent, lucide-react) are stubbed, following the same minimal-mock
+// AeatSubmitFlow, FmTabContent, @phosphor-icons/react) are stubbed, following the same minimal-mock
 // convention as FmModel303Page.precomputed.vitest.jsx.
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';

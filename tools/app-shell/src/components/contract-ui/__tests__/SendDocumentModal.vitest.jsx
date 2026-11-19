@@ -24,10 +24,17 @@ vi.mock('sonner', () => ({
 
 // Icons render as bare <svg>s carrying their data-testid, so their position inside a button
 // can be asserted without pulling in the real icon set.
-vi.mock('lucide-react', () => {
+vi.mock('@phosphor-icons/react', () => {
   const icon = (name) => (props) => <svg data-testid={props['data-testid']} data-icon={name} />;
   return Object.fromEntries(
-    ['Download', 'Mail', 'Maximize', 'Plus', 'Search', 'Loader2', 'X'].map((name) => [name, icon(name)]),
+    [
+      ['DownloadSimpleIcon', 'Download'],
+      ['EnvelopeSimpleIcon', 'Mail'],
+      ['ArrowsOutIcon', 'Maximize'],
+      ['PlusIcon', 'Plus'],
+      ['MagnifyingGlassIcon', 'Search'],
+      ['XIcon', 'X'],
+    ].map(([name, label]) => [name, icon(label)]),
   );
 });
 
@@ -1274,7 +1281,7 @@ describe('SendDocumentModal — header', () => {
     const onClose = vi.fn();
     render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onClose={onClose} />);
     const close = screen.getByRole('button', { name: 'close' });
-    // Figma "Close": the lucide X icon, not a text glyph.
+    // Figma "Close": the Phosphor X icon, not a text glyph.
     expect(close.querySelector('[data-icon="X"]')).not.toBeNull();
     await user.click(close);
     expect(onClose).toHaveBeenCalledTimes(1);

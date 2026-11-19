@@ -2,9 +2,15 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import {
-  LayoutGrid, ArrowUpDown,
-  ChevronDown, Calendar, Clock, TriangleAlert, OctagonAlert, Check,
-} from 'lucide-react';
+  SquaresFourIcon,
+  ArrowsDownUpIcon,
+  CaretDownIcon,
+  CalendarBlankIcon,
+  ClockIcon,
+  WarningIcon,
+  WarningOctagonIcon,
+  CheckIcon,
+} from '@phosphor-icons/react';
 import { EmptyState, KpiWidget, FmInfoTooltip } from './FmCommon.jsx';
 import { FmStatusChip } from './FmDetailChrome.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
@@ -112,9 +118,8 @@ function FilterDropdown({ label, value, options, onChange }) {
         aria-expanded={open}
       >
         {selectedLabel}
-        <ChevronDown
+        <CaretDownIcon
           size={12}
-          strokeWidth={1.75}
           style={{ opacity: .6 }}
           data-testid="ChevronDown__cb728e" />
       </button>
@@ -128,9 +133,8 @@ function FilterDropdown({ label, value, options, onChange }) {
             onClick={() => { onChange('all'); setOpen(false); }}
           >
             <span style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: value === 'all' ? 500 : 400 }}>{label}</span>
-            {value === 'all' && <Check
+            {value === 'all' && <CheckIcon
               size={14}
-              strokeWidth={2}
               style={{ color: 'hsl(var(--foreground))', flexShrink: 0 }}
               data-testid="Check__cb728e" />}
           </button>
@@ -153,9 +157,8 @@ function FilterDropdown({ label, value, options, onChange }) {
                 onClick={() => { onChange(opt.value); setOpen(false); }}
               >
                 {optLabel}
-                {value === opt.value && <Check
+                {value === opt.value && <CheckIcon
                   size={14}
-                  strokeWidth={2}
                   style={{ color: 'hsl(var(--foreground))', flexShrink: 0 }}
                   data-testid="Check__cb728e" />}
               </button>
@@ -371,7 +374,7 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
     <div data-testid="fm-list-kpi-row" style={{ display: 'flex', gap: 12, padding: '8px 16px 12px', background: 'hsl(var(--card))', flexShrink: 0 }}>
       <div style={{ flex: '1 1 0%', minWidth: 0 }}>
         <KpiWidget
-          icon={<Calendar size={20} strokeWidth={1.75} data-testid="Calendar__cb728e" />}
+          icon={<CalendarBlankIcon size={20} data-testid="Calendar__cb728e" />}
           iconColor="hsl(var(--muted-foreground))"
           label={t('fm.kpi.upcoming') ?? 'Por vencer'}
           badge={t('fm.kpi.upcoming_sub') ?? 'Esta semana'}
@@ -384,7 +387,7 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
       </div>
       <div style={{ flex: '1 1 0%', minWidth: 0 }}>
         <KpiWidget
-          icon={<Clock size={20} strokeWidth={1.75} data-testid="Clock__cb728e" />}
+          icon={<ClockIcon size={20} data-testid="Clock__cb728e" />}
           iconColor="hsl(var(--muted-foreground))"
           label={t('fm.kpi.pending') ?? 'Pendientes'}
           badge={t('fm.kpi.pending_sub') ?? 'Sin presentar'}
@@ -397,7 +400,7 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
       </div>
       <div style={{ flex: '1 1 0%', minWidth: 0 }}>
         <KpiWidget
-          icon={<TriangleAlert size={20} strokeWidth={1.75} data-testid="TriangleAlert__cb728e" />}
+          icon={<WarningIcon size={20} data-testid="TriangleAlert__cb728e" />}
           iconColor="hsl(var(--muted-foreground))"
           label={t('fm.m303.kpi.incidents') ?? 'Incidencias'}
           badge={incidentIndicator?.label ?? t('fm.incidents.none') ?? 'Sin incidencias'}
@@ -494,7 +497,7 @@ function IncidentsCell({ blocking, warning, t }) {
           padding: '2px 8px', borderRadius: 6, fontSize: 12, fontWeight: 500,
           background: 'var(--status-destructive-bg)', color: 'hsl(var(--destructive))',
         }}>
-          <OctagonAlert size={12} strokeWidth={1.75} data-testid="OctagonAlert__cb728e" /> {blocking}
+          <WarningOctagonIcon size={12} data-testid="OctagonAlert__cb728e" /> {blocking}
         </span>
       )}
       {warning > 0 && (
@@ -503,7 +506,7 @@ function IncidentsCell({ blocking, warning, t }) {
           padding: '2px 8px', borderRadius: 6, fontSize: 12, fontWeight: 500,
           background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)',
         }}>
-          <TriangleAlert size={12} strokeWidth={1.75} data-testid="TriangleAlert__cb728e" /> {warning}
+          <WarningIcon size={12} data-testid="TriangleAlert__cb728e" /> {warning}
         </span>
       )}
     </span>
@@ -1378,7 +1381,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           onClick={() => setShowCatalog(true)}
           data-testid="fm-list-catalog-button"
         >
-          <LayoutGrid className="h-3.5 w-3.5" data-testid="LayoutGrid__cb728e" />
+          <SquaresFourIcon className="h-3.5 w-3.5" data-testid="LayoutGrid__cb728e" />
           {t('fm.catalog.title') ?? 'Catálogo de modelos'}{catalogLoaded ? ` (${activeCount})` : ''}
         </Button>
         {catalogLoaded && activeCount > 0 && (
@@ -1438,7 +1441,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             onClick={() => setShowSortMenu(o => !o)}
             style={sortColumn ? { color: 'hsl(var(--foreground))', borderColor: 'var(--fm-border-2)' } : undefined}
           >
-            <ArrowUpDown size={16} strokeWidth={1.75} data-testid="ArrowUpDown__cb728e" />
+            <ArrowsDownUpIcon size={16} data-testid="ArrowUpDown__cb728e" />
           </button>
           {showSortMenu && (
             // Right-anchored: the sort button is the last item of the toolbar row (ETP-5584).
@@ -1489,7 +1492,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
       {/* ── Overlays ─────────────────────────────────────────────── */}
       {/* Mounted only while a delete is pending confirmation (matches the
           showNewDecl/showCatalog convention below) — Dialog/DialogContent pulls
-          in lucide-react's X icon at render time even when `open` is false, so
+          in the close (X) icon at render time even when `open` is false, so
           keeping this unconditionally mounted needlessly drags that dependency
           into every render of this page. */}
       {deleteTarget && (

@@ -225,9 +225,6 @@ vi.mock('../DocumentStatusPill.jsx', () => ({
   default: ({ status }) => <span>{status}</span>,
 }));
 
-vi.mock('@/components/attachments/AttachmentIcon', () => ({
-  AttachmentIcon: () => null,
-}));
 
 // --- IMPORTS ---
 

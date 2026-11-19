@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { LoaderCircle, Star } from 'lucide-react';
+import { CircleNotchIcon, StarIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { cn } from '@/lib/utils';
@@ -57,8 +57,8 @@ export function AssistantSelector({
           onClick={() => setFeaturedOnly((prev) => !prev)}
           aria-label={ui('copilotFeaturedOnly')}
           data-testid="Button__8ea2ef">
-          <Star
-            className={cn('h-4 w-4', featuredOnly && 'fill-current')}
+          <StarIcon
+            className={cn('h-4 w-4', featuredOnly && 'text-status-warning-foreground')}
             data-testid="Star__8ea2ef" />
         </Button>
       </div>
@@ -66,7 +66,7 @@ export function AssistantSelector({
       <div className="mt-4 flex-1 overflow-y-auto">
         {isLoading && (
           <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
-            <LoaderCircle className="h-4 w-4 animate-spin" data-testid="LoaderCircle__8ea2ef" />
+            <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="LoaderCircle__8ea2ef" />
             <span>{ui('copilotLoadingAssistants')}</span>
           </div>
         )}
@@ -81,8 +81,8 @@ export function AssistantSelector({
               >
                 <div className="flex items-center gap-2 font-medium">
                   {assistant.featured === 'Y' && (
-                    <Star
-                      className="h-3.5 w-3.5 shrink-0 text-status-warning-foreground fill-status-warning-foreground"
+                    <StarIcon
+                      className="h-3.5 w-3.5 shrink-0 text-status-warning-foreground"
                       data-testid="Star__8ea2ef" />
                   )}
                   <span>{assistant.name}</span>

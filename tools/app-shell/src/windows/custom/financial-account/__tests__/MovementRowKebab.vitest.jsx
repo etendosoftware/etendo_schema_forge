@@ -18,16 +18,16 @@ vi.mock('@/hooks/useNeoResource', () => ({
   getApiBase: () => '',
 }));
 
-vi.mock('lucide-react', () => ({
-  MoreVertical: () => null,
-  ExternalLink: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  DotsThreeVerticalIcon: () => null,
+  ArrowSquareOutIcon: () => null,
   GitMerge: () => null,
-  BookOpen: () => null,
-  BookX: () => null,
-  CheckCircle2: () => null,
-  RotateCcw: () => null,
-  Trash2: () => null,
-  Pencil: () => null,
+  BookOpenIcon: () => null,
+  BookIcon: () => null,
+  CheckCircleIcon: () => null,
+  ArrowCounterClockwiseIcon: () => null,
+  TrashIcon: () => null,
+  PencilSimpleIcon: () => null,
 }));
 
 // Radix dropdown — passthrough wrappers so menu items render immediately.

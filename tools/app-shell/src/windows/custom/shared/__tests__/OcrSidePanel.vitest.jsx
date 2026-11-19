@@ -31,12 +31,12 @@ vi.mock('../useMainAttachment.js', () => ({
 // (its "Más" menu, the lightbox and ConfirmDeleteDialog), which need icons this
 // panel never imports (MoreVertical, X, Upload, Trash2, ZoomIn...). Every other
 // icon stays real; only the four this suite asserts on are replaced.
-vi.mock('lucide-react', async (importOriginal) => ({
+vi.mock('@phosphor-icons/react', async (importOriginal) => ({
   ...(await importOriginal()),
-  FileText: (props) => <span {...props} data-testid="icon-file" />,
-  Loader2: (props) => <span {...props} data-testid="icon-loader" />,
-  Paperclip: (props) => <span {...props} data-testid="icon-clip" />,
-  AlertCircle: (props) => <span {...props} data-testid="icon-alert" />,
+  FileTextIcon: (props) => <span {...props} data-testid="icon-file" />,
+  CircleNotchIcon: (props) => <span {...props} data-testid="icon-loader" />,
+  PaperclipIcon: (props) => <span {...props} data-testid="icon-clip" />,
+  WarningCircleIcon: (props) => <span {...props} data-testid="icon-alert" />,
 }));
 
 // Lazy components

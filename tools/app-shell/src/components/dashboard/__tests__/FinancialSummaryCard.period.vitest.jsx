@@ -1,5 +1,7 @@
 // @covers tools/app-shell/src/components/dashboard/FinancialSummaryCard.jsx
 import { render, screen, within } from '@testing-library/react';
+import { ArrowUpIcon, ArrowDownIcon } from '@phosphor-icons/react';
+import { findIcon } from '@/test/iconGlyph.js';
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
@@ -101,7 +103,7 @@ describe('FinancialSummaryCard — badge tone', () => {
 
     expect(styleAttr(badge)).toContain(DESTRUCTIVE_BG);
     expect(styleAttr(badge)).not.toContain(SUCCESS_BG);
-    expect(block.querySelector('svg').getAttribute('class')).toMatch(/arrow-up/);
+    expect(findIcon(block, ArrowUpIcon)).toBe(block.querySelector('svg'));
     expect(within(block).getByText(/^yoyUp/)).toBeInTheDocument();
     expect(within(block).queryByText(/^yoyDown/)).not.toBeInTheDocument();
     expect(container.querySelectorAll(TREND_ICON)).toHaveLength(3);
@@ -114,7 +116,7 @@ describe('FinancialSummaryCard — badge tone', () => {
 
     expect(styleAttr(badge)).toContain(SUCCESS_BG);
     expect(styleAttr(badge)).not.toContain(DESTRUCTIVE_BG);
-    expect(block.querySelector('svg').getAttribute('class')).toMatch(/arrow-down/);
+    expect(findIcon(block, ArrowDownIcon)).toBe(block.querySelector('svg'));
     expect(within(block).getByText(/^yoyDown/)).toBeInTheDocument();
   });
 
@@ -124,7 +126,7 @@ describe('FinancialSummaryCard — badge tone', () => {
     const badge = badgeOf(block);
 
     expect(styleAttr(badge)).toContain(SUCCESS_BG);
-    expect(block.querySelector('svg').getAttribute('class')).toMatch(/arrow-up/);
+    expect(findIcon(block, ArrowUpIcon)).toBe(block.querySelector('svg'));
     expect(within(block).getByText(/^yoyUp/)).toBeInTheDocument();
   });
 
@@ -134,7 +136,7 @@ describe('FinancialSummaryCard — badge tone', () => {
       render(<FinancialSummaryCard kpis={kpis({ revenue: 12, profit: 12 })} currencyLabel="EUR" />);
       const block = metricBlock(labelKey);
       expect(styleAttr(badgeOf(block))).toContain(SUCCESS_BG);
-      expect(block.querySelector('svg').getAttribute('class')).toMatch(/arrow-up/);
+      expect(findIcon(block, ArrowUpIcon)).toBe(block.querySelector('svg'));
       expect(within(block).getByText(/^yoyUp/)).toBeInTheDocument();
     },
   );
@@ -145,7 +147,7 @@ describe('FinancialSummaryCard — badge tone', () => {
       render(<FinancialSummaryCard kpis={kpis({ revenue: -12, profit: -12 })} currencyLabel="EUR" />);
       const block = metricBlock(labelKey);
       expect(styleAttr(badgeOf(block))).toContain(DESTRUCTIVE_BG);
-      expect(block.querySelector('svg').getAttribute('class')).toMatch(/arrow-down/);
+      expect(findIcon(block, ArrowDownIcon)).toBe(block.querySelector('svg'));
       expect(within(block).getByText(/^yoyDown/)).toBeInTheDocument();
     },
   );
@@ -210,14 +212,14 @@ describe('FinancialSummaryCard — expenses (lowerIsBetter) with the rounded dir
 
   it('a decrease of 1.2 is good: down arrow, green', () => {
     const block = expensesBlock(-1.2);
-    expect(block.querySelector('svg').getAttribute('class')).toMatch(/arrow-down/);
+    expect(findIcon(block, ArrowDownIcon)).toBe(block.querySelector('svg'));
     expect(styleAttr(badgeOf(block))).toContain(SUCCESS_BG);
     expect(within(block).getByText(/^yoyDown/)).toBeInTheDocument();
   });
 
   it('a flat -0.4 shows the up arrow with the neutral-positive tone, not inverted', () => {
     const block = expensesBlock(-0.4);
-    expect(block.querySelector('svg').getAttribute('class')).toMatch(/arrow-up/);
+    expect(findIcon(block, ArrowUpIcon)).toBe(block.querySelector('svg'));
     expect(styleAttr(badgeOf(block))).toContain(SUCCESS_BG);
     expect(styleAttr(badgeOf(block))).not.toContain(DESTRUCTIVE_BG);
     expect(within(block).getByText(/^yoyUp/)).toBeInTheDocument();
@@ -226,7 +228,7 @@ describe('FinancialSummaryCard — expenses (lowerIsBetter) with the rounded dir
 
   it('a decrease of 0.5 prints "1" and is good: down arrow, green', () => {
     const block = expensesBlock(-0.5);
-    expect(block.querySelector('svg').getAttribute('class')).toMatch(/arrow-down/);
+    expect(findIcon(block, ArrowDownIcon)).toBe(block.querySelector('svg'));
     expect(styleAttr(badgeOf(block))).toContain(SUCCESS_BG);
     expect(within(block).getByText(/^yoyDown/)).toBeInTheDocument();
     expect(block.textContent).toContain('"pct":"1"');
@@ -234,7 +236,7 @@ describe('FinancialSummaryCard — expenses (lowerIsBetter) with the rounded dir
 
   it('an increase of 1.2 is bad: up arrow, red', () => {
     const block = expensesBlock(1.2);
-    expect(block.querySelector('svg').getAttribute('class')).toMatch(/arrow-up/);
+    expect(findIcon(block, ArrowUpIcon)).toBe(block.querySelector('svg'));
     expect(styleAttr(badgeOf(block))).toContain(DESTRUCTIVE_BG);
     expect(within(block).getByText(/^yoyUp/)).toBeInTheDocument();
   });

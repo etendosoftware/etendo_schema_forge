@@ -1,4 +1,4 @@
-import { Link2 } from 'lucide-react';
+import { LinkSimpleIcon } from '@phosphor-icons/react';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { useUI } from '@/i18n';
 import { useCopyRecordLinkAction } from '@/hooks/useCopyLinkAction';
@@ -19,7 +19,7 @@ export default function CopyRecordLinkButton({ recordId, windowName }) {
             aria-label={ui('copyLink')}
             data-testid="CopyRecordLinkButton"
             className="h-10 w-10 flex items-center justify-center rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors">
-            <Link2 className="h-5 w-5" data-testid="CopyRecordLinkButton__icon" />
+            <LinkSimpleIcon className="h-5 w-5" data-testid="CopyRecordLinkButton__icon" />
           </button>
         </TooltipTrigger>
         <TooltipContent data-testid="TooltipContent__CopyRecordLinkButton">{ui('copyLink')}</TooltipContent>

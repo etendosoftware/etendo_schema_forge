@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
-vi.mock('lucide-react', () => ({ TriangleAlert: () => null, ArrowUpRight: () => null }));
+vi.mock('@phosphor-icons/react', () => ({ WarningIcon: () => null, ArrowUpRightIcon: () => null }));
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }) => children,
   TooltipContent: ({ children }) => children,

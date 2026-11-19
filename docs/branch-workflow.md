@@ -56,9 +56,9 @@ develop  (protected — staging and integration point; PRs need NOT be up to dat
 
 | Merge | Gate | Who merges |
 |-------|------|------------|
-| `feature → develop` | PR checks: mini pipeline (schema_forge: `Mocked E2E`; com.etendoerp.go: `goTest`, the Java tests without and with a database), `Tests`, `Sonar Build`, `verify`, review, code-owner gate | **Human**, in GitHub, merge commit |
+| `feature → develop` | PR checks: mini pipeline (schema_forge: `Mini Pipeline: Unit tests + Sonar + coverage` and `Mocked E2E`; com.etendoerp.go: `Mini Pipeline: Go tests + Sonar + coverage`), `verify`, review, code-owner gate | **Human**, in GitHub, merge commit |
 | `main → develop` | PR checks; `back-merge-main.yml` opens it when main moves | **Auto-merge** once the checks pass; its assignee when it conflicts |
-| `mergeblock → main` (the cut) | Full Jenkins pipeline, integration included; every required check green; branch up to date with main | **Human only** |
+| `mergeblock → main` (the cut) | Full pipeline in GitHub Actions (`full-pipeline.yml`: unit tests + Sonar, mocked and integration E2E); every required check green; branch up to date with main | **Human only** |
 | `hotfix → main` | Full pipeline | **Human only**; comes back at once through `main → develop` |
 
 ### Key rules
@@ -104,8 +104,8 @@ version (§ schema_forge_core versions).
    `main → develop` merge (cutting one task earlier) or main moved in between.
    The human pushes the branches; Clerk opens the PRs to `main` on request. Then announce in the
    team chat which tasks the cut carries; Blockie's list from this step is the usual source.
-3. **Full pipeline.** Jenkins runs everything there, integration included. Only when every required
-   check is green, Jenkins included, the human merges in both repos and production updates (branch
+3. **Full pipeline.** GitHub Actions runs everything there (`full-pipeline.yml`: unit tests + Sonar,
+   mocked and integration E2E). Only when every required check is green the human merges in both repos and production updates (branch
    protection refuses an earlier merge, admins included). Red → the failure ladder below.
 
 ### Who does what

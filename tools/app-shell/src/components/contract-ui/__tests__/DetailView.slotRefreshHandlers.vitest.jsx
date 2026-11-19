@@ -116,7 +116,6 @@ vi.mock('../SummaryBar.jsx', () => ({ SummaryBar: () => null }));
 vi.mock('../DocumentTotalsPanel.jsx', () => ({ default: () => null }));
 vi.mock('../LinesSelectionBar.jsx', () => ({ default: () => null }));
 vi.mock('../DocumentStatusPill.jsx', () => ({ default: ({ status }) => <span>{status}</span> }));
-vi.mock('@/components/attachments/AttachmentIcon', () => ({ AttachmentIcon: () => <span>📎</span> }));
 
 const MockForm = ({ data }) => <div data-testid="mock-form"><span>{data?.documentNo}</span></div>;
 const MockTable = ({ data }) => <div data-testid="mock-table">{(data || []).map((r) => <div key={r.id}>{r.id}</div>)}</div>;

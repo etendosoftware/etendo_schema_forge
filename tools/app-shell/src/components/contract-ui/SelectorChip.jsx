@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { XIcon } from '@phosphor-icons/react';
 
 /**
  * Figma chip used by FK pickers (Contacto, Tarifa, Dirección, etc.) when a
@@ -52,7 +52,7 @@ export function SelectorChip({ label, onClick, onClear, clearAriaLabel, testId, 
           onKeyDown={onClearKeyDown}
           className="shrink-0 inline-flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
         >
-          <X
+          <XIcon
             className="h-4 w-4 text-[hsl(var(--text-disabled))] hover:text-foreground transition-colors"
             data-testid="X__88e7eb" />
         </span>

@@ -1,4 +1,4 @@
-import { PackageCheck, Truck } from 'lucide-react';
+import { PackageIcon, TruckIcon } from '@phosphor-icons/react';
 
 /**
  * ETP-5576 — follow-up document configuration of the two invoice windows. Both share the
@@ -43,7 +43,7 @@ export const SALES_INVOICE_FOLLOW_UP = {
       actionLabelKey: 'followUpCreateShipmentAction',
       badgeKey: 'draft',
       badgeTone: 'info',
-      icon: Truck,
+      icon: TruckIcon,
       resultDocType: 'salida',
     },
   },
@@ -65,7 +65,7 @@ export const PURCHASE_INVOICE_FOLLOW_UP = {
       actionLabelKey: 'followUpCreateReceiptAction',
       badgeKey: 'draft',
       badgeTone: 'info',
-      icon: PackageCheck,
+      icon: PackageIcon,
       resultDocType: 'entrada',
     },
   },

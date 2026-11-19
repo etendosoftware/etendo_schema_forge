@@ -1,5 +1,11 @@
 import { useState, useRef, useMemo } from 'react';
-import { Save, RefreshCw, PlusCircle, MoreVertical, AlertTriangle } from 'lucide-react';
+import {
+  FloppyDiskIcon,
+  ArrowsClockwiseIcon,
+  PlusIcon,
+  DotsThreeVerticalIcon,
+  WarningIcon,
+} from '@phosphor-icons/react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -389,7 +395,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                   aria-label={ui('fiscal.actions.menu')}
                   data-testid="FiscalConfigPage__actionsMenu"
                   className="flex h-7 w-7 items-center justify-center rounded-md text-topbar-icon hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50 disabled:pointer-events-none">
-                  <MoreVertical className="h-4 w-4" data-testid="MoreVertical__310303" />
+                  <DotsThreeVerticalIcon className="h-4 w-4" data-testid="MoreVertical__310303" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52" data-testid="DropdownMenuContent__310303">
@@ -398,7 +404,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                     disabled={creatingComplementary}
                     onSelect={handleAddComplementary}
                     data-testid="FiscalConfigPage__addComplementary">
-                    <PlusCircle
+                    <PlusIcon
                       className="h-4 w-4 mr-2 text-muted-foreground"
                       data-testid="PlusCircle__310303" />
                     {creatingComplementary
@@ -410,7 +416,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
                   <DropdownMenuItem
                     onSelect={() => setChangeSifOpen(true)}
                     data-testid="FiscalConfigPage__changeSif">
-                    <RefreshCw
+                    <ArrowsClockwiseIcon
                       className="h-4 w-4 mr-2 text-muted-foreground"
                       data-testid="RefreshCw__310303" />
                     {ui('fiscal.changeSif.action')}
@@ -425,7 +431,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
             data-dirty={String(isDirty)}
             className={resolveSaveClass(savedOk)}
             data-testid="Button__310303">
-            <Save size={14} className="mr-1.5" data-testid="Save__310303" />
+            <FloppyDiskIcon size={14} className="mr-1.5" data-testid="Save__310303" />
             {saveLabel}
           </Button>
         </div>
@@ -465,7 +471,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
           <div className="px-6 pt-4">
             <InfoBanner
               tone="warning"
-              icon={AlertTriangle}
+              icon={WarningIcon}
               data-testid="FiscalConfigPage__testModeBanner">
               {ui('fiscal.testModeLock.warning')}
             </InfoBanner>

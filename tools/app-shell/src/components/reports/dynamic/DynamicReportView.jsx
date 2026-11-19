@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FileDown, FileSpreadsheet, FileText, Loader2, X } from 'lucide-react';
+import { CircleNotchIcon, DownloadSimpleIcon, FileTextIcon, FileXlsIcon, XIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -25,9 +25,9 @@ import { useRestoredPickerNames } from './useRestoredPickerNames.js';
 import { expandedNodeIdsParam, foldExpansion, visibleRows } from './reportTree.js';
 
 const EXPORTS = [
-  { format: 'pdf', label: 'PDF', icon: FileDown },
-  { format: 'xlsx', label: 'Excel', icon: FileSpreadsheet },
-  { format: 'csv', label: 'CSV', icon: FileText },
+  { format: 'pdf', label: 'PDF', icon: DownloadSimpleIcon },
+  { format: 'xlsx', label: 'Excel', icon: FileXlsIcon },
+  { format: 'csv', label: 'CSV', icon: FileTextIcon },
 ];
 const SPLIT_DIMENSIONS = [['org', 'orgId'], ['bpartner', 'bPartnerId'], ['product', 'productId']];
 const COLUMN_LABELS = { total: 'dynamicReportColumnsTotal', month: 'dynamicReportColumnsMonth', quarter: 'dynamicReportColumnsQuarter' };
@@ -323,7 +323,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
               onClick={() => exportAs(format)}
               data-testid={`DynamicReportView__export-${format}`}
             >
-              {exporting === format ? <Loader2 className="w-4 h-4 animate-spin" data-testid="Loader2__c51cea" /> : <Icon className="w-4 h-4" data-testid="Icon__c51cea" />}
+              {exporting === format ? <CircleNotchIcon className="w-4 h-4 animate-spin" data-testid="Loader2__c51cea" /> : <Icon className="w-4 h-4" data-testid="Icon__c51cea" />}
               {text}
             </Button>
           ))}
@@ -361,7 +361,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
           <div className="bg-card rounded-xl border border-border/40 p-6">
             <div className="flex items-center gap-2">
               <h2 className="text-base font-semibold" data-testid="DynamicReportView__title">{title}</h2>
-              {loading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" data-testid="DynamicReportView__loading" />}
+              {loading && <CircleNotchIcon className="w-4 h-4 animate-spin text-muted-foreground" data-testid="DynamicReportView__loading" />}
             </div>
 
             <div className="flex flex-wrap gap-x-4 gap-y-1 my-3 text-xs text-muted-foreground" data-testid="DynamicReportView__chips">
@@ -376,7 +376,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
                       onClick={() => userChange(c.clear)}
                       data-testid={`DynamicReportView__chipRemove-${c.key}`}
                     >
-                      <X className="w-3 h-3" data-testid="X__c51cea" />
+                      <XIcon className="w-3 h-3" data-testid="X__c51cea" />
                     </button>
                   )}
                 </span>

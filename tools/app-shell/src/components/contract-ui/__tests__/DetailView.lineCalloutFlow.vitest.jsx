@@ -175,7 +175,6 @@ vi.mock('../DocumentTotalsPanel.jsx', () => ({ default: () => null }));
 vi.mock('../BalanceFooterPanel.jsx', () => ({ default: () => null }));
 vi.mock('../LinesSelectionBar.jsx', () => ({ default: () => null }));
 vi.mock('../DocumentStatusPill.jsx', () => ({ default: ({ status }) => <span>{status}</span> }));
-vi.mock('@/components/attachments/AttachmentIcon', () => ({ AttachmentIcon: () => <span>A</span> }));
 
 // DetailTable mock that captures the callout-related props so the test can drive
 // the internal handleLineFieldChange / onUpdateRow flow directly.

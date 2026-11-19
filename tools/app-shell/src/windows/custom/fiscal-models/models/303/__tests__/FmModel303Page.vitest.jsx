@@ -80,16 +80,8 @@ vi.mock('../../../FmOverlays.jsx', () => ({
     ),
   ),
 }));
-vi.mock('lucide-react', () => ({
-  // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
-  Check: () => null,
-  Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
-  TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
-  Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
-  TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
-  ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
-  FileCheck: () => null, Landmark: () => null,
-}));
+import { allIconsAs } from '@/test/iconMock.js';
+vi.mock('@phosphor-icons/react', async importOriginal => allIconsAs(() => null, importOriginal));
 
 import FmModel303Page from '../FmModel303Page.jsx';
 import { computeBoxes303 } from '../../../fiscalModelsUtils.js';
@@ -288,7 +280,7 @@ describe('FmModel303Page — Guardar button (ETP-5338 pivot)', () => {
     unmount();
     render(<FmModel303Page decl={{ ...BASE_DECL, status: 'submitted_ack', submissionMethod: 'aeat_telematic' }} {...defaultProps} />);
     badge = screen.getByTestId('FmStatusChip__badge');
-    // (lucide-react is mocked to render nothing in this file, so the Check icon itself is not
+    // (@phosphor-icons/react is mocked to render nothing in this file, so the Check icon itself is not
     // asserted here — the tone that selects it is.)
     expect(badge.getAttribute('data-tone')).toBe('success');
     // the submissionMethod label stays on the same line, next to the chip

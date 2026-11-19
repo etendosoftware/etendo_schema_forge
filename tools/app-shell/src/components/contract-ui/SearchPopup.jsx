@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useUI } from '@/i18n';
 import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
-import { Check } from 'lucide-react';
+import { CheckIcon } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
   resolveSelectedIndex, prependCurrentSelection, nextActiveIndex, arrowStartIndexFor, hasCommittedValue, pinSearchTerms,
@@ -333,7 +333,7 @@ const SearchPopupOption = memo(function SearchPopupOption({
       className={['w-full flex items-start gap-2 text-left px-4 py-2 text-sm break-words', isHighlighted ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50', isSelected ? 'font-medium' : '', locating ? 'invisible' : ''].join(' ')}
     >
       {isSelected
-        ? <Check className="h-4 w-4 mt-0.5 text-primary shrink-0" aria-hidden="true" data-testid={checkTestId} />
+        ? <CheckIcon className="h-4 w-4 mt-0.5 text-primary shrink-0" aria-hidden="true" data-testid={checkTestId} />
         : <span className="w-4 shrink-0" />}
       <span className="min-w-0">{option.name}</span>
     </button>

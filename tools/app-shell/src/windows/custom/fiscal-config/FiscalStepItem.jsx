@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react';
+import { CheckIcon } from '@phosphor-icons/react';
 
 export default function FiscalStepItem({ n, label, done, active, isFirst }) {
   let labelColor;
@@ -10,9 +10,8 @@ export default function FiscalStepItem({ n, label, done, active, isFirst }) {
       {!isFirst && <span className="flex-shrink-0" style={{ width: 40, height: 1, background: 'hsl(var(--border-subtle))' }} />}
       <span className="flex items-center" style={{ gap: 6 }}>
         {done ? (
-          <Check
+          <CheckIcon
             size={14}
-            strokeWidth={2.5}
             className="text-status-success-foreground flex-shrink-0"
             data-testid="Check__ede562" />
         ) : (

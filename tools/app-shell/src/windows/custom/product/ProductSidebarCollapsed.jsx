@@ -1,4 +1,4 @@
-import { Package, Warehouse } from 'lucide-react';
+import { PackageIcon, WarehouseIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { SIDEBAR_PANEL_ID } from './ProductSidebarDividerToggle';
 
@@ -12,8 +12,8 @@ const BTN = `inline-flex items-center justify-center w-8 h-8 rounded-lg text-mut
 export default function ProductSidebarCollapsed({ onSelectTab }) {
   const ui = useUI();
   const tabs = [
-    { tab: 'summary', Icon: Package, label: ui('summary'), testId: 'ProductSidebarStripSummary' },
-    { tab: 'warehouses', Icon: Warehouse, label: ui('warehouses'), testId: 'ProductSidebarStripWarehouses' },
+    { tab: 'summary', Icon: PackageIcon, label: ui('summary'), testId: 'ProductSidebarStripSummary' },
+    { tab: 'warehouses', Icon: WarehouseIcon, label: ui('warehouses'), testId: 'ProductSidebarStripWarehouses' },
   ];
   return (
     <aside

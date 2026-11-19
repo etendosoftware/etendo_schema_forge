@@ -1,6 +1,14 @@
 import {useState, useEffect, useMemo, useRef} from 'react';
 import {useUnsavedChangesGuard} from '@/hooks/useUnsavedChangesGuard.js';
-import {X, Loader2, Search, ChevronDown, Check, Info, Lock} from 'lucide-react';
+import {
+  XIcon,
+  CircleNotchIcon,
+  MagnifyingGlassIcon,
+  CaretDownIcon,
+  CheckIcon,
+  InfoIcon,
+  LockIcon,
+} from '@phosphor-icons/react';
 import {useUI} from '@/i18n';
 import {toast} from 'sonner';
 import {SquareCheckbox} from './SquareCheckbox';
@@ -108,7 +116,7 @@ function LegacyAddressLineRow({ label, value, testId }) {
                     maxWidth: '100%', minWidth: 0, overflow: 'hidden',
                 }}
             >
-                <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} data-testid="Lock__927831" />
+                <LockIcon size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} data-testid="Lock__927831" />
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {value}
                 </span>
@@ -428,12 +436,12 @@ function CountryPicker({
                         className="text-muted-foreground hover:text-muted-foreground transition-colors"
                         aria-label={closeAriaLabel}
                     >
-                        <X size={16} data-testid="X__927831" />
+                        <XIcon size={16} data-testid="X__927831" />
                     </button>
                 </div>
                 <div className="px-4 py-3 border-b border-border-subtle">
                     <div className="relative">
-                        <Search
+                        <MagnifyingGlassIcon
                             size={14}
                             className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                             data-testid="Search__927831" />
@@ -451,7 +459,7 @@ function CountryPicker({
                     {renderCountryPickerBody(isLoading, loadingText, hasLoadFailed, loadErrorText, filteredCountries, emptyText, renderCountryRow)}
                     {!isLoading && !hasLoadFailed && (
                         <div ref={loadMoreRef} className="flex justify-center py-2">
-                            {isLoadingMore ? <Loader2
+                            {isLoadingMore ? <CircleNotchIcon
                                 size={14}
                                 className="animate-spin text-muted-foreground"
                                 data-testid="Loader2__927831" /> :
@@ -476,7 +484,7 @@ function renderRegionPickerBody(regionsLoading, ui, regionsLoadFailed, filteredR
             style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', fontSize: 14, textAlign: 'left', border: 'none', cursor: 'pointer', background: form.region === region.id ? 'hsl(var(--muted))' : 'hsl(var(--card))', color: form.region === region.id ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))', fontWeight: form.region === region.id ? 600 : 400 }}
         >
             <span style={{ width: 16, flexShrink: 0 }}>
-                {form.region === region.id ? <Check size={13} data-testid="Check__927831" /> : null}
+                {form.region === region.id ? <CheckIcon size={13} data-testid="Check__927831" /> : null}
             </span>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{region.label}</span>
         </button>
@@ -1350,7 +1358,7 @@ export default function LocationEditorModal({
                 <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
                     {initialLoading ? (
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 0' }}>
-                            <Loader2
+                            <CircleNotchIcon
                                 size={20}
                                 style={{ animation: 'spin 1s linear infinite', color: 'hsl(var(--text-disabled))' }}
                                 data-testid="Loader2__927831" />
@@ -1388,7 +1396,7 @@ export default function LocationEditorModal({
                                     style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px' }}
                                 >
                                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                                        <Info
+                                        <InfoIcon
                                             size={16}
                                             className="text-status-info-foreground"
                                             style={{ flexShrink: 0, marginTop: 1 }}
@@ -1430,7 +1438,7 @@ export default function LocationEditorModal({
                                             className="text-status-info-foreground rounded-full p-1 transition-colors hover:bg-status-info-border/20"
                                             style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer' }}
                                         >
-                                            <X size={14} data-testid="X__location-legacy-banner" />
+                                            <XIcon size={14} data-testid="X__location-legacy-banner" />
                                         </button>
                                     </div>
                                 </div>
@@ -1527,7 +1535,7 @@ export default function LocationEditorModal({
                                                 border: `1px solid ${badgeBorder}`,
                                             }}
                                         >
-                                            {!showingLegacyPreview && composedAddress.address1 && <Check size={11} style={{ flexShrink: 0 }} data-testid="Check__927831" />}
+                                            {!showingLegacyPreview && composedAddress.address1 && <CheckIcon size={11} style={{ flexShrink: 0 }} data-testid="Check__927831" />}
                                             {ui(badgeKey)}
                                         </span>
                                     </div>
@@ -1537,7 +1545,7 @@ export default function LocationEditorModal({
                                             data-testid="location-resulting-address1"
                                             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '2px 10px', borderRadius: 9999, border: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))', fontSize: 12, color: 'hsl(var(--foreground))' }}
                                         >
-                                            <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} data-testid="Lock__927831" />
+                                            <LockIcon size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} data-testid="Lock__927831" />
                                             {line1 || '—'}
                                         </span>
                                     </div>
@@ -1547,7 +1555,7 @@ export default function LocationEditorModal({
                                             data-testid="location-resulting-address2"
                                             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '2px 10px', borderRadius: 9999, border: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))', fontSize: 12, color: 'hsl(var(--foreground))' }}
                                         >
-                                            <Lock size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} data-testid="Lock__927831" />
+                                            <LockIcon size={12} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} data-testid="Lock__927831" />
                                             {line2 || '—'}
                                         </span>
                                     </div>
@@ -1609,7 +1617,7 @@ export default function LocationEditorModal({
                                         <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: pickerTextColor(form.country) }}>
                                             {selectedCountryLabel}
                                         </span>
-                                        <ChevronDown
+                                        <CaretDownIcon
                                             size={15}
                                             style={{ color: 'hsl(var(--text-disabled))', flexShrink: 0 }}
                                             data-testid="ChevronDown__927831" />
@@ -1634,7 +1642,7 @@ export default function LocationEditorModal({
                                         <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: pickerTextColor(form.region) }}>
                                             {!form.country ? ui('selectCountryFirst') : selectedRegionLabel}
                                         </span>
-                                        <ChevronDown
+                                        <CaretDownIcon
                                             size={15}
                                             style={{ color: 'hsl(var(--text-disabled))', flexShrink: 0 }}
                                             data-testid="ChevronDown__927831" />
@@ -1701,11 +1709,11 @@ export default function LocationEditorModal({
                             className="border border-primary bg-primary text-primary-foreground transition-colors enabled:hover:bg-primary/90"
                             style={{ font: '600 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: saveDisabled ? 0.5 : 1 }}
                         >
-                            {saving && <Loader2
+                            {saving && <CircleNotchIcon
                                 size={13}
                                 style={{ animation: 'spin 1s linear infinite' }}
                                 data-testid="Loader2__927831" />}
-                            {!saving && <Check size={14} strokeWidth={2} data-testid="Check__927831" />}
+                            {!saving && <CheckIcon size={14} data-testid="Check__927831" />}
                             {ui('save')}
                         </button>
                     </div>
@@ -1726,7 +1734,7 @@ export default function LocationEditorModal({
                         </div>
                         <div style={{ padding: '12px 20px', borderBottom: '1px solid hsl(var(--muted))' }}>
                             <div style={{ position: 'relative' }}>
-                                <Search
+                                <MagnifyingGlassIcon
                                     size={14}
                                     style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'hsl(var(--text-disabled))' }}
                                     data-testid="Search__927831" />
@@ -1740,12 +1748,12 @@ export default function LocationEditorModal({
                             {filteredCountries.map(country => (
                                 <button key={country.id} type="button" onClick={() => handleCountrySelect(country.id)}
                                     style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', fontSize: 14, textAlign: 'left', border: 'none', cursor: 'pointer', background: form.country === country.id ? 'hsl(var(--muted))' : 'hsl(var(--card))', color: form.country === country.id ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))', fontWeight: form.country === country.id ? 600 : 400 }}>
-                                    <span style={{ width: 16, flexShrink: 0 }}>{form.country === country.id && <Check size={13} data-testid="Check__927831" />}</span>
+                                    <span style={{ width: 16, flexShrink: 0 }}>{form.country === country.id && <CheckIcon size={13} data-testid="Check__927831" />}</span>
                                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{country.label}</span>
                                 </button>
                             ))}
                             <div ref={countryLoadMoreRef} style={{ display: 'flex', justifyContent: 'center', padding: '8px 0' }}>
-                                {countryLoadingMore && <Loader2
+                                {countryLoadingMore && <CircleNotchIcon
                                     size={14}
                                     style={{ animation: 'spin 1s linear infinite', color: 'hsl(var(--text-disabled))' }}
                                     data-testid="Loader2__927831" />}
@@ -1768,7 +1776,7 @@ export default function LocationEditorModal({
                         </div>
                         <div style={{ padding: '12px 20px', borderBottom: '1px solid hsl(var(--muted))' }}>
                             <div style={{ position: 'relative' }}>
-                                <Search
+                                <MagnifyingGlassIcon
                                     size={14}
                                     style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'hsl(var(--text-disabled))' }}
                                     data-testid="Search__927831" />
@@ -1778,7 +1786,7 @@ export default function LocationEditorModal({
                         <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
                             {renderRegionPickerBody(regionsLoading, ui, regionsLoadFailed, filteredRegions, handleRegionSelect, form)}
                             <div ref={regionLoadMoreRef} style={{ display: 'flex', justifyContent: 'center', padding: '8px 0' }}>
-                                {regionLoadingMore && <Loader2
+                                {regionLoadingMore && <CircleNotchIcon
                                     size={14}
                                     style={{ animation: 'spin 1s linear infinite', color: 'hsl(var(--text-disabled))' }}
                                     data-testid="Loader2__927831" />}

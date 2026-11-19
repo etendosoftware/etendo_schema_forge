@@ -13,9 +13,9 @@ vi.mock('@/lib/formatCurrency', () => ({
   formatCurrency: (_curr, val) => `$${Number(val || 0).toFixed(2)}`,
 }));
 
-vi.mock('lucide-react', () => ({
-  FileText: () => <span data-testid="icon-file" />,
-  Check: () => <span data-testid="icon-check" />,
+vi.mock('@phosphor-icons/react', () => ({
+  FileTextIcon: () => <span data-testid="icon-file" />,
+  CheckIcon: () => <span data-testid="icon-check" />,
 }));
 
 vi.mock('sonner', () => ({

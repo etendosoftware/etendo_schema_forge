@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 import { describe, it, expect, vi } from 'vitest';
-import { allIconsAs } from '@/test/lucideIconMock.js';
+import { allIconsAs } from '@/test/iconMock.js';
 
 // Same dependency stubs as DataTable.fieldHelpers.vitest.jsx, EXCEPT
 // `@/lib/applyCalloutUpdates.js` is intentionally left unmocked here — this
@@ -43,7 +43,7 @@ vi.mock('./SelectorInput.jsx', () => ({ SelectorInput: () => null }));
 vi.mock('./RowQuickActions.jsx', () => ({ default: () => null }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 const Stub = () => null;
-vi.mock('lucide-react', async (importOriginal) => allIconsAs(Stub, importOriginal));
+vi.mock('@phosphor-icons/react', async (importOriginal) => allIconsAs(Stub, importOriginal));
 vi.mock('@/components/ui/table', () => ({
   Table: Stub, TableBody: Stub, TableCell: Stub, TableHead: Stub,
   TableHeader: Stub, TableRow: Stub, TableFooter: Stub,
