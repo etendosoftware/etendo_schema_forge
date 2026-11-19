@@ -799,28 +799,11 @@ How the step itself works — the backend `sifDefaults` preview, when it appears
 
 ## Public API — exchange rate and line currency — ETP-6177
 
-`decisions.json` publishes the header's exchange rate (`eTGOCurrencyRate`, `form: false`) as the
-public field `currency_rate` (`inout`, number) through `entities.header.publicApi.inputFields`, so an
-integrator reads and sets the rate the window shows next to the currency and edits with the pencil.
-The rate rules are the window's own ETP-5840 rules, enforced by Etendo on every channel: a write
-that changes the currency or the order date without a rate recalculates it, a positive rate sent is kept,
-a foreign-currency document left without a rate is refused (`422`), except a create that omits
-the currency or the date: Etendo fills them after saving, so that create is saved without a rate
-and its next write is refused (`docs/public-api.md` §4.12). Once the document is processed the rate is
-locked, as the rate picker is: a write that changes it answers `422`, whatever the currency.
+The `purchase-order` window exposes `header.eTGOCurrencyRate` as numeric `currency_rate`
+through `entities.header.publicApi.inputFields` in `decisions.json` (`form: false`).
 
-Line pricing (Etendo GO, `OrderLineCurrencyConversion`): a line created through the API (or REST,
-batch, `etendo_create`) without a price is priced from the price list and, when the order is in a
-foreign currency and the price list in the organization's, converted by the header's rate. Every new
-line for a product takes the order's currency, whatever its price came from. The result matches adding the line
-in this window ("Line conversion based on saved state") when the product's list price equals its
-standard price; otherwise the server converts each one separately and keeps the discount between
-them, where the window sets both to the converted price. A price sent is never converted. Without a
-rate, or with a price list in a third currency, the line is in the order's currency with the price
-list's prices unconverted. Existing lines are not re-priced when the
-header currency or rate changes, in the window or through the API.
-
-Contract: `docs/public-api.md` §4.12.
+See [Document currency, exchange rate and line prices](../public-api.md#412-document-currency-exchange-rate-and-line-prices)
+for the shared rate rules, completed-document lock, line conversion and pricing exceptions.
 
 ## Rate and cost fields are numeric — ETP-6342
 
