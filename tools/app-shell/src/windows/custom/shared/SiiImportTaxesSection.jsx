@@ -32,7 +32,8 @@ import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
  *
  * Inline editable table: Impuesto*, Tipo (rate, read-only), Base imponible*, Cuota (read-only,
  * computed by the Classic callout `SL_InvoiceTax_Amt` — base x rate, currency precision — through
- * the NEO callout endpoint), plus DUA* / Fecha DUA* with "Varios DUA", and a delete icon.
+ * the NEO callout endpoint) and a delete icon; with "Varios DUA" each line gets a sub-row with
+ * DUA* / Fecha DUA* (no extra columns, so no horizontal scroll).
  *
  * Saving: each row saves ITSELF as soon as it is complete — on choosing the tax, on committing the
  * base (blur / Enter), on leaving the DUA field, on picking the DUA date. An incomplete row stays a
@@ -189,10 +190,70 @@ function HeaderCell({ children, required, align = 'left', testId }) {
 function ReadOnlyAmount({ currency, value, testId }) {
   return (
     <div
-      className="h-8 min-w-24 rounded-lg bg-muted px-2 flex items-center justify-end text-sm tabular-nums text-muted-foreground"
+      className="h-8 w-full rounded-lg bg-muted px-2 flex items-center justify-end text-sm tabular-nums text-muted-foreground"
       data-testid={testId}>
       {value == null ? '—' : formatCurrency(currency, value)}
     </div>
+  );
+}
+
+function DuaSubRowLabel({ ui, labelKey, required, testId }) {
+  return (
+    <span className="text-xs font-medium text-muted-foreground whitespace-nowrap" data-testid={testId}>
+      {ui(labelKey)}
+      {required && <RequiredMark aria-hidden="true" data-testid={`${testId}_required`} />}
+    </span>
+  );
+}
+
+/**
+ * "Varios DUA": the line's DUA and DUA date live on a sub-row right below it (same `<tbody>` row
+ * group, indented under Impuesto, spanning the table), so the table keeps its 4 columns + delete
+ * and never needs a horizontal scroll.
+ */
+function DuaSubRow({ ui, row, editable, locale, missing, disabled, colSpan, onDuaChange, onDuaBlur, onDateChange }) {
+  return (
+    <tr className="border-b border-border/20" data-testid={`SiiImportTaxesSection__duaRow_${row.key}`}>
+      <td colSpan={colSpan} className="pl-6 pr-2 pb-2 pt-0" data-testid="SiiImportTaxesSection__tdDuaGroup">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="SiiImportTaxesSection__duaFields">
+          <div className="flex items-center gap-2 min-w-0" data-testid="SiiImportTaxesSection__tdDua">
+            <DuaSubRowLabel ui={ui} labelKey="sifDataTabs.field.dua" required={editable} testId="SiiImportTaxesSection__duaLabel" data-testid="DuaSubRowLabel__dua" />
+            {editable ? (
+              <Input
+                type="text"
+                maxLength={255}
+                value={row.aeatsiiDua}
+                onChange={e => onDuaChange(row, e.target.value)}
+                onBlur={() => onDuaBlur(row)}
+                disabled={disabled}
+                aria-label={ui('sifDataTabs.field.dua')}
+                aria-invalid={missing.has('aeatsiiDua') || undefined}
+                className={`h-8 w-48 bg-card ${missing.has('aeatsiiDua') ? ERROR_OUTLINE : ''}`}
+                data-testid="Input__siiImportTaxDua" />
+            ) : (
+              <span className="text-sm" data-testid="SiiImportTaxesSection__duaValue">{row.aeatsiiDua || '—'}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 min-w-0" data-testid="SiiImportTaxesSection__tdDuaDate">
+            <DuaSubRowLabel ui={ui} labelKey="sifDataTabs.field.duaDate" required={editable} testId="SiiImportTaxesSection__duaDateLabel" data-testid="DuaSubRowLabel__duaDate" />
+            {editable ? (
+              <div className="w-44" data-testid="SiiImportTaxesSection__duaDateField">
+                <DateField
+                  value={row.aeatsiiFechaDua}
+                  onChange={iso => onDateChange(row, iso ?? '')}
+                  disabled={disabled}
+                  className={missing.has('aeatsiiFechaDua') ? ERROR_OUTLINE : undefined}
+                  data-testid="DateField__siiImportTaxDuaDate" />
+              </div>
+            ) : (
+              <span className="text-sm" data-testid="SiiImportTaxesSection__duaDateValue">
+                {row.aeatsiiFechaDua ? formatCalendarDate(row.aeatsiiFechaDua, locale) : '—'}
+              </span>
+            )}
+          </div>
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -203,102 +264,90 @@ function ImportTaxRow({
   const cell = 'px-2 py-1.5 align-middle';
   const missing = editable ? missingImportTaxFields(row, multiDua) : new Set();
   const disabled = Boolean(row.saving);
+  const mainRowClass = multiDua ? '' : 'border-b border-border/20';
+  const subRow = multiDua && (
+    <DuaSubRow
+      ui={ui}
+      row={row}
+      editable={editable}
+      locale={locale}
+      missing={missing}
+      disabled={disabled}
+      colSpan={editable ? 5 : 4}
+      onDuaChange={onDuaChange}
+      onDuaBlur={onDuaBlur}
+      onDateChange={onDateChange}
+      data-testid="DuaSubRow__siiImportTax" />
+  );
   if (!editable) {
     return (
-      <tr className="border-b border-border/20" data-testid={`SiiImportTaxesSection__row_${row.key}`}>
-        <td className={cell} data-testid="SiiImportTaxesSection__tdTax">{row.taxLabel || row.tax}</td>
-        <td className={`${cell} tabular-nums`} data-testid="SiiImportTaxesSection__tdRate">{rateLabel(row, rateMap)}</td>
-        <td className={`${cell} text-right tabular-nums`} data-testid="SiiImportTaxesSection__tdBase">
-          {formatCurrency(currency, row.taxableAmount)}
-        </td>
-        <td className={`${cell} text-right tabular-nums`} data-testid="SiiImportTaxesSection__tdAmount">
-          {formatCurrency(currency, row.taxAmount)}
-        </td>
-        {multiDua && (
-          <>
-            <td className={cell} data-testid="SiiImportTaxesSection__tdDua">{row.aeatsiiDua || '—'}</td>
-            <td className={cell} data-testid="SiiImportTaxesSection__tdDuaDate">
-              {row.aeatsiiFechaDua ? formatCalendarDate(row.aeatsiiFechaDua, locale) : '—'}
-            </td>
-          </>
-        )}
-      </tr>
+      <tbody data-testid={`SiiImportTaxesSection__group_${row.key}`}>
+        <tr className={mainRowClass} data-testid={`SiiImportTaxesSection__row_${row.key}`}>
+          <td className={cell} data-testid="SiiImportTaxesSection__tdTax">{row.taxLabel || row.tax}</td>
+          <td className={`${cell} tabular-nums`} data-testid="SiiImportTaxesSection__tdRate">{rateLabel(row, rateMap)}</td>
+          <td className={`${cell} text-right tabular-nums`} data-testid="SiiImportTaxesSection__tdBase">
+            {formatCurrency(currency, row.taxableAmount)}
+          </td>
+          <td className={`${cell} text-right tabular-nums`} data-testid="SiiImportTaxesSection__tdAmount">
+            {formatCurrency(currency, row.taxAmount)}
+          </td>
+        </tr>
+        {subRow}
+      </tbody>
     );
   }
   return (
-    <tr className="border-b border-border/20" data-testid={`SiiImportTaxesSection__row_${row.key}`}>
-      <td className={`${cell} min-w-44`} data-testid="SiiImportTaxesSection__tdTax">
-        <SelectorInput
-          entityName="tax"
-          field={TAX_FIELD}
-          value={row.tax}
-          displayValue={row.taxLabel}
-          onChange={(val, lbl) => onTaxChange(row, val ?? '', lbl ?? '')}
-          catalogs={null}
-          resolvedLabel={ui('tax')}
-          selectorUrl={selectorUrl}
-          selectorContext={selectorContext}
-          token={token}
-          compact
-          triggerClassName={`w-full h-8 text-sm text-text-primary bg-card focus:ring-2 focus:ring-primary ${missing.has('tax') ? ERROR_OUTLINE : ''}`}
-          data-testid="SelectorInput__siiImportTax" />
-      </td>
-      <td className={`${cell} tabular-nums text-muted-foreground whitespace-nowrap`} data-testid="SiiImportTaxesSection__tdRate">
-        {rateLabel(row, rateMap)}
-      </td>
-      <td className={`${cell} min-w-28`} data-testid="SiiImportTaxesSection__tdBase">
-        <MaskedAmountInput
-          bare
-          currency={currency}
-          value={row.taxableAmount}
-          onCommit={parsed => onBaseCommit(row, parsed)}
-          disabled={disabled}
-          aria-label={ui('sifDataTabs.importTaxes.taxableAmount')}
-          aria-invalid={missing.has('taxableAmount') || undefined}
-          className={`h-8 ${missing.has('taxableAmount') ? ERROR_OUTLINE : ''}`}
-          data-testid="MaskedAmountInput__siiImportTaxBase" />
-      </td>
-      <td className={cell} data-testid="SiiImportTaxesSection__tdAmount">
-        <ReadOnlyAmount currency={currency} value={row.taxAmount} testId="SiiImportTaxesSection__amount" data-testid="ReadOnlyAmount__siiImportTax" />
-      </td>
-      {multiDua && (
-        <>
-          <td className={`${cell} min-w-36`} data-testid="SiiImportTaxesSection__tdDua">
-            <Input
-              type="text"
-              maxLength={255}
-              value={row.aeatsiiDua}
-              onChange={e => onDuaChange(row, e.target.value)}
-              onBlur={() => onDuaBlur(row)}
-              disabled={disabled}
-              aria-label={ui('sifDataTabs.field.dua')}
-              aria-invalid={missing.has('aeatsiiDua') || undefined}
-              className={`h-8 bg-card ${missing.has('aeatsiiDua') ? ERROR_OUTLINE : ''}`}
-              data-testid="Input__siiImportTaxDua" />
-          </td>
-          <td className={`${cell} min-w-36`} data-testid="SiiImportTaxesSection__tdDuaDate">
-            <DateField
-              value={row.aeatsiiFechaDua}
-              onChange={iso => onDateChange(row, iso ?? '')}
-              disabled={disabled}
-              className={missing.has('aeatsiiFechaDua') ? ERROR_OUTLINE : undefined}
-              data-testid="DateField__siiImportTaxDuaDate" />
-          </td>
-        </>
-      )}
-      <td className={`${cell} text-right`} data-testid="SiiImportTaxesSection__tdActions">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={ui('delete')}
-          onClick={() => onDelete(row)}
-          disabled={disabled}
-          data-testid="Button__siiImportTaxDelete">
-          <Trash2 data-testid="Trash2__siiImportTax" />
-        </Button>
-      </td>
-    </tr>
+    <tbody data-testid={`SiiImportTaxesSection__group_${row.key}`}>
+      <tr className={mainRowClass} data-testid={`SiiImportTaxesSection__row_${row.key}`}>
+        <td className={`${cell} min-w-40`} data-testid="SiiImportTaxesSection__tdTax">
+          <SelectorInput
+            entityName="tax"
+            field={TAX_FIELD}
+            value={row.tax}
+            displayValue={row.taxLabel}
+            onChange={(val, lbl) => onTaxChange(row, val ?? '', lbl ?? '')}
+            catalogs={null}
+            resolvedLabel={ui('tax')}
+            selectorUrl={selectorUrl}
+            selectorContext={selectorContext}
+            token={token}
+            compact
+            triggerClassName={`w-full h-8 text-sm text-text-primary bg-card focus:ring-2 focus:ring-primary ${missing.has('tax') ? ERROR_OUTLINE : ''}`}
+            data-testid="SelectorInput__siiImportTax" />
+        </td>
+        <td className={`${cell} tabular-nums text-muted-foreground whitespace-nowrap`} data-testid="SiiImportTaxesSection__tdRate">
+          {rateLabel(row, rateMap)}
+        </td>
+        <td className={`${cell} w-32`} data-testid="SiiImportTaxesSection__tdBase">
+          <MaskedAmountInput
+            bare
+            currency={currency}
+            value={row.taxableAmount}
+            onCommit={parsed => onBaseCommit(row, parsed)}
+            disabled={disabled}
+            aria-label={ui('sifDataTabs.importTaxes.taxableAmount')}
+            aria-invalid={missing.has('taxableAmount') || undefined}
+            className={`h-8 ${missing.has('taxableAmount') ? ERROR_OUTLINE : ''}`}
+            data-testid="MaskedAmountInput__siiImportTaxBase" />
+        </td>
+        <td className={`${cell} w-28`} data-testid="SiiImportTaxesSection__tdAmount">
+          <ReadOnlyAmount currency={currency} value={row.taxAmount} testId="SiiImportTaxesSection__amount" data-testid="ReadOnlyAmount__siiImportTax" />
+        </td>
+        <td className={`${cell} w-10 text-right`} data-testid="SiiImportTaxesSection__tdActions">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={ui('delete')}
+            onClick={() => onDelete(row)}
+            disabled={disabled}
+            data-testid="Button__siiImportTaxDelete">
+            <Trash2 data-testid="Trash2__siiImportTax" />
+          </Button>
+        </td>
+      </tr>
+      {subRow}
+    </tbody>
   );
 }
 
@@ -502,7 +551,7 @@ function ImportTaxesBlock({ ui, multiDua, recordId, data, apiBaseUrl, token, rea
         <>
           {rows.length > 0 && (
             <div className="overflow-x-auto" data-testid="SiiImportTaxesSection__tableWrap">
-              <table className="w-full text-sm" data-testid="SiiImportTaxesSection__table">
+              <table className="w-full table-auto text-sm" data-testid="SiiImportTaxesSection__table">
                 <thead data-testid="SiiImportTaxesSection__thead">
                   <tr className="border-b border-border/40" data-testid="SiiImportTaxesSection__headRow">
                     <HeaderCell required={editable} testId="SiiImportTaxesSection__thTax" data-testid="HeaderCell__tax">{ui('tax')}</HeaderCell>
@@ -513,18 +562,9 @@ function ImportTaxesBlock({ ui, multiDua, recordId, data, apiBaseUrl, token, rea
                     <HeaderCell align="right" testId="SiiImportTaxesSection__thAmount" data-testid="HeaderCell__amount">
                       {ui('sifDataTabs.importTaxes.taxAmount')}
                     </HeaderCell>
-                    {multiDua && (
-                      <>
-                        <HeaderCell required={editable} testId="SiiImportTaxesSection__thDua" data-testid="HeaderCell__dua">{ui('sifDataTabs.field.dua')}</HeaderCell>
-                        <HeaderCell required={editable} testId="SiiImportTaxesSection__thDuaDate" data-testid="HeaderCell__duaDate">
-                          {ui('sifDataTabs.field.duaDate')}
-                        </HeaderCell>
-                      </>
-                    )}
                     {editable && <th aria-hidden="true" data-testid="SiiImportTaxesSection__thActions" />}
                   </tr>
                 </thead>
-                <tbody data-testid="SiiImportTaxesSection__tbody">
                   {rows.map(row => (
                     <ImportTaxRow
                       key={row.key}
@@ -546,7 +586,6 @@ function ImportTaxesBlock({ ui, multiDua, recordId, data, apiBaseUrl, token, rea
                       onDelete={onDelete}
                       data-testid="ImportTaxRow__siiImportTax" />
                   ))}
-                </tbody>
               </table>
             </div>
           )}
