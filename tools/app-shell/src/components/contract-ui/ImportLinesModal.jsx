@@ -414,7 +414,7 @@ export default function ImportLinesModal({
       if (res.ok) { importedDocIds.add(docId); importedCount++; }
       else {
         errors++;
-        refusal = refusal ?? await readImportRefusal(res);
+        refusal = refusal ?? (await readImportRefusal(res));
       }
       lineNo += 10;
     }
