@@ -517,12 +517,9 @@ reports move to `ad_client_id`.
 **Open items** (for the issue owner):
 - Backend events carry the same identity since ETP-6228 (`NeoTelemetryService`, owner account
   from the flagged owner user, also returned as `environment.etgoAccountId` by
-  `GET /sws/go/session`); see the backend telemetry doc for its own open items (the PM rule that
-  `account_id` was the only identifier a backend event may carry).
-- Delivery order: `schema_forge_core` (mapping of `userId`/`etgoAccountId`), then
-  `com.etendoerp.go`, then this repo. The SPA must bump `@etendosoftware/app-shell-core` to the
-  release that contains the core change before it merges; until then `useAuth().userId` and
-  `etgoAccountId` are undefined and the SPA sends neither id.
+  `GET /sws/go/session`); see the backend telemetry doc for its own open items (the legal rule,
+  ETP-5791, forbids business record ids only; the PM confirmed on 2026-11-19 that `ad_user_id` is
+  allowed).
 - `distinct_id` as hash of `ad_user_id` + device id: needs `identify`, which ETP-4352 (GDPR)
   removed; pending a privacy decision.
 - `ETGO_Account` lookup table with the test-account flag in Mixpanel: flag name pending from
