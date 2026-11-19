@@ -1456,6 +1456,11 @@ describe('ImportLinesModal', () => {
       await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
       const hint = screen.getByTestId('ImportLinesModal__selectionHint');
       expect(screen.getByTestId('ImportLinesModal__import')).toBeDisabled();
+      // Figma: the import button is black while enabled and grey while disabled.
+      const importClasses = screen.getByTestId('ImportLinesModal__import').className;
+      expect(importClasses).toContain('bg-foreground');
+      expect(importClasses).toContain('disabled:bg-muted');
+      expect(importClasses).not.toContain('bg-primary');
 
       fireEvent.click(screen.getByText('Widget A').closest('[data-testid="ImportLinesModal__lineRow"]'));
       expect(hint).toHaveTextContent('importLinesSelectedCountOne:{"count":1}');

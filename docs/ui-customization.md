@@ -3494,7 +3494,9 @@ checkbox and a −/+ quantity stepper (`NumberStepperInput`, bounded by the line
 quantity, typed values still validated on blur); the footer has the selection hint and the
 «Cancelar» / primary pills. The hint counts the selected LINES with singular/plural wording («1 línea
 seleccionada» / «N líneas seleccionadas», ETP-5651, in every import popup) and the primary button
-counts them too.
+counts them too. Per Figma (ETP-5651) «Cancelar» is a borderless text pill and the import button is
+black (`bg-foreground text-background`) while enabled and grey (`bg-muted`) while nothing is
+selected; it does not use the theme's `primary` colour.
 
 **Optional props added by ETP-5828** (all default to the previous behaviour):
 

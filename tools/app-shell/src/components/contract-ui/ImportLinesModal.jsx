@@ -847,7 +847,8 @@ export default function ImportLinesModal({
               onClick={handleImport}
               disabled={importDisabled}
               data-testid="ImportLinesModal__import"
-              className={cn(PILL_BASE, 'bg-primary text-primary-foreground enabled:hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/40')}
+              // ETP-5651 (Figma): black while enabled, grey while nothing is selected.
+              className={cn(PILL_BASE, 'bg-foreground text-background enabled:hover:bg-foreground/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground')}
             >
               {importing ? ui('importing') : ui(importButtonKey, { count: selectionSize > 0 ? ` (${selectionSize})` : '' })}
             </button>
