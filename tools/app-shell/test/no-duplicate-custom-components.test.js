@@ -36,14 +36,14 @@ function collectFiles(dir, acc = []) {
 
 function duplicatedFiles() {
   const duplicates = [];
-  for (const window of readdirSync(APP_SHELL_CUSTOM)) {
-    const shellDir = join(APP_SHELL_CUSTOM, window);
-    if (!statSync(shellDir).isDirectory() || window === '__tests__') continue;
-    const artifactDir = join(ARTIFACTS, window, 'custom');
+  for (const windowName of readdirSync(APP_SHELL_CUSTOM)) {
+    const shellDir = join(APP_SHELL_CUSTOM, windowName);
+    if (!statSync(shellDir).isDirectory() || windowName === '__tests__') continue;
+    const artifactDir = join(ARTIFACTS, windowName, 'custom');
     if (!existsSync(artifactDir)) continue;
     for (const file of collectFiles(shellDir)) {
       const rel = relative(shellDir, file);
-      if (existsSync(join(artifactDir, rel))) duplicates.push(`${window}/${rel}`);
+      if (existsSync(join(artifactDir, rel))) duplicates.push(`${windowName}/${rel}`);
     }
   }
   return duplicates;
@@ -51,10 +51,11 @@ function duplicatedFiles() {
 
 describe('no duplicated custom components (ETP-5280)', () => {
   it('no file name exists under both app-shell windows/custom and artifacts/*/custom for the same window', () => {
-    assert.deepEqual(
-      duplicatedFiles(),
-      [],
-      'these files exist in BOTH trees; the artifacts copy is the one that runs — delete the app-shell copy and import the live module in its tests',
+    const duplicates = duplicatedFiles();
+    assert.equal(
+      duplicates.length,
+      0,
+      `these files exist in BOTH trees; the artifacts copy is the one that runs — delete the app-shell copy and import the live module in its tests: ${duplicates.join(', ')}`,
     );
   });
 });

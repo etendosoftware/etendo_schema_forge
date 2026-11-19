@@ -1,8 +1,9 @@
 // ETP-5424 — confirming a purchase order runs the document process synchronously (and, with
 // "confirm + invoice", creates the invoice right after). Either can outlive apiFetch's default
-// timeout; a client-side cut while the server still commits invites a double submit, so both
-// requests of the confirm flow opt out with `timeout: 0`. The real client performs the request;
-// only its options are recorded (see `@/test/recordApiFetch.js`).
+// timeout; a client-side cut while the server still commits invites a double submit, so the
+// documentAction and createPurchaseInvoice requests opt out with `timeout: 0`. The goods-receipt
+// request is deliberately NOT covered here: ETP-5424 never changed it (it keeps the default).
+// The real client performs the request; only its options are recorded (see `@/test/recordApiFetch.js`).
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
@@ -102,15 +103,16 @@ describe('PurchaseOrderActions — confirm flow timeout opt-out (ETP-5424)', () 
     expect(apiFetchCallsTo('/action/documentAction')[0].options.timeout).toBe(0);
   });
 
-  it('confirm + receipt + invoice: the goods receipt and invoice requests pass timeout: 0 too', async () => {
+  it('confirm + invoice: the documentAction and createPurchaseInvoice requests pass timeout: 0', async () => {
     await renderDraftAndOpenConfirm();
+    // The receipt option is selected too only so the flow runs end to end; its timeout is not asserted.
     fireEvent.click(await screen.findByText('poCreateReceiptTitle'));
     fireEvent.click(screen.getByText('soCreateInvoiceTitle'));
     fireEvent.click(screen.getByTestId('action-confirm-modal'));
 
     await waitFor(() => expect(apiFetchCallsTo('/action/createPurchaseInvoice').length).toBe(1));
     expect(apiFetchCallsTo('/action/documentAction')[0].options.timeout).toBe(0);
-    expect(apiFetchCallsTo('/action/createGoodsReceipt')[0].options.timeout).toBe(0);
     expect(apiFetchCallsTo('/action/createPurchaseInvoice')[0].options.timeout).toBe(0);
+    expect(apiFetchCallsTo('/action/createGoodsReceipt')[0].options.timeout).toBeUndefined();
   });
 });

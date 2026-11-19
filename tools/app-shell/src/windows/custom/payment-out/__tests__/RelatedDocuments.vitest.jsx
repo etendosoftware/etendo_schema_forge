@@ -8,8 +8,9 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
+const mockNavigate = vi.fn();
 vi.mock('react-router-dom', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mockNavigate,
 }));
 
 const mockApiFetch = vi.fn();
@@ -34,7 +35,7 @@ vi.mock('@/components/related-documents', () => ({
   fetchById: vi.fn(),
 }));
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import RelatedDocuments from '@generated/payment-out/custom/RelatedDocuments.jsx';
 import { fetchById } from '@/components/related-documents';
 
@@ -82,9 +83,13 @@ describe('RelatedDocuments — document linking', () => {
 
     const chip = await screen.findByTestId('doc-chip');
     expect(chip).toHaveAttribute('data-title', 'invoiceDoc');
+    // tied to the resolved invoice: status from its header, navigation to its id
+    expect(chip).toHaveAttribute('data-status', 'CO');
+    fireEvent.click(chip);
+    expect(mockNavigate).toHaveBeenCalledWith('/purchase-invoice/INV1');
   });
 
-  it('4. dedups: two lines with the same invoicePaymentSchedule fetch the header once', async () => {
+  it('2. dedups: two lines with the same invoicePaymentSchedule fetch the header once', async () => {
     mockFetchLines([
       { invoicePaymentSchedule: 'SCHED1' },
       { invoicePaymentSchedule: 'SCHED1' },
@@ -105,7 +110,7 @@ describe('RelatedDocuments — document linking', () => {
     expect(headerCalls).toHaveLength(1);
   });
 
-  it('5. silent catch: a rejecting schedule fetch is swallowed and renders no chips', async () => {
+  it('3. characterization (current live behavior, see ETP-5280 open question c): one rejected schedule lookup aborts the batch, no chips', async () => {
     mockFetchLines([
       { invoicePaymentSchedule: 'BAD' },
       { invoicePaymentSchedule: 'SCHED_OK' },
@@ -121,15 +126,16 @@ describe('RelatedDocuments — document linking', () => {
 
     renderComp();
 
-    // The live component resolves the schedules with a single Promise.all, so one
-    // failure aborts the batch: it must not throw and must stop loading.
+    // Characterization only, NOT the intended contract: the live component resolves the
+    // schedules with a single Promise.all, so one failure aborts the batch. This may be a
+    // regression to confirm or file; the dead copy tolerated a failing line.
     await waitFor(() => {
       expect(screen.getByTestId('rel-docs-shell')).toHaveAttribute('data-loading', 'false');
     });
     expect(screen.queryByTestId('doc-chip')).not.toBeInTheDocument();
   });
 
-  it('6. renders zero chips when the lines response is not ok', async () => {
+  it('4. renders zero chips when the lines response is not ok', async () => {
     mockFetchLines([], { ok: false });
 
     renderComp();
@@ -141,7 +147,7 @@ describe('RelatedDocuments — document linking', () => {
     expect(fetchById).not.toHaveBeenCalled();
   });
 
-  it('7. with no recordId: no fetch, not loading, no chips', async () => {
+  it('5. with no recordId: no fetch, not loading, no chips', async () => {
     renderComp({ recordId: undefined });
 
     expect(mockApiFetch).not.toHaveBeenCalled();

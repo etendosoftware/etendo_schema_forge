@@ -479,7 +479,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
     if (createReceipt && !receiptResult) {
       try {
         const res = await apiFetch(`${orderUrl}/${orderId}/action/createGoodsReceipt`,
-          { method: 'POST', body: JSON.stringify({}), timeout: 0 });
+          { method: 'POST', body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           throw new Error(ui('poOrderConfirmedReceiptError') + ' ' + translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
