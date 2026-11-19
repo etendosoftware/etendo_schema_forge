@@ -1,4 +1,4 @@
-import { Link2 } from 'lucide-react';
+import { LinkSimpleIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button.jsx';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { useUI } from '@/i18n';
@@ -24,7 +24,7 @@ export default function CopyLinkButton({ selectedRows, windowName, selectionBarS
             onClick={onCopyLink}
             aria-label={ui('copyLink')}
             data-testid="CopyLinkButton">
-            <Link2 className={iconSizeClass} data-testid="CopyLinkButton__icon" />
+            <LinkSimpleIcon className={iconSizeClass} data-testid="CopyLinkButton__icon" />
           </Button>
         </TooltipTrigger>
         <TooltipContent data-testid="TooltipContent__CopyLinkButton">{ui('copyLink')}</TooltipContent>

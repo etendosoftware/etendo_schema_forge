@@ -1,4 +1,4 @@
-import { Languages } from 'lucide-react';
+import { TranslateIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 /**
@@ -12,7 +12,7 @@ export const APP_LOCALES = Object.freeze([
 ]);
 
 /**
- * The "Idioma" section of the app's user menu (`UserAvatarButton`): the `Languages` title, then one
+ * The "Idioma" section of the app's user menu (`UserAvatarButton`): the `TranslateIcon` title, then one
  * row per {@link APP_LOCALES} entry; the active one on `bg-muted` and semibold. Meant to sit inside
  * a `DropdownMenuContent`.
  *
@@ -25,7 +25,7 @@ export function LanguageMenuSection({ locale, setLocale, testIdFor = (code) => `
   return (
     <div className="px-2 pt-2 pb-1">
       <p className="flex items-center gap-1.5 px-2 pb-1 text-xs font-medium text-muted-foreground">
-        <Languages className="h-3.5 w-3.5" data-testid="Languages__9f3744" />
+        <TranslateIcon className="h-3.5 w-3.5" data-testid="Languages__9f3744" />
         {ui('language')}
       </p>
       {APP_LOCALES.map((l) => (

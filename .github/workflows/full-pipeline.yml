@@ -16,17 +16,22 @@ name: Full Pipeline
 #                from com.etendoerp.jenkins.pipelines), the run summary and, when DD_API_KEY exists,
 #                the run sent to Datadog as etendo.ci.pilot.* metrics. Reporting only: it never turns
 #                the run red.
-# Unit tests, Sonar and the quality gate are not here: test.yml and quality-gate.yml run them on
-# every PR and push, as they did next to Jenkins.
+#   unit-tests   ETP-6375: the unit tests, the Sonar analysis with their coverage and, on a PR, the
+#                coverage gate against main and the quality gate (.github/actions/unit-tests-sonar).
+#                They ran in test.yml on every PR and push before.
+# A push to main that merges a validated cut skips every test job; validated-cut-sonar keeps main's
+# Sonar analysis (the base the next PRs compare against) with the coverage of the cut's PR run.
 #
 # Where the results are: the run summary and, for 30 days, the run's artifacts:
 #   cell-report                    TESTS POR CÉLULA (index.html) and its summary.json
+#   unit-coverage                  the unit tests' JUnit XML and merged LCOV
 #   playwright-report-mocked       the mocked suite's Playwright report
 #   playwright-report-integration  the integration suite's Playwright report, with the retries' traces
 #   local-env-logs                 the environment build and Tomcat logs, and the runner load
 #   pw-cell-results-*              the raw results cell-report reads
 #
-# Secrets: ETENDOBOT_TOKEN reads etendo_core, com.etendoerp.go, etendo-localenv, the GitHub modules
+# Secrets: SONAR_TOKEN/SONAR_HOST_URL publish the analysis and SONAR_READ_TOKEN reads the coverage and
+# the quality gate; ETENDOBOT_TOKEN reads etendo_core, com.etendoerp.go, etendo-localenv, the GitHub modules
 # and the npm packages; BITBUCKET_SSH_KEY clones the Bitbucket modules and
 # com.etendoerp.jenkins.pipelines; LOCALENV_CACHE_RO_KEY/SECRET read the snapshot cache; DD_API_KEY
 # (optional, EU site) sends the metrics. No Nexus credentials: building the environment does not
@@ -59,8 +64,9 @@ env:
 jobs:
   # A push to main that merges a cut (mergeblock/*) or a hotfix (hotfix/*) carries the tree this
   # pipeline already tested on that PR: main is strict, so the merged tree equals the PR head's.
-  # Jenkins' Route Build skips that push, and so does this job. Anything else runs in full: a PR, a
-  # dispatch, a direct push, a red or missing PR run, or an error while looking (never a red job).
+  # Jenkins' Route Build skips that push, and so does this job; validated-cut-sonar keeps main's
+  # analysis with the PR run's coverage. Anything else runs in full: a PR, a dispatch, a direct push,
+  # a red or missing PR run, an expired coverage artifact, or an error while looking (never a red job).
   route:
     name: Route
     runs-on: ubuntu-24.04
@@ -104,14 +110,84 @@ jobs:
               const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
                 owner, repo, run_id: run.id, filter: 'latest', per_page: 100,
               });
-              const missing = ['Mocked E2E (full pipeline)', 'Integration (Tomcat + Playwright)'].filter(n =>
+              const missing = ['Unit tests + Sonar + coverage', 'Mocked E2E (full pipeline)', 'Integration (Tomcat + Playwright)'].filter(n =>
                 !jobs.some(j => j.name === n && j.conclusion === 'success'));
               if (missing.length) return full(`${run.html_url} did not pass ${missing.join(', ')}`);
+              const { data } = await github.rest.actions.listWorkflowRunArtifacts({
+                owner, repo, run_id: run.id, name: 'unit-coverage',
+              });
+              if (!data.artifacts.some(a => !a.expired)) return full(`${run.html_url} has no unit-coverage left`);
               core.setOutput('run_id', String(run.id));
               core.notice(`#${pr.number} (${pr.head.ref}) was validated by ${run.html_url}: every test job skipped.`);
             } catch (e) {
               full(`could not look up the validated PR (${e.message})`);
             }
+
+  # Main's Sonar branch analysis for a validated push: the scanner alone, with the coverage the PR's
+  # unit-tests job uploaded (coverage/merged-lcov.info, read through sonar-project.properties).
+  validated-cut-sonar:
+    name: Sonar with the cut coverage
+    needs: route
+    if: needs.route.outputs.validated_run != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The whole history: Sonar's blame and new-code detection need it.
+          fetch-depth: 0
+
+      - name: Download the PR run's coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-coverage
+          run-id: ${{ needs.route.outputs.validated_run }}
+          github-token: ${{ github.token }}
+
+      - name: Check the coverage report
+        run: |
+          if [ ! -s coverage/merged-lcov.info ]; then
+            echo "::error::The PR run's unit-coverage has no coverage/merged-lcov.info."
+            exit 1
+          fi
+
+      - name: Sonar analysis
+        uses: sonarsource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_SCANNER_OPTS: "-Xmx4096m"
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+  unit-tests:
+    name: Unit tests + Sonar + coverage
+    needs: route
+    if: ${{ !cancelled() && needs.route.outputs.validated_run == '' && (github.event_name != 'pull_request' || startsWith(github.head_ref, 'mergeblock/') || startsWith(github.head_ref, 'hotfix/')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read   # npm install from npm.pkg.github.com
+      checks: write    # dorny/test-reporter publishes the "Test Results" check
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          # The whole history: Sonar's blame and new-code detection need it.
+          fetch-depth: 0
+
+      - name: Unit tests + Sonar + coverage
+        uses: ./.github/actions/unit-tests-sonar
+        with:
+          npm_token: ${{ secrets.GITHUB_TOKEN }}
+          sonar_token: ${{ secrets.SONAR_TOKEN }}
+          sonar_host_url: ${{ secrets.SONAR_HOST_URL }}
+          sonar_read_token: ${{ secrets.SONAR_READ_TOKEN }}
+          coverage_minimum: ${{ vars.COVERAGE_MINIMUM }}
+          coverage_tolerance: ${{ vars.COVERAGE_TOLERANCE }}
+          retention_days: ${{ env.RETENTION_DAYS }}
 
   mocked:
     name: Mocked E2E (full pipeline)

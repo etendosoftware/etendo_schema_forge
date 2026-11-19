@@ -1,7 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { ZoomIn, ZoomOut, Maximize2, Loader2, AlertCircle } from 'lucide-react';
+import {
+  MagnifyingGlassPlusIcon,
+  MagnifyingGlassMinusIcon,
+  ArrowsOutIcon,
+  CircleNotchIcon,
+  WarningCircleIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -65,13 +71,13 @@ export function usePdfZoom({ initialFitMode = 'width' } = {}) {
  *   sheet; the fitted width is the container width minus left + right. While not
  *   zoomed in the x-axis is clipped (the sheet always fits), so a vertical scrollbar
  *   can only eat into the empty right padding, never surface a horizontal scrollbar.
- * - fitIcon: lucide icon component for the fit button (default `Maximize2`).
+ * - fitIcon: Phosphor icon component for the fit button (default `ArrowsOutIcon`).
  * - controlColors: partial { background, border, divider, shadow, icon, iconActive } CSS
  *   colours for the zoom bar; missing keys keep the defaults above.
  */
 export default function PdfViewer({
   url, zoom, hideToolbar = false, toolbarExtra = null, onExpand, onNumPages,
-  contentPadding, fitIcon: FitIcon = Maximize2, controlColors,
+  contentPadding, fitIcon: FitIcon = ArrowsOutIcon, controlColors,
 }) {
   const colors = { ...DEFAULT_CONTROL_COLORS, ...controlColors };
   const ui = useUI();
@@ -147,7 +153,7 @@ export default function PdfViewer({
           className="w-12 h-[38px] flex items-center justify-center hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           aria-label={ui('pdfViewerZoomIn')}
         >
-          <ZoomIn size={20} style={{ color: colors.icon }} data-testid="ZoomIn__fca188" />
+          <MagnifyingGlassPlusIcon size={20} style={{ color: colors.icon }} data-testid="ZoomIn__fca188" />
         </button>
         <div style={{ width: 1, backgroundColor: colors.divider }} />
         <button
@@ -170,7 +176,7 @@ export default function PdfViewer({
           className="w-12 h-[38px] flex items-center justify-center hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           aria-label={ui('pdfViewerZoomOut')}
         >
-          <ZoomOut size={20} style={{ color: colors.icon }} data-testid="ZoomOut__fca188" />
+          <MagnifyingGlassMinusIcon size={20} style={{ color: colors.icon }} data-testid="ZoomOut__fca188" />
         </button>
         {toolbarExtra && (
           <>
@@ -197,13 +203,13 @@ export default function PdfViewer({
             onLoadError={(err) => setLoadError(err?.message || 'Error')}
             loading={(
               <div className="flex items-center justify-center gap-2 text-muted-foreground p-12">
-                <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__fca188" />
+                <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__fca188" />
                 <span className="text-sm">{ui('invoicePdfGenerating')}</span>
               </div>
             )}
             error={(
               <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
-                <AlertCircle className="h-8 w-8 text-status-warning-foreground" data-testid="AlertCircle__fca188" />
+                <WarningCircleIcon className="h-8 w-8 text-status-warning-foreground" data-testid="AlertCircle__fca188" />
                 <p className="text-sm text-muted-foreground">{ui('invoicePdfError')}</p>
                 {loadError && <p className="text-xs text-muted-foreground/60">{loadError}</p>}
               </div>

@@ -219,14 +219,14 @@ vi.mock('@/components/ui/button', () => ({
   ),
 }));
 
-vi.mock('lucide-react', () => ({
-  Save: () => <svg data-testid="icon-save" />,
-  RefreshCw: () => <svg data-testid="icon-refresh" />,
-  PlusCircle: () => <svg data-testid="icon-plus-circle" />,
-  MoreVertical: () => <svg data-testid="icon-more-vertical" />,
-  AlertTriangle: () => <svg data-testid="icon-alert-triangle" />,
-  X: () => <svg data-testid="icon-x" />,
-  Info: () => <svg data-testid="icon-info" />,
+vi.mock('@phosphor-icons/react', () => ({
+  FloppyDiskIcon: () => <svg data-testid="icon-save" />,
+  ArrowsClockwiseIcon: () => <svg data-testid="icon-refresh" />,
+  PlusIcon: () => <svg data-testid="icon-plus-circle" />,
+  DotsThreeVerticalIcon: () => <svg data-testid="icon-more-vertical" />,
+  WarningIcon: () => <svg data-testid="icon-alert-triangle" />,
+  XIcon: () => <svg data-testid="icon-x" />,
+  InfoIcon: () => <svg data-testid="icon-info" />,
 }));
 
 // DropdownMenu: stub out Radix primitives so the content renders only when the

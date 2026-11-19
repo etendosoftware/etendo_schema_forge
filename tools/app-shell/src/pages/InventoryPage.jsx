@@ -4,14 +4,20 @@ import { KPIHeader, DataTable } from '@/components/contract-ui';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Package, AlertTriangle, ArrowUp, ArrowDown, Search } from 'lucide-react';
+import {
+  PackageIcon,
+  WarningIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+  MagnifyingGlassIcon,
+} from '@phosphor-icons/react';
 
 import { kpisConfig, sections } from '@generated/inventory/generated/config';
 import * as mockData from '@generated/inventory/generated/mockData';
 
 // -- Icon map for resolving string names from config to React components ------
 
-const ICON_MAP = { Package, AlertTriangle };
+const ICON_MAP = { Package: PackageIcon, AlertTriangle: WarningIcon };
 
 // -- Derived data from contract files -----------------------------------------
 
@@ -43,7 +49,7 @@ export default function InventoryPage() {
           <Card data-testid="Card__2d6473">
             <CardHeader data-testid="CardHeader__2d6473">
               <CardTitle className="flex items-center gap-2" data-testid="CardTitle__2d6473">
-                <Search className="h-5 w-5 text-muted-foreground" data-testid="Search__2d6473" />
+                <MagnifyingGlassIcon className="h-5 w-5 text-muted-foreground" data-testid="Search__2d6473" />
                 {ui('stockLevels')}
               </CardTitle>
             </CardHeader>
@@ -65,7 +71,7 @@ export default function InventoryPage() {
               <CardTitle
                 className="flex items-center gap-2 text-base"
                 data-testid="CardTitle__2d6473">
-                <AlertTriangle className="h-5 w-5 text-status-warning-foreground" data-testid="AlertTriangle__2d6473" />
+                <WarningIcon className="h-5 w-5 text-status-warning-foreground" data-testid="AlertTriangle__2d6473" />
                 {ui('lowStockAlerts')}
               </CardTitle>
             </CardHeader>
@@ -112,8 +118,8 @@ export default function InventoryPage() {
                         : 'bg-destructive text-destructive-foreground'
                     }`}>
                       {movement.direction === 'in'
-                        ? <ArrowUp className="h-3.5 w-3.5" data-testid="ArrowUp__2d6473" />
-                        : <ArrowDown className="h-3.5 w-3.5" data-testid="ArrowDown__2d6473" />
+                        ? <ArrowUpIcon className="h-3.5 w-3.5" data-testid="ArrowUp__2d6473" />
+                        : <ArrowDownIcon className="h-3.5 w-3.5" data-testid="ArrowDown__2d6473" />
                       }
                     </div>
                     <div className="flex-1 min-w-0">

@@ -1,7 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
 import {
-  ArrowLeft, Download, FileX,
-} from 'lucide-react';
+  ArrowLeftIcon,
+  FileXIcon,
+  CornersOutIcon,
+  DotsThreeVerticalIcon,
+  DownloadSimpleIcon,
+  MagnifyingGlassMinusIcon,
+  MagnifyingGlassPlusIcon,
+  XIcon,
+} from '@phosphor-icons/react';
+import { useCallback, useEffect, useState } from 'react';
+
 import { useLocale, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -21,10 +29,7 @@ import {
   PortalDate, PortalMain, PortalMoney, PortalPaymentStatus, PortalSection, PORTAL_SECTION_TITLE,
   PORTAL_FIGMA_BUTTON_SECONDARY, PORTAL_FIGMA_SHADOW,
 } from './PortalBits.jsx';
-import {
-  CornersOutIcon, DotsThreeVerticalIcon, DownloadSimpleIcon, MagnifyingGlassMinusIcon,
-  MagnifyingGlassPlusIcon, XIcon,
-} from '@phosphor-icons/react';
+
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -219,7 +224,7 @@ export default function PortalDocumentDetailView({
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px]"
           data-testid="portal-back-mobile"
         >
-          <ArrowLeft className="h-5 w-5" aria-hidden="true" data-testid="ArrowLeft__6a1d3b" />
+          <ArrowLeftIcon className="h-5 w-5" aria-hidden="true" data-testid="ArrowLeft__6a1d3b" />
         </button>
         <div className="flex min-w-0 flex-1 flex-col">
           <h1 className="truncate text-xl font-semibold leading-7">{title}</h1>
@@ -234,7 +239,7 @@ export default function PortalDocumentDetailView({
             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px] border border-border bg-card disabled:opacity-50"
             data-testid="portal-download-pdf-mobile"
           >
-            <Download className="h-5 w-5" aria-hidden="true" data-testid="Download__6a1d3b" />
+            <DownloadSimpleIcon className="h-5 w-5" aria-hidden="true" data-testid="Download__6a1d3b" />
           </button>
         ) : null}
       </header>
@@ -390,7 +395,7 @@ function DesktopHeader({ title, breadcrumb, plural, onBack }) {
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card"
         data-testid="portal-back"
       >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" data-testid="ArrowLeft__6a1d3b" />
+        <ArrowLeftIcon className="h-4 w-4" aria-hidden="true" data-testid="ArrowLeft__6a1d3b" />
       </button>
       <div className="flex min-w-0 flex-col">
         <h1 className="truncate text-lg font-semibold leading-7" data-testid="portal-view-title">{title}</h1>
@@ -596,7 +601,7 @@ function DocumentNotReady({ state, title, plural, onBack, onNavigate }) {
           <p className="text-sm text-muted-foreground" data-testid="portal-document-loading">{ui('loading')}</p>
         ) : (
           <div className="flex flex-col items-center px-6 py-12 text-center" data-testid="portal-document-unavailable">
-            <FileX
+            <FileXIcon
               className="h-8 w-8 text-muted-foreground"
               aria-hidden="true"
               data-testid="FileX__6a1d3b" />

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Minus, Plus } from 'lucide-react';
+import { MinusIcon, PlusIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { cn } from '@/lib/utils';
@@ -216,7 +216,7 @@ export function NumberStepperInput({
         data-testid={testIds.decrement}
         className={STEP_BUTTON_CLASS}
       >
-        <Minus className="h-5 w-5" data-testid="Minus__5c1a7e" />
+        <MinusIcon className="h-5 w-5" data-testid="Minus__5c1a7e" />
       </button>
       <button
         type="button"
@@ -227,7 +227,7 @@ export function NumberStepperInput({
         data-testid={testIds.increment}
         className={STEP_BUTTON_CLASS}
       >
-        <Plus className="h-5 w-5" data-testid="Plus__5c1a7e" />
+        <PlusIcon className="h-5 w-5" data-testid="Plus__5c1a7e" />
       </button>
     </div>
     {hintShown && (

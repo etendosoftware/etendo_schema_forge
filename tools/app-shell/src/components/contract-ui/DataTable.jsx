@@ -4,7 +4,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { Checkbox } from '@/components/ui/checkbox';
 import { AmountText } from '@/components/currency-summary';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search, Inbox, X, Trash2, Copy, Loader2, Pencil, Check, ArrowUpRight } from 'lucide-react';
+import {
+  MagnifyingGlassIcon,
+  TrayIcon,
+  XIcon,
+  TrashIcon,
+  CopyIcon,
+  CircleNotchIcon,
+  PencilSimpleIcon,
+  CheckIcon,
+  ArrowUpRightIcon,
+} from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useLabel, useUI, useLocale, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
@@ -888,7 +898,7 @@ function EmptyState({ hasFilter, totalCount, override, readOnly = false }) {
       <div
         className="flex flex-col items-center justify-center py-12 text-muted-foreground"
         data-testid={override.testId}>
-        <Inbox className="h-10 w-10 mb-3 opacity-40" data-testid="Inbox__eb5261" />
+        <TrayIcon className="h-10 w-10 mb-3 opacity-40" data-testid="Inbox__eb5261" />
         <p className="text-sm font-medium">{override.title}</p>
         {override.description && <p className="text-xs mt-1">{override.description}</p>}
         {override.action && <div className="mt-4">{override.action}</div>}
@@ -897,7 +907,7 @@ function EmptyState({ hasFilter, totalCount, override, readOnly = false }) {
   }
   return (
     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-      <Inbox className="h-10 w-10 mb-3 opacity-40" data-testid="Inbox__eb5261" />
+      <TrayIcon className="h-10 w-10 mb-3 opacity-40" data-testid="Inbox__eb5261" />
       {hasFilter ? (
         <>
           <p className="text-sm font-medium">{ui('noMatchingRecords')}</p>
@@ -1777,7 +1787,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
       {selectable && (
         <TableCell style={{ width: CHECKBOX_COLUMN_WIDTH }} className="px-1" data-testid="TableCell__eb5261">
           <div className="flex items-center justify-center h-7">
-            {isSaving && <Loader2
+            {isSaving && <CircleNotchIcon
               className="h-4 w-4 animate-spin text-muted-foreground"
               aria-label={ui('savingLineTooltip')}
               data-testid="Loader2__eb5261" />}
@@ -1949,7 +1959,7 @@ function LookupField({ value, committedValue = null, committedItem = null, field
         }}
         className={`w-full h-8 text-sm rounded-md border bg-card px-2 text-left flex items-center gap-2 focus:ring-2 focus:outline-none transition-colors${isInvalid ? ' border-destructive focus:ring-destructive' : ' border-input hover:border-primary/50 focus:ring-primary'}`}
       >
-        <Search
+        <MagnifyingGlassIcon
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
           data-testid="Search__eb5261" />
         {value ? (
@@ -1997,7 +2007,7 @@ function LookupButton({ selectorUrl, selectorContext, token, onSelect, title }) 
         className="h-8 w-8 flex items-center justify-center rounded border border-input hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors shrink-0"
         title={title || ''}
       >
-        <Search className="h-3.5 w-3.5" data-testid="Search__eb5261" />
+        <MagnifyingGlassIcon className="h-3.5 w-3.5" data-testid="Search__eb5261" />
       </button>
       {/* committed-selection-ok: an add-a-row button, it holds no value to reopen on. */}
       <DefaultDrawer
@@ -2881,7 +2891,7 @@ function TableDataRow({
                 className="h-8 w-8 flex items-center justify-center rounded-full text-[var(--status-success-fg)] hover:bg-[var(--status-success-bg)] transition-all"
                 aria-label={ui('save')}
               >
-                <Check className="h-5 w-5" aria-hidden="true" data-testid="Check__eb5261" />
+                <CheckIcon className="h-5 w-5" aria-hidden="true" data-testid="Check__eb5261" />
               </button>
             ) : !rowWritesOff && (
               <button
@@ -2894,7 +2904,7 @@ function TableDataRow({
                 className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-all"
                 aria-label={ui('edit')}
               >
-                <Pencil className="h-5 w-5" aria-hidden="true" data-testid="Pencil__eb5261" />
+                <PencilSimpleIcon className="h-5 w-5" aria-hidden="true" data-testid="Pencil__eb5261" />
               </button>
             )}
           </TableCell>
@@ -2910,7 +2920,7 @@ function TableDataRow({
                   className="h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-all"
                   aria-label={ui('cancel')}
                 >
-                  <X className="h-5 w-5" aria-hidden="true" data-testid="X__eb5261" />
+                  <XIcon className="h-5 w-5" aria-hidden="true" data-testid="X__eb5261" />
                 </button>
               ) : (
                 <button
@@ -2925,11 +2935,11 @@ function TableDataRow({
                   data-testid={`row-delete-${row.id}`}
                 >
                   {deletingRows[row.id]
-                    ? <Loader2
+                    ? <CircleNotchIcon
                     className="h-5 w-5 animate-spin"
                     aria-hidden="true"
                     data-testid="Loader2__eb5261" />
-                    : <Trash2 className="h-5 w-5" aria-hidden="true" data-testid="Trash2__eb5261" />}
+                    : <TrashIcon className="h-5 w-5" aria-hidden="true" data-testid="Trash2__eb5261" />}
                 </button>
               )}
             </TableCell>
@@ -2953,10 +2963,10 @@ function TableDataRow({
                 aria-label={ui('deleteRowTooltip')}
                 data-testid={`row-delete-${row.id}`}
               >
-                {deletingRows[row.id] ? <Loader2
+                {deletingRows[row.id] ? <CircleNotchIcon
                   className="h-3.5 w-3.5 animate-spin"
                   aria-hidden="true"
-                  data-testid="Loader2__eb5261" /> : <Trash2 className="h-3.5 w-3.5" aria-hidden="true" data-testid="Trash2__eb5261" />}
+                  data-testid="Loader2__eb5261" /> : <TrashIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="Trash2__eb5261" />}
               </button>
             </TableCell>
           )}
@@ -2978,7 +2988,7 @@ function TableDataRow({
                   style={{ width: 26, height: 26 }}
                   aria-label={ui('cloneOrderBtn')}
                 >
-                  <Copy className="h-3.5 w-3.5" aria-hidden="true" data-testid="Copy__eb5261" />
+                  <CopyIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="Copy__eb5261" />
                 </button>
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs font-medium text-primary-foreground bg-foreground rounded whitespace-nowrap opacity-0 group-hover/clonebtn:opacity-100 pointer-events-none transition-opacity z-10">
                   {ui('cloneOrderBtn')}
@@ -3558,7 +3568,7 @@ export function DataTable({
         className="inline-flex items-center gap-1 text-left underline decoration-[hsl(var(--border-control))] underline-offset-4 hover:decoration-[hsl(var(--foreground))]"
         data-testid={`fk-link-${col.key}`}>
         {rendered}
-        <ArrowUpRight className="h-3 w-3 shrink-0" data-testid="ArrowUpRight__eb5261" />
+        <ArrowUpRightIcon className="h-3 w-3 shrink-0" data-testid="ArrowUpRight__eb5261" />
       </button>
     );
   };

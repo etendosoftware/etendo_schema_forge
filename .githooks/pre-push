@@ -894,8 +894,8 @@ run_test_hygiene() {
 # exit non-zero when the Quality Gate is in ERROR, so this step (and the push) is
 # blocked exactly when CI's gate would fail. The overall coverage comparison
 # (--compare-coverage) is not run here: with a selection the overall figure always
-# drops. The PR's required "Sonar Build" check runs it over the whole suite, as does
-# Jenkins' "Compare Coverage Results" stage (docs/coverage-gate.md).
+# drops. The PR's required "Unit tests + Sonar + coverage" check (mini pipeline into develop, full
+# pipeline into main) runs it over the whole suite (docs/coverage-gate.md).
 run_step_2() {
   if [ "$RUN_S2" != "1" ]; then
     echo "==> [2/5] Running unit tests and SonarQube analysis... SKIPPED ⏭️  (no source/test/sonar-config changes)"

@@ -70,14 +70,14 @@ vi.mock('../CurrentWindowContext', () => ({
   useCurrentWindowContext: () => ({ current: null }),
 }));
 
-vi.mock('lucide-react', () => ({
-  ArrowLeft: (p) => <span {...p} />,
-  Bot: (p) => <span {...p} />,
-  History: (p) => <span {...p} />,
-  Maximize2: (p) => <span {...p} />,
-  Minimize2: (p) => <span {...p} />,
-  Sparkles: (p) => <span {...p} />,
-  X: (p) => <span {...p} />,
+vi.mock('@phosphor-icons/react', () => ({
+  ArrowLeftIcon: (p) => <span {...p} />,
+  RobotIcon: (p) => <span {...p} />,
+  ClockCounterClockwiseIcon: (p) => <span {...p} />,
+  ArrowsOutIcon: (p) => <span {...p} />,
+  ArrowsInIcon: (p) => <span {...p} />,
+  SparkleIcon: (p) => <span {...p} />,
+  XIcon: (p) => <span {...p} />,
 }));
 
 vi.mock('@/components/ui/button.jsx', () => ({

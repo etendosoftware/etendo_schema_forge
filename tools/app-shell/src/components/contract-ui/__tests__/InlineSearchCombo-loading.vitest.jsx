@@ -14,10 +14,10 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-vi.mock('lucide-react', () => ({
-  ChevronDown: () => <span data-testid="chevron" />,
-  X: () => <span data-testid="x-icon" />,
-  Check: () => <span data-testid="check-icon" />,
+vi.mock('@phosphor-icons/react', () => ({
+  CaretDownIcon: () => <span data-testid="chevron" />,
+  XIcon: () => <span data-testid="x-icon" />,
+  CheckIcon: () => <span data-testid="check-icon" />,
 }));
 vi.mock('@/lib/buildUrlWithParams.js', () => ({
   buildUrlWithParams: (url, params) => {

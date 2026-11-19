@@ -1,4 +1,4 @@
-import { Upload } from 'lucide-react';
+import { UploadSimpleIcon } from '@phosphor-icons/react';
 import SegmentedTabs from '@/components/contract-ui/SegmentedTabs.jsx';
 import { RefreshButton } from '@/components/contract-ui/RefreshButton.jsx';
 import { Button } from '@/components/ui/button';
@@ -41,7 +41,7 @@ export default function InvoiceInboxToolbar({ filterKey, onFilterChange, counts,
           data-testid="RefreshButton__56539a" />
       </span>
       <Button type="button" onClick={onPick} className="h-10 rounded-lg" data-testid="invoice-inbox-upload-button">
-        <Upload aria-hidden="true" data-testid="Upload__56539a" />
+        <UploadSimpleIcon aria-hidden="true" data-testid="Upload__56539a" />
         {ui('invoiceInboxUploadButton')}
       </Button>
     </div>

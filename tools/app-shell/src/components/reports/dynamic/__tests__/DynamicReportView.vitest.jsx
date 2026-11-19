@@ -49,7 +49,7 @@ const REPORT = {
     { name: 'dateTo', type: 'date', label: { es_ES: 'Fecha de Fin' } },
     { name: 'compareTo', type: 'toggle' },
     { name: 'bPartnerId', type: 'search', selector: 'bpartner', label: { es_ES: 'Contacto' } },
-    { name: 'productId', type: 'search', selector: 'product', label: { es_ES: 'Producto' } },
+    { name: 'productId', type: 'search', selector: 'product-all', label: { es_ES: 'Producto' } },
     { name: 'splitBy', type: 'string', hidden: true },
     { name: 'accountLevel', default: 'C', options: [{ value: 'E', label: { es_ES: 'Epígrafe' } }, { value: 'C', label: { es_ES: 'Cuenta' } }, { value: 'S', label: { es_ES: 'Subcuenta' } }] },
   ],
@@ -114,6 +114,7 @@ function route(url, init) {
 }
 
 const FULL_ACCESS = { 'profit-loss': 'full', 'report-general-ledger': 'full', 'report-journal-entries': 'full' };
+const TWO_ORGS = [{ id: 'O1', name: 'Spain' }, { id: 'O2', name: 'USA' }];
 const renderView = (props = {}) => render(<DynamicReportView report={REPORT} onBack={vi.fn()} selectedOrgId="O1" reportAccess={FULL_ACCESS} {...props} />);
 const rowIds = () => screen.queryAllByTestId('DynamicReportTable__row').map((r) => r.dataset.nodeId);
 
@@ -286,7 +287,7 @@ describe('DynamicReportView — comparison and chips', () => {
 
 describe('DynamicReportView — split, errors and exports', () => {
   it('with dateFrom after dateTo the split toggle is not offered: no request, no parts', async () => {
-    renderView();
+    renderView({ roleOrgs: TWO_ORGS });
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
     fireEvent.click(screen.getByTestId('DynamicReportPanel__expandAll'));
     fireEvent.change(screen.getByTestId('DynamicReportPanel__splitBy'), { target: { value: 'org' } });
@@ -329,7 +330,7 @@ describe('DynamicReportView — split, errors and exports', () => {
   });
 
   it('with a split dimension, a leaf account lists its parts by that dimension', async () => {
-    renderView();
+    renderView({ roleOrgs: TWO_ORGS });
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
     fireEvent.click(screen.getByTestId('DynamicReportPanel__expandAll'));
     fireEvent.change(screen.getByTestId('DynamicReportPanel__splitBy'), { target: { value: 'org' } });
@@ -1137,7 +1138,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
         periods: periodsOf(params),
         rows: [{ node_id: 'O1', name: 'Spain', cells: periodsOf(params).map((_, pos) => cellOf(600 + pos)) }],
       });
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       await toMonths();
       await openLeaf();
       choose('DynamicReportPanel__splitBy', 'org');
@@ -1155,7 +1156,7 @@ describe('DynamicReportView — period columns (ETP-6239)', () => {
         periods: periodsOf(params),
         rows: [{ node_id: 'O1', name: 'Spain', cells: periodsOf(params).map((_, pos) => cellOf(600 + pos)) }],
       });
-      await renderPeriods();
+      await renderPeriods({ roleOrgs: TWO_ORGS });
       choose('DynamicReportPanel__columns', 'quarter');
       await waitFor(() => expect(groupLabels()).toHaveLength(3));
       choose('DynamicReportPanel__compare', 'previous');
@@ -1180,7 +1181,7 @@ describe('DynamicReportView — collapsible panel (ETP-6239 D8/D9)', () => {
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
     return view;
   };
-  const ROLE_ORGS = [{ id: 'O1', name: 'Spain' }];
+  const ROLE_ORGS = TWO_ORGS;
   const quietMs = () => new Promise((r) => setTimeout(r, 450));
   beforeEach(() => localStorage.clear());
 
@@ -1390,6 +1391,14 @@ describe('DynamicReportView — selections in the URL (ETP-6239)', () => {
     expect(lookups).toEqual(['/sws/report-selectors/bpartner?ids=BP1%2CBP3']);
   });
 
+  it('resolves a restored product through the contract selector (product-all), not the stock-scoped one', async () => {
+    link('productId=PR1');
+    renderView();
+    await waitFor(() => expect(apiFetchMock.mock.calls.map(([u]) => u).some((u) => u.includes('/report-selectors/product-all?ids='))).toBe(true));
+    const lookups = apiFetchMock.mock.calls.map(([u]) => u).filter((u) => u.includes('/report-selectors/product'));
+    expect(lookups).toEqual(['/sws/report-selectors/product-all?ids=PR1']);
+  });
+
   it('names containing a comma survive the URL round trip as single chips, and reach the PDF header exactly', async () => {
     link('bPartnerId=BP4,BP5');
     renderView();
@@ -1493,5 +1502,36 @@ describe('DynamicReportView — selections in the URL (ETP-6239)', () => {
     await new Promise((r) => setTimeout(r, 50));
     // While the years reload the opening period is unknown: nothing of the period is written.
     expect(onSearchChange.mock.calls.map(([next]) => next).filter((next) => next.includes('dateFrom'))).toEqual([]);
+  });
+});
+
+// ETP-6080 (QA CP-8 note) — same rule as the org picker: Organización only for a role with several orgs.
+describe('DynamicReportView — Organización split and chip (ETP-6080)', () => {
+  const splitValues = () => [...screen.getByTestId('DynamicReportPanel__splitBy').querySelectorAll('option')].map((o) => o.value);
+
+  it('a single-org role has no org split option and no org chip', async () => {
+    queryAnswer = periodAnswer;
+    renderView({ roleOrgs: [{ id: 'O1', name: 'Spain' }] });
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    expect(splitValues()).not.toContain('org');
+    expect(splitValues()).toContain('bpartner');
+    expect(screen.queryByTestId('DynamicReportView__chip-org')).toBeNull();
+  });
+
+  it('a role with two orgs has both', async () => {
+    queryAnswer = periodAnswer;
+    renderView({ roleOrgs: TWO_ORGS });
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    expect(splitValues()).toContain('org');
+    expect(screen.getByTestId('DynamicReportView__chip-org')).toBeInTheDocument();
+  });
+
+  it('a link restored with splitBy=org for a single-org role ends with no split and no chip', async () => {
+    window.history.replaceState(null, '', '/report-viewer?report=profit-loss&splitBy=org');
+    queryAnswer = periodAnswer;
+    renderView({ roleOrgs: [{ id: 'O1', name: 'Spain' }] });
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    expect(screen.getByTestId('DynamicReportPanel__splitBy')).toHaveValue('');
+    expect(screen.queryByTestId('DynamicReportView__chip-split')).toBeNull();
   });
 });

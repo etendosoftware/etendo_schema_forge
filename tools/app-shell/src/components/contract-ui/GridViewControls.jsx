@@ -1,4 +1,4 @@
-import { Columns3, Loader2, Save } from 'lucide-react';
+import { ColumnsIcon, CircleNotchIcon, FloppyDiskIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button.jsx';
 import { gridViewColumnId } from '@/hooks/useGridView.js';
 import {
@@ -37,8 +37,8 @@ function ColumnToggleItem({ column, gridView, t }) {
 
 function SaveIcon({ saving }) {
   return saving
-    ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__3b8cf2" />
-    : <Save className="h-4 w-4" data-testid="Save__3b8cf2" />;
+    ? <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__3b8cf2" />
+    : <FloppyDiskIcon className="h-4 w-4" data-testid="Save__3b8cf2" />;
 }
 
 // Column labels are already translated on the grid columns; `t` only overrides that lookup.
@@ -58,7 +58,7 @@ export function GridViewControls({ gridView, gridColumns, ui, t = labelOf(gridCo
             title={ui('gridViewColumns')}
             aria-label={ui('gridViewColumns')}
             data-testid="grid-view-columns-trigger">
-            <Columns3 className="h-4 w-4" data-testid="Columns3__3b8cf2" />
+            <ColumnsIcon className="h-4 w-4" data-testid="Columns3__3b8cf2" />
             <span className="sr-only">{ui('gridViewColumns')}</span>
           </Button>
         </DropdownMenuTrigger>

@@ -19,21 +19,18 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
-vi.mock('lucide-react', () => ({
-  LineChart: () => <span data-testid="icon-line-chart" />,
+vi.mock('@phosphor-icons/react', () => ({
+  ChartLineIcon: () => <span data-testid="icon-line-chart" />,
   // Rendered by the core Radix dropdown-menu the period selector is built on.
-  ChevronDown: () => <span data-testid="icon-chevron" />,
-  Calendar: () => <span data-testid="icon-calendar" />,
-  Check: () => <span data-testid="icon-check" />,
-  ChevronRight: () => <span data-testid="icon-chevron-right" />,
-  Circle: () => <span data-testid="icon-circle" />,
-  X: () => <span data-testid="icon-x" />,
-}));
-
-vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
-  ...(await importOriginal()),
-  IconicArrowUpIcon: (props) => <svg data-direction="up" {...props} />,
-  IconicArrowDownIcon: (props) => <svg data-direction="down" {...props} />,
+  CaretDownIcon: () => <span data-testid="icon-chevron" />,
+  CalendarBlankIcon: () => <span data-testid="icon-calendar" />,
+  CheckIcon: () => <span data-testid="icon-check" />,
+  CaretRightIcon: () => <span data-testid="icon-chevron-right" />,
+  CircleIcon: () => <span data-testid="icon-circle" />,
+  DotOutlineIcon: () => <span data-testid="icon-circle" />,
+  XIcon: () => <span data-testid="icon-x" />,
+  ArrowUpIcon: (props) => <svg data-direction="up" {...props} />,
+  ArrowDownIcon: (props) => <svg data-direction="down" {...props} />,
 }));
 
 vi.mock('@/hooks/useCurrency', () => ({ useCurrency: () => 'USD' }));

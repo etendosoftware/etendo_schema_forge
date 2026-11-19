@@ -1,12 +1,24 @@
-import { useEffect, useRef, useState } from 'react';
-import { LayoutGrid, Search } from 'lucide-react';
-// The main screen's glyphs are the design's own Phosphor icons (spec of 2026-11-17), imported with
-// the library's `*Icon` names like the rest of the app (`pages/first-steps/firstStepsIcons.js`).
 import {
-  ArrowLineLeftIcon, ArrowLineRightIcon, CaretDownIcon, CaretRightIcon, FilesIcon, FileTextIcon,
-  HouseSimpleIcon, PackageIcon, ReceiptIcon, RocketLaunchIcon, ShoppingCartSimpleIcon,
+  MagnifyingGlassIcon,
+  SquaresFourIcon,
+  ArrowLineLeftIcon,
+  ArrowLineRightIcon,
+  CaretDownIcon,
+  CaretRightIcon,
+  FilesIcon,
+  FileTextIcon,
+  HouseSimpleIcon,
+  PackageIcon,
+  ReceiptIcon,
+  RocketLaunchIcon,
+  ShoppingCartSimpleIcon,
   UserIcon,
 } from '@phosphor-icons/react';
+import { useEffect, useRef, useState } from 'react';
+
+// The main screen's glyphs are the design's own Phosphor icons (spec of 2026-11-17), imported with
+// the library's `*Icon` names like the rest of the app (`pages/first-steps/firstStepsIcons.js`).
+
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { PORTAL_DOCUMENT_KINDS } from '@/lib/portal/portalApi.js';
@@ -246,7 +258,7 @@ export function PortalMobileBrandBar({ identity, logoUrl, onSearch }) {
             className="flex h-10 w-10 items-center justify-center rounded-[10px] border border-border bg-card sm:h-12 sm:w-12"
             data-testid="portal-mobile-search"
           >
-            <Search className="h-5 w-5" aria-hidden="true" data-testid="Search__a5d12f" />
+            <MagnifyingGlassIcon className="h-5 w-5" aria-hidden="true" data-testid="Search__a5d12f" />
           </button>
         ) : null}
         <PortalCustomer identity={identity} variant="avatar" data-testid="PortalCustomer__a5d12f" />
@@ -675,7 +687,7 @@ function PortalBottomNav({ onNavigate, isActive }) {
       onClick: () => go({ view: 'list', kind }),
     })),
     {
-      key: 'more', Icon: LayoutGrid, label: ui('portalMore'), active: moreActive,
+      key: 'more', Icon: SquaresFourIcon, label: ui('portalMore'), active: moreActive,
       onClick: () => setMoreOpen((open) => !open), expanded: moreOpen,
     },
   ];

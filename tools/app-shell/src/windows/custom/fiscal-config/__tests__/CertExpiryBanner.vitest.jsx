@@ -15,10 +15,10 @@ vi.mock('@/i18n', () => ({
   },
 }));
 
-vi.mock('lucide-react', () => ({
-  OctagonAlert: () => <svg data-testid="icon-octagon-alert" />,
-  TriangleAlert: () => <svg data-testid="icon-triangle-alert" />,
-  X: () => <svg data-testid="icon-x" />,
+vi.mock('@phosphor-icons/react', () => ({
+  WarningOctagonIcon: () => <svg data-testid="icon-octagon-alert" />,
+  WarningIcon: () => <svg data-testid="icon-triangle-alert" />,
+  XIcon: () => <svg data-testid="icon-x" />,
 }));
 
 // --- Import under test ----------------------------------------------------

@@ -110,7 +110,6 @@ vi.mock('../DocumentStatusPill.jsx', () => ({
     </span>
   ),
 }));
-vi.mock('@/components/attachments/AttachmentIcon', () => ({ AttachmentIcon: () => <span>A</span> }));
 
 const MockForm = ({ data }) => <div data-testid="mock-form">{data?.documentNo}</div>;
 const MockDetailTable = () => <div data-testid="mock-detail-table" />;

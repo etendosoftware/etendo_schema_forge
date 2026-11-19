@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react';
+import { WarningIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { DateInput, Field } from '@/components/forms/fields';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect';
@@ -68,7 +68,7 @@ export function LegacyBankImportSettings({ bankConnection, warningTone }) {
           className={`flex items-center gap-2 rounded-lg px-3 py-3 ${warningTone.bg}`}
           data-testid="bank-connection-import-fetch-interval-warning"
         >
-          <AlertTriangle
+          <WarningIcon
             className={`h-4 w-4 shrink-0 ${warningTone.fg}`}
             data-testid="AlertTriangle__73027d" />
           <span className={`text-sm font-medium ${warningTone.fg}`}>

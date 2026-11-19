@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Building2, ChevronRight, LogOut, User, Rocket } from 'lucide-react';
+import { BuildingsIcon, CaretRightIcon, RocketLaunchIcon, SignOutIcon, UserIcon } from '@phosphor-icons/react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n/index.js';
@@ -74,10 +74,10 @@ export function UserAvatarButton({ expanded = false }) {
       className="flex w-full items-center gap-2.5 px-3 py-2 text-sm rounded-md text-foreground hover:bg-muted/50 transition-colors"
     >
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        <User className="h-4 w-4" data-testid="User__9f3744" />
+        <UserIcon className="h-4 w-4" data-testid="User__9f3744" />
       </span>
       <span className="flex-1 text-left truncate">{username || '—'}</span>
-      <ChevronRight
+      <CaretRightIcon
         className="h-4 w-4 shrink-0 text-muted-foreground"
         data-testid="ChevronRight__9f3744" />
     </button>
@@ -146,7 +146,7 @@ export function UserAvatarButton({ expanded = false }) {
                 onSelect={() => navigate('/upgrade')}
                 data-testid="menu-tenant-upgrade"
               >
-                <Rocket className="h-3.5 w-3.5 mr-2" data-testid="Rocket__9f3744" />
+                <RocketLaunchIcon className="h-3.5 w-3.5 mr-2" data-testid="Rocket__9f3744" />
                 {ui('upgradeMenuAction')}
               </DropdownMenuItem>
               {myCompaniesEnabled && (
@@ -154,7 +154,7 @@ export function UserAvatarButton({ expanded = false }) {
                   onSelect={() => navigate('/companies')}
                   data-testid="menu-my-companies"
                 >
-                  <Building2 className="h-3.5 w-3.5 mr-2" data-testid="Building2__menu-my-companies" />
+                  <BuildingsIcon className="h-3.5 w-3.5 mr-2" data-testid="Building2__menu-my-companies" />
                   {ui('myCompaniesMenuAction')}
                 </DropdownMenuItem>
               )}
@@ -162,7 +162,7 @@ export function UserAvatarButton({ expanded = false }) {
                 onSelect={() => navigate('/account')}
                 data-testid="menu-account"
               >
-                <User className="h-3.5 w-3.5 mr-2" data-testid="User__menu-account" />
+                <UserIcon className="h-3.5 w-3.5 mr-2" data-testid="User__menu-account" />
                 {ui('account')}
               </DropdownMenuItem>
             </>
@@ -171,7 +171,7 @@ export function UserAvatarButton({ expanded = false }) {
             onClick={logout}
             className="text-destructive focus:text-destructive focus:bg-destructive/10 dark:focus:bg-destructive/20"
             data-testid="user-menu-logout">
-            <LogOut className="h-3.5 w-3.5 mr-2" data-testid="LogOut__9f3744" />
+            <SignOutIcon className="h-3.5 w-3.5 mr-2" data-testid="LogOut__9f3744" />
             {ui('logout')}
           </DropdownMenuItem>
         </div>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LifeBuoy, Loader2, LogOut } from 'lucide-react';
+import { LifebuoyIcon, CircleNotchIcon, SignOutIcon } from '@phosphor-icons/react';
 import { whenSessionRevokeSettles } from '@etendosoftware/app-shell-core/auth';
 import { Button } from '@/components/ui/button';
 import { useLocaleSwitch, useUI } from '@/i18n';
@@ -61,7 +61,7 @@ function SupportSessionStrip({ supportSession, className }) {
     >
       {/* 375px: the expiry drops under the message instead of squeezing it; side by side from sm. */}
       <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
-        <LifeBuoy className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" aria-hidden="true" data-testid="LifeBuoy__5351b2" />
+        <LifebuoyIcon className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" aria-hidden="true" data-testid="LifeBuoy__5351b2" />
         <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
           <p className="min-w-0 break-words font-semibold" data-testid="support-mode-banner-message">
             {clientName
@@ -85,8 +85,8 @@ function SupportSessionStrip({ supportSession, className }) {
         data-testid="support-mode-exit"
       >
         {leaving
-          ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" data-testid="Loader2__5351b2" />
-          : <LogOut className="h-3.5 w-3.5 mr-2" data-testid="LogOut__5351b2" />}
+          ? <CircleNotchIcon className="h-3.5 w-3.5 mr-2 animate-spin" data-testid="Loader2__5351b2" />
+          : <SignOutIcon className="h-3.5 w-3.5 mr-2" data-testid="LogOut__5351b2" />}
         {ui('supportModeExit')}
       </Button>
     </div>

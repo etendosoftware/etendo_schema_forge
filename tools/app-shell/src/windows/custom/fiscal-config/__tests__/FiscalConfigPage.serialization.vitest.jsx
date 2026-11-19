@@ -110,12 +110,12 @@ vi.mock('@/components/ui/button', () => ({
     <button onClick={onClick} disabled={disabled} {...rest}>{children}</button>
   ),
 }));
-vi.mock('lucide-react', () => ({
-  Save: () => <svg data-testid="icon-save" />,
-  RefreshCw: () => <svg data-testid="icon-refresh" />,
-  PlusCircle: () => <svg data-testid="icon-plus-circle" />,
-  MoreVertical: () => <svg data-testid="icon-more-vertical" />,
-  AlertTriangle: () => <svg data-testid="icon-alert-triangle" />,
+vi.mock('@phosphor-icons/react', () => ({
+  FloppyDiskIcon: () => <svg data-testid="icon-save" />,
+  ArrowsClockwiseIcon: () => <svg data-testid="icon-refresh" />,
+  PlusIcon: () => <svg data-testid="icon-plus-circle" />,
+  DotsThreeVerticalIcon: () => <svg data-testid="icon-more-vertical" />,
+  WarningIcon: () => <svg data-testid="icon-alert-triangle" />,
 }));
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }) => <div>{children}</div>,

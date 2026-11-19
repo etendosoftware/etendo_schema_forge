@@ -1,23 +1,31 @@
 import { useState, useEffect, useRef } from 'react';
 import { upsertSpec, populateSpec, fetchMenuTree } from './useDiscovery';
-import { Folder, AppWindow, Cog, ChevronRight, Search, Loader2, X } from 'lucide-react';
+import {
+  FolderIcon,
+  AppWindowIcon,
+  GearIcon,
+  CaretRightIcon,
+  MagnifyingGlassIcon,
+  CircleNotchIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_MODULE_ID = '94E1B433CF55451EABB764750AC5902A';
 
 function TypeIcon({ type, className }) {
   if (type === 'folder') return (
-    <Folder
+    <FolderIcon
       className={cn('h-3.5 w-3.5 text-status-warning-foreground/70', className)}
       data-testid="Folder__1a98b9" />
   );
   if (type === 'process') return (
-    <Cog
+    <GearIcon
       className={cn('h-3.5 w-3.5 text-primary', className)}
       data-testid="Cog__1a98b9" />
   );
   return (
-    <AppWindow
+    <AppWindowIcon
       className={cn('h-3.5 w-3.5 text-status-info-foreground/70', className)}
       data-testid="AppWindow__1a98b9" />
   );
@@ -35,7 +43,7 @@ function TreeNode({ node, onSelect, expanded, onToggle }) {
           onClick={() => onToggle(node.id)}
           className="w-full flex items-center gap-1.5 px-2 py-1 text-xs text-inverse-foreground hover:bg-inverse-muted/50 rounded transition-colors"
         >
-          <ChevronRight
+          <CaretRightIcon
             className={cn('h-3 w-3 text-inverse-muted transition-transform flex-shrink-0', isOpen && 'rotate-90')}
             data-testid="ChevronRight__1a98b9" />
           <TypeIcon type="folder" data-testid="TypeIcon__1a98b9" />
@@ -122,7 +130,7 @@ function MenuSelector({ onSelect, onClose }) {
   if (loading) {
     menuContent = (
       <div className="flex items-center justify-center gap-2 py-4 text-inverse-muted">
-        <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__1a98b9" />
+        <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__1a98b9" />
         <span className="text-xs">Loading menu...</span>
       </div>
     );
@@ -161,7 +169,7 @@ function MenuSelector({ onSelect, onClose }) {
   return (
     <div className="border border-inverse-border rounded bg-inverse-muted/90 overflow-hidden">
       <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-inverse-border">
-        <Search
+        <MagnifyingGlassIcon
           className="h-3.5 w-3.5 text-inverse-muted flex-shrink-0"
           data-testid="Search__1a98b9" />
         <input
@@ -173,7 +181,7 @@ function MenuSelector({ onSelect, onClose }) {
         />
         {query && (
           <button onClick={() => setQuery('')} className="text-inverse-muted hover:text-inverse-foreground">
-            <X className="h-3 w-3" data-testid="X__1a98b9" />
+            <XIcon className="h-3 w-3" data-testid="X__1a98b9" />
           </button>
         )}
       </div>
@@ -291,7 +299,7 @@ export default function AddSpec({ onCreated }) {
               </>
             ) : (
               <>
-                <Search className="h-3.5 w-3.5 text-inverse-muted" data-testid="Search__1a98b9" />
+                <MagnifyingGlassIcon className="h-3.5 w-3.5 text-inverse-muted" data-testid="Search__1a98b9" />
                 <span className="text-inverse-muted flex-1">Select a window or process...</span>
               </>
             )}

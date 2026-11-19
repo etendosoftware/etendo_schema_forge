@@ -1,6 +1,6 @@
 import { useState, useRef, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowRightToLine } from 'lucide-react';
+import { ArrowLineRightIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 // Circle size (px) and the offset (px) of its top edge from the top of the side panel column: 8 px of column
@@ -97,7 +97,7 @@ export default function ProductSidebarDividerToggle({ collapsed, onToggle }) {
           style={{ width: SIZE, height: SIZE, left: placement.left, top: placement.top }}
           data-testid={collapsed ? 'ProductSidebarOpenButton' : 'ProductSidebarCollapseButton'}
         >
-          <ArrowRightToLine
+          <ArrowLineRightIcon
             size={14}
             aria-hidden="true"
             className={`transition-transform duration-200 ${collapsed ? 'rotate-180' : ''}`}

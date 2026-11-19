@@ -9,7 +9,7 @@
 // to consume these through an `ACCOUNT_CELL_RENDERERS` registry; the generic
 // `DataTable` now supplies its own `<TableCell>` around whatever `col.render` returns,
 // which is why these are exported as bare bodies with no wrapper of their own.
-import { Copy } from 'lucide-react';
+import { CopyIcon } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { Tag } from '@/components/ui/tag';
@@ -139,7 +139,7 @@ export function TypeCell({ account, ui }) {
               data-testid={`account-row-copy-iban-${account.id}`}
               className="shrink-0 rounded-full p-0.5 text-[hsl(var(--text-disabled))] opacity-0 transition-opacity hover:bg-[hsl(var(--border-subtle))] group-hover:opacity-100 group-hover/row:opacity-100"
             >
-              <Copy className="h-3.5 w-3.5" data-testid="Copy__dc050f" />
+              <CopyIcon className="h-3.5 w-3.5" data-testid="Copy__dc050f" />
             </button>
           </span>
         )}
