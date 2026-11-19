@@ -102,7 +102,7 @@ export default function SiiImportDuaSection({ ui, siiTypeKey, getVal, getDateVal
       {!multiDua && (
         <div className="grid grid-cols-2 gap-3" data-testid="SiiImportDuaSection__fields">
           <DuaField
-            label={ui('sifDataTabs.dua.mrnLabel')}
+            label={ui('sifDataTabs.field.dua')}
             htmlFor="sif-dua"
             required={duaRequired}
             aside={(
@@ -126,7 +126,7 @@ export default function SiiImportDuaSection({ ui, siiTypeKey, getVal, getDateVal
               data-testid="Input__siiDua" />
           </DuaField>
           <DuaField
-            label={ui('sifDataTabs.dua.admissionDate')}
+            label={ui('sifDataTabs.field.duaDate')}
             htmlFor="sif-duaDate"
             required={duaRequired}
             helper={ui('sifDataTabs.dua.dateHelper')}
