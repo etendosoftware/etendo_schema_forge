@@ -17825,6 +17825,7 @@
     "inDraftInvoiceMany": "in draft invoices {documentNos}",
     "partlyInDraftInvoiceOne": "{quantity} in draft invoice {documentNo}",
     "partlyInDraftInvoiceMany": "{quantity} in draft invoices {documentNos}",
+    "partlyInThisInvoice": "{quantity} already on this invoice",
     "importNoticeTitle": "Import information",
     "importNoticeBody": "Notices about the selected lines will appear here.",
     "importedLinesWithErrors": "Imported {count} line(s) with {errors} error(s)",
