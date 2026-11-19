@@ -1,0 +1,112 @@
+name: CloudFront security headers
+
+# ETP-4573 (ADR-0002 D1): attach etendo-go-security-headers-v1 to every behavior
+# of ONE distribution per run. Manual only: each environment is an explicit choice.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - production
+          - staging
+          - experimental
+      action:
+        description: 'apply (idempotent), verify (read-only) or rollback (needs snapshot_file)'
+        required: true
+        default: verify
+        type: choice
+        options:
+          - verify
+          - apply
+          - rollback
+      dry_run:
+        description: 'apply only: plan and snapshot without writing'
+        required: false
+        default: true
+        type: boolean
+      snapshot_file:
+        description: 'rollback only: snapshot JSON path inside the downloaded snapshot artifact'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: cloudfront-security-headers-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  headers:
+    name: ${{ inputs.action }} (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Resolve distribution
+        id: target
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          CF_PRODUCTION: ${{ vars.CF_DISTRIBUTION_PRODUCTION }}
+          CF_STAGING: ${{ vars.CF_DISTRIBUTION_STAGING }}
+          CF_EXPERIMENTAL: ${{ vars.CF_DISTRIBUTION_EXPERIMENTAL }}
+        run: |
+          case "$ENVIRONMENT" in
+            production)   ID="$CF_PRODUCTION" ;;
+            staging)      ID="$CF_STAGING" ;;
+            experimental) ID="$CF_EXPERIMENTAL" ;;
+            *) echo "::error::unknown environment"; exit 1 ;;
+          esac
+          if [[ -z "$ID" ]]; then echo "::error::CF_DISTRIBUTION_* variable not set for $ENVIRONMENT"; exit 1; fi
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume:        ${{ vars.FRONT_RELEASE_ROLE_ARN }}
+          role-session-name:     cf-headers-${{ github.run_id }}
+          aws-access-key-id:     ${{ vars.FRONT_RELEASE_ROLE_ARN == '' && secrets.AWS_ACCESS_KEY_ID || '' }}
+          aws-secret-access-key: ${{ vars.FRONT_RELEASE_ROLE_ARN == '' && secrets.AWS_SECRET_ACCESS_KEY || '' }}
+          aws-region:            ${{ vars.AWS_REGION }}
+
+      - name: Run
+        env:
+          DIST: ${{ steps.target.outputs.id }}
+          ACTION: ${{ inputs.action }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          SNAPSHOT_FILE: ${{ inputs.snapshot_file }}
+        run: |
+          case "$ACTION" in
+            apply)
+              ARGS=(--snapshot-dir cf-snapshots)
+              if [[ "$DRY_RUN" == "true" ]]; then ARGS+=(--dry-run); fi
+              node scripts/cloudfront-security-headers.mjs apply --distribution "$DIST" "${ARGS[@]}" ;;
+            verify)
+              node scripts/cloudfront-security-headers.mjs verify --distribution "$DIST" ;;
+            rollback)
+              if [[ -z "$SNAPSHOT_FILE" ]]; then echo "::error::snapshot_file is required"; exit 1; fi
+              node scripts/cloudfront-security-headers.mjs rollback --distribution "$DIST" --snapshot "$SNAPSHOT_FILE" ;;
+          esac
+
+      - name: Verify every behavior
+        if: inputs.action == 'apply' && inputs.dry_run == false
+        env:
+          DIST: ${{ steps.target.outputs.id }}
+        run: node scripts/cloudfront-security-headers.mjs verify --distribution "$DIST"
+
+      - name: Upload pre-change snapshot
+        if: always() && inputs.action == 'apply'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cf-snapshot-${{ inputs.environment }}-${{ github.run_id }}
+          path: cf-snapshots/
+          if-no-files-found: ignore
+          retention-days: 90
