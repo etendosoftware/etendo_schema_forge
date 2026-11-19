@@ -36,7 +36,7 @@ function splitDimensionsFor(multiOrg, label) {
   return SPLIT_DIMENSIONS.filter(([value]) => value !== 'org' || multiOrg).map(([value, name]) => ({ value, label: label(name) }));
 }
 const COLUMN_LABELS = { total: 'dynamicReportColumnsTotal', month: 'dynamicReportColumnsMonth', quarter: 'dynamicReportColumnsQuarter' };
-const ERROR_KEYS = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess',
+const ERROR_KEYS = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess', report_timeout: 'reportErrorTimeout',
   period_range_too_long: 'reportErrorPeriodRangeTooLong', invalid_periods: 'reportErrorInvalidPeriods',
 };
 

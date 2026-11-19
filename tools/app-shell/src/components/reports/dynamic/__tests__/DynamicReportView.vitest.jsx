@@ -418,6 +418,12 @@ describe('DynamicReportView — drill steps the role cannot open (ETP-6080)', ()
     renderView();
     expect(await screen.findByTestId('DynamicReportView__error')).toHaveTextContent('reportErrorReportAccess');
   });
+
+  it('shows a query past the statement timeout as the translated timeout message (ETP-6146)', async () => {
+    queryAnswer = () => json({ error: 'REPORT_TIMEOUT', code: 'REPORT_TIMEOUT' }, { ok: false, status: 504 });
+    renderView();
+    expect(await screen.findByTestId('DynamicReportView__error')).toHaveTextContent('reportErrorTimeout');
+  });
 });
 
 describe('DynamicReportView — drill-down (F9)', () => {
