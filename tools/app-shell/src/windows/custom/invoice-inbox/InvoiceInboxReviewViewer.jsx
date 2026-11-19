@@ -1,5 +1,11 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, FileText, Loader2, ZoomIn, ZoomOut } from 'lucide-react';
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  DownloadSimpleIcon,
+  FileTextIcon,
+  CircleNotchIcon,
+  MagnifyingGlassPlusIcon,
+  MagnifyingGlassMinusIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { useMainAttachment } from '@/windows/custom/shared/useMainAttachment.js';
@@ -7,7 +13,32 @@ import {
   initialZoom, PAPER_WIDTH, stepZoom, ZOOM_MAX, ZOOM_MIN,
 } from './invoiceInboxReviewModel.js';
 
-const LazyPdfViewer = lazy(() => import('@/windows/custom/shared/PdfViewer.jsx'));
+const loadPdfViewer = () => import('@/windows/custom/shared/PdfViewer.jsx');
+
+/**
+ * `React.lazy` caches a rejected import for good, so a retry needs a NEW lazy component. Each
+ * attempt number gets its own (attempt 0 is the module-level one), kept in a small map.
+ */
+const lazyByAttempt = new Map([[0, lazy(loadPdfViewer)]]);
+function lazyPdfViewerFor(attempt) {
+  if (!lazyByAttempt.has(attempt)) lazyByAttempt.set(attempt, lazy(loadPdfViewer));
+  return lazyByAttempt.get(attempt);
+}
+
+/**
+ * Contains a failure of the viewer pane (the lazy chunk failing to load: a deploy, a dropped
+ * network) so it never blanks the review drawer. Renders `<FallbackComponent onRetry={reset} />`; no error text leaks.
+ */
+class ViewerBoundary extends Component {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(error) { console.error('[invoice-inbox] viewer failed to load', error); }
+  reset = () => { this.setState({ failed: false }); this.props.onRetry(); };
+  render() {
+    const { FallbackComponent } = this.props;
+    return this.state.failed ? <FallbackComponent onRetry={this.reset} data-testid="FallbackComponent__e8a41d" /> : this.props.children;
+  }
+}
 
 /** AD table name of `ETGO_INCOMING_DOCUMENT`, as `/sws/neo/attachments/{table}/{id}/main` takes it. */
 export const INCOMING_DOCUMENT_TABLE = 'ETGO_Incoming_Document';
@@ -25,6 +56,24 @@ function Centered({ testId, children }) {
     >
       {children}
     </div>
+  );
+}
+
+/** The boundary's fallback: a short message plus a retry that remounts the viewer. */
+function ViewerFailed({ onRetry }) {
+  const ui = useUI();
+  return (
+    <Centered testId="invoice-inbox-review-viewer-error" data-testid="Centered__e8a41d">
+      <span className="text-xs">{ui('invoiceInboxReviewViewerFailed')}</span>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onRetry}
+        data-testid="invoice-inbox-review-viewer-retry">
+        {ui('retry')}
+      </Button>
+    </Centered>
   );
 }
 
@@ -114,6 +163,8 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
     token,
     apiBaseUrl,
   });
+  const [attempt, setAttempt] = useState(0);
+  const retryViewer = useCallback(() => setAttempt((n) => n + 1), []);
   const { setBox, zoom, pageWidth, zoomIn, zoomOut, pdfZoom, measure } = useViewerZoom(storedFile?.attachmentId);
 
   if (!storedFile && isBusy) {
@@ -121,7 +172,7 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
       <Centered
         testId="invoice-inbox-review-viewer-loading"
         data-testid="Centered__e8a41d">
-        <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" data-testid="Loader2__review-viewer" />
+        <CircleNotchIcon className="h-5 w-5 animate-spin" aria-hidden="true" data-testid="Loader2__review-viewer" />
         <span className="text-xs">{ui('invoiceInboxReviewViewerLoading')}</span>
       </Centered>
     );
@@ -129,11 +180,12 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
   if (!storedFile) {
     return (
       <Centered testId="invoice-inbox-review-viewer-empty" data-testid="Centered__e8a41d">
-        <FileText className="h-8 w-8 opacity-40" aria-hidden="true" data-testid="FileText__review-viewer" />
+        <FileTextIcon className="h-8 w-8 opacity-40" aria-hidden="true" data-testid="FileText__review-viewer" />
         <span className="text-xs">{ui('invoiceInboxReviewViewerEmpty')}</span>
       </Centered>
     );
   }
+  const LazyPdfViewer = lazyPdfViewerFor(attempt);
   const isImage = storedFile.mimeType?.startsWith('image/');
   const downloadName = storedFile.fileName || fileName || 'document';
   return (
@@ -148,7 +200,7 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
           disabled={zoom <= ZOOM_MIN}
           testId="invoice-inbox-review-viewer-zoom-out"
           data-testid="ToolbarButton__e8a41d">
-          <ZoomOut className="h-4 w-4" aria-hidden="true" data-testid="ZoomOut__review-viewer" />
+          <MagnifyingGlassMinusIcon className="h-4 w-4" aria-hidden="true" data-testid="ZoomOut__review-viewer" />
         </ToolbarButton>
         <span className="w-11 text-center font-mono text-xs font-medium tabular-nums" data-testid="invoice-inbox-review-viewer-zoom">
           {zoom}%
@@ -159,7 +211,7 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
           disabled={zoom >= ZOOM_MAX}
           testId="invoice-inbox-review-viewer-zoom-in"
           data-testid="ToolbarButton__e8a41d">
-          <ZoomIn className="h-4 w-4" aria-hidden="true" data-testid="ZoomIn__review-viewer" />
+          <MagnifyingGlassPlusIcon className="h-4 w-4" aria-hidden="true" data-testid="ZoomIn__review-viewer" />
         </ToolbarButton>
         {storedFile.objectUrl && (
           <Button
@@ -174,7 +226,7 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
               aria-label={ui('download')}
               title={ui('download')}
               data-testid="invoice-inbox-review-viewer-download">
-              <Download className="h-4 w-4" aria-hidden="true" data-testid="Download__review-viewer" />
+              <DownloadSimpleIcon className="h-4 w-4" aria-hidden="true" data-testid="Download__review-viewer" />
             </a>
           </Button>
         )}
@@ -192,12 +244,17 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
               data-testid="invoice-inbox-review-viewer-image" />
           </div>
         ) : (
+          <ViewerBoundary
+            key={attempt}
+            onRetry={retryViewer}
+            FallbackComponent={ViewerFailed}
+            data-testid="ViewerBoundary__e8a41d">
           <Suspense
             fallback={(
               <Centered
                 testId="invoice-inbox-review-viewer-suspense"
                 data-testid="Centered__e8a41d">
-                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" data-testid="Loader2__review-viewer-lazy" />
+                <CircleNotchIcon className="h-5 w-5 animate-spin" aria-hidden="true" data-testid="Loader2__review-viewer-lazy" />
               </Centered>
             )}
             data-testid="Suspense__review-viewer">
@@ -209,6 +266,7 @@ export default function InvoiceInboxReviewViewer({ documentId, fileName, token =
               contentPadding={CONTENT_PADDING}
               data-testid="LazyPdfViewer__review-viewer" />
           </Suspense>
+          </ViewerBoundary>
         )}
       </div>
     </div>

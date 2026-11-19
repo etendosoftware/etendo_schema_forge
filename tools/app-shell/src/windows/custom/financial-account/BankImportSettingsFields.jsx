@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { WarningIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { DateInput, Field } from '@/components/forms/fields';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect';
@@ -154,7 +154,7 @@ export function BankImportSettingsFields({
           className="flex items-center gap-2 rounded-lg bg-[var(--status-warning-bg)] px-3 py-3"
           data-testid={`${testIdPrefix}-import-fetch-interval-warning`}
         >
-          <AlertTriangle
+          <WarningIcon
             className="h-4 w-4 shrink-0 text-[var(--status-warning-fg)]"
             data-testid="AlertTriangle__bankimport" />
           <span className="text-sm font-medium text-[var(--status-warning-fg)]">

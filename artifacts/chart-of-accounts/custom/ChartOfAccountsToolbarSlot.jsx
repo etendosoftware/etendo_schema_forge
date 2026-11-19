@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Search } from 'lucide-react';
+import { ArrowDownIcon, ArrowUpIcon, MagnifyingGlassIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { DistinctValuesFilter } from '@etendosoftware/app-shell-core/components/ui/distinct-values-filter.jsx';
@@ -95,8 +95,8 @@ export function ChartOfAccountsToolbarSlot() {
         data-testid="coa-toggle-expand-all"
       >
         {hasExpandedFolder
-          ? <ArrowUp className="h-3.5 w-3.5" data-testid="ArrowUp__coa" />
-          : <ArrowDown className="h-3.5 w-3.5" data-testid="ArrowDown__coa" />}
+          ? <ArrowUpIcon className="h-3.5 w-3.5" data-testid="ArrowUp__coa" />
+          : <ArrowDownIcon className="h-3.5 w-3.5" data-testid="ArrowDown__coa" />}
         {hasExpandedFolder ? ui('collapseAll') : ui('expandAll')}
       </Button>
 
@@ -104,7 +104,7 @@ export function ChartOfAccountsToolbarSlot() {
         className="flex h-9 w-56 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm text-muted-foreground focus-within:ring-2 focus-within:ring-focus-ring"
         data-testid="coa-search"
       >
-        <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" data-testid="Search__coa" />
+        <MagnifyingGlassIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" data-testid="Search__coa" />
         <input
           type="search"
           value={draft}

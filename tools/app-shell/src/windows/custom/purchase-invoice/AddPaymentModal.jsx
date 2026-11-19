@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { X } from 'lucide-react';
+import { XIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button.jsx';
 import { DateField } from '@/components/ui/date-field';
 import { useUI } from '@/i18n';
@@ -51,7 +51,7 @@ export default function AddPaymentModal({ invoice, outstanding, onClose, onSave 
             className="text-muted-foreground hover:text-muted-foreground transition-colors"
             aria-label={ui('close')}
           >
-            <X size={18} data-testid="X__4f30ab" />
+            <XIcon size={18} data-testid="X__4f30ab" />
           </button>
         </div>
 

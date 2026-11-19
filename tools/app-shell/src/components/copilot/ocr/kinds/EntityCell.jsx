@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Loader2, Search } from 'lucide-react';
+import {
+  CheckIcon,
+  CaretDownIcon,
+  CircleNotchIcon,
+  MagnifyingGlassIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Popover, PopoverContent, PopoverAnchor } from '@/components/ui/popover';
 import {
@@ -47,7 +52,7 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
         <div ref={wrapRef} className="min-w-0">
           {open ? (
             <div className="flex w-full min-w-0 items-center gap-2 rounded-md border border-foreground bg-card px-2 py-1.5 text-sm">
-              <Search size={12} className="shrink-0 text-muted-foreground" data-testid="Search__65a761" />
+              <MagnifyingGlassIcon size={12} className="shrink-0 text-muted-foreground" data-testid="Search__65a761" />
               <input
                 ref={inputRef}
                 type="text"
@@ -56,7 +61,7 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
                 placeholder={ui(column.searchPlaceholder || 'ocrLinesTaxSearch')}
                 className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder-gray-500 outline-none"
               />
-              {loading && <Loader2
+              {loading && <CircleNotchIcon
                 size={12}
                 className="shrink-0 animate-spin text-muted-foreground"
                 data-testid="Loader2__65a761" />}
@@ -72,7 +77,7 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
               className="flex w-full min-w-0 items-center justify-between gap-2 rounded-md border border-border-subtle bg-card px-2 py-1.5 text-sm hover:border-border-control"
             >
               <span className={`min-w-0 flex-1 truncate text-left ${chipDim}`}>{chipLabel}</span>
-              <ChevronDown
+              <CaretDownIcon
                 size={14}
                 className="shrink-0 text-muted-foreground"
                 data-testid="ChevronDown__65a761" />
@@ -121,7 +126,7 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
               }}
               className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted ${itemCls}`}
             >
-              <span className="w-4 shrink-0">{selected ? <Check size={14} data-testid="Check__65a761" /> : null}</span>
+              <span className="w-4 shrink-0">{selected ? <CheckIcon size={14} data-testid="Check__65a761" /> : null}</span>
               <span className="min-w-0 truncate">{label}</span>
             </button>
           );

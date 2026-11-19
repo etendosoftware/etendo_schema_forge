@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Upload } from 'lucide-react';
+import { UploadSimpleIcon } from '@phosphor-icons/react';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
 import { useAuthOptional } from '@etendosoftware/app-shell-core/auth';
 import { getSpecBaseUrl } from '@/lib/neoBaseUrl.js';
@@ -62,7 +62,7 @@ export default function FirstStepsImportButton({ step, ui, disabled = false }) {
         className="flex items-center gap-1.5 rounded-md border px-3 py-1 text-xs font-medium text-foreground cursor-pointer hover:bg-muted/50"
         data-testid={`first-steps-import-${step.id}`}
       >
-        <Upload className="h-3.5 w-3.5" data-testid={`first-steps-import-icon-${step.id}`} />
+        <UploadSimpleIcon className="h-3.5 w-3.5" data-testid={`first-steps-import-icon-${step.id}`} />
         {ui('import')}
       </button>
       {open && importConfig && (

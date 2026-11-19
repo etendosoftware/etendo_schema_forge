@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { Star, GripVertical } from 'lucide-react';
+import { StarIcon } from '@phosphor-icons/react';
 
 /**
  * Color accent map for column headers.
@@ -53,7 +53,7 @@ function PriorityStars({ priority }) {
   return (
     <div className="flex items-center gap-0.5" aria-label={`Priority ${count} of 3`}>
       {Array.from({ length: 3 }).map((_, i) => (
-        <Star
+        <StarIcon
           key={i}
           className={cn(
             'h-3 w-3',

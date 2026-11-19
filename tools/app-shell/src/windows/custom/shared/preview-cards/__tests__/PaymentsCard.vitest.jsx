@@ -68,7 +68,7 @@ describe('PaymentsCard', () => {
 
   it('shows check icon when isFullyPaid=true and canAddPayment=false', () => {
     const { container } = render(<PaymentsCard isFullyPaid payments={[]} totalOutstanding={0} />);
-    // Check icon from lucide renders as svg
+    // Check icon from Phosphor renders as svg
     expect(container.querySelector('svg')).toBeInTheDocument();
     // No add-payment button
     expect(screen.queryByText('previewCardAddPayment')).toBeNull();

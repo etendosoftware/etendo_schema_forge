@@ -13,11 +13,11 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 vi.mock('../fiscal-models.css', () => ({}));
-vi.mock('lucide-react', () => ({
-  X: () => null,
-  TriangleAlert: () => null,
-  Check: () => null,
-  Star: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  XIcon: () => null,
+  WarningIcon: () => null,
+  CheckIcon: () => null,
+  StarIcon: () => null,
 }));
 vi.mock('../FmOverlays.jsx', () => ({
   ConfigDrawer: () => null,

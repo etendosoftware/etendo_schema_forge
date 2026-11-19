@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { FilePlus } from 'lucide-react';
+import { FilePlusIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { translateBackendError, translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
@@ -324,7 +324,7 @@ export default function BulkInvoiceFromReceipt({ selectedRows, clearSelection, t
           opacity: canCreate ? 1 : 0.5,
         }}
       >
-        <FilePlus className="h-3.5 w-3.5" data-testid="FilePlus__bulkInvoiceReceipt" />
+        <FilePlusIcon className="h-3.5 w-3.5" data-testid="FilePlus__bulkInvoiceReceipt" />
         {ui('createInvoiceBtn')}
       </button>
 

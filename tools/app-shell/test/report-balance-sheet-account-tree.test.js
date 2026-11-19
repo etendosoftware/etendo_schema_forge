@@ -13,6 +13,7 @@ import Handlebars from 'handlebars';
 import { registerReportHelpers, buildJsreportHelpersString } from '../../../templates/reports/helpers/report-html-helpers.js';
 import { buildContractLabels } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
 import { expandBrandingPartial } from './reportBrandingPartialHelper.js';
+import { registerJsreportHelpers } from './reportJsreportHelpers.js';
 
 // ETP-4899 — balance-sheet ("Balance de Situación") is the SAME indented
 // account-report tree as profit-loss. In Etendo Classic both are literally one
@@ -613,6 +614,7 @@ describe('balance-sheet template.hbs — Reference Amount column visibility', ()
 function renderExcel({ compareTo, locale = 'en_US', rows = ROWS } = {}) {
   const hb = Handlebars.create();
   registerReportHelpers(hb, HELPERS_CODE);
+  registerJsreportHelpers(hb, HELPERS_CODE);
   const template = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'));
   return template({
     css: '',
@@ -820,11 +822,12 @@ function typeMeta(contract, locale, compareTo = false, labelOverrides = {}) {
 function renderExportExcel(dir, meta, rows = TYPE_ROWS) {
   const hb = Handlebars.create();
   registerReportHelpers(hb);
+  registerJsreportHelpers(hb, readFileSync(resolve(dir, 'helpers.js'), 'utf8'));
   return hb.compile(readFileSync(resolve(dir, 'template-excel.hbs'), 'utf8'))({ css: '', meta, rows });
 }
 
 function renderExportCsv(dir, meta, rows = TYPE_ROWS) {
-  const built = buildJsreportHelpersString();
+  const built = buildJsreportHelpersString(readFileSync(resolve(dir, 'helpers.js'), 'utf8'));
   const helperNames = [...built.matchAll(/^function\s+(\w+)\s*\(/gm)].map((m) => m[1]);
   // eslint-disable-next-line no-new-func
   const helpers = new Function(`${built}\nreturn { ${helperNames.join(', ')} };`)();
@@ -931,3 +934,25 @@ for (const { report, dir, contract } of TYPE_REPORTS) {
     });
   });
 }
+
+// ETP-6080 — the Excel/CSV templates and the number helpers are shared with profit-loss.
+describe('balance-sheet exports — shared with profit-loss (ETP-6080)', () => {
+  const pl = resolve(import.meta.dirname, '../../../artifacts/profit-loss');
+  for (const f of ['template-excel.hbs', 'template-csv.hbs', 'helpers.js']) {
+    it(`${f} stays byte-identical to profit-loss`, () => {
+      assert.equal(readFileSync(resolve(ARTIFACT_DIR, f), 'utf8'), readFileSync(resolve(pl, f), 'utf8'));
+    });
+  }
+
+  it('compare on but no variation labels: no variation columns, and a null % cell is never a number cell', () => {
+    const hb = Handlebars.create();
+    registerReportHelpers(hb, HELPERS_CODE);
+    registerJsreportHelpers(hb, HELPERS_CODE);
+    const excel = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))({
+      meta: { ...META_BASE, labels: LABELS.en_US, params: { compareTo: 'true' } },
+      rows: [{ ...ROWS[0], variationAmount: 1, variationPct: null }],
+    });
+    assert.doesNotMatch(excel, /Variation/);
+    assert.doesNotMatch(excel, /data-cell-type="number"><\/td>/);
+  });
+});

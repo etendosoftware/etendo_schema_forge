@@ -1,5 +1,7 @@
 // @covers tools/app-shell/src/lib/observability/providers/mixpanel.js
 import { createMixpanelProvider } from '../mixpanel.js';
+import { TRUSTED_CONTEXT_KEYS } from '../../core.js';
+import { SAFE_EVENT_PROPERTY_KEYS } from '../../payload.js';
 
 function makeClient(overrides = {}) {
   return {
@@ -330,5 +332,23 @@ describe('createMixpanelProvider — flush', () => {
     const provider = createMixpanelProvider({ enabled: false, loader });
     await expect(provider.flush()).resolves.toBeUndefined();
     expect(loader).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-6080 — the adapter sanitizes again after the gateway; without trustedKeys the `session`
+// key-name rule turned the report session id into '[REDACTED]'.
+describe('createMixpanelProvider — trusted context keys', () => {
+  it('lets reportSessionId through unredacted', async () => {
+    const client = makeClient();
+    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader: vi.fn().mockResolvedValue({ default: client }) });
+    await provider.init();
+    const uuid = '3f2b8c1e-5d4a-4e7b-9a10-0c6d2e8f7a11';
+    const { before_send_events } = client.init.mock.calls[0][1].hooks;
+    const out = before_send_events({ event: 'report_opened', properties: { reportSessionId: uuid } });
+    expect(out.properties.reportSessionId).toBe(uuid);
+  });
+
+  it('only trusts keys that are already in the payload allowlist', () => {
+    for (const key of TRUSTED_CONTEXT_KEYS) expect(SAFE_EVENT_PROPERTY_KEYS.has(key)).toBe(true);
   });
 });

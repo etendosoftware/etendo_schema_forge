@@ -1,4 +1,12 @@
-import { ChevronDown, Check, Landmark, Wallet, CreditCard, Building2, Archive } from 'lucide-react';
+import {
+  CaretDownIcon,
+  CheckIcon,
+  BankIcon,
+  WalletIcon,
+  CreditCardIcon,
+  BuildingsIcon,
+  ArchiveIcon,
+} from '@phosphor-icons/react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -13,11 +21,11 @@ const INACTIVE = 'INACTIVE';
 function useTypeOptions() {
   const ui = useUI();
   return [
-    { value: ALL, label: ui('financeAccountsFilterAll'), Icon: Building2 },
-    { value: ACCOUNT_TYPE.BANK, label: ui('financeAccountsTypeBank'), Icon: Landmark },
-    { value: ACCOUNT_TYPE.CASH, label: ui('financeAccountsTypeCash'), Icon: Wallet },
-    { value: ACCOUNT_TYPE.CARD, label: ui('financeAccountsTypeCard'), Icon: CreditCard },
-    { value: INACTIVE, label: ui('financeAccountsFilterInactive'), Icon: Archive, divider: true },
+    { value: ALL, label: ui('financeAccountsFilterAll'), Icon: BuildingsIcon },
+    { value: ACCOUNT_TYPE.BANK, label: ui('financeAccountsTypeBank'), Icon: BankIcon },
+    { value: ACCOUNT_TYPE.CASH, label: ui('financeAccountsTypeCash'), Icon: WalletIcon },
+    { value: ACCOUNT_TYPE.CARD, label: ui('financeAccountsTypeCard'), Icon: CreditCardIcon },
+    { value: INACTIVE, label: ui('financeAccountsFilterInactive'), Icon: ArchiveIcon, divider: true },
   ];
 }
 
@@ -36,7 +44,7 @@ export function AccountTypeFilter({ value, onChange }) {
           className="inline-flex h-10 w-[181px] items-center justify-between gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium leading-6 text-[#121217] transition-colors hover:bg-[hsl(var(--muted))]"
         >
           <span className="truncate text-left">{active.label}</span>
-          <ChevronDown
+          <CaretDownIcon
             className="h-4 w-4 shrink-0 text-[#828FA3]"
             data-testid="ChevronDown__f795e3" />
         </button>
@@ -62,7 +70,7 @@ export function AccountTypeFilter({ value, onChange }) {
                 >
                   <opt.Icon className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
                   <span className="flex-1 text-left">{opt.label}</span>
-                  {selected ? <Check className="h-4 w-4 text-[hsl(var(--foreground))]" data-testid="Check__f795e3" /> : null}
+                  {selected ? <CheckIcon className="h-4 w-4 text-[hsl(var(--foreground))]" data-testid="Check__f795e3" /> : null}
                 </button>
               </div>
             );

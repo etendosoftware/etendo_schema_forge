@@ -1,7 +1,7 @@
 // Shared UI primitives for the Fiscal Monitor.
 import { useState, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
-import { TriangleAlert, ArrowUpRight } from 'lucide-react';
+import { WarningIcon, ArrowUpRightIcon, UploadSimpleIcon } from '@phosphor-icons/react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { neutralizeSpreadsheetCell } from '../../../../../../templates/reports/helpers/report-html-helpers.js';
 
@@ -74,9 +74,8 @@ export const NumFactura = ({ n, onOpen }) => {
       title={ui('fiscalMonitor.openInvoice')}
     >
       {n}
-      <ArrowUpRight
+      <ArrowUpRightIcon
         size={14}
-        strokeWidth={2}
         className="fm-num-factura-arrow"
         data-testid="ArrowUpRight__29f91c" />
     </a>
@@ -117,12 +116,7 @@ export const PAGE_SIZE = 20;
 
 export { fmtDate } from './fmtDateUtils.js';
 
-export const ExportIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-    <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-  </svg>
-);
+export const ExportIcon = () => <UploadSimpleIcon size={13} data-testid="UploadSimpleIcon__29f91c" />;
 
 /**
  * Shared selection state for fiscal monitor tables.
@@ -217,7 +211,7 @@ export const WipBadge = ({ inline = false }) => {
         <Tooltip data-testid="Tooltip__29f91c">
           <TooltipTrigger asChild data-testid="TooltipTrigger__29f91c">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-status-warning text-status-warning-foreground border border-status-warning-border cursor-default select-none">
-              <TriangleAlert size={12} strokeWidth={2} data-testid="TriangleAlert__29f91c" /> {ui('fiscal.wip.badge')}
+              <WarningIcon size={12} data-testid="TriangleAlert__29f91c" /> {ui('fiscal.wip.badge')}
             </span>
           </TooltipTrigger>
           <TooltipContent

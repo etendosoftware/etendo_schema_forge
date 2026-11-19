@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MapPin, ChevronRight, Pencil } from 'lucide-react';
+import { MapPinIcon, CaretRightIcon, PencilSimpleIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Label } from '@/components/ui/label';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
@@ -86,7 +86,7 @@ export default function LocationModalField({
         onClick={() => setOpen(true)}
         className={`flex ${FIELD_HEIGHT} w-full items-center gap-2 rounded-lg border border-border-control bg-card px-2 text-left text-sm hover:bg-[hsl(var(--field-hover))] focus:outline-none focus:ring-2 focus:ring-ring`}
         data-testid={'LocationModalField__' + field.id}>
-        <MapPin size={15} className="shrink-0 text-muted-foreground" data-testid="MapPin__location-modal-field" />
+        <MapPinIcon size={15} className="shrink-0 text-muted-foreground" data-testid="MapPin__location-modal-field" />
         <span
           className={
             'flex-1 truncate ' + (hasValue ? 'text-foreground' : 'text-muted-foreground')
@@ -94,8 +94,8 @@ export default function LocationModalField({
           {hasValue ? cleanDisplayValue || value : ui('locationFieldPlaceholder')}
         </span>
         {hasValue
-          ? <Pencil size={14} className="shrink-0 text-muted-foreground" data-testid="Pencil__location-modal-field" />
-          : <ChevronRight size={15} className="shrink-0 text-muted-foreground" data-testid="ChevronRight__location-modal-field" />}
+          ? <PencilSimpleIcon size={14} className="shrink-0 text-muted-foreground" data-testid="Pencil__location-modal-field" />
+          : <CaretRightIcon size={15} className="shrink-0 text-muted-foreground" data-testid="ChevronRight__location-modal-field" />}
       </button>
       <LocationEditorModal
         open={open}

@@ -55,7 +55,7 @@ vi.mock('@/components/ui/select', () => {
     },
   };
 });
-vi.mock('lucide-react', () => new Proxy({}, {
+vi.mock('@phosphor-icons/react', () => new Proxy({}, {
   has: (_t, prop) => typeof prop === 'string' && prop !== 'then',
   get: (_t, prop) => (typeof prop === 'string' && prop !== 'then' ? (props) => <span {...props} /> : undefined),
 }));
@@ -590,7 +590,7 @@ describe('ProductMovementsTab (ETP-5889)', () => {
       const empty = await screen.findByTestId('product-movements-empty');
       expect(empty).toHaveTextContent('noStockMovements');
       expect(empty).toHaveTextContent('productMovementsEmptyText');
-      // same icon as the side panel's "Ver movimientos" link (lucide ArrowLeftRight)
+      // same icon as the side panel's "Ver movimientos" link (Phosphor ArrowsLeftRightIcon)
       expect(empty.querySelector('[data-testid="ArrowLeftRight__763719"]')).not.toBeNull();
       expect(empty.querySelector('[data-testid^="PackageOpen"]')).toBeNull();
       expect(screen.queryByTestId('product-movements-no-results')).toBeNull();

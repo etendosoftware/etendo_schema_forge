@@ -77,7 +77,7 @@ export default defineConfig({
     // THIS repo's node_modules. Harmless when LOCAL_CORE is unset: these deps
     // already resolve from a single location. Mirrors vite.config.js.
     dedupe: [
-      'react', 'react-dom', 'react-router-dom', 'sonner', 'lucide-react',
+      'react', 'react-dom', 'react-router-dom', 'sonner', '@phosphor-icons/react',
       'clsx', 'cmdk', 'next-themes', 'date-fns', 'react-day-picker',
       'class-variance-authority', 'tailwind-merge',
       '@radix-ui/react-collapsible', '@radix-ui/react-dialog',

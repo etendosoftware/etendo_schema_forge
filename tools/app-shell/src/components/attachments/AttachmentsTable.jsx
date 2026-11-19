@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Loader2 } from 'lucide-react';
+import { DownloadSimpleIcon, CircleNotchIcon, TrashIcon } from '@phosphor-icons/react';
 import { DataTable } from '@/components/contract-ui/DataTable.jsx';
 import {
   ROW_ACTION_BUTTON_NEUTRAL,
   ROW_ACTION_BUTTON_DESTRUCTIVE,
 } from '@/components/contract-ui/rowVisuals.js';
-import { IconicTrashIcon } from '@/components/ui/custom-icons';
 import { useClientSort } from '@/hooks/useClientSort';
 import { useLocaleSwitch, useUI } from '@/i18n';
 
@@ -104,7 +103,7 @@ function AttachmentRowActions({ row, onDownload, onDelete }) {
           aria-label={ui('attachmentsDownload')}
           title={ui('attachmentsDownload')}
           data-testid={`attachment-download-${row.id}`}>
-          <Download className="h-5 w-5" aria-hidden="true" data-testid="Download__e868a0" />
+          <DownloadSimpleIcon className="h-5 w-5" aria-hidden="true" data-testid="Download__e868a0" />
         </button>
       )}
       {onDelete && (
@@ -115,7 +114,7 @@ function AttachmentRowActions({ row, onDownload, onDelete }) {
           aria-label={ui('delete')}
           title={ui('delete')}
           data-testid={`attachment-delete-${row.id}`}>
-          <IconicTrashIcon className="h-5 w-5" aria-hidden="true" data-testid="IconicTrashIcon__e868a0" />
+          <TrashIcon className="h-5 w-5" aria-hidden="true" data-testid="IconicTrashIcon__e868a0" />
         </button>
       )}
     </div>
@@ -233,7 +232,7 @@ export default function AttachmentsTable({
       render: (row) => (row.uploading
         ? (
           <span className="flex items-center gap-2 font-medium text-muted-foreground" data-testid={`attachment-uploading-${row.id}`}>
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" data-testid="Loader2__e868a0" />
+            <CircleNotchIcon className="h-4 w-4 animate-spin" aria-hidden="true" data-testid="Loader2__e868a0" />
             <span>{row.name}</span>
           </span>
         )
@@ -302,7 +301,7 @@ export default function AttachmentsTable({
             onClick={onDownloadAll}
             className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
           >
-            <Download className="h-3.5 w-3.5" data-testid="Download__e868a0" />
+            <DownloadSimpleIcon className="h-3.5 w-3.5" data-testid="Download__e868a0" />
             {ui('attachmentsDownloadAll')}
           </button>
         </div>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { CircleNotchIcon } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
 import EmbeddedWindowRoute from './EmbeddedWindowRoute.jsx';
@@ -474,7 +474,7 @@ export default function RecordCreateModal({
                 </EmbeddedWindowRoute>
               ) : (
                 <div className="flex h-full items-center justify-center" data-testid="record-create-window-loading">
-                  <Loader2
+                  <CircleNotchIcon
                     className="h-6 w-6 animate-spin text-muted-foreground"
                     data-testid="Loader2__928459" />
                 </div>

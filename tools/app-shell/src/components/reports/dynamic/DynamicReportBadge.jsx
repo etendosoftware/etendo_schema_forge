@@ -1,4 +1,4 @@
-import { Sparkles } from 'lucide-react';
+import { SparkleIcon } from '@phosphor-icons/react';
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip';
@@ -24,7 +24,7 @@ export default function DynamicReportBadge({ className }) {
             aria-label={label}
             data-testid="DynamicReportBadge"
           >
-            <Sparkles className="w-3.5 h-3.5" aria-hidden="true" data-testid="Sparkles__f5d762" />
+            <SparkleIcon className="w-3.5 h-3.5" aria-hidden="true" data-testid="Sparkles__f5d762" />
           </span>
         </TooltipTrigger>
         <TooltipContent data-testid="TooltipContent__f5d762">{label}</TooltipContent>

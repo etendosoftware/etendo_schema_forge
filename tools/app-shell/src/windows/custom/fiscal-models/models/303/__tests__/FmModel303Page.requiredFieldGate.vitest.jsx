@@ -88,13 +88,13 @@ vi.mock('@/components/attachments', () => ({
 }));
 // ETP-5584 — FmBoxes303 renders the app's Radix Select; drive it as a native <select>.
 vi.mock('@/components/ui/select', () => import('../../../__tests__/testUtils/nativeSelectMock.jsx'));
-vi.mock('lucide-react', () => ({
-  // ETP-5584 — the detail status chip renders lucide's Check for success tones.
-  Check: () => null,
-  Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null, TriangleAlert: () => null,
-  CircleCheck: () => null, Calculator: () => null, Loader2: () => null,
-  TrendingUp: () => null, TrendingDown: () => null, ClipboardCheck: () => null,
-  ReceiptText: () => null, FileCheck: () => null, Pencil: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  // ETP-5584 — the detail status chip renders a Phosphor Check for success tones.
+  CheckIcon: () => null,
+  DownloadSimpleIcon: () => null, ArrowLeftIcon: () => null, FloppyDiskIcon: () => null, WarningOctagonIcon: () => null, WarningIcon: () => null,
+  CheckCircleIcon: () => null, CalculatorIcon: () => null, CircleNotchIcon: () => null,
+  TrendUpIcon: () => null, TrendDownIcon: () => null, ClipboardTextIcon: () => null,
+  ReceiptIcon: () => null, SealCheckIcon: () => null, PencilSimpleIcon: () => null,
 }));
 
 import FmModel303Page from '../FmModel303Page.jsx';
