@@ -60,6 +60,7 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 
 import LocationEditorModal from '../LocationEditorModal.jsx';
 import { toast } from 'sonner';
+import { STREET_NAME_MAX_LENGTH } from '@etendosoftware/app-shell-core/lib/locationAddress.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { hasUnsavedChanges } from '@/lib/unsavedChanges.js';
 
@@ -793,7 +794,7 @@ describe('LocationEditorModal', () => {
 
   it('caps Street/Number/Building name inputs at their DB column lengths', () => {
     renderModal();
-    expect(streetNameInput()).toHaveAttribute('maxLength', '70');
+    expect(streetNameInput()).toHaveAttribute('maxLength', String(STREET_NAME_MAX_LENGTH));
     expect(buildingNumberInput()).toHaveAttribute('maxLength', '16');
     expect(buildingNameInput()).toHaveAttribute('maxLength', '35');
   });

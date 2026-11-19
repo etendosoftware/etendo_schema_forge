@@ -36,7 +36,7 @@ const LIMITS = {
   // ETP-5806 — the free-text address field was replaced by structured Street/Number/Building
   // Name/City cells; streetName is the closest conceptual replacement for this length-limit
   // check (`ETGO_CORE` ships maxLength === the AD column limit, same as the old address field).
-  streetName: 70,
+  streetName: 60, // core STREET_NAME_MAX_LENGTH (business cap; the DB column stays 70)
 };
 
 // ── Mock installer ───────────────────────────────────────────────────────────
