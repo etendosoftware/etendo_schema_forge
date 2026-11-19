@@ -484,6 +484,54 @@ with `setContext`, before `session_started` fires, follows a role switch, and
 clears them on unmount. In a Mixpanel `where`, filter with
 `"warehouse" in properties["role_groups"]`. Mapping: `lib/observability/roleGroups.js`.
 
+### `ad_user_id`, `ad_client_id`, `etgo_account_id` (ETP-6228)
+
+Every event carries the same internal identity so KPIs can count per environment or
+account, join SPA events with the backend's, and exclude test accounts:
+
+| Property | Value |
+|---|---|
+| `ad_user_id` | The AD_User of the session (internal id, no name or email). |
+| `ad_client_id` | The environment (AD_Client_ID). Same value as the former `account_id`. |
+| `etgo_account_id` | The ETGO_Account that **owns** the environment (one account, several environments). Not the account of the person signed in: an invited member signs in with their own account. |
+
+`useSessionStartTracking` keeps them in the common context with `setContext`, in a single
+write so a company switch replaces all three together. They are cleared on unmount and,
+for a session lost while the shell stays mounted, from `clearSessionScopedState` in
+`App.jsx` (`clearIdentityContext`). An id that is not known yet is left off the events; it is
+never copied from another tenant. `session_started` is not sent if the session changed while
+the group calls were in flight. Policy: the three keys are in the allowlist of `payload.js`;
+names and emails are dropped.
+
+**Sources.** `ad_user_id` is `useAuth().userId` and `etgo_account_id` is
+`useAuth().etgoAccountId`, both mapped by `schema_forge_core` from the session payload
+(`environment.userId`, `environment.etgoAccountId`). Until the core release and the backend
+expose them the SPA sends neither; it never falls back to `account.id`.
+
+**Transition.** `account_id` keeps being sent (session events and health events) with the
+same value as `ad_client_id`, and the Mixpanel group is registered under both keys
+(`group`/`groupSet` for `ad_client_id` and `account_id`), so saved reports and group reports
+keep working. No removal date is set: drop `account_id` (property and group key) once the
+reports move to `ad_client_id`.
+
+**Open items** (for the issue owner):
+- Backend events carry the same identity since ETP-6228 (`NeoTelemetryService`, owner account
+  from the flagged owner user, also returned as `environment.etgoAccountId` by
+  `GET /sws/go/session`); see the backend telemetry doc for its own open items (the PM rule that
+  `account_id` was the only identifier a backend event may carry).
+- Delivery order: `schema_forge_core` (mapping of `userId`/`etgoAccountId`), then
+  `com.etendoerp.go`, then this repo. The SPA must bump `@etendosoftware/app-shell-core` to the
+  release that contains the core change before it merges; until then `useAuth().userId` and
+  `etgoAccountId` are undefined and the SPA sends neither id.
+- `distinct_id` as hash of `ad_user_id` + device id: needs `identify`, which ETP-4352 (GDPR)
+  removed; pending a privacy decision.
+- `ETGO_Account` lookup table with the test-account flag in Mixpanel: flag name pending from
+  Platform.
+- Group Analytics must be active in the project, and the project's group-key limit must allow
+  both keys during the transition.
+- Formal privacy review: the code sends internal ids only.
+- `account_id` removal date.
+
 ### `tenant_type` (ETP-6072)
 
 Every event carries `tenant_type` once the current environment is known, so KPIs
@@ -505,7 +553,9 @@ unknown. `session_started` waits for the list (at most 5 s, then it goes out wit
 the property), because it is the denominator of the adoption KPIs and a filter on the
 numerator alone would bias them. A company switch is a
 hard navigation, so the next page resolves the new tenant. Backend events of
-`com.etendoerp.go` do not go through the SPA and do not carry it; historical events
+`com.etendoerp.go` do not go through the SPA; since ETP-6228 the backend sink adds the same
+`tenant_type` (`demo` | `productive`, from the same environment lifecycle) to the events built
+in a session, see `docs/backend-observability.md` in that module. Historical events
 are not backfilled. In a Mixpanel `where`, exclude demo tenants and keep the unknown
 ones with `not (properties["tenant_type"] == "demo")`. Mapping:
 `lib/observability/tenantType.js`.
