@@ -89,14 +89,31 @@ describe('sanitizeDashJoinedIdentifier', () => {
   // non-empty one even when it is short or sits right next to a collapsed pair. Real
   // live example via MCP: the two consecutive blank segments ("" between "2" and "- -"
   // before "Madrid") collapse, while "2", "Madrid" and "MADRID" — all short, all
-  // dash-adjacent — must survive untouched. This already works today because the
-  // implementation is split-then-filter(Boolean), never a dash-collapsing regex; this
-  // test exists to catch a future "simplification" that would merge non-empty segments.
+  // dash-adjacent — must survive untouched. The split-on-separator-run regex (not a literal
+  // " - " split) still must never merge two non-empty segments into one.
   it('never swallows a short non-empty segment adjacent to collapsed empty ones', () => {
     const raw = 'P, 1 - 2 -  -  - Madrid - MADRID - España';
     assert.equal(
       sanitizeDashJoinedIdentifier(raw),
       'P, 1 - 2 - Madrid - MADRID - España',
+    );
+  });
+
+  // @covers tools/app-shell/src/lib/locationAddress.js:sanitizeDashJoinedIdentifier
+  // Bug repro (2026-11-19, post-ETP-5806 round): 2+ CONSECUTIVE blank segments joined with a
+  // single shared space between dash tokens (e.g. produced by the MCP identifier builder,
+  // distinct from the double-space-per-blank pattern above) were not collapsing at all.
+  // `"Nave 3 - - Getafe".split(" - ")` finds only ONE match (consecutive " - " tokens share
+  // a boundary space), returning `["Nave 3", "- Getafe"]` — the stray "-" survived rejoin
+  // untouched. Splitting on the separator-RUN pattern `(?: -)+ ` instead collapses any number
+  // of consecutive blanks in one match.
+  it('collapses 2+ consecutive blank segments joined with a single shared space', () => {
+    assert.equal(sanitizeDashJoinedIdentifier('Nave 3 - - Getafe'), 'Nave 3 - Getafe');
+    assert.equal(
+      sanitizeDashJoinedIdentifier(
+        'Poligono Industrial Norte, s/n - Nave 3 - - - Getafe - - España',
+      ),
+      'Poligono Industrial Norte, s/n - Nave 3 - Getafe - España',
     );
   });
 });
