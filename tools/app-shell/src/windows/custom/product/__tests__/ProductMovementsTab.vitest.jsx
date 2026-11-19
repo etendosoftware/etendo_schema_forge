@@ -1,6 +1,8 @@
 // @covers tools/app-shell/src/windows/custom/product/ProductMovementsTab.jsx
 // ETP-5889 — the Product "Movements" tab: server-side filters, sorting and paging over the product's
 // transactions, with the source document and the resulting stock the backend adds to each row.
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { createContext, useContext } from 'react';
 import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -524,11 +526,27 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     const box = screen.getByTestId('product-movements-scroll');
     expect(box.className.split(' ')).toEqual(expect.arrayContaining(['flex', 'flex-col', 'overflow-y-auto', '[scrollbar-gutter:stable]']));
     const tokens = total.className.split(' ');
-    expect(tokens).toEqual(expect.arrayContaining(['sticky', '-bottom-2', 'z-20', 'overflow-hidden']));
+    expect(tokens).toEqual(expect.arrayContaining(['sticky', '-bottom-2', 'z-40', 'overflow-hidden']));
     expect(tokens).not.toContain('mt-auto');
     expect(box.contains(total)).toBe(false);
     // Rows must not shrink inside the flex column.
     expect(screen.getByTestId('product-movements-row').className).toContain('shrink-0');
+  });
+
+  it('stacks the total row above the sticky table header (compares the z tokens, not a literal)', async () => {
+    mocks.apiFetch.mockImplementation(async (path) => (path.startsWith('/stock')
+      ? respond([])
+      : respond([row()], 1, { totals: { netQuantity: 4, count: 1 } })));
+    render(<ProductMovementsTab data={storable} isActive />);
+    const total = await screen.findByTestId('product-movements-total');
+    const header = screen.getAllByRole('row')[0];
+    const z = (el) => Number(el.className.split(/\s+/).find((t) => /^z-\d+$/.test(t))?.slice(2));
+    expect(Number.isFinite(z(header)), 'the sticky header row must carry a z-N token').toBe(true);
+    expect(Number.isFinite(z(total)), 'the Total row must carry a z-N token').toBe(true);
+    expect(
+      z(total),
+      'at 1280x720 the table header sits in the Total band until the page scrolls: the Total must paint above it or its label and value are hidden',
+    ).toBeGreaterThan(z(header));
   });
 
   it('keeps the header white and sticky, and every row as wide as the columns for sideways scroll', async () => {
@@ -539,8 +557,74 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     expect(header.className).toContain('sticky');
     expect(header.className).toContain('top-0');
     expect(header.className).toContain('bg-card');
-    expect(header.className).toContain('min-w-[900px]');
-    expect(line.className).toContain('min-w-[900px]');
+    expect(header.className).toContain('min-w-[994px]');
+    expect(line.className).toContain('min-w-[994px]');
+  });
+
+  it('derives the row minimum width from its own columns: min-w equals track minimums + gaps + horizontal padding', async () => {
+    route({ pages: [[row({ id: 'a-0' })]], total: 1 });
+    render(<ProductMovementsTab data={storable} isActive />);
+    await screen.findByTestId('product-movements-row');
+    const header = screen.getAllByRole('row')[0];
+    const cls = header.className;
+    const tracks = cls.match(/grid-cols-\[([^\]]+)\]/)?.[1].split('_');
+    expect(tracks, 'the header row lost its grid-cols-[...] template').toBeTruthy();
+    // A track's minimum: `150px` -> 150, `minmax(220px,1.6fr)` -> 220.
+    const minimum = (t) => Number(t.match(/^(?:minmax\()?(\d+)px/)?.[1]);
+    const tracksSum = tracks.reduce((sum, t) => sum + minimum(t), 0);
+    expect(Number.isFinite(tracksSum), `unparsable track in ${tracks.join(' ')}`).toBe(true);
+    const gap = Number(cls.match(/gap-x-(\d+)/)?.[1]) * 4;
+    const pad = Number(cls.match(/(?:^|\s)px-(\d+)(?:\s|$)/)?.[1]) * 4;
+    const declared = Number(cls.match(/min-w-\[(\d+)px\]/)?.[1]);
+    expect(
+      declared,
+      'the row minimum width must equal what the columns need (track minimums + gaps + horizontal padding) or cells overflow the row',
+    ).toBe(tracksSum + (tracks.length - 1) * gap + 2 * pad);
+  });
+
+  it('shares the same horizontal padding and gap across header, data row, skeleton row and the Total inner grid', async () => {
+    const tokensOf = (el) => {
+      const cls = el.className;
+      return { px: cls.match(/(?:^|\s)px-(\d+)(?:\s|$)/)?.[1], gap: cls.match(/(?:^|\s)gap-x-(\d+)(?:\s|$)/)?.[1], minW: cls.match(/min-w-\[(\d+)px\]/)?.[1] };
+    };
+    const MESSAGE = 'header, rows, skeleton rows and the Total must share the same horizontal padding and gap or their columns drift';
+    // Loading: header + skeleton rows + the Total (its value is a placeholder while the totals are pending).
+    mocks.apiFetch.mockImplementation((path) => (path.startsWith('/stock') ? Promise.resolve(respond([])) : new Promise(() => {})));
+    const loading = render(<ProductMovementsTab data={storable} isActive />);
+    const skeleton = (await screen.findAllByTestId('product-movements-skeleton'))[0];
+    const header = screen.getAllByRole('row')[0];
+    const loadingTotal = await screen.findByTestId('product-movements-total');
+    const reference = tokensOf(header);
+    expect(reference.px, 'header row lost its px-N').toBeTruthy();
+    expect(reference.gap, 'header row lost its gap-x-N').toBeTruthy();
+    expect(tokensOf(skeleton), MESSAGE).toEqual(reference);
+    expect(tokensOf(loadingTotal.firstElementChild), MESSAGE).toEqual(reference);
+    loading.unmount();
+    // Loaded: the data row.
+    mocks.apiFetch.mockImplementation(async (path) => (path.startsWith('/stock') ? respond([]) : respond([row()], 1, { totals: { netQuantity: 4, count: 1 } })));
+    render(<ProductMovementsTab data={storable} isActive />);
+    const dataRow = await screen.findByTestId('product-movements-row');
+    expect(tokensOf(dataRow), MESSAGE).toEqual(reference);
+    expect(tokensOf((await screen.findByTestId('product-movements-total')).firstElementChild), MESSAGE).toEqual(reference);
+  });
+
+  const classOfTag = (src, testid) => {
+    const tag = src.match(new RegExp(`<[A-Za-z][^<>]*?data-testid="${testid}"[^<>]*>`, 's'))?.[0];
+    expect(tag, `no element with data-testid="${testid}" in ProductMovementsTab.jsx`).toBeTruthy();
+    return tag.match(/className="([^"]*)"/)?.[1] ?? '';
+  };
+
+  it('keeps the Total on the same horizontal bleed as the block and cancels the tab root gap so it touches the table (from source)', () => {
+    const src = readFileSync(resolve(__dirname, '../ProductMovementsTab.jsx'), 'utf8');
+    const total = classOfTag(src, 'product-movements-total').split(/\s+/);
+    const block = classOfTag(src, 'product-movements-block').split(/\s+/);
+    for (const t of ['-ml-2', '-mr-4']) {
+      expect(total, `the Total must carry ${t} like the block`).toContain(t);
+      expect(block).toContain(t);
+    }
+    const rootGap = Number(classOfTag(src, 'product-movements-tab').match(/(?:^|\s)gap-(\d+)(?:\s|$)/)?.[1]);
+    const mt = Number(total.join(' ').match(/(?:^|\s)-mt-(\d+)(?:\s|$)/)?.[1]);
+    expect(mt, 'the Total must cancel the root gap so it touches the table').toBe(rootGap);
   });
 
   it('loads the next 50 rows when the list is scrolled to the end', async () => {
@@ -1242,6 +1326,20 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     };
     const withLabels = () => { mocks.dictionary = { ...esES.genericLabels }; };
 
+    it('asks for the totals with the selected warehouse as an equals criterion and still renders the Total', async () => {
+      withLabels();
+      mocks.apiFetch.mockImplementation(async (path) => (path.startsWith('/stock')
+        ? respond([{ warehouse: 'wh-9', 'warehouse$_identifier': 'Almacén Sur' }])
+        : respond([row()], 1, totalsOf(5, 1))));
+      render(<ProductMovementsTab data={storable} isActive />);
+      await userEvent.click(await screen.findByTestId('warehouse-wh-9'));
+      await waitFor(() => expect(pageRequests().some((p) => query(p).get('etgoTotals') === 'true'
+        && JSON.parse(query(p).get('criteria')).some((c) => c.fieldName === 'etgoWarehouse' && c.value === 'wh-9'))).toBe(true));
+      const total = await screen.findByTestId('product-movements-total');
+      expect(total).toHaveTextContent('Total del período');
+      expect(screen.getByTestId('product-movements-total-value')).toHaveTextContent('+5');
+    });
+
     it('shows the server net sum with a real minus sign, red, and the pluralised count', async () => {
       withLabels();
       routeWithTotals([row({ movementQuantity: -7 })], totalsOf(-7, 3));
@@ -1335,7 +1433,7 @@ describe('ProductMovementsTab (ETP-5889)', () => {
       expect(screen.queryByTestId('product-movements-total')).toBeNull();
     });
 
-    it('is a labelled group outside the table box, a sibling right after it inside the block, and not one of the data rows', async () => {
+    it('is a labelled group outside the block, a direct child of the tab right after the block, and not one of the data rows', async () => {
       withLabels();
       routeWithTotals([row(), row()], totalsOf(8, 2));
       render(<ProductMovementsTab data={storable} isActive />);
@@ -1346,8 +1444,10 @@ describe('ProductMovementsTab (ETP-5889)', () => {
       expect(total.getAttribute('role')).toBe('group');
       expect(total.getAttribute('aria-label')).toBe('Total del período');
       expect(box.contains(total)).toBe(false);
-      expect(total.parentElement).toBe(screen.getByTestId('product-movements-block'));
-      expect(box.nextElementSibling).toBe(total);
+      const block = screen.getByTestId('product-movements-block');
+      expect(block.contains(total)).toBe(false);
+      expect(total.parentElement).toBe(screen.getByTestId('product-movements-tab'));
+      expect(block.nextElementSibling).toBe(total);
       expect(within(total).queryAllByRole('cell')).toHaveLength(0);
     });
 

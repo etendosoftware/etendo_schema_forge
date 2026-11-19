@@ -65,6 +65,7 @@ describe('product window wrapper', () => {
       return n;
     };
     const mr = tokenN(classOfTag('product-movements-block'), /(?:^|\s)-mr-(\d+)(?:\s|$)/, 'the block -mr-N bleed');
+    const totalMr = tokenN(classOfTag('product-movements-total'), /(?:^|\s)-mr-(\d+)(?:\s|$)/, 'the Total row -mr-N bleed');
     const bottom = tokenN(classOfTag('product-movements-total'), /(?:^|\s)-bottom-(\d+)(?:\s|$)/, 'the Total row -bottom-N');
     const pb = Number(lastProps().sidebarFormScrollPaddingX.match(/(?:^|\s)pb-(\d+)(?:\s|$)/)[1]);
     expect(bottom, 'Total row -bottom-N must cancel the content column pb-N so it sits flush with the card bottom').toBe(pb);
@@ -73,6 +74,7 @@ describe('product window wrapper', () => {
     const wrapper = dvSrc.match(/className=\{`(p-\d+) flex flex-col gap-3[^`]*`\}/);
     expect(wrapper, 'DetailView custom-tab wrapper (`p-N flex flex-col gap-3`) not found').toBeTruthy();
     const DETAILVIEW_CUSTOM_TAB_PADDING = Number(wrapper[1].slice(2));
+    expect(totalMr, 'the Total -mr-N must equal pr-N plus the DetailView custom-tab padding, like the block').toBe(pr + DETAILVIEW_CUSTOM_TAB_PADDING);
     expect(mr, 'Movements bleed (-mr-N) must equal the content column pr-N plus the DetailView custom-tab padding: update ProductMovementsTab -mr-N (and its -ml-N) if either changed').toBe(pr + DETAILVIEW_CUSTOM_TAB_PADDING);
   });
 

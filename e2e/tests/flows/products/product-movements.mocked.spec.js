@@ -262,12 +262,7 @@ test.describe('Product movements tab — period total row', () => {
 
     // It is pinned to the column bottom while the page is not scrolled (it may overlay the table's lower edge
     // there, by design); scrolled to the end of the page it rests below every movement row.
-    await total.evaluate((el) => {
-      for (let n = el.parentElement; n; n = n.parentElement) {
-        const oy = getComputedStyle(n).overflowY;
-        if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) { n.scrollTop = n.scrollHeight; return; }
-      }
-    });
+    await (await contentColumn(total)).scrollTo('end');
     const lastRowBox = await page.getByTestId('product-movements-row').last().boundingBox();
     await expect.poll(async () => (await total.boundingBox()).y - (lastRowBox.y + lastRowBox.height)).toBeGreaterThanOrEqual(-1);
 
@@ -276,43 +271,90 @@ test.describe('Product movements tab — period total row', () => {
     expect(new URL(tabCalls(calls)[0]).searchParams.get('etgoTotals')).toBe('true');
   });
 
-  test('the total is visible without scrolling the page, flush with the column bottom, and sticks to the table box once scrolled to the end', async ({ page }) => {
-    const MANY = Array.from({ length: 45 }, (_, i) => ({ ...MOVEMENT, id: `mov-many-${i}`, etgoDocLabel: `GR-${String(i).padStart(4, '0')}` }));
-    await openMovementsWith(page, () => [200, page_(MANY, { netQuantity: 540, count: MANY.length })]);
-    const total = page.getByTestId('product-movements-total');
-    await expect(total).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('product-movements-row')).toHaveCount(45);
-    const viewportHeight = page.viewportSize().height;
-
-    // The scrolling ancestor of the total (the product content column), found from the DOM, not from a class.
-    const columnHandle = await total.evaluateHandle((el) => {
+  /**
+   * The content column that scrolls the Movements tab: the nearest vertically scrolling ancestor of the Total. Fails
+   * loudly (instead of silently picking another ancestor) when it is not the column holding the tab strip or does not
+   * overflow in the mocked page, since every geometry assertion that uses it depends on that.
+   */
+  async function contentColumn(total) {
+    const found = await total.evaluate((el) => {
       for (let n = el.parentElement; n; n = n.parentElement) {
         const oy = getComputedStyle(n).overflowY;
-        if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) return n;
+        if (oy === 'auto' || oy === 'scroll') {
+          return { overflows: n.scrollHeight > n.clientHeight, scrollHeight: n.scrollHeight, clientHeight: n.clientHeight, hasTabs: Boolean(n.querySelector('[data-testid="tab-custom:movements"]')) };
+        }
       }
       return null;
     });
-    expect(await columnHandle.evaluate((n) => n !== null)).toBe(true);
-    await columnHandle.evaluate((n) => { n.scrollTop = 0; });
+    expect(found, 'no scrolling ancestor found above the Total').not.toBeNull();
+    expect(found.hasTabs, 'the scrolling ancestor must be the content column that holds the tab strip').toBe(true);
+    expect(found.overflows, `the content column must overflow in the mocked page (scrollHeight ${found.scrollHeight} vs clientHeight ${found.clientHeight})`).toBe(true);
+    const onColumn = (fn, arg) => total.evaluate((el, [source, value]) => {
+      for (let n = el.parentElement; n; n = n.parentElement) {
+        const oy = getComputedStyle(n).overflowY;
+        if (oy === 'auto' || oy === 'scroll') return new Function('n', 'value', source)(n, value);
+      }
+      return null;
+    }, [fn, arg]);
+    return {
+      scrollTo: (top) => onColumn('n.scrollTop = value === "end" ? n.scrollHeight : value;', top),
+      bottom: () => onColumn('return n.getBoundingClientRect().bottom;'),
+    };
+  }
 
-    // Regression: without any scrolling the whole total row is inside the viewport and at the column bottom.
-    const first = await total.boundingBox();
-    expect(first.y).toBeGreaterThanOrEqual(0);
-    expect(first.y + first.height).toBeLessThanOrEqual(viewportHeight);
-    const columnBottom = await columnHandle.evaluate((n) => n.getBoundingClientRect().bottom);
-    expect(Math.abs(first.y + first.height - columnBottom)).toBeLessThanOrEqual(1);
+  // 720 is the supported minimum height; 900 the config default. The mocked product page is shorter than a real one
+  // (fewer banners above the table), so the geometry that once clamped a Total nested in the table block (table top
+  // within one Total height of the column bottom) is only reached at 600 (at 640 the table top equals the threshold exactly, not past it). The test asserts that precondition with the
+  // measured numbers so it cannot pass vacuously.
+  for (const height of [900, 720, 600]) {
+    test(`at 1280x${height} nothing paints over the total: its label and value are hit-testable, inside the viewport, flush with the column bottom`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height });
+      const MANY = Array.from({ length: 45 }, (_, i) => ({ ...MOVEMENT, id: `mov-many-${i}`, etgoDocLabel: `GR-${String(i).padStart(4, '0')}` }));
+      await openMovementsWith(page, () => [200, page_(MANY, { netQuantity: 540, count: MANY.length })]);
+      const total = page.getByTestId('product-movements-total');
+      await expect(total).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByTestId('product-movements-row')).toHaveCount(45);
 
-    // Scrolled to the end of the column, the total rests right under the table box (no gap).
-    await columnHandle.evaluate((n) => { n.scrollTop = n.scrollHeight; });
-    await expect.poll(async () => {
-      const t = await total.boundingBox();
-      const b = await page.getByTestId('product-movements-scroll').boundingBox();
-      return Math.round(t.y - (b.y + b.height));
-    }).toBeLessThanOrEqual(1);
-    const t2 = await total.boundingBox();
-    const b2 = await page.getByTestId('product-movements-scroll').boundingBox();
-    expect(Math.abs(t2.y - (b2.y + b2.height))).toBeLessThanOrEqual(1);
-  });
+      const column = await contentColumn(total);
+      await column.scrollTo(0);
+
+      const box = await total.boundingBox();
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.y + box.height).toBeLessThanOrEqual(height);
+
+      // Flush with the content column bottom at scrollTop 0.
+      const columnBottom = await column.bottom();
+      expect(Math.abs(box.y + box.height - columnBottom)).toBeLessThanOrEqual(1);
+
+      const scrollBox = await page.getByTestId('product-movements-scroll').boundingBox();
+      console.log(`GEOMETRY height=${height} tableTop=${scrollBox.y} columnBottom=${columnBottom} totalHeight=${box.height} threshold=${columnBottom - box.height}`);
+      if (height === 600) {
+        expect(scrollBox.y, 'precondition: the table top must be within one Total height of the column bottom').toBeGreaterThan(columnBottom - box.height);
+      }
+
+      // The element painted at the centre of the label and of the value belongs to the Total, never to the table header.
+      for (const target of [total.getByText('Total del período'), total.getByTestId('product-movements-total-value')]) {
+        const hit = await target.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+          return {
+            insideTotal: Boolean(top?.closest('[data-testid="product-movements-total"]')),
+            insideHeader: Boolean(top?.closest('[data-testid="product-movements-scroll"] > [role="row"]')),
+          };
+        });
+        expect(hit.insideTotal).toBe(true);
+        expect(hit.insideHeader).toBe(false);
+      }
+
+      // At the end of the column scroll the Total touches the table box (gap 0).
+      await column.scrollTo('end');
+      await expect.poll(async () => {
+        const t = await total.boundingBox();
+        const b = await page.getByTestId('product-movements-scroll').boundingBox();
+        return Math.abs(t.y - (b.y + b.height));
+      }).toBeLessThanOrEqual(1);
+    });
+  }
 
   test('a net entry is green with a plus and one movement reads in the singular', async ({ page }) => {
     await openMovementsWith(page, () => [200, page_([MOVEMENT], { netQuantity: 12, count: 1 })]);

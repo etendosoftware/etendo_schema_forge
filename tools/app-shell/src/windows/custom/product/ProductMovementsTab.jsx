@@ -46,9 +46,11 @@ import {
 // Opt-in presets of the period filter: they map 1:1 to the side panel's 3M / 6M (12M is a default one).
 const MOVEMENTS_EXTRA_PRESETS = ['last3m', 'last6m'];
 
-// `min-w-[900px]` (sum of the column minimums + gaps + padding) makes every row, the sticky header and the
-// sticky total row as wide as the columns, so their backgrounds and cells stay aligned when the box scrolls sideways.
-const GRID = 'grid shrink-0 min-w-[900px] grid-cols-[150px_minmax(220px,1.6fr)_minmax(140px,1fr)_100px_150px_130px] items-center gap-x-4';
+// `min-w-[994px]` is the real width of the grid: the column minimums (150 + 220 + 140 + 100 + 150 + 130 = 890)
+// + 5 gaps of `gap-x-4` (80) + the `px-3` of each row (24). It must stay equal to that sum: a smaller literal
+// lets the cells overflow the row box, so backgrounds and borders stop before the last column. Every row, the
+// sticky header and the period total use it, so they have the same width and align when the box scrolls sideways.
+const GRID = 'grid shrink-0 min-w-[994px] grid-cols-[150px_minmax(220px,1.6fr)_minmax(140px,1fr)_100px_150px_130px] items-center gap-x-4';
 const NEAR_BOTTOM_PX = 80;
 const SKELETON_ROWS = 6;
 
@@ -149,8 +151,17 @@ const TOTAL_ROW_RESERVE_PX = 48;
  * Alignment with the table, which scrolls on its own: the box keeps `scrollbar-gutter: stable` and this row
  * takes the same width as `scrollbarWidth` on its right, so both grids have the same width with or without
  * rows overflowing. The inner grid is as wide as the table's content (`gridWidth` = the box's `scrollWidth`,
- * NOT a fixed 900: the row content can widen the `minmax` columns), so both have the same horizontal scroll
+ * NOT a literal: it also covers a window wider than the grid), so both have the same horizontal scroll
  * range; sideways, the table box drives this row's `scrollLeft` (this row is `overflow-hidden`).
+ *
+ * Stacking: `z-40` puts it above the table's sticky header (`z-30`). At 1280x720 the table starts with less
+ * than one row of card left below it, so until the page is scrolled the header sits inside this row's band
+ * and a lower z-index would paint the total under it. Still below modals, drawers and popups (`z-50`+).
+ *
+ * Placement: a direct child of the tab root (after the table block), so its sticky range starts above the
+ * table. `-ml-2 -mr-4` is the same edge-to-edge bleed as the table block (coupled to Product's `pr-2` and
+ * DetailView's `p-2`, see index.jsx) and `-mt-3` cancels the root's `gap-3`, so at the end of the scroll the
+ * row sits directly under the table box.
  *
  * Bottom: `-bottom-2` is coupled to the `pb-2` of Product's content column (index.jsx). Sticky `bottom`
  * is measured against the scroller's content box, so without the negative offset that padding would leave an
@@ -178,7 +189,7 @@ const MovementsTotalRow = forwardRef(function MovementsTotalRow({ ui, row, scrol
       ref={setRef}
       role="group"
       aria-label={ui('productMovementsTotalLabel')}
-      className="sticky -bottom-2 z-20 overflow-hidden border-t border-border bg-[var(--surface-subtle)]"
+      className="sticky -bottom-2 z-40 -ml-2 -mr-4 -mt-3 overflow-hidden border-t border-border bg-[var(--surface-subtle)]"
       style={{ paddingRight: scrollbarWidth }}
       data-testid="product-movements-total">
       <div className={`${GRID} px-3 py-2.5 text-sm`} style={gridWidth ? { minWidth: gridWidth } : undefined}>
@@ -601,8 +612,7 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
         warehouses={warehouses}
         data-testid="MovementsFilterBar__763719" />
 
-      {/* Table + total share one block that bleeds edge to edge; the total is a sibling of the scroll box so it can
-          stick to the content column instead of to the box. */}
+      {/* The table block bleeds edge to edge (same classes as the total row below). */}
       <div className="-ml-2 -mr-4 flex flex-col" data-testid="product-movements-block">
       {/* A keyboard user must be able to focus the scrollable list to scroll it and load the next page. */}
       <div
@@ -658,9 +668,12 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
         {state.loadingMore ? (
           <div className="flex justify-center py-3"><CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__763719" /></div>
         ) : null}
-
+        </div>
       </div>
 
+      {/* A sibling of the block, not a child: a sticky element cannot leave its containing block, so inside the
+          block (whose top is the table's) it overflowed the card bottom whenever the table started within a
+          row's height of it. Here its range is the whole tab, filter bar included. */}
       <MovementsTotalRow
         ref={totalRef}
         boxRef={remaining.ref}
@@ -669,7 +682,6 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
         scrollbarWidth={boxMetrics.scrollbarWidth}
         gridWidth={boxMetrics.gridWidth}
         data-testid="MovementsTotalRow__763719" />
-      </div>
     </div>
   );
 }
