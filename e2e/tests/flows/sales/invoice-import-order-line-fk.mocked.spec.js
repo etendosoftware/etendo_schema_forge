@@ -368,8 +368,8 @@ for (const win of WINDOWS) {
 
       // The orders and the pending quantities came from the server (ETP-5828: listed through
       // availableOrders, lines in ONE availableOrderLines per order, covered ones included).
-      // `detail` (ETP-6099): pendingLines leaves out the lines already on this invoice, so an
-      // order with nothing selectable is hidden at open; the lines body stays without it. No
+      // `detail` (ETP-6099) on the list only; an order with nothing left (pendingLines 0) is hidden
+      // at open, while a line partly on this invoice keeps it listed (QA UI-7). No
       // `pendingBasis`: the server rule (drafts deducted), on both windows.
       expect(state.actionCalls.filter((c) => c.name === 'availableOrders').map((c) => c.body))
         .toContainEqual({ limit: 1000, includeCovered: true, detail: true });
