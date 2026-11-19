@@ -502,10 +502,10 @@ export function ManualRateDialog({
   if (isEdit) submitLabel = ui('convRateSaveChanges');
 
   const rateField = (
-    <Field label={ui('convRateRate')} required data-testid="Field__convrate-rate">
+    <Field label={ui('convRateRate')} required className="min-w-0" data-testid="Field__convrate-rate">
       <div
-        className={`flex ${FIELD_HEIGHT} items-center gap-1.5 rounded-lg border bg-card px-3 text-sm shadow-[0px_1px_2px_rgba(18,18,23,0.05)] focus-within:ring-2 focus-within:ring-focus-ring ${rateInError ? 'border-destructive' : 'border-[hsl(var(--border-control))]'}`}>
-        <span className="whitespace-nowrap text-muted-foreground">{ui('convRateOneOrg', { currency: orgIso })}</span>
+        className={`flex ${FIELD_HEIGHT} min-w-0 items-center gap-1.5 rounded-lg border bg-card px-3 text-sm shadow-[0px_1px_2px_rgba(18,18,23,0.05)] focus-within:ring-2 focus-within:ring-focus-ring ${rateInError ? 'border-destructive' : 'border-[hsl(var(--border-control))]'}`}>
+        <span className="shrink-0 whitespace-nowrap text-muted-foreground">{ui('convRateOneOrg', { currency: orgIso })}</span>
         <MaskedAmountInput
           bare
           grouping={false}
@@ -518,7 +518,7 @@ export function ManualRateDialog({
           aria-describedby={rateError ? 'convrate-rate-error' : undefined}
           className="w-full min-w-0 border-0 bg-transparent p-0 outline-none focus-visible:ring-0 tabular-nums"
           data-testid="convrate-dialog-rate" />
-        <span className="text-muted-foreground">{destIso}</span>
+        {destIso && <span className="shrink-0 whitespace-nowrap text-muted-foreground" data-testid="convrate-dialog-rate-suffix">{destIso}</span>}
       </div>
       {rateError && (
         <span id="convrate-rate-error" className="block text-xs font-normal text-destructive" data-testid="convrate-dialog-rate-error">
@@ -531,9 +531,12 @@ export function ManualRateDialog({
   // Válido desde: in error (red border, aria-invalid) on a field error or on a server refusal of
   // the start (overlap, future); the hint stays under it, as in the error design.
   const validFromField = (
-    <Field label={ui('convRateValidFromDateTime')} required data-testid="Field__convrate-from">
-      <div className={`flex gap-2${startInError ? ' [&>div]:border-destructive' : ''}`} data-invalid={startInError ? 'true' : undefined}>
+    <Field label={ui('convRateValidFromDateTime')} required className="min-w-0" data-testid="Field__convrate-from">
+      {/* One control inside the grid cell: the date takes the free width (min-w-0 lets it shrink),
+          the time a fixed narrow width, so the pair never overflows the 520px dialog. */}
+      <div className={`flex min-w-0 gap-1.5${startInError ? ' [&>div]:border-destructive' : ''}`} data-invalid={startInError ? 'true' : undefined}>
         <DateField
+          className="min-w-0 flex-1"
           value={form.dateIso}
           onChange={(iso) => {
             setForm((f) => ({ ...f, dateIso: iso }));
@@ -549,7 +552,7 @@ export function ManualRateDialog({
           required
           aria-label={ui('convRateTime')}
           aria-invalid={startInError ? true : undefined}
-          className={`w-[96px] shrink-0 bg-card${startInError ? ' border-destructive' : ''}`}
+          className={`w-[92px] shrink-0 bg-card px-2${startInError ? ' border-destructive' : ''}`}
           data-testid="convrate-dialog-time" />
       </div>
       {dateError && (
@@ -593,8 +596,8 @@ export function ManualRateDialog({
           <DialogDescription className="sr-only" data-testid="DialogDescription__51f9a2">{ui('convRateDialogDescription')}</DialogDescription>
 
           <div className="flex flex-col gap-4 px-[22px] py-5">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label={ui('convRateOriginCurrency')} data-testid="Field__convrate-origin">
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
+              <Field label={ui('convRateOriginCurrency')} className="min-w-0" data-testid="Field__convrate-origin">
                 <Input
                   value={orgText ?? ''}
                   readOnly
@@ -602,7 +605,7 @@ export function ManualRateDialog({
                   aria-label={ui('convRateOriginCurrency')}
                   data-testid="convrate-dialog-origin" />
               </Field>
-              <Field label={ui('convRateDestinationCurrency')} required={isNewCurrency} data-testid="Field__convrate-destination">
+              <Field label={ui('convRateDestinationCurrency')} required={isNewCurrency} className="min-w-0" data-testid="Field__convrate-destination">
                 {isNewCurrency ? (
                   <div data-testid="convrate-dialog-destination">
                     <CreatableSearchSelect
@@ -648,8 +651,8 @@ export function ManualRateDialog({
             {isEdit ? (
               <>
                 <div className="max-w-[240px]">{rateField}</div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label={ui('convRateValidFromDateTime')} data-testid="Field__convrate-from">
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
+                  <Field label={ui('convRateValidFromDateTime')} className="min-w-0" data-testid="Field__convrate-from">
                     <Input
                       value={formatWallClock(row?.validFromDate)}
                       readOnly
@@ -657,7 +660,7 @@ export function ManualRateDialog({
                       aria-label={ui('convRateValidFromDateTime')}
                       data-testid="convrate-dialog-valid-from" />
                   </Field>
-                  <Field label={ui('convRateValidToDateTime')} data-testid="Field__convrate-to">
+                  <Field label={ui('convRateValidToDateTime')} className="min-w-0" data-testid="Field__convrate-to">
                     <Input
                       value={displayValidTo(row) ?? ui('convRateOpenEnd')}
                       readOnly
@@ -671,7 +674,7 @@ export function ManualRateDialog({
                 </div>
               </>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
                 {rateField}
                 {validFromField}
               </div>
