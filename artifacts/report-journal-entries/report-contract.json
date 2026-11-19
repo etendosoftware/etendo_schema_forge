@@ -40,7 +40,7 @@
     { "name": "fromAccountId", "label": { "en_US": "From Account", "es_ES": "Desde la cuenta" }, "type": "search", "selector": "account", "inputStyle": "popup-single", "dependsOn": "acctSchemaId", "section": "alcance" },
     { "name": "toAccountId", "label": { "en_US": "To Account", "es_ES": "A la cuenta" }, "type": "search", "selector": "account", "inputStyle": "popup-single", "dependsOn": "acctSchemaId", "section": "alcance" },
     { "name": "bPartnerId", "label": { "en_US": "Contact", "es_ES": "Contacto" }, "type": "search", "selector": "bpartner", "multi": true, "inputStyle": "popup", "section": "dimensiones" },
-    { "name": "productId", "label": { "en_US": "Product", "es_ES": "Producto" }, "type": "search", "selector": "product", "multi": true, "inputStyle": "popup", "section": "dimensiones" },
+    { "name": "productId", "label": { "en_US": "Product", "es_ES": "Producto" }, "type": "search", "selector": "product-all", "multi": true, "inputStyle": "popup", "section": "dimensiones" },
     { "name": "projectId", "label": { "en_US": "Project", "es_ES": "Proyecto" }, "type": "search", "selector": "project", "multi": true, "inputStyle": "popup", "section": "dimensiones" },
     { "name": "costCenterId", "label": { "en_US": "Cost Center", "es_ES": "Centro de costos" }, "type": "search", "selector": "costcenter", "multi": true, "inputStyle": "popup", "section": "dimensiones" },
     { "name": "factAcctGroupId", "label": { "en_US": "Journal Entry", "es_ES": "Asiento" }, "type": "text", "hidden": true },

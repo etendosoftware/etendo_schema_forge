@@ -9,15 +9,16 @@
   "entities": {
     "header": {
       "name": "conversionRate",
+      "publicApi": { "readOnly": true },
       "fields": {
         "organization": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
-        "currency": { "grid": true, "form": true, "searchable": true, "inputMode": "selector", "readOnlyLogic": "@sMFCRSynced@='Y'" },
-        "toCurrency": { "grid": true, "form": true, "searchable": true, "inputMode": "selector", "readOnlyLogic": "@sMFCRSynced@='Y'" },
+        "currency": { "grid": true, "form": true, "searchable": true, "inputMode": "selector", "readOnlyLogic": "@sMFCRSynced@='Y'", "publicApi": { "exposed": true } },
+        "toCurrency": { "grid": true, "form": true, "searchable": true, "inputMode": "selector", "readOnlyLogic": "@sMFCRSynced@='Y'", "publicApi": { "exposed": true } },
         "conversionRateType": { "grid": true, "form": true, "searchable": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
-        "validFromDate": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
-        "validToDate": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
-        "multipleRateBy": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
-        "divideRateBy": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
+        "validFromDate": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'", "publicApi": { "exposed": true } },
+        "validToDate": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'", "publicApi": { "exposed": true } },
+        "multipleRateBy": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'", "type": "number", "publicApi": { "exposed": true }, "_note": "Explicit numeric type: AD reference 800019 (Rate) is not mapped by the core extractor, so it is extracted as string while NEO answers a JSON number. Remove once ref 800019 is mapped in schema_forge_core." },
+        "divideRateBy": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'", "type": "number", "publicApi": { "exposed": true }, "_note": "Explicit numeric type, same reason as multipleRateBy." },
         "active": { "grid": false, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
         "sMFCRSynced": { "visibility": "readOnly", "grid": true, "form": true, "section": "principal" }
       }

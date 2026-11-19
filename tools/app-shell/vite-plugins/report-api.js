@@ -519,13 +519,7 @@ export default function reportApiPlugin(options = {}) {
               // silently return every client's rows.
               const clientId = session.clientId;
               const byClient = (col) => `AND ${col} = '${clientId}'`;
-              const queries = {
-                'bpartner': {
-                  fromWhere: `FROM c_bpartner WHERE isactive='Y' ${byClient('ad_client_id')} AND name ILIKE $1`,
-                  orderBy: 'ORDER BY name',
-                  select: `SELECT c_bpartner_id AS id, name, name AS label`
-                },
-                'product': {
+              const productQuery = {
                   // ETP-4967: excludes products under a category flagged EM_Etgo_IsSystemCategory='Y'
                   // (e.g. ETGO_DTO, category "Discounts") — mirrors ReportSelectorsServlet.buildProductQuery
                   // (com.etendoerp.go). This dev-only mock hits Postgres directly, so the real Java
@@ -533,7 +527,18 @@ export default function reportApiPlugin(options = {}) {
                   fromWhere: `FROM m_product WHERE isactive='Y' ${byClient('ad_client_id')} AND (name ILIKE $1 OR value ILIKE $1) AND NOT EXISTS (SELECT 1 FROM m_product_category mpc WHERE mpc.m_product_category_id = m_product.m_product_category_id AND mpc.em_etgo_issystemcategory = 'Y')`,
                   orderBy: 'ORDER BY value, name',
                   select: `SELECT m_product_id AS id, value AS "searchKey", name, value || ' - ' || name AS label`
+                };
+              const queries = {
+                'bpartner': {
+                  fromWhere: `FROM c_bpartner WHERE isactive='Y' ${byClient('ad_client_id')} AND name ILIKE $1`,
+                  orderBy: 'ORDER BY name',
+                  select: `SELECT c_bpartner_id AS id, name, name AS label`
                 },
+                'product': productQuery,
+                // ETP-6080: same query without the stock clause below (mirrors the servlet's stockScoped=false).
+                // The servlet also scopes it by the session's role orgs; this mock only gets `roleOrgIds` as a
+                // query param, which the SPA never sends for products, so that scoping is skipped here.
+                'product-all': productQuery,
                 'warehouse': {
                   fromWhere: `FROM m_warehouse WHERE isactive='Y' ${byClient('ad_client_id')} AND name ILIKE $1`,
                   orderBy: 'ORDER BY name',
@@ -626,13 +631,13 @@ export default function reportApiPlugin(options = {}) {
               };
               const queryCfg = queries[type];
               if (!queryCfg) throw new Error(`Unknown selector type: ${type}`);
-              // ETP-6239: `ids` resolves exactly those rows (bpartner/product only; q/limit/offset ignored,
+              // ETP-6239: `ids` resolves exactly those rows (bpartner/product/product-all only; q/limit/offset ignored,
               // blank or invalid = empty, capped at 100). Mirrors ReportSelectorsServlet's `ids`; keep both in sync.
               const idsRaw = url.searchParams.get('ids');
               const byIds = idsRaw !== null;
               let idList = [];
               if (byIds) {
-                if (type !== 'bpartner' && type !== 'product') {
+                if (type !== 'bpartner' && type !== 'product' && type !== 'product-all') {
                   res.statusCode = 400;
                   res.setHeader('Content-Type', 'application/json');
                   res.end(JSON.stringify({ error: `ids is not supported for ${type}` }));

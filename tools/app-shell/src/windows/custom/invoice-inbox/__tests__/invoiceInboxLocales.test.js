@@ -324,6 +324,17 @@ describe('confirm keys', () => {
     assert.match(locales.en_US.genericLabels.invoiceInboxConfirmErrorPriceListTax, /without tax included/i);
   });
 
+  it('the failure-identifier texts exist in the three locales; es_AR uses voseo and es_ES does not where they address the user', () => {
+    const keys = Object.keys(locales.en_US.genericLabels).filter((k) => /^invoiceInboxConfirm(Detail|Step)/.test(k));
+    assert.equal(keys.length, 17);
+    for (const locale of Object.keys(locales)) {
+      for (const key of keys) assert.ok(String(locales[locale].genericLabels[key] ?? '').trim(), `${locale}.${key}`);
+    }
+    assert.match(locales.es_AR.genericLabels.invoiceInboxConfirmDetailCompletionError, /intentá.*contactá/);
+    assert.match(locales.es_ES.genericLabels.invoiceInboxConfirmDetailCompletionError, /inténtalo.*contacta/);
+    for (const key of keys) assert.doesNotMatch(locales.es_ES.genericLabels[key], /\b(Podés|Tenés|Querés|Corregí|confirmá|intentá|contactá)\b/, key);
+  });
+
   it('es_AR confirm texts use voseo where they address the user and es_ES does not', () => {
     for (const key of confirmKeys) {
       assert.doesNotMatch(locales.es_ES.genericLabels[key], /\b(Podés|Tenés|Querés|Cambiá|Revisá|usá|intentá)\b/, key);

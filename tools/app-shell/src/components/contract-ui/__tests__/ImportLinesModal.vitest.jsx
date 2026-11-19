@@ -1108,6 +1108,71 @@ describe('ImportLinesModal', () => {
       expect(call.invoiceId).toBe('inv-1');
       expect(toast.success).toHaveBeenCalledWith('importSuccess:{"count":1}');
       expect(toast.warning).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    describe('a line the server refuses', () => {
+      const accepted = () => ({ ok: true, status: 200, json: () => Promise.resolve({}) });
+      const refused = (body) => ({ ok: false, status: 422, json: () => Promise.resolve(body) });
+      const exceeds = (product, requested, pending) => refused({
+        error: {
+          status: 422,
+          code: 'importQuantityExceedsPending',
+          message: `Cannot import ${requested} of ${product}`,
+          product,
+          requested,
+          pending,
+        },
+      });
+      const sentence = (product, requested, pending) => 'backendError.importQuantityExceedsPending:'
+        + JSON.stringify({ product, requested, pending });
+
+      async function importBothLines(responses, overrides = {}) {
+        const queue = [...responses];
+        globalThis.fetch = vi.fn(() => Promise.resolve(queue.shift()));
+        const { props } = await renderExpandedAndSelectFirstLine(overrides);
+        fireEvent.click(screen.getByText('Widget B').closest('[data-testid="ImportLinesModal__lineRow"]'));
+        fireEvent.click(screen.getByText(/importSelected/).closest('button'));
+        await waitFor(() => expect(props.onSuccess).toHaveBeenCalledTimes(1));
+        expect(globalThis.fetch).toHaveBeenCalledTimes(responses.length);
+        return props;
+      }
+
+      it('shows the reason once and keeps the partial-success flow for the line that was imported', async () => {
+        const afterImport = vi.fn().mockResolvedValue();
+        const getSuccessToast = vi.fn(() => ({ message: 'partial-notice', variant: 'warning' }));
+
+        await importBothLines([accepted(), exceeds('Widget B', 3, 1)], { afterImport, getSuccessToast });
+
+        expect(toast.error).toHaveBeenCalledTimes(1);
+        expect(toast.error).toHaveBeenCalledWith(sentence('Widget B', 3, 1));
+        expect(toast.warning).toHaveBeenCalledWith('importedLinesWithErrors:{"count":1,"errors":1}');
+        expect(toast.warning).toHaveBeenCalledWith('partial-notice');
+        expect(toast.success).not.toHaveBeenCalled();
+        expect([...afterImport.mock.calls[0][0].importedDocIds]).toEqual(['doc-1']);
+        expect(getSuccessToast).toHaveBeenCalledWith(expect.objectContaining({ count: 1, partial: true }));
+      });
+
+      it.each([
+        ['two refusals show only the first reason',
+          () => [exceeds('Widget A', 5, 2), exceeds('Widget B', 3, 1)],
+          '{"count":0,"errors":2}', sentence('Widget A', 5, 2)],
+        ['a failure without a reason does not hide the refusal after it',
+          () => [refused({ error: { message: 'Server text' } }), exceeds('Widget B', 3, 1)],
+          '{"count":0,"errors":2}', sentence('Widget B', 3, 1)],
+        ['another refusal code adds no error toast',
+          () => [refused({ error: { code: 'business_rule', message: 'Server text' } }), accepted()],
+          '{"count":1,"errors":1}', null],
+        ['a body that is not JSON adds no error toast',
+          () => [{ ok: false, status: 500, json: () => Promise.reject(new SyntaxError('Unexpected token <')) }, accepted()],
+          '{"count":1,"errors":1}', null],
+      ])('%s', async (_label, responses, counts, reason) => {
+        await importBothLines(responses());
+
+        expect(toast.warning).toHaveBeenCalledWith(`importedLinesWithErrors:${counts}`);
+        expect(toast.error).toHaveBeenCalledTimes(reason ? 1 : 0);
+        if (reason) expect(toast.error).toHaveBeenCalledWith(reason);
+      });
     });
 
     it('reports a warning toast but still calls onSuccess when the import POST fails', async () => {
