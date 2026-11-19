@@ -103,7 +103,17 @@ runs:
         BASE_BRANCH: ${{ github.base_ref }}
         COVERAGE_MINIMUM: ${{ inputs.coverage_minimum }}
         COVERAGE_TOLERANCE: ${{ inputs.coverage_tolerance }}
-      run: >-
-        node scripts/compare-sonar-coverage.js --context ci
-        --pull-request "$PR_NUMBER" --base-branch "$BASE_BRANCH"
-        --report-task .scannerwork/report-task.txt --check-quality-gate
+      # The script is the PR head's, which can predate --check-quality-gate (ETP-6374): a main into
+      # develop back-merge, a branch that never merged develop. Then compare the coverage alone and
+      # say the gate was not read (ETP-6387, as com.etendoerp.go's ETP-6326).
+      run: |
+        gate=--check-quality-gate
+        if ! grep -q -- "--check-quality-gate" scripts/compare-sonar-coverage.js; then
+          gate=
+          msg="The checked-out compare-sonar-coverage.js predates --check-quality-gate: quality gate not read here."
+          echo "::warning::$msg"
+          echo "> $msg" >> "$GITHUB_STEP_SUMMARY"
+        fi
+        node scripts/compare-sonar-coverage.js --context ci \
+          --pull-request "$PR_NUMBER" --base-branch "$BASE_BRANCH" \
+          --report-task .scannerwork/report-task.txt $gate
