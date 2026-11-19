@@ -463,9 +463,7 @@ export default function ImportLinesModal({
     const one = selectionSize === 1;
     return (
       <>
-        <strong className="font-semibold">
-          {ui(one ? 'importLinesSelectedCountOne' : 'importLinesSelectedCountMany', { count: selectionSize })}
-        </strong>
+        {ui(one ? 'importLinesSelectedCountOne' : 'importLinesSelectedCountMany', { count: selectionSize })}
         {' '}{ui(one ? 'importLinesSelectedSuffixOne' : 'importLinesSelectedSuffixMany')}
       </>
     );
@@ -840,7 +838,7 @@ export default function ImportLinesModal({
               type="button"
               onClick={onClose}
               data-testid="ImportLinesModal__cancel"
-              className={cn(PILL_BASE, 'border bg-card text-foreground hover:bg-muted', CONTROL_BORDER, SHADOW_XS)}
+              className={cn(PILL_BASE, 'bg-transparent text-foreground hover:bg-muted')}
             >
               {ui('cancel')}
             </button>
