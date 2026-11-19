@@ -572,8 +572,26 @@ const BACKEND_ERROR_KEY_MAP = {
   // (retry).
   ETGO_RemittanceAccountNotBank: 'backendError.remittanceAccountNotBank',
   ETGO_RemittanceAccountIbanRequired: 'backendError.remittanceAccountIbanRequired',
+  // The remittance's own IBAN (REM_REMITTANCE.IBAN, written with the header): length 15-34 or mod 97 failed.
+  ETGO_RemittanceIbanInvalid: 'backendError.remittanceIbanInvalid',
+  // Collection-only options of the remittance header (direct debit scheme CORE|B2B, «Remesa financiada»).
+  ETGO_RemittanceSchemeInvalid: 'backendError.remittanceSchemeInvalid',
+  ETGO_RemittanceOptionsCollectionOnly: 'backendError.remittanceOptionsCollectionOnly',
   ETGO_RemittanceAccountNotAllowed: 'backendError.remittanceAccountNotAllowed',
   ETGO_RemittanceProvisioningConflict: 'backendError.remittanceProvisioningConflict',
+  // ETP-6148 — the SEPA creditor identifier saved on the financial account (saveCreditorId, 422). The SPA
+  // validates the same rule inline (lib/sepaCreditorId.js); these are the safety net. The two
+  // ETGO_RemittanceFileAccount* codes are the readiness problems of a collection remittance whose
+  // account has no (valid) saved identifier; their localized text normally wins, the key is the fallback.
+  ETGO_SepaCreditorIdRequired: 'backendError.sepaCreditorIdRequired',
+  ETGO_SepaCreditorIdInvalidFormat: 'backendError.sepaCreditorIdInvalidFormat',
+  ETGO_SepaCreditorIdInvalidCheckDigits: 'backendError.sepaCreditorIdInvalidCheckDigits',
+  // saveCreditorId on a remittance: a payment remittance (or one of another account) has no creditor
+  // identifier; and a save with no remittance that does not target the account.
+  ETGO_RemittanceCreditorIdNotApplicable: 'backendError.remittanceCreditorIdNotApplicable',
+  ETGO_RemittanceCreditorIdNeedsAccount: 'backendError.remittanceCreditorIdNeedsAccount',
+  ETGO_RemittanceFileAccountNoCreditorId: 'backendError.remittanceFileAccountNoCreditorId',
+  ETGO_RemittanceFileAccountInvalidCreditorId: 'backendError.remittanceFileAccountInvalidCreditorId',
   // ETP-6247 — the SEPA file actions (confirm / generateFile / fileReadiness, RemittanceHeaderHandler).
   // The backend localizes every ETGO_RemittanceFile* text in the request language with its
   // positional params substituted, and the 422s carry no messageParams, so only the parameter-free

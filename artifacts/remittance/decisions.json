@@ -5,7 +5,7 @@
     "category": "finance",
     "name": "Remittance",
     "detailEntity": "lines",
-    "titleField": "name",
+    "titleField": "documentNo",
     "statusEnumLabels": {
       "PE": "remittanceStatusPe",
       "PR": "remittanceStatusPr",
@@ -76,6 +76,7 @@
       },
       "confirm": {
         "add": true,
+        "exclude": true,
         "label": "confirm",
         "style": "positive",
         "displayLogicRaw": "@Processed@='N'",
@@ -300,6 +301,34 @@
           "grid": false,
           "form": false,
           "reason": "ETP-6148 — kept in the payload (not shown) because every header field's readOnlyLogic is @Processed@='Y': a processed remittance is locked."
+        },
+        "creditorIdentifier": {
+          "visibility": "editable",
+          "grid": false,
+          "form": false,
+          "required": false,
+          "reason": "ETP-6247 — REM_REMITTANCE.CREDITOR_IDENTIFIER: the remittance's own SEPA creditor identifier (AT-02), the one its file carries. Writable on create and update while not processed so the custom block can preload it (the account's, else the one computed from the organization) and save it with the general «Guardar»; RemittanceHeaderWrites normalizes and validates it (ETGO_SepaCreditorId* keys), collections only, never written to the account. A blank one is ignored: the trigger copies the account's on insert, and confirm keeps the organization's computed one as the copy. form:false: the custom block owns it."
+        },
+        "directDebitScheme": {
+          "visibility": "editable",
+          "grid": false,
+          "form": false,
+          "required": false,
+          "reason": "ETP-6247 — REM_REMITTANCE.DD_SCHEME: CORE | B2B, only for collection remittances (default CORE, set by REM_REMITTANCE_TRG on insert). Writable while the remittance is not processed (RemittanceHeaderWrites normalizes it, 422 ETGO_RemittanceSchemeInvalid / ETGO_RemittanceOptionsCollectionOnly); the SEPA file carries it in LclInstrm/Cd. form:false: the custom «Opciones avanzadas» block owns it."
+        },
+        "financed": {
+          "visibility": "editable",
+          "grid": false,
+          "form": false,
+          "required": false,
+          "reason": "ETP-6247 — REM_REMITTANCE.ISFINANCED (default N): «Remesa financiada», only for collection remittances. Writable while not processed; the SEPA file's GrpHdr/MsgId carries the financed prefix. form:false: the custom «Opciones avanzadas» block owns it."
+        },
+        "iBAN": {
+          "visibility": "editable",
+          "grid": false,
+          "form": false,
+          "required": false,
+          "reason": "ETP-6247 — REM_REMITTANCE.IBAN: the remittance's own IBAN, copied from the account by REM_REMITTANCE_TRG on insert and when the account or type changes (while not processed), and the one its SEPA file always carries. Writable on create and update so the custom «Datos para el fichero SEPA» block can send the IBAN typed for THIS remittance before its first save (RemittanceHeaderWrites normalizes and validates it, 422 ETGO_RemittanceIbanInvalid); never written to the account. form:false keeps it out of the generic form: the custom block owns it."
         },
         "eTARAutomaticprocess": {
           "visibility": "readOnly",

@@ -47,8 +47,8 @@ function deferred() {
   return { promise, resolve };
 }
 
-function renderCard(data) {
-  return render(<RemittanceFileCard data={data} apiBaseUrl={API} />);
+function renderCard(data, extra = {}) {
+  return render(<RemittanceFileCard data={data} apiBaseUrl={API} {...extra} />);
 }
 
 beforeEach(() => {
@@ -83,15 +83,14 @@ describe('RemittanceFileCard — unsaved remittance', () => {
 });
 
 describe('RemittanceFileCard — «Antes de confirmar» (pending)', () => {
-  it('shows «checking» until fileReadiness answers, then «ready»', async () => {
+  it('renders nothing while checking and nothing when there are no problems (no «ready» line, no recheck)', async () => {
     const pending = deferred();
     mockApiFetch.mockReturnValueOnce(pending.promise);
-    renderCard(PENDING);
-    expect(screen.getByTestId('remittance-file-readiness')).toHaveTextContent('remittanceFileReadinessTitle');
-    expect(screen.getByTestId('remittance-file-readiness-loading')).toHaveTextContent('remittanceFileReadinessChecking');
-    expect(screen.getByTestId('remittance-file-readiness-recheck')).toBeDisabled();
+    const { container } = renderCard(PENDING);
+    expect(container).toBeEmptyDOMElement();
     await act(async () => { pending.resolve(readiness({ ready: true, scheme: 'CORE' })); });
-    expect(screen.getByTestId('remittance-file-readiness-ready')).toHaveTextContent('remittanceFileReadinessReady');
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByTestId('remittance-file-readiness-recheck')).toBeNull();
     expect(actionCalls('fileReadiness')[0][0]).toBe('/remittance/rem-1/action/fileReadiness');
   });
 
@@ -147,19 +146,58 @@ describe('RemittanceFileCard — «Antes de confirmar» (pending)', () => {
     renderCard(PENDING);
     await screen.findByTestId('remittance-file-readiness-problems');
     await act(async () => { fireEvent.click(screen.getByTestId('remittance-file-readiness-recheck')); });
-    expect(await screen.findByTestId('remittance-file-readiness-ready')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId('remittance-file-readiness')).toBeNull());
     expect(actionCalls('fileReadiness')).toHaveLength(2);
   });
 
   it('re-checks when the record’s `updated` token changes, and not on a plain re-render', async () => {
     mockApiFetch.mockResolvedValue(readiness({ ready: true }));
     const { rerender } = renderCard(PENDING);
-    await screen.findByTestId('remittance-file-readiness-ready');
+    await waitFor(() => expect(actionCalls('fileReadiness')).toHaveLength(1));
     rerender(<RemittanceFileCard data={{ ...PENDING }} apiBaseUrl={API} />);
     await act(async () => {});
     expect(actionCalls('fileReadiness')).toHaveLength(1);
     rerender(<RemittanceFileCard data={{ ...PENDING, updated: 'T2' }} apiBaseUrl={API} />);
     await waitFor(() => expect(actionCalls('fileReadiness')).toHaveLength(2));
+  });
+});
+
+describe('RemittanceFileCard — creditor identifier problem', () => {
+  const NO_ID = { scope: 'account', accountId: 'acc-1', code: 'ETGO_RemittanceFileAccountNoCreditorId', message: 'Falta el identificador', suggestedCreditorId: null };
+  const INVALID = { scope: 'account', accountId: 'acc-1', code: 'ETGO_RemittanceFileAccountInvalidCreditorId', message: 'El identificador es incorrecto' };
+  const OTHER = { scope: 'org', organizationId: 'org-1', code: 'Z', message: 'Sin NIF' };
+
+  it('is a plain sentence pointing at the field: no buttons, no checkbox, nothing saved', async () => {
+    mockApiFetch.mockResolvedValue(readiness({ ready: false, problems: [NO_ID] }));
+    renderCard(PENDING);
+    const group = await screen.findByTestId('remittance-file-problems-account');
+    expect(group).toHaveTextContent('Falta el identificador');
+    expect(screen.getByTestId('remittance-file-creditor-hint')).toHaveTextContent('remittanceFileCreditorIdHint');
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByTestId('creditor-id-problem-use-suggested')).toBeNull();
+    expect(screen.queryByTestId('creditor-id-problem-write')).toBeNull();
+    expect(actionCalls('saveCreditorId')).toHaveLength(0);
+  });
+
+  it('is dropped while the field holds a valid identifier, whatever fileReadiness says', async () => {
+    mockApiFetch.mockResolvedValue(readiness({ ready: false, problems: [NO_ID] }));
+    renderCard(PENDING, { creditorValid: true });
+    await waitFor(() => expect(actionCalls('fileReadiness')).toHaveLength(1));
+    expect(screen.queryByTestId('remittance-file-readiness')).toBeNull();
+    expect(screen.queryByTestId('remittance-file-problems-account')).toBeNull();
+  });
+
+  it('keeps the other problems when only the creditor ones are dropped', async () => {
+    mockApiFetch.mockResolvedValue(readiness({ ready: false, problems: [INVALID, OTHER] }));
+    renderCard(PENDING, { creditorValid: true });
+    await screen.findByTestId('remittance-file-problems-org');
+    expect(screen.queryByTestId('remittance-file-problems-account')).toBeNull();
+  });
+
+  it('shows the invalid-identifier problem when the field has no valid value', async () => {
+    mockApiFetch.mockResolvedValue(readiness({ ready: false, problems: [INVALID] }));
+    renderCard(PENDING, { creditorValid: false });
+    expect(await screen.findByTestId('remittance-file-problems-account')).toHaveTextContent('El identificador es incorrecto');
   });
 });
 

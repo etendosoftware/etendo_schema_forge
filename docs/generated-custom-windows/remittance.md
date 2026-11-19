@@ -75,7 +75,7 @@ Wiring:
 | Order | Key | Column | Label (es_ES) | Notes |
 |---|---|---|---|---|
 | 1 | `documentNo` | `DocumentNo` | Nº documento | first column, by user decision (2026-11-06) |
-| 2 | `name` | `Name` | Nombre | detail title (`titleField`); `grow: true`, absorbs the leftover width |
+| 2 | `name` | `Name` | Nombre | `grow: true`, absorbs the leftover width |
 | 3 | `remittanceType` | `REM_Remittance_Type_ID` | Tipo de remesa | its name ("Remesa de cobro" / "Remesa de pago") gives both the direction and the SEPA scheme; `columnWidth: 260` («Remesa de cobro (adeudo SEPA)» fits) |
 | 4 | `financialAccount` | `FIN_Financial_Account_ID` | Cuenta | `columnWidth: 290`, enough for a typical account name |
 | 5 | `transactionDate` | `Datetrx` | Fecha | default order `transactionDate desc` |
@@ -99,7 +99,7 @@ Every column is a real AD column, so it sorts and filters on the server. Labels 
 `window.labelOverrides` (`es_ES`, `es_AR`, `en_US`).
 
 **Row menu (⋮).** Each row's menu has ONE «Cambiar estado» entry (clock icon) whose submenu opens to the
-left (as Holded does) and lists the flow's statuses as chips, labelled and toned like the status chip:
+left (as Holded does) and lists the flow's statuses as chips (the detail's standard `DocumentStatusPill`: same 14px text, padding, radius and tone icon as every window's header chip and as the plain pill of the other statuses, so the chip does not change size between PR/SB and CT), labelled and toned like the status chip:
 Pendiente de envío (`PR`), Enviada al banco (`SB`), Cobrada (`CT`). Only the transitions the detail header
 offers are clickable: from `PR` → «Enviada al banco» (`RemittanceSentDialog`) and from `SB` → «Cobrada»
 (`RemittanceCollectDialog`, with the «A → B» chips). The current status, the way back and PR → Cobrada
@@ -299,6 +299,13 @@ for the business partner.
 
 ### «Confirmar» / «Reactivar», status banner and lines total
 
+**«¿Reactivar la remesa?» dialog** (`RemittanceProcessConfirmModal`, the shared `ConfirmDialog`): the base text says the effect
+(the payments created on confirm are deleted and the remittance is editable again). **Only when the status is SB** (read
+from the record's `remittanceStatus`) a warning `InfoBanner` (`remittanceReactivateSentWarning`,
+`remittance-reactivate-sent-warning`) is added under it: «Esta remesa está «Enviada al banco». Si la reactivas y cambias
+facturas o importes, el fichero que ya recibió el banco dejará de coincidir: avísale al banco o anula la orden y envía el
+fichero nuevo.» In PR only the base text shows. (`ConfirmDialog` takes optional `children`, rendered between the header and the buttons.)
+
 **Header actions**, declared in `window.processOverrides` as `add` entries. They are the generic
 header process buttons (DetailView `processes`), running `hook.handleProcess`, which POSTs
 `/remittance/{id}/action/<name>` with `{ fieldValues }`.
@@ -369,7 +376,10 @@ action `confirm`):
    and «Cobrada» (`markCollected`, from `PR`/`SB`: settles every payment on the fecha de
    cargo/abono with the automated-remittance module's `settleOnDueDate`, ends `CT`/`PT` and flags
    the remittance automated) are the later steps; see `neo-headless.md` §4.6c;
-4. it generates the SEPA file (pain.008 for CORE collections, pain.001 for SCT payments);
+4. it generates the SEPA file (`pain.008.001.08` for CORE collections, `pain.001.001.09` for SCT payments).
+   For CORE, GO checks the bank identifications and party names, and reconciles the number and
+   amount of the debits against each payment group and the file header. If one of these checks
+   fails, the error identifies the XML element to review.
 5. it stores the file as the remittance's main attachment.
 
 Any failure rolls everything back. **It cannot be undone**: going back is a matter of returns, which
@@ -384,9 +394,10 @@ are out of scope. The SPA pieces live in `artifacts/remittance/custom/`. The con
 | `GET /sws/neo/attachments/file/{attachmentId}` | — | the file, saved with `downloadBlobAsFile` |
 
 **«Antes de confirmar»** (`RemittanceFileCard`, rendered by `RemittanceSepaFileData` right under
-«Datos para el fichero SEPA», in the same compact card style). On a saved remittance that is not
+«Datos para el fichero SEPA»). It is deliberately light: no card or title strip. A warning strip (the app's notice tokens: left accent, warning colors) with the problems and «Volver a comprobar», only when there are
+problems; nothing otherwise. On a saved remittance that is not
 processed, it shows the result of `fileReadiness`:
-- «Todo listo» in green; or
+- nothing at all when there is nothing to fix (no «Todo listo» line: with no lines it would mislead, and the server refuses «Confirmar» then); or
 - the problems, grouped: the organization's, the bank account's, then one group per contact. Each
   group is titled with a ↗ link to where it is fixed: the contact (`/contacts/{id}`, for its IBAN,
   mandate or address), the account's edit modal (`/financial-account/{id}?edit=true`) or the
@@ -407,12 +418,10 @@ confirming).
   (`formatCalendarDate`); «Agrupación» as two choice cards (radio group, arrow keys), each with a
   one-line description (`remittanceGroupingNoneDescription`,
   `remittanceGroupingByBpAndDueDateDescription`), and with no grouping param a single static
-  «Sin agrupar» card; the note that the file is generated and can be downloaded afterwards; and what confirming does, as a non-dismissible warning
-  `InfoBanner` (`remittanceConfirmEffect`: the payments stay in Remesado and the invoices uncollected until the remittance is moved to Cobrada, and it can be reactivated until then). The selected card is the grouping posted. Enter on a card confirms with it, but only
+  «Sin agrupar» card; and ONE neutral info `InfoBanner` (`remittanceConfirmInfo`, `remittance-confirm-info`): «Se generará el fichero SEPA y los pagos quedarán en «Remesado». Las facturas siguen sin cobrar hasta que pases la remesa a «Cobrada»; puedes reactivarla hasta entonces.» No separate file note and no «Todo listo» line: while checking, only a minimal «Comprobando…»; problems, when there are any, are ONE warning banner with the list (`remittance-confirm-problems-banner`). The selected card is the grouping posted. Enter on a card confirms with it, but only
   when Confirmar would be enabled.
-- **Problems** use `ReadinessProblemsBlock` and «Todo listo» uses `ReadinessReadyLine`, both
-  exported by `RemittanceFileCard.jsx` and shared with «Antes de confirmar», so the heading, icons,
-  grouping and links are the same in both.
+- **Problems** use `ReadinessProblemsBlock`, exported by `RemittanceFileCard.jsx` and shared with «Antes de confirmar», so the heading,
+  grouping and links are the same in both. The success step uses the same info banner for its one-line instruction.
 - **Re-checks** `fileReadiness` on open and lists any problem. Its Confirmar is disabled while
   checking, on a failed check and while there are problems.
 - **Confirming** posts `confirm` itself instead of using `handleProcess`, which drops the
@@ -442,7 +451,7 @@ confirming).
   - **Spacing:** the card rows copy `DocumentPickerModal`'s rhythm (`min-h-14`, `px-3 py-2`) with
     `divide-y` `border-subtle` separators, label left and muted, value right (`justify-end`, the chip
     and the avatar included); the body uses the shared modal's section gap (`gap-5`, 20 px).
-  The detail has the same «Descargar fichero» in its top bar (see «Fichero SEPA» below).
+  The detail has the same «Descargar fichero» in its top bar (see «Fichero SEPA» below): an icon-only 40x40 square button with a tooltip (the chrome of Copy link / Clone / Send, `topbarSecondary` slot, left of the kebab and Guardar), `aria-label` and tooltip «Descargar fichero», a spinner while it downloads.
 - **A refusal** keeps the dialog open; `ETGO_RemittanceFileNotReady` lists `error.problems`.
 
 **The header button itself is not disabled** when there are problems: DetailView has no hook for
@@ -475,6 +484,20 @@ with its positional params substituted, and the 422s carry no `messageParams`. S
 maps only the parameter-free `ETGO_RemittanceFileNotProcessed`. A mapped parametric key would leave
 `{0}` unfilled, and `translateByMessageKey` falls back to the backend text in that case anyway.
 
+### Header buttons, title and «Nueva remesa» (ETP-6247)
+
+- **List button:** «Nueva remesa» (`windows.Remittance.newLabel` in the three locales, the same mechanism as «Nuevo pedido»).
+- **Title and last breadcrumb:** the document number (`titleField: "documentNo"`, e.g. 1000013), as Sales Order shows PV1000001.
+  A new remittance still reads «Nuevo».
+- **Guardar / Confirmar (as Sales Order):** «Guardar» is neutral (outline) and the primary «Confirmar» is always offered while the
+  remittance is pending, new or saved: the generic draftMode pair, passed by the route (`REMITTANCE_DRAFT_MODE` in
+  `windows/custom/remittance/index.jsx`) with `disableWhenEmpty` and a custom `onConfirm`. «Confirmar» is **disabled while the
+  remittance has no lines** (a new one has none) with the tooltip «Guarda la remesa y añade líneas para confirmar»
+  (`draftMode.disabledEmptyTitleKey`). A pending edit is saved first (the draftMode `onConfirm` contract), then
+  `remittance:open-confirm-modal` opens the same `RemittanceConfirmDialog`, hosted by `RemittanceStatusSelector` (the `topbarExtra`
+  slot), which re-checks `fileReadiness` and runs the atomic `confirm`. The declared `confirm` process is now `exclude`d (no header
+  process button; its params still feed the dialog's grouping). From PR on, the buttons per status are unchanged.
+
 ### «Datos para el fichero SEPA» (IBAN and creditor identifier)
 
 A block below the header form (`window.headerExtra.customForm` →
@@ -483,44 +506,75 @@ A block below the header form (`window.headerExtra.customForm` →
 There is no BIC (user decision).
 
 Layout (Holded reference):
-- a compact, subtle card (`rounded-xl`, `border-subtle`) on the form grid's left and right edges
-  (`mx-2`, the `p-2` of DetailView's header card body), with about the form's own row gap
-  (`mt-3 mb-3`) before the Líneas tabs;
-- a light header strip with the title on the left and, when the IBAN is stored, «🔒 De la cuenta
-  <nombre>» on the right;
+- a compact, subtle card (`rounded-xl`, `border-subtle`) spanning the form grid's full row (`col-span-full`,
+  spliced into the grid, so the grid's own gap separates it from the field rows);
+- a light header strip with the title;
 - below it the header form's own grid and tokens (EntityForm's `Label`, `Input`, `FIELD_HEIGHT`,
   `ROW_GAP_Y`, 4 columns): IBAN in columns 1–2, «Identificador del acreedor» in columns 3–4.
   Each label is inline, left of its value (it wraps above on a narrow screen), so the read-only
-  body is a single row. Values use the app font. Without an IBAN, «IBAN *», the input and «Guardar
-  IBAN» share one row at input height, with one help line below.
+  body is a single row. Values use the app font. «IBAN *» is an input with one help line below
+  (the inline error, or the empty-account hint).
 
-- **IBAN.**
-  - When the account's IBAN is valid, it is shown read-only, in groups of 4, with a lock and «De la
-    cuenta <nombre>».
-  - When it is missing or invalid, it is an input (placeholder «ES91 2100 0418 4502 0005 1332»).
-    The input is validated inline with the Edit-account rules (`validateIbanForCountry`, same error
-    keys) and has a «Guardar IBAN» button. The note says «Esta cuenta no tiene IBAN guardado. Se
-    guardará en la cuenta <nombre>.» The IBAN is saved **on the account**, not on the remittance.
-    The block is then re-read.
-  - While the IBAN is missing, a red line says the remittance cannot be saved. The header refuses
-    the save with 422 `ETGO_RemittanceAccountIbanRequired`, mapped in `backendErrors.js`.
-  - On a processed remittance the block is read-only.
-- **Identificador del acreedor**, computed by the backend from the organization's country and tax ID
-  and the remittance type's business code (000 by default). Its info icon first says what
-  it is (it identifies the company as issuer of SEPA direct debits; the bank assigns it; only for
-  collection remittances), then how it is built (country, check digits, suffix, tax ID). When it cannot be computed, a warning names what is missing: «la organización no
-  tiene NIF», «la organización no tiene país», «la cuenta no tiene IBAN», or that the collection
-  remittance type's creditor business code is not valid (it must be 3 letters or digits; provisioning
-  stores `000`, the default suffix).
-- **Cuenta selector.** Accounts without a valid IBAN are offered too, marked with a «Sin IBAN» badge
-  (`financialAccount.optionBadge` on the selector item's `ibanValid`, see `docs/ui-customization.md`
-  → *Badge on selector options*).
+- **IBAN (of the remittance, never of the account).** `REM_REMITTANCE.IBAN`, property `iBAN`. A trigger
+  copies the account's IBAN into the remittance on create and, before processing, whenever the account
+  changes (overwriting what was typed). The remittance's own IBAN is what its SEPA file carries.
+  - The input opens on the **effective** IBAN (the remittance's own, else the account's copy) . With a value
+    (typed, copied from the account or the remittance's own) **nothing is shown under it**: no «De la remesa» / «De la
+    cuenta». Only while the field is **empty** and the account has no valid IBAN, a neutral grey hint says «Esta cuenta no
+    tiene IBAN. Escribe uno: solo se usará en esta remesa y no se guardará en la cuenta.» No red warning and no «Falta». It is validated inline with the
+    Edit-account rules (`validateIbanForCountry`, same error keys). There is **no «Guardar IBAN»
+    button and no note about saving on the account**; the account is never written from the remittance.
+  - **How it is saved.** A valid value is handed to the header form as the field `iBAN`
+    (`onChange('iBAN', normalized)`, the `formFooter` slot's callback), so it travels in the body of the
+    header's create (it can be given before the first save) or update, with the header's «Guardar». The
+    server normalizes (upper case, no separators) and validates length 15–34 and mod 97 (422
+    `ETGO_RemittanceIbanInvalid`); a blank value is ignored (the trigger copies the account's). While
+    typing an invalid or empty value the form field is left empty.
+  - **Save gate.** While the effective IBAN is not valid, the block registers a required, never-filled
+    field (`sepaFileIban`) with the header form, so «Guardar» stays disabled. It is presented like any other
+    required field: the red asterisk on «IBAN», and the field's error state («Obligatorio») only once the form
+    reports it (after trying to save), with no extra banner or «Falta». A typed but invalid IBAN shows the inline
+    format error. The server refuses an IBAN-less save with 422 `ETGO_RemittanceAccountIbanRequired` («La remesa
+    necesita un IBAN válido»).
+  - Changing the account drops an IBAN the user had typed (the form field is cleared), because the
+    trigger replaces it on the server and a new remittance would otherwise still send it.
+  - On a processed remittance the IBAN is read-only (the value only).
+- **Collection options** (scheme, financed) sit above this card. See «Collection options» below.
+- **Creditor identifier (AT-02).** A plain input like the IBAN, for a collection type (hidden on payment). A
+  collection holds its **own copy** (REM column `Creditor_Identifier`, property `creditorIdentifier`), taken from
+  the bank account's default when it is created; the file always uses it, so editing the account later does not
+  change an existing remittance nor a generated file. The input opens on the **effective** value: the remittance's
+  own, else the account's, else the one computed from the organization (tax ID + country), with no origin caption; the only
+  note is «Propuesto a partir de la organización» while the shown value is the computed one and not saved yet.
+  - A valid typed value is handed to the header form (`onChange('creditorIdentifier', normalized)`) and saved with
+    the header's «Guardar», on create too. Format and mod 97 are checked inline (`lib/sepaCreditorId.js`) and by the
+    server (422 `ETGO_SepaCreditorIdInvalidFormat` / `…InvalidCheckDigits` with `error.expectedCheckDigits`); a
+    blank value is discarded. An invalid typed value blocks the header's «Guardar» (a required, never-filled gate
+    field `sepaFileCreditorId`) instead of being dropped.
+  - There are **no** «Guardar» or «Usar el calculado» buttons and no «also save as account default» option: the
+    account's default is edited only in «Editar cuenta».
+  - On confirm the server uses the computed value and copies it to the remittance when there is no own one nor the
+    account's. A **processed** remittance shows the copy read-only (locked).
+  - **Payment** remittances: the server refuses `creditorIdentifier`, `directDebitScheme = B2B` and
+    `financed = true` (422 `ETGO_RemittanceOptionsCollectionOnly`), so the block never sends them: choosing a
+    payment type after touching them puts the three fields back to the values the record had.
+  - **«Antes de confirmar»** only reports `ETGO_RemittanceFileAccountNoCreditorId` (no valid or computable
+    identifier, e.g. organization without tax ID or country) or `…InvalidCreditorId` (an invalid own one) as a plain
+    sentence with a pointer to the field, and the card **drops** those problems while the field holds a valid value
+    (typed, the account's or the computed one), whatever `fileReadiness` still says.
+
+  A **processed** remittance shows the copy read-only (locked). A **payment** remittance shows nothing
+  (it has no creditor identifier; `saveCreditorId` on it answers 422). On a remittance that is **not
+  saved yet** (record `new`) the value (the account's, or the proposal) is read-only with the note that
+  it can be edited once the remittance is saved: the server has nothing to store a copy on until then, and
+  the creation trigger copies the account's value.
 
 **Contract (confirmed by the backend, isolated in `sepaFileDataApi.js`):**
 
 | Call | Body | Answer |
 |---|---|---|
-| `POST <spec>/remittance/{id or new}/action/sepaFileData` | `{ accountId, organizationId? }` (the header's organization when set) | `{ accountId, accountName, iban, ibanValid, organizationId, country, creditorId, creditorIdAvailable, missing: ["iban"\|"orgTaxId"\|"country"\|"creditorBusinessCode"] }`. NEO actions need a record segment, so an unsaved remittance sends `new` (never loaded). `country` is the organization's country, the one inside the creditor id. `orgTaxId` is also missing when the tax ID cannot form an identifier. Refusals: 404 (account or organization not found), 422 `ETGO_RemittanceAccountNotBank` / `…NotAllowed`, 403 `feature_disabled` |
+| `POST <spec>/remittance/{id or new}/action/sepaFileData` | `{ accountId, organizationId? }` (the header's organization when set; a saved remittance's record id counts as its id) | `{ accountId, accountName, iban, ibanValid, organizationId, country, collection (true/false with a remittance, null without), remittanceCreditorId (the copy; null when none, invalid or of another account), remittanceCreditorIdValid, accountCreditorId, accountCreditorIdValid, suggestedCreditorId, creditorIdSource ('remittance'\|'account'\|'suggested'\|'missing'), creditorId (effective), creditorIdAvailable, missing: ["iban"\|"orgTaxId"\|"country"\|"creditorBusinessCode"] }`. NEO actions need a record segment, so an unsaved remittance sends `new` (never loaded). `country` is the organization's country, the one inside the creditor id. `orgTaxId` is also missing when the tax ID cannot form an identifier. Refusals: 404 (account or organization not found), 422 `ETGO_RemittanceAccountNotBank` / `…NotAllowed`, 403 `feature_disabled` |
+| `POST <spec>/remittance/{id or new}/action/saveCreditorId` | `{ accountId, creditorId, saveToAccount?, organizationId? }` | On a saved remittance it saves the copy **only on that remittance**; `saveToAccount: true` also saves the account default. On `new` (no remittance) `saveToAccount: true` is required (else 422 `ETGO_RemittanceCreditorIdNeedsAccount`). 422 refusals (`error.messageKeys[0]`): `ETGO_SepaCreditorIdRequired`, `…InvalidFormat`, `…InvalidCheckDigits` (with `error.expectedCheckDigits`), `ETGO_RemittanceAccountNotBank`, `…AccountNotAllowed`, `ETGO_RemittanceProcessedNotEditable` (frozen after processing), `ETGO_RemittanceCreditorIdNotApplicable` (payment remittance or another account); 404 not found; 403 flag off. All map to `backendError.*` keys. The account editor uses `new` and explicitly sets this option; it reads only `accountCreditorId` (never the suggestion) and saves it with its own «Guardar cambios», only when changed and not empty (see [financial-account-management.md](financial-account-management.md)). |
 | `GET /sws/neo/financial-account/account/{id}` then `PATCH` the same | `{ iBAN, updated }` | the existing account update. `updated` is mandatory on every NEO update, hence the read first. The body carries only the IBAN; the account must already have a country (set in Edit account). Without one the backend answers 400 `ETGO_FinAccIbanRequiresCountry`, shown as «La cuenta no tiene país. Indícalo primero en Editar cuenta para poder guardar el IBAN.» (`remittanceSepaIbanNeedsAccountCountry`, also when an older backend sends only the English literal). The other refusals (the IBAN/country pair texts) go through `translateBackendError` |
 | `financialAccount` selector items | — | `{ id, label, iban, ibanValid }`; accounts without a valid IBAN are offered too. DEFAULTS never prefills an IBAN-less account |
 
@@ -760,14 +814,35 @@ Testids: `remittance-return-dialog`, `-count`, `-total`, `-date-label`, `-loadin
 `-not-collection`, `-search`, `-select-all`, `-lines`, `-line` (`data-state`, `data-code`), `-check` (the Checkbox label),
 `-note`, `-date` (the DateField input), `-date-error`, `-warning`, `-problems`, and the dialog's primary button `action-confirm-modal`.
 
+### Collection options: «Esquema de adeudo» and «Remesa financiada»
+
+Two header fields that fill the free columns 3 and 4 of the header form's own grid, in the row of «Nombre» and «Fecha» (the footer is `inlineInHeaderCard`, so its fragment is spliced into that grid; the cards below span the full row)
+(`artifacts/remittance/custom/RemittanceAdvancedOptions.jsx`, rendered by the same `formFooter`), **before the first
+save**, only when the selected remittance type is a **collection**. The type is known from `direction`
+(`'collection' | 'payment'`) on each item of the type selector
+(`GET remittance/selectors/remittanceType?FIN_Financial_Account_ID=<id>`), which the block reads itself; if the
+backend does not send it, the block degrades to `sepaFileData.collection === true` (a saved remittance).
+
+| Option | Column / field | Values |
+|---|---|---|
+| «Esquema de adeudo» (select, with an (i) help) | `REM_REMITTANCE.DD_SCHEME` / `directDebitScheme` | «Core» (default), «B2B (interempresas)» |
+| «Remesa financiada» (switch, with an (i) help) | `REM_REMITTANCE.ISFINANCED` / `financed` | off (default) / on; the file's identifier carries it |
+
+- Both travel in the header's create/update (`onChange('directDebitScheme' | 'financed', …)`, saved by «Guardar»),
+  like the IBAN. They are `editable`, `form: false` in `decisions.json`. Untouched, nothing is sent (the server
+  defaults to Core / off).
+- Editable only before processing; afterwards read-only as the same disabled grey input the other read-only header fields use, holding «Core» / «B2B (interempresas)», and «Remesa financiada» as the same switch, disabled (422 `ETGO_RemittanceProcessedNotEditable`).
+- 422 `ETGO_RemittanceSchemeInvalid` and `ETGO_RemittanceOptionsCollectionOnly` map to
+  `backendError.remittanceSchemeInvalid` / `backendError.remittanceOptionsCollectionOnly`.
+- `sepaFileData` also answers `directDebitScheme` (`null` on a payment remittance) and `financed`.
+
 ### SEPA creditor identifier
 
-It is not stored, neither on the account nor on the remittance, and it is not shown. It is computed
-when the SEPA XML is built:
-- the organization tax ID (NIF);
-- plus the `Creditor_Business_Code` parameter of the remittance type, default `000`.
-
-The XML belongs to another team.
+REM stores the bank account default and the collection's own identifier separately. A collection
+copies the account default when it is created; older collections without a copy take the account's
+first value on confirmation or regeneration. The file uses the remittance's copy, so later changes
+to the bank account apply to future collections only. The UI is described under «Datos para el fichero
+SEPA» above; the account's field in [financial-account-management.md](financial-account-management.md).
 
 ## Ticket fields not covered by a Classic column
 
@@ -778,7 +853,7 @@ These need a new column, which the scope rules out, or a later task. None was in
 | List "Tipo" (collection / payment) | covered by the `remittanceType` name |
 | List "Nº de documentos" and "Total" | **not covered**. Both are aggregates of the lines; there is no Classic column |
 | Header SEPA scheme | covered by the `remittanceType` name. There is no separate field |
-| Header creditor identifier | left out (computed at XML time, see above) |
+| Header creditor identifier | stored on the collection header in REM |
 | Line due date | covered: «Vencimiento», property path `paymentScheduleDetail.invoicePaymentSchedule.expectedDate` |
 | Line invoice number | covered: «Factura», property path `….invoice.documentNo` |
 | Line business partner | covered: «Cliente», property path `paymentScheduleDetail.businessPartner` (declared in decisions; Classic has no field for it) |
@@ -829,7 +904,7 @@ These need a new column, which the scope rules out, or a later task. None was in
 | Lines total | `remittance-lines-total`, `-label`, `-amount` |
 | Status banner | `remittance-status-banner` (`data-status` = the code) |
 | «Antes de confirmar» | `remittance-file-readiness`, `-loading`, `-ready`, `-problems`, `-error`, `-recheck`; problem list `remittance-file-problems` with groups `remittance-file-problems-org` / `-account` / `-partner-{bpId}` (their links add `-link`) and each sentence `remittance-file-problem` (`data-code`) |
-| «Confirmar» dialog | `remittance-confirm-dialog`, `remittance-confirm-count`, `-total`, `-due-date` (the summary values), `remittance-confirm-grouping-P` / `-GGPD` (the cards), `remittance-confirm-file-note`, `remittance-confirmed-dialog` (the success step: `-subtitle`, `-summary`, `-name`, `-status`, `-count`, `-total`, `-type`, `-due-date`, `-account`), `remittance-confirm-irreversible`, `remittance-confirm-checking`, `-check-failed`, `-ready`, `-problems`; the buttons are ActionChoiceModal's: `action-confirm-modal` (primary) and Cancelar (by text) |
+| «Confirmar» dialog | `remittance-confirm-dialog`, `remittance-confirm-count`, `-total`, `-due-date` (the summary values), `remittance-confirm-grouping-P` / `-GGPD` (the cards), `remittance-confirm-info`, `remittance-confirm-problems-banner`, `remittance-confirmed-dialog` (the success step: `-subtitle`, `-summary`, `-name`, `-status`, `-count`, `-total`, `-type`, `-due-date`, `-account`), `remittance-confirm-irreversible`, `remittance-confirm-checking`, `-check-failed`, `-problems`; the buttons are ActionChoiceModal's: `action-confirm-modal` (primary) and Cancelar (by text) |
 | File actions | `remittance-file-download` (the top-bar button), `menu-action-regenerateFile` (the kebab item), `ConfirmDialog__remittance-regenerate` |
 | «Confirmar» / «Reactivar» | the generic process buttons; the reactivate confirmation is the shared `ConfirmDialog` (`components/OAuth2ClientDialog.jsx`), which takes no `data-testid` of its own: target its `DialogContent__4aea7f` / `Button__4aea7f`, or the dialog role and its title |
 | Due-item picker | `document-picker-modal`, `-search`, `-select-all`, `-list`, `-row-{id}` (`aria-selected`), `-check-{id}`, `-amount-{id}` (`-input`, `-reset`), `-amount-error-{id}`, `-status`, `-confirm`, `-cancel`; the document link `remittance-due-item-link-{id}`, the due status `remittance-due-status-{id}` |

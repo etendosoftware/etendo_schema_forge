@@ -145,23 +145,25 @@ describe('RemittanceConfirmDialog — check', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/financial-account/acc-1?edit=true');
   });
 
-  it('warns what confirming does: payments stay in Remesado until it is marked collected', async () => {
+  it('shows ONE info banner about what confirming does (file generated, payments Remesado, invoices uncollected, reactivable) and no other note', async () => {
     routes();
     await renderDialog();
-    expect(screen.getByTestId('remittance-confirm-effect')).toHaveTextContent('remittanceConfirmEffect');
-    expect(screen.getByTestId('remittance-confirm-effect')).toHaveAttribute('role', 'alert');
+    expect(screen.getByTestId('remittance-confirm-info')).toHaveTextContent('remittanceConfirmInfo');
+    expect(screen.queryByTestId('remittance-confirm-effect')).toBeNull();
+    expect(screen.queryByTestId('remittance-confirm-file-note')).toBeNull();
     expect(screen.queryByTestId('remittance-confirm-irreversible')).toBeNull();
-    expect(screen.getByTestId('remittance-confirm-file-note')).toHaveTextContent('remittanceConfirmFileNote');
     expect(screen.getByRole('dialog')).toHaveTextContent('remittanceConfirmTitle');
   });
 
-  it('shows the «Todo listo» line once the check passes, and not while problems exist', async () => {
+  it('shows no «Todo listo» line: only the problems, as one warning banner, when there are any', async () => {
     routes();
     const { unmount } = await renderDialog();
-    expect(screen.getByTestId('remittance-confirm-ready')).toHaveTextContent('remittanceFileReadinessReady');
+    expect(screen.queryByTestId('remittance-confirm-ready')).toBeNull();
+    expect(screen.queryByTestId('remittance-confirm-problems-banner')).toBeNull();
     unmount();
     routes({ readiness: data({ ready: false, problems: [{ scope: 'org', organizationId: 'org-1', message: 'x' }] }) });
     await renderDialog();
+    expect(screen.getByTestId('remittance-confirm-problems-banner')).toContainElement(screen.getByTestId('remittance-confirm-problems'));
     expect(screen.queryByTestId('remittance-confirm-ready')).toBeNull();
   });
 

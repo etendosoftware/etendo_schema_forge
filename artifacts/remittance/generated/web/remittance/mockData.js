@@ -10,8 +10,12 @@ export const remittance = [
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
     "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
+    "creditorIdentifier": "Sample creditorIdentifier",
     "processed": "Sample processed",
-    "remittanceStatus": "DR"
+    "remittanceStatus": "DR",
+    "directDebitScheme": "Sample directDebitScheme",
+    "financed": "Sample financed",
+    "iBAN": "Sample iBAN"
   },
   {
     "id": "mock-remittance-002",
@@ -22,8 +26,12 @@ export const remittance = [
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
     "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
+    "creditorIdentifier": "Sample creditorIdentifier",
     "processed": "Sample processed",
-    "remittanceStatus": "CO"
+    "remittanceStatus": "CO",
+    "directDebitScheme": "Sample directDebitScheme",
+    "financed": "Sample financed",
+    "iBAN": "Sample iBAN"
   },
   {
     "id": "mock-remittance-003",
@@ -34,8 +42,12 @@ export const remittance = [
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
     "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
+    "creditorIdentifier": "Sample creditorIdentifier",
     "processed": "Sample processed",
-    "remittanceStatus": "VO"
+    "remittanceStatus": "VO",
+    "directDebitScheme": "Sample directDebitScheme",
+    "financed": "Sample financed",
+    "iBAN": "Sample iBAN"
   },
   {
     "id": "mock-remittance-004",
@@ -46,8 +58,12 @@ export const remittance = [
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
     "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
+    "creditorIdentifier": "Sample creditorIdentifier",
     "processed": "Sample processed",
-    "remittanceStatus": "IP"
+    "remittanceStatus": "IP",
+    "directDebitScheme": "Sample directDebitScheme",
+    "financed": "Sample financed",
+    "iBAN": "Sample iBAN"
   },
   {
     "id": "mock-remittance-005",
@@ -58,8 +74,12 @@ export const remittance = [
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
     "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
+    "creditorIdentifier": "Sample creditorIdentifier",
     "processed": "Sample processed",
-    "remittanceStatus": "DR"
+    "remittanceStatus": "DR",
+    "directDebitScheme": "Sample directDebitScheme",
+    "financed": "Sample financed",
+    "iBAN": "Sample iBAN"
   },
   {
     "id": "mock-remittance-006",
@@ -70,8 +90,12 @@ export const remittance = [
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
     "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
+    "creditorIdentifier": "Sample creditorIdentifier",
     "processed": "Sample processed",
-    "remittanceStatus": "CO"
+    "remittanceStatus": "CO",
+    "directDebitScheme": "Sample directDebitScheme",
+    "financed": "Sample financed",
+    "iBAN": "Sample iBAN"
   },
   {
     "id": "mock-remittance-007",
@@ -82,8 +106,12 @@ export const remittance = [
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
     "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
+    "creditorIdentifier": "Sample creditorIdentifier",
     "processed": "Sample processed",
-    "remittanceStatus": "VO"
+    "remittanceStatus": "VO",
+    "directDebitScheme": "Sample directDebitScheme",
+    "financed": "Sample financed",
+    "iBAN": "Sample iBAN"
   },
   {
     "id": "mock-remittance-008",
@@ -94,8 +122,12 @@ export const remittance = [
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
     "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
+    "creditorIdentifier": "Sample creditorIdentifier",
     "processed": "Sample processed",
-    "remittanceStatus": "IP"
+    "remittanceStatus": "IP",
+    "directDebitScheme": "Sample directDebitScheme",
+    "financed": "Sample financed",
+    "iBAN": "Sample iBAN"
   },
   {
     "id": "mock-remittance-009",
@@ -106,8 +138,12 @@ export const remittance = [
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
     "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
+    "creditorIdentifier": "Sample creditorIdentifier",
     "processed": "Sample processed",
-    "remittanceStatus": "DR"
+    "remittanceStatus": "DR",
+    "directDebitScheme": "Sample directDebitScheme",
+    "financed": "Sample financed",
+    "iBAN": "Sample iBAN"
   },
   {
     "id": "mock-remittance-010",
@@ -118,8 +154,12 @@ export const remittance = [
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
     "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
+    "creditorIdentifier": "Sample creditorIdentifier",
     "processed": "Sample processed",
-    "remittanceStatus": "CO"
+    "remittanceStatus": "CO",
+    "directDebitScheme": "Sample directDebitScheme",
+    "financed": "Sample financed",
+    "iBAN": "Sample iBAN"
   },
   {
     "id": "mock-remittance-011",
@@ -130,8 +170,12 @@ export const remittance = [
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
     "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
+    "creditorIdentifier": "Sample creditorIdentifier",
     "processed": "Sample processed",
-    "remittanceStatus": "VO"
+    "remittanceStatus": "VO",
+    "directDebitScheme": "Sample directDebitScheme",
+    "financed": "Sample financed",
+    "iBAN": "Sample iBAN"
   },
   {
     "id": "mock-remittance-012",
@@ -142,8 +186,12 @@ export const remittance = [
     "name": "Sample name",
     "financialAccount": "Sample financialAccount",
     "eTARAutomaticprocess": "Sample eTARAutomaticprocess",
+    "creditorIdentifier": "Sample creditorIdentifier",
     "processed": "Sample processed",
-    "remittanceStatus": "IP"
+    "remittanceStatus": "IP",
+    "directDebitScheme": "Sample directDebitScheme",
+    "financed": "Sample financed",
+    "iBAN": "Sample iBAN"
   }
 ];
 

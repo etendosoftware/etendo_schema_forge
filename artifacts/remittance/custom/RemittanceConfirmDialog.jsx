@@ -21,7 +21,7 @@ import {
 } from './remittanceFileApi.js';
 import { AccountLogoAvatar } from '@/components/financial-accounts/AccountLogoAvatar';
 import { fetchAccountLogo, fetchSepaFileData } from './sepaFileDataApi.js';
-import { ReadinessProblemsBlock, ReadinessReadyLine } from './RemittanceFileCard.jsx';
+import { ReadinessProblemsBlock } from './RemittanceFileCard.jsx';
 
 /** The grouping param declared on processOverrides.confirm (its options and default), if any. */
 export function groupingParam(process) {
@@ -152,9 +152,9 @@ function ConfirmedStep({ record, summary, result, apiBaseUrl, onFinish }) {
       testId="remittance-confirmed-dialog"
       data-testid="ActionChoiceModal__remittance-confirmed">
       <div className="flex flex-col gap-5" data-testid="remittance-confirmed-body">
-        <p className="m-0 text-sm text-[hsl(var(--muted-foreground))]" data-testid="remittance-confirmed-subtitle">
+        <InfoBanner tone="info" dismissible={false} data-testid="remittance-confirmed-subtitle">
           {ui('remittanceConfirmedSubtitle')}
-        </p>
+        </InfoBanner>
         <div className="divide-y divide-[hsl(var(--border-subtle))] overflow-hidden rounded-lg border border-[hsl(var(--border-subtle))]" data-testid="remittance-confirmed-summary">
           <ConfirmedRow label={ui('remittanceConfirmedRemittance')} testId="remittance-confirmed-name">
             {[record?.documentNo, record?.name].filter(Boolean).join(' · ') || '—'}
@@ -291,26 +291,23 @@ export default function RemittanceConfirmDialog({ process, record, apiBaseUrl, o
       testId="remittance-confirm-dialog"
       data-testid="ActionChoiceModal__remittance-confirm">
       <div className="flex flex-col gap-3" data-testid="remittance-confirm-body">
-        <p className="m-0 text-sm text-[hsl(var(--muted-foreground))]" data-testid="remittance-confirm-file-note">
-          {ui('remittanceConfirmFileNote')}
-        </p>
         <InfoBanner
-          tone="warning"
-          icon={AlertTriangle}
+          tone="info"
           dismissible={false}
-          role="alert"
-          data-testid="remittance-confirm-effect">
-          {ui('remittanceConfirmEffect')}
+          data-testid="remittance-confirm-info">
+          {ui('remittanceConfirmInfo')}
         </InfoBanner>
-        {checking && <p className="m-0 text-sm text-[hsl(var(--muted-foreground))]" data-testid="remittance-confirm-checking">{ui('remittanceFileReadinessChecking')}</p>}
+        {checking && <p className="m-0 text-xs text-[hsl(var(--muted-foreground))]" data-testid="remittance-confirm-checking">{ui('remittanceFileReadinessChecking')}</p>}
         {!checking && checkFailed && (
           <p className="m-0 text-sm text-[hsl(var(--muted-foreground))]" data-testid="remittance-confirm-check-failed">{ui('remittanceFileReadinessLoadError')}</p>
         )}
         {!checking && !checkFailed && problems.length > 0 && (
-          <ReadinessProblemsBlock problems={problems} onNavigate={onClose} testId="remittance-confirm-problems" data-testid="ReadinessProblemsBlock__confirm" />
-        )}
-        {!checking && !checkFailed && problems.length === 0 && readiness?.ready === true && (
-          <ReadinessReadyLine testId="remittance-confirm-ready" data-testid="ReadinessReadyLine__confirm" />
+          <div className="flex items-start gap-3 rounded-[0_8px_8px_0] border-l-2 border-status-warning-border bg-status-warning px-4 py-2" data-testid="remittance-confirm-problems-banner">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-status-warning-foreground" aria-hidden="true" data-testid="AlertTriangle__confirm" />
+            <div className="min-w-0 flex-1">
+              <ReadinessProblemsBlock problems={problems} onNavigate={onClose} hideIcon testId="remittance-confirm-problems" data-testid="ReadinessProblemsBlock__confirm" />
+            </div>
+          </div>
         )}
       </div>
     </ActionChoiceModal>

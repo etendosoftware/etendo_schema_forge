@@ -10,7 +10,7 @@ vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => mockApiFetch }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
 const mockDictionary = { 'backendError.remittanceMarkSentNotAllowed': 'T:notAllowed' };
 const mockUi = (key, params) => mockDictionary[key] ?? (params ? `${key}:${JSON.stringify(params)}` : key);
-vi.mock('@/i18n', () => ({ useUI: () => mockUi }));
+vi.mock('@/i18n', () => ({ useUI: () => mockUi, useLocale: () => ({}) }));
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { toast } from 'sonner';
@@ -86,5 +86,15 @@ describe('RemittanceStatusChip', () => {
     const { unmount } = render(<RemittanceStatusChip status={status} />);
     expect(screen.getByText(key)).toBeInTheDocument();
     unmount();
+  });
+
+  it('is the detail\'s standard status pill (same component as every window\'s header), toned by the status field\'s variants', () => {
+    const { unmount } = render(<RemittanceStatusChip status="SB" />);
+    const pill = screen.getByTestId('remittance-status-chip-SB');
+    expect(pill).toHaveAttribute('data-tone', 'info');
+    expect(pill).toHaveStyle({ fontSize: '14px', borderRadius: '8px', padding: '4px 8px' });
+    unmount();
+    render(<RemittanceStatusChip status="CT" />);
+    expect(screen.getByTestId('remittance-status-chip-CT')).toHaveAttribute('data-tone', 'success');
   });
 });

@@ -71,6 +71,16 @@ describe('RemittanceProcessConfirmModal', () => {
     expect(confirmButton('cancel')).toBeInTheDocument();
   });
 
+  it('warns that the bank already has the file ONLY when the remittance is Enviada al banco (SB), keeping the base text', () => {
+    const { unmount } = render(<RemittanceProcessConfirmModal process={REACTIVATE} record={{ id: 'rem-1', remittanceStatus: 'SB' }} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByTestId('remittance-reactivate-sent-warning')).toHaveTextContent('remittanceReactivateSentWarning');
+    expect(screen.getByText('remittanceReactivateConfirmBody')).toBeInTheDocument();
+    unmount();
+    render(<RemittanceProcessConfirmModal process={REACTIVATE} record={{ id: 'rem-1', remittanceStatus: 'PR' }} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.queryByTestId('remittance-reactivate-sent-warning')).toBeNull();
+    expect(screen.getByText('remittanceReactivateConfirmBody')).toBeInTheDocument();
+  });
+
   it('recognises the reactivation by its columnName too', () => {
     render(<RemittanceProcessConfirmModal process={{ columnName: 'reactivate' }} onConfirm={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByText('remittanceReactivateConfirmTitle')).toBeInTheDocument();

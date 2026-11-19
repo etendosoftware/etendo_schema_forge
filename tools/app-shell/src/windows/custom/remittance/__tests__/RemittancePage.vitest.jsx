@@ -44,6 +44,8 @@ vi.mock('@generated/remittance/custom/RemittanceStatusBanner', () => ({
 }));
 
 import { render, screen } from '@testing-library/react';
+import decisions from '@generated/remittance/decisions.json';
+import { REMITTANCE_DRAFT_MODE } from '@/windows/custom/remittance/index.jsx';
 import RemittancePage from '@generated/remittance/generated/web/remittance/RemittancePage.jsx';
 import RemittanceBottomPanel from '@generated/remittance/custom/RemittanceBottomPanel';
 import RemittanceProcessConfirmModal from '@generated/remittance/custom/RemittanceProcessConfirmModal';
@@ -86,14 +88,14 @@ const visibleProcessNames = (processes, data, lines) => processes
 const ONE_LINE = [{ id: 'line-1' }];
 
 describe('RemittancePage — header processes', () => {
-  it('declares exactly «confirm», «reactivate» and «returnLines» as header buttons (the advance steps are the status chip selector)', () => {
-    expect(detailProps().processes.map((p) => p.name)).toEqual(['confirm', 'reactivate', 'returnLines']);
+  it('declares exactly «reactivate» and «returnLines» as header process buttons («Confirmar» is the draftMode button of the route; the advance steps are the status chip selector)', () => {
+    expect(detailProps().processes.map((p) => p.name)).toEqual(['reactivate', 'returnLines']);
   });
 
   // ETP-6247 — the step-by-step flow: PE -> Confirmar -> PR -> Marcar enviada -> SB -> Marcar cobrada -> CT/PT.
   it.each([
-    ['a pending remittance with lines', { processed: false, remittanceStatus: 'PE' }, ONE_LINE, ['confirm']],
-    ['a pending remittance (Y/N) with lines', { processed: 'N', remittanceStatus: 'PE' }, ONE_LINE, ['confirm']],
+    ['a pending remittance with lines (no process button: «Confirmar» is the draftMode button)', { processed: false, remittanceStatus: 'PE' }, ONE_LINE, []],
+    ['a pending remittance (Y/N) with lines', { processed: 'N', remittanceStatus: 'PE' }, ONE_LINE, []],
     ['a pending remittance without lines', { processed: false, remittanceStatus: 'PE' }, [], []],
     ['a Pendiente de envío remittance (PR): only «Reactivar» (the advance is the status chip)', { processed: 'Y', remittanceStatus: 'PR' }, ONE_LINE, ['reactivate']],
     ['an Enviada al banco remittance (SB): only «Reactivar»', { processed: 'Y', remittanceStatus: 'SB' }, ONE_LINE, ['reactivate']],
@@ -128,12 +130,13 @@ describe('RemittancePage — header processes', () => {
     expect(WINDOW_HIDE_STATUS_PILL_FOR.remittance).toEqual(new Set(['PR', 'SB']));
   });
 
-  it('«confirm» is the primary action, opens the confirm modal and declares the grouping, default P', () => {
-    const process = detailProps().processes.find((p) => p.name === 'confirm');
-    expect(process.style).toBe('positive');
-    expect(process.requiresLines).toBe(true);
-    expect(process.confirmModal).toBe(true);
-    expect(process.params).toEqual([{
+  it('«confirm» is no header process: it stays declared (the dialog reads its grouping param, default P) but excluded', () => {
+    expect(detailProps().processes.find((p) => p.name === 'confirm')).toBeUndefined();
+    const override = decisions.window.processOverrides.confirm;
+    expect(override.exclude).toBe(true);
+    expect(override.style).toBe('positive');
+    expect(override.confirmModal).toBe(true);
+    expect(override.params).toEqual([{
       key: 'grouping',
       type: 'select',
       label: 'remittanceGrouping',
@@ -146,6 +149,16 @@ describe('RemittancePage — header processes', () => {
     }]);
   });
 
+  it('«Confirmar» is the route\'s draftMode button: always offered, disabled without lines, opening the confirm dialog by event', () => {
+    const draftMode = REMITTANCE_DRAFT_MODE;
+    expect(draftMode).toMatchObject({ enabled: true, label: 'confirm', disableWhenEmpty: true, disabledEmptyTitleKey: 'remittanceConfirmNeedsLines' });
+    const listener = vi.fn();
+    window.addEventListener('remittance:open-confirm-modal', listener);
+    draftMode.onConfirm();
+    window.removeEventListener('remittance:open-confirm-modal', listener);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
   it('«Devolver» opens the return dialog through the window’s modal, never a direct run', () => {
     const { processes, processConfirmModal } = detailProps();
     const ret = processes.find((p) => p.name === 'returnLines');
@@ -153,16 +166,6 @@ describe('RemittancePage — header processes', () => {
     const ctx = { processConfirmModal, setConfirmProcess: vi.fn(), setParamDialogProcess: vi.fn(), handleProcess: vi.fn() };
     dispatchProcessAction(ret, ctx);
     expect(ctx.setConfirmProcess).toHaveBeenCalledWith(ret);
-    expect(ctx.handleProcess).not.toHaveBeenCalled();
-  });
-
-  it('«confirm» goes to the window’s confirm modal, not the parameter dialog and not a direct run', () => {
-    const { processes, processConfirmModal } = detailProps();
-    const ctx = { processConfirmModal, setConfirmProcess: vi.fn(), setParamDialogProcess: vi.fn(), handleProcess: vi.fn() };
-    const process = processes.find((p) => p.name === 'confirm');
-    dispatchProcessAction(process, ctx);
-    expect(ctx.setConfirmProcess).toHaveBeenCalledWith(process);
-    expect(ctx.setParamDialogProcess).not.toHaveBeenCalled();
     expect(ctx.handleProcess).not.toHaveBeenCalled();
   });
 
@@ -217,10 +220,10 @@ describe('RemittancePage — detail slots', () => {
     expect(json.genericLabels.remittanceAccountNoIbanBadge).toEqual(expect.stringMatching(/\S/));
   });
 
-  it('orders the lines by line number and titles the record by its name', () => {
+  it('orders the lines by line number and titles the record by its document number', () => {
     const props = detailProps();
     expect(props.detailSortBy).toBe('lineNo asc');
-    expect(props.titleField).toBe('name');
+    expect(props.titleField).toBe('documentNo');
     expect(props.statusField).toBe('remittanceStatus');
   });
 

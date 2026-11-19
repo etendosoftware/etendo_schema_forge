@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { Button } from '@/components/ui/button';
@@ -7,13 +7,13 @@ import { RecordLink } from '@/components/contract-ui/RecordLink.jsx';
 import {
   fetchFileReadiness,
   groupReadinessProblems,
+  isCreditorIdProblem,
   readinessProblemText,
 } from './remittanceFileApi.js';
 
-// Same card frame and header strip as «Datos para el fichero SEPA» (RemittanceSepaFileData), so the
-// two read as one block under the header form.
-const CARD = 'mx-2 mt-3 mb-3 overflow-hidden rounded-xl border border-[hsl(var(--border-subtle))] bg-card';
-const CARD_HEADER = 'flex items-center justify-between gap-3 border-b border-[hsl(var(--border-subtle))] bg-[hsl(var(--muted))] px-4 py-1.5';
+// ETP-6247 — light and consistent with the app's notices (InfoBanner tokens): a left-accented strip, not a
+// card with a header, so it does not dominate the page. Problems: warning strip; ready: one discreet line.
+const STRIP = 'flex items-start gap-3 rounded-[0_8px_8px_0] border-l-2 border-status-warning-border bg-status-warning px-4 py-2';
 const MUTED = 'text-sm text-[hsl(var(--muted-foreground))]';
 
 export function isProcessedRemittance(data) {
@@ -30,15 +30,16 @@ export function problemFixRoute(scope, ids) {
 
 // The sentence as the backend wrote it: it already names the contact or the invoice, and a contact
 // problem is reported once for all its lines (`lineIds`), so prefixing one invoice would mislead.
-function ProblemSentence({ problem, ui }) {
+function ProblemSentence({ problem, ui, renderActions }) {
   return (
     <li className="text-sm text-foreground" data-testid="remittance-file-problem" data-code={problem.code ?? undefined}>
       {readinessProblemText(problem, ui)}
+      {renderActions?.(problem)}
     </li>
   );
 }
 
-function ProblemGroup({ title, to, problems, ui, onNavigate, testId }) {
+function ProblemGroup({ title, to, problems, ui, onNavigate, testId, renderActions }) {
   return (
     <div className="min-w-0" data-testid={testId}>
       <div className="text-sm font-medium text-foreground">
@@ -48,7 +49,7 @@ function ProblemGroup({ title, to, problems, ui, onNavigate, testId }) {
       </div>
       <ul className="mt-0.5 list-disc space-y-0.5 pl-5">
         {problems.map((problem, i) => (
-          <ProblemSentence key={`${problem.lineId ?? ''}-${problem.code ?? ''}-${i}`} problem={problem} ui={ui} data-testid="ProblemSentence__remittance" />
+          <ProblemSentence key={`${problem.lineId ?? ''}-${problem.code ?? ''}-${i}`} problem={problem} ui={ui} renderActions={renderActions} data-testid="ProblemSentence__remittance" />
         ))}
       </ul>
     </div>
@@ -61,7 +62,7 @@ function ProblemGroup({ title, to, problems, ui, onNavigate, testId }) {
  * IBAN, mandate or address; the account's edit modal; the organization). Shared by «Antes de
  * confirmar» and the confirm dialog. `onNavigate` lets a dialog close itself before navigating.
  */
-export function ReadinessProblemList({ problems, onNavigate }) {
+export function ReadinessProblemList({ problems, onNavigate, renderProblemActions }) {
   const ui = useUI();
   const groups = groupReadinessProblems(problems);
   const orgId = groups.org.find((p) => p.organizationId)?.organizationId;
@@ -75,6 +76,7 @@ export function ReadinessProblemList({ problems, onNavigate }) {
           problems={groups.org}
           ui={ui}
           onNavigate={onNavigate}
+          renderActions={renderProblemActions}
           testId="remittance-file-problems-org"
           data-testid="ProblemGroup__org" />
       )}
@@ -85,6 +87,7 @@ export function ReadinessProblemList({ problems, onNavigate }) {
           problems={groups.account}
           ui={ui}
           onNavigate={onNavigate}
+          renderActions={renderProblemActions}
           testId="remittance-file-problems-account"
           data-testid="ProblemGroup__account" />
       )}
@@ -96,6 +99,7 @@ export function ReadinessProblemList({ problems, onNavigate }) {
           problems={group.problems}
           ui={ui}
           onNavigate={onNavigate}
+          renderActions={renderProblemActions}
           testId={`remittance-file-problems-partner-${group.businessPartnerId ?? i}`}
           data-testid="ProblemGroup__partner" />
       ))}
@@ -108,27 +112,16 @@ export function ReadinessProblemList({ problems, onNavigate }) {
  * the grouped problem list. Shared by «Antes de confirmar» and the confirm dialog so both read as
  * one pattern. `testId` names the wrapper (each caller keeps its own).
  */
-export function ReadinessProblemsBlock({ problems, onNavigate, testId }) {
+export function ReadinessProblemsBlock({ problems, onNavigate, testId, renderProblemActions, hideIcon = false }) {
   const ui = useUI();
   return (
     <div className="space-y-2" role="alert" data-testid={testId}>
       <p className="inline-flex items-center gap-1.5 text-sm font-medium text-[hsl(var(--status-warning-fg))]">
-        <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="AlertTriangle__readiness" />
+        {!hideIcon && <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="AlertTriangle__readiness" />}
         {ui('remittanceFileReadinessProblems')}
       </p>
-      <ReadinessProblemList problems={problems} onNavigate={onNavigate} data-testid="ReadinessProblemList__block" />
+      <ReadinessProblemList problems={problems} onNavigate={onNavigate} renderProblemActions={renderProblemActions} data-testid="ReadinessProblemList__block" />
     </div>
-  );
-}
-
-/** The «Todo listo» line, shared by «Antes de confirmar» and the confirm dialog. */
-export function ReadinessReadyLine({ testId }) {
-  const ui = useUI();
-  return (
-    <p className="inline-flex items-center gap-1.5 text-sm text-[hsl(var(--status-success-fg))]" data-testid={testId}>
-      <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="CheckCircle2__readiness" />
-      {ui('remittanceFileReadinessReady')}
-    </p>
   );
 }
 
@@ -139,7 +132,7 @@ export function ReadinessReadyLine({ testId }) {
  * since a contact fixed in another tab does not touch this record. It only informs: «Confirmar»
  * itself re-checks in its dialog, which refuses to confirm while there are problems.
  */
-function ReadinessCard({ data, apiBaseUrl }) {
+function ReadinessCard({ data, apiBaseUrl, creditorValid = false }) {
   const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
   const remittanceId = data.id;
@@ -159,36 +152,59 @@ function ReadinessCard({ data, apiBaseUrl }) {
 
   useEffect(() => { load(); }, [load, data.updated, data.financialAccount]);
 
-  const { loading, readiness, failed } = state;
-  let body;
-  if (loading && !readiness) {
-    body = <p className={MUTED} data-testid="remittance-file-readiness-loading">{ui('remittanceFileReadinessChecking')}</p>;
-  } else if (failed) {
-    body = <p className={MUTED} data-testid="remittance-file-readiness-error">{ui('remittanceFileReadinessLoadError')}</p>;
-  } else if (readiness?.ready) {
-    body = <ReadinessReadyLine testId="remittance-file-readiness-ready" data-testid="ReadinessReadyLine__card" />;
-  } else {
-    body = <ReadinessProblemsBlock problems={readiness?.problems ?? []} testId="remittance-file-readiness-problems" data-testid="ReadinessProblemsBlock__card" />;
+  // ETP-6247 — the creditor identifier is an input of «Datos para el fichero SEPA» saved with the header; here a
+  // creditor-id problem (none valid or computable, or an invalid own one) is a plain sentence that points to it.
+  const renderProblemActions = useCallback((problem) => (isCreditorIdProblem(problem)
+    ? <span className="ml-1 text-[hsl(var(--muted-foreground))]" data-testid="remittance-file-creditor-hint">{ui('remittanceFileCreditorIdHint')}</span>
+    : null), [ui]);
+
+  // A creditor-id problem is dropped while the field of «Datos para el fichero SEPA» holds a valid value
+  // (typed, the account's or the one computed from the organization): confirm copies it to the remittance.
+  // The server may still report it (an older backend, or before the value is saved); it only stays when there
+  // really is no valid or computable identifier.
+  const { loading, failed } = state;
+  const problems = (state.readiness?.problems ?? []).filter((problem) => !(creditorValid && isCreditorIdProblem(problem)));
+  const readiness = state.readiness && { ...state.readiness, problems, ready: state.readiness.ready || problems.length === 0 };
+  const recheck = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      onClick={load}
+      disabled={loading}
+      className="h-7 shrink-0 gap-1.5 px-2 text-xs text-[hsl(var(--muted-foreground))]"
+      data-testid="remittance-file-readiness-recheck"
+    >
+      <RefreshCw className={`h-3.5 w-3.5${loading ? ' animate-spin' : ''}`} aria-hidden="true" data-testid="RefreshCw__readiness" />
+      {ui('remittanceFileReadinessRecheck')}
+    </Button>
+  );
+  // Nothing at all while loading and when there is nothing to fix: «ready» is not shown (with no lines it would
+  // mislead; «Confirmar» is refused by the server then). Only a failed check and the problems render.
+  let body = null;
+  if (failed) {
+    body = (
+      <div className="flex items-center justify-between gap-3">
+        <p className={MUTED} data-testid="remittance-file-readiness-error">{ui('remittanceFileReadinessLoadError')}</p>
+        {recheck}
+      </div>
+    );
+  } else if (readiness && !readiness.ready) {
+    body = (
+      <div className={STRIP}>
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-status-warning-foreground" aria-hidden="true" data-testid="AlertTriangle__readiness-card" />
+        <div className="min-w-0 flex-1">
+          <ReadinessProblemsBlock problems={problems} renderProblemActions={renderProblemActions} hideIcon testId="remittance-file-readiness-problems" data-testid="ReadinessProblemsBlock__card" />
+        </div>
+        {recheck}
+      </div>
+    );
   }
 
+  if (!body) return null;
   return (
-    <section className={CARD} aria-labelledby="remittance-file-readiness-title" data-testid="remittance-file-readiness">
-      <header className={CARD_HEADER}>
-        <h3 id="remittance-file-readiness-title" className="text-sm font-semibold text-foreground">{ui('remittanceFileReadinessTitle')}</h3>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={load}
-          disabled={loading}
-          className="h-7 gap-1.5 px-2 text-xs"
-          data-testid="remittance-file-readiness-recheck"
-        >
-          <RefreshCw className={`h-3.5 w-3.5${loading ? ' animate-spin' : ''}`} aria-hidden="true" data-testid="RefreshCw__readiness" />
-          {ui('remittanceFileReadinessRecheck')}
-        </Button>
-      </header>
-      <div className="px-4 py-2.5">{body}</div>
+    <section className="col-span-full" aria-label={ui('remittanceFileReadinessTitle')} data-testid="remittance-file-readiness">
+      {body}
     </section>
   );
 }
@@ -198,9 +214,9 @@ function ReadinessCard({ data, apiBaseUrl }) {
  * remittance is pending, «Fichero SEPA» once it is processed. Nothing for an unsaved remittance (the
  * actions need a record). Rendered by RemittanceSepaFileData, the window's `headerExtra.customForm`.
  */
-export default function RemittanceFileCard({ data, apiBaseUrl }) {
+export default function RemittanceFileCard({ data, apiBaseUrl, creditorValid = false }) {
   // ETP-6247 — a processed remittance shows no card here any more: «Descargar fichero» is a button in the
   // top bar and «Regenerar fichero» an item of the detail kebab (the file name is in «Adjuntos»).
   if (!data?.id || isProcessedRemittance(data)) return null;
-  return <ReadinessCard data={data} apiBaseUrl={apiBaseUrl} data-testid="ReadinessCard__remittance" />;
+  return <ReadinessCard data={data} apiBaseUrl={apiBaseUrl} creditorValid={creditorValid} data-testid="ReadinessCard__remittance" />;
 }

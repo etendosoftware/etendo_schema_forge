@@ -385,6 +385,7 @@ export function ConfirmDialog({
   variant = 'default',
   loading = false,
   onConfirm,
+  children = null,
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange} data-testid="Dialog__4aea7f">
@@ -393,6 +394,7 @@ export function ConfirmDialog({
           <DialogTitle data-testid="DialogTitle__4aea7f">{title}</DialogTitle>
           <DialogDescription data-testid="DialogDescription__4aea7f">{description}</DialogDescription>
         </DialogHeader>
+        {children}
         <DialogFooter data-testid="DialogFooter__4aea7f">
           <Button
             type="button"

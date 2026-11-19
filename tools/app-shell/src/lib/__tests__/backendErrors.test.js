@@ -1479,11 +1479,22 @@ describe('translateBackendError — SEPA remittance refusals (ETP-6148)', () => 
     ['ETGO_SepaRemittancesDisabled', 'backendError.sepaRemittancesDisabled'],
     ['ETGO_RemittanceAccountNotBank', 'backendError.remittanceAccountNotBank'],
     ['ETGO_RemittanceAccountIbanRequired', 'backendError.remittanceAccountIbanRequired'],
+    ['ETGO_RemittanceIbanInvalid', 'backendError.remittanceIbanInvalid'],
+    ['ETGO_RemittanceSchemeInvalid', 'backendError.remittanceSchemeInvalid'],
+    ['ETGO_RemittanceOptionsCollectionOnly', 'backendError.remittanceOptionsCollectionOnly'],
     ['ETGO_RemittanceMethodAccountNotAllowed', 'backendError.remittanceMethodAccountNotAllowed'],
     // RemittanceHeaderHandler: an account with no remittance payment methods linked (422), and the
     // Bank-account create racing on that provisioning (409, retry).
     ['ETGO_RemittanceAccountNotAllowed', 'backendError.remittanceAccountNotAllowed'],
     ['ETGO_RemittanceProvisioningConflict', 'backendError.remittanceProvisioningConflict'],
+    // ETP-6148 — the creditor identifier saved on the account (saveCreditorId 422s and the two readiness problem codes).
+    ['ETGO_SepaCreditorIdRequired', 'backendError.sepaCreditorIdRequired'],
+    ['ETGO_SepaCreditorIdInvalidFormat', 'backendError.sepaCreditorIdInvalidFormat'],
+    ['ETGO_SepaCreditorIdInvalidCheckDigits', 'backendError.sepaCreditorIdInvalidCheckDigits'],
+    ['ETGO_RemittanceCreditorIdNotApplicable', 'backendError.remittanceCreditorIdNotApplicable'],
+    ['ETGO_RemittanceCreditorIdNeedsAccount', 'backendError.remittanceCreditorIdNeedsAccount'],
+    ['ETGO_RemittanceFileAccountNoCreditorId', 'backendError.remittanceFileAccountNoCreditorId'],
+    ['ETGO_RemittanceFileAccountInvalidCreditorId', 'backendError.remittanceFileAccountInvalidCreditorId'],
     // RemittanceHeaderHandler: a new or changed due date earlier than today (422), the safety
     // net behind the dueDate field's `minDate`.
     ['ETGO_RemittanceDueDatePast', 'backendError.remittanceDueDatePast'],

@@ -1,5 +1,7 @@
 import { ArrowRight } from 'lucide-react';
 import { StatusTag } from '@/components/ui/status-tag';
+import DocumentStatusPill from '@/components/contract-ui/DocumentStatusPill.jsx';
+import decisions from '../decisions.json';
 import { useUI } from '@/i18n';
 
 // The chip tone and label of each status a step moves between: the same map the grid chip and the
@@ -10,11 +12,18 @@ export const STEP_STATUS = {
   CT: { key: 'remittanceStatusCt', tone: 'success' },
 };
 
-/** One status as its chip (the shared StatusTag, labelled and toned like the header chip). */
+const STATUS_VARIANTS = decisions.entities.remittance.fields.remittanceStatus.enumVariants;
+
+/**
+ * One status as the detail's standard status pill (DocumentStatusPill, the one every window's header renders:
+ * 14px text, 4px 8px padding, 8px radius, tone icon), labelled and toned like the header chip. The status selector's
+ * trigger and menu and the grid's «Cambiar estado» submenu use it, so the chip keeps its size when the status moves
+ * between the selector (PR, SB) and the plain pill (CT, PT, ...).
+ */
 export function RemittanceStatusChip({ status }) {
   const ui = useUI();
   const entry = STEP_STATUS[status];
-  return <StatusTag status={status} label={ui(entry.key)} tone={entry.tone} data-testid={`StatusTag__${status}`} />;
+  return <DocumentStatusPill status={status} label={ui(entry.key)} enumVariants={STATUS_VARIANTS} testId={`remittance-status-chip-${status}`} />;
 }
 
 /**

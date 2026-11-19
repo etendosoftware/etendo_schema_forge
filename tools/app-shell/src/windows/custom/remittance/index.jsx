@@ -29,6 +29,21 @@ import RemittanceApp from '@generated/remittance/generated/web/remittance/index.
 export const REMITTANCE_WINDOW_ID = 'FF8080812E71F7C7012E71FD0499001B';
 
 /**
+ * ETP-6247 — «Guardar» neutral + «Confirmar» primary, as Sales Order: the generic draftMode pair, with a
+ * custom `onConfirm` that opens the window's own confirm dialog (hosted by RemittanceStatusSelector, listening to
+ * this event). «Confirmar» is always there while the remittance is pending (new or saved) and disabled while it has
+ * no lines (`disableWhenEmpty`, with `disabledEmptyTitleKey` as its tooltip); a pending edit is saved first.
+ */
+export const REMITTANCE_CONFIRM_EVENT = 'remittance:open-confirm-modal';
+export const REMITTANCE_DRAFT_MODE = {
+  enabled: true,
+  label: 'confirm',
+  disableWhenEmpty: true,
+  disabledEmptyTitleKey: 'remittanceConfirmNeedsLines',
+  onConfirm: () => window.dispatchEvent(new CustomEvent(REMITTANCE_CONFIRM_EVENT)),
+};
+
+/**
  * The detail status pill's per-code tones: the status field's own `enumVariants` in decisions.json,
  * the same map the grid chip honours, so the two cannot diverge. The generated page emits only
  * `statusEnumLabels`, so this route hands the map to DetailView (`statusEnumVariants`, the prop
@@ -159,6 +174,7 @@ export default function RemittanceRoute(props) {
     <>
       <RemittanceApp
         statusEnumVariants={REMITTANCE_STATUS_VARIANTS}
+        draftMode={REMITTANCE_DRAFT_MODE}
         rowQuickActions={rowQuickActions}
         topbarSecondary={RemittanceDownloadButton}
         menuActions={detailMenuActions}

@@ -34,8 +34,6 @@ const extraBadges = [
 
 // @sf-generated-start processes:remittance
 const processes = [
-  { name: 'confirm', label: 'confirm', style: 'positive',
-    displayLogicRaw: "@Processed@='N'", requiresLines: true, params: [{"key":"grouping","type":"select","label":"remittanceGrouping","required":true,"defaultValue":"P","options":[{"value":"P","label":"remittanceGroupingNone"},{"value":"GGPD","label":"remittanceGroupingByBpAndDueDate"}]}], confirmModal: true },
   { name: 'reactivate', label: 'reactivate', style: 'primary-danger',
     displayLogicRaw: "@RemittanceStatus@!='PE' & @RemittanceStatus@!='CT' & @RemittanceStatus@!='PT' & @RemittanceStatus@!='CP' & @RemittanceStatus@!='PP' & @RemittanceStatus@!='AN'" },
   { name: 'returnLines', label: 'remittanceReturnAction', style: 'primary-danger',
@@ -308,7 +306,7 @@ export default function RemittancePage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 0}
         detailSortBy="lineNo asc"
-        titleField="name"
+        titleField="documentNo"
         statusEnumLabels={{"PE":"remittanceStatusPe","PR":"remittanceStatusPr","SB":"remittanceStatusSb","CT":"remittanceStatusCt","PT":"remittanceStatusPt","CP":"remittanceStatusCp","PP":"remittanceStatusPp","AN":"remittanceStatusAn"}}
         labelOverrides={labelOverrides}
         sendDocument={{"enabled":false}}

@@ -67,7 +67,7 @@ describe('normalizeFileReadiness', () => {
     }).problems;
     expect(p).toEqual({
       scope: 'line', lineId: '7', lineIds: ['7'], businessPartnerId: 'bp-1', businessPartnerName: 'Acme', documentNo: null,
-      organizationId: null, accountId: null, code: 'ETGO_RemittanceFileBpIban', message: 'Sin IBAN', params: ['Acme', 'FAC-1'],
+      suggestedCreditorId: null, organizationId: null, accountId: null, code: 'ETGO_RemittanceFileBpIban', message: 'Sin IBAN', params: ['Acme', 'FAC-1'],
     });
   });
 

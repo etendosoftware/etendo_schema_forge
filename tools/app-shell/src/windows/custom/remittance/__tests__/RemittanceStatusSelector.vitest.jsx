@@ -5,7 +5,7 @@
 // chips (current dimmed and marked, the one valid transition clickable) and opens the step dialog.
 // Real Popover and chips; the two step dialogs are stubbed (they have their own suites).
 const mockUi = (key) => key;
-vi.mock('@/i18n', () => ({ useUI: () => mockUi }));
+vi.mock('@/i18n', () => ({ useUI: () => mockUi, useLocale: () => ({}) }));
 vi.mock('@generated/remittance/custom/RemittanceSentDialog.jsx', () => ({
   default: (props) => (
     <div data-testid="selector-sent-dialog" data-record={props.record?.id} data-api={props.apiBaseUrl}>
@@ -14,11 +14,18 @@ vi.mock('@generated/remittance/custom/RemittanceSentDialog.jsx', () => ({
     </div>
   ),
 }));
+vi.mock('@generated/remittance/custom/RemittanceConfirmDialog.jsx', () => ({
+  default: (props) => (
+    <div data-testid="host-confirm-dialog" data-record={props.record?.id} data-process={props.process?.name} data-grouping={props.process?.params?.[0]?.key}>
+      <button type="button" data-testid="host-confirm-close" onClick={() => props.onClose()}>close</button>
+    </div>
+  ),
+}));
 vi.mock('@generated/remittance/custom/RemittanceCollectDialog.jsx', () => ({
   default: (props) => <div data-testid="selector-collect-dialog" data-record={props.record?.id} />,
 }));
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import RemittanceStatusSelector, { SELECTABLE_STATUSES } from '@generated/remittance/custom/RemittanceStatusSelector.jsx';
 
 const renderSelector = (status, extra = {}) => {
@@ -102,5 +109,37 @@ describe('RemittanceStatusSelector', () => {
     expect(onRefresh).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByTestId('selector-dialog-close'));
     expect(screen.queryByTestId('selector-sent-dialog')).toBeNull();
+  });
+});
+
+describe('RemittanceStatusSelector — «Confirmar» dialog host', () => {
+  const fire = () => act(() => { window.dispatchEvent(new CustomEvent('remittance:open-confirm-modal')); });
+
+  it('opens the confirm dialog (with the declared grouping param) on the header «Confirmar» event, for a saved pending remittance', () => {
+    renderSelector('PE', { data: { id: 'rem-1', remittanceStatus: 'PE', processed: false } });
+    expect(screen.queryByTestId('host-confirm-dialog')).toBeNull();
+    fire();
+    expect(screen.getByTestId('host-confirm-dialog')).toHaveAttribute('data-record', 'rem-1');
+    expect(screen.getByTestId('host-confirm-dialog')).toHaveAttribute('data-process', 'confirm');
+    expect(screen.getByTestId('host-confirm-dialog')).toHaveAttribute('data-grouping', 'grouping');
+    fireEvent.click(screen.getByTestId('host-confirm-close'));
+    expect(screen.queryByTestId('host-confirm-dialog')).toBeNull();
+  });
+
+  it('ignores the event on an unsaved or already processed remittance', () => {
+    const { unmount } = renderSelector('PE', { data: { remittanceStatus: 'PE', processed: false } });
+    fire();
+    expect(screen.queryByTestId('host-confirm-dialog')).toBeNull();
+    unmount();
+    renderSelector('PR', { data: { id: 'rem-1', remittanceStatus: 'PR', processed: 'Y' } });
+    fire();
+    expect(screen.queryByTestId('host-confirm-dialog')).toBeNull();
+  });
+
+  it('stops listening once unmounted', () => {
+    const { unmount } = renderSelector('PE', { data: { id: 'rem-1', remittanceStatus: 'PE', processed: false } });
+    unmount();
+    fire();
+    expect(screen.queryByTestId('host-confirm-dialog')).toBeNull();
   });
 });

@@ -38,6 +38,13 @@ import { downloadBlobAsFile } from '@/windows/custom/shared/pdfUtils.js';
 
 export const GROUPING_NONE = 'P';
 
+/** The readiness problems about the creditor identifier saved on the account (collection remittances). */
+export const CREDITOR_ID_PROBLEM_CODES = new Set(['ETGO_RemittanceFileAccountNoCreditorId', 'ETGO_RemittanceFileAccountInvalidCreditorId']);
+
+export function isCreditorIdProblem(problem) {
+  return problem?.scope === 'account' && CREDITOR_ID_PROBLEM_CODES.has(problem.code);
+}
+
 /** A remittance that was confirmed has a SEPA file to download: PR, SB, CT, PT, CP, PP (not PE, not voided AN). */
 export const FILE_STATUSES = new Set(['PR', 'SB', 'CT', 'PT', 'CP', 'PP']);
 
@@ -88,6 +95,8 @@ function normalizeProblem(raw) {
     documentNo: textOrNull(p.documentNo),
     organizationId: textOrNull(p.organizationId),
     accountId: textOrNull(p.accountId),
+    // ETP-6148 — on the account problems «no / invalid creditor identifier»: the proposal computed from the organization.
+    suggestedCreditorId: textOrNull(p.suggestedCreditorId),
     code: textOrNull(p.code),
     message: textOrNull(p.message),
     // Positional (`{0}`, `{1}` in the catalog): kept as an array, which the key route interpolates by index.

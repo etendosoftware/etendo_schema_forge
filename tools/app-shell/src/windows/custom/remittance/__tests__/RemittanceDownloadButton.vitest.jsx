@@ -33,7 +33,10 @@ beforeEach(() => { vi.clearAllMocks(); mockApiFetch.mockReset(); mockRootFetch.m
 describe('RemittanceDownloadButton', () => {
   it.each([['PR'], ['SB'], ['CT'], ['PT'], ['CP'], ['PP']])('is offered on a %s remittance', (status) => {
     renderButton(status);
-    expect(screen.getByTestId('remittance-file-download')).toHaveTextContent('remittanceFileDownload');
+    // Icon-only (the standard topbar action chrome): the label is the accessible name, with a tooltip.
+    expect(screen.getByTestId('remittance-file-download')).toHaveAttribute('aria-label', 'remittanceFileDownload');
+    expect(screen.getByTestId('remittance-file-download')).toHaveTextContent('');
+    expect(screen.getByTestId('remittance-file-download')).toHaveClass('h-10', 'w-10');
   });
 
   it.each([['PE'], ['AN'], [undefined]])('is not offered on %s', (status) => {

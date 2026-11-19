@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { getApiBase } from '@/hooks/useNeoResource.js';
-import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import {
   FILE_STATUSES,
   downloadRemittanceFile,
@@ -14,7 +14,7 @@ import {
 
 /**
  * ETP-6247 — «Descargar fichero» in the detail's top action bar (the `topbarSecondary` slot, left of
- * Reactivar / Guardar), an outline button with the download icon. Visible on a confirmed remittance
+ * Reactivar / Guardar), an icon-only 40x40 square button with a tooltip, the same chrome as Copy link / Clone / Send (CopyRecordLinkButton). Visible on a confirmed remittance
  * (PR, SB, CT, PT, CP, PP; the same rule as the row menu's item). It only downloads: the main SEPA file
  * is resolved like everywhere else (`resolveLatestRemittanceFile`: `fileReadiness.latestFile`, then the
  * newest `.xml` attachment) and saved with `downloadRemittanceFile`. A spinner shows while it runs; no
@@ -43,17 +43,25 @@ export default function RemittanceDownloadButton({ data, apiBaseUrl }) {
     }
   };
 
+  const label = ui('remittanceFileDownload');
   return (
-    <Button
-      type="button"
-      variant="outline"
-      onClick={download}
-      disabled={busy}
-      data-testid="remittance-file-download">
-      {busy
-        ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" data-testid="Loader2__download" />
-        : <Download className="mr-1.5 h-4 w-4" aria-hidden="true" data-testid="Download__download" />}
-      {ui('remittanceFileDownload')}
-    </Button>
+    <TooltipProvider data-testid="TooltipProvider__remittance-download">
+      <Tooltip delayDuration={150} data-testid="Tooltip__remittance-download">
+        <TooltipTrigger asChild data-testid="TooltipTrigger__remittance-download">
+          <button
+            type="button"
+            onClick={download}
+            disabled={busy}
+            aria-label={label}
+            data-testid="remittance-file-download"
+            className="h-10 w-10 flex items-center justify-center rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-60">
+            {busy
+              ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" data-testid="Loader2__download" />
+              : <Download className="h-5 w-5" aria-hidden="true" data-testid="Download__download" />}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent data-testid="TooltipContent__remittance-download">{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
