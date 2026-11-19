@@ -291,3 +291,10 @@ The lines grid shows the **unit of measure** of every line in a new read-only co
 - **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
 
 **Manual verification:** open a draft movement; confirm `Unidad` sits after Cantidad; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.
+
+## Agent prompt — ETP-5850
+
+The `movement` entity's `agentPrompt` says this window holds movements between warehouses or bins
+only, and sends an agent asked for everything that moved for one product to `product/transactions`
+(see `product.md`, same section). The text lives in this window's `decisions.json` and in
+`com.etendoerp.go`'s `ETGO_SF_ENTITY` sourcedata; keep both equal.

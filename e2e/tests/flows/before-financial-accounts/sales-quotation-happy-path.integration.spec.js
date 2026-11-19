@@ -6,8 +6,9 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../../helpers/auth.js';
+import { noteFinancialAccountPrecondition } from '../../helpers/financial-account-helpers.js';
 import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../../helpers/product-helpers.js';
-import { selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
+import { ensureCustomerSetup, selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
 import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 import { createDraftWithFirstLine } from '../../helpers/purchase-helpers.js';
 
@@ -76,6 +77,11 @@ test.describe('Sales Quotation — Happy path (integration)', () => {
       await login(page, { user, password });
       await expect(page).toHaveURL(/dashboard/, { timeout: 30_000 });
       await slow(page);
+      // Runs before any spec creates a financial account; see the folder's README.
+      await noteFinancialAccountPrecondition(page, test.info());
+      // A fresh tenant has no contacts; provision the customer instead of borrowing one
+      // an earlier spec left behind (it never touches financial accounts).
+      await ensureCustomerSetup(page);
     });
 
     await test.step('Ensure the product fixture exists', async () => {
