@@ -491,6 +491,15 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     expect(box.className).toContain('overflow-y-auto');
   });
 
+  it('bleeds the scroll box to the card edges (-ml-2 / -mr-4) so the table runs edge to edge', async () => {
+    route({ pages: [[row({ id: 'a-0' })]], total: 1 });
+    render(<ProductMovementsTab data={storable} isActive />);
+    await waitFor(() => expect(screen.getAllByTestId('product-movements-row')).toHaveLength(1));
+    const tokens = screen.getByTestId('product-movements-scroll').className.split(/\s+/);
+    expect(tokens).toContain('-ml-2');
+    expect(tokens).toContain('-mr-4');
+  });
+
   it('keeps the table at least 340 px high (inline floor from the shared constant) and drops the card border', async () => {
     route({ pages: [[row({ id: 'a-0' })]], total: 1 });
     render(<ProductMovementsTab data={storable} isActive />);

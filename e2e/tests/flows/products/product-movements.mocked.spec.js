@@ -433,7 +433,7 @@ test.describe('Product side panel — divider toggle and collapsed strip', () =>
     expect(Math.round(box.height)).toBe(24);
     expect(await collapse.evaluate((el) => parseFloat(getComputedStyle(el).borderTopLeftRadius) >= 12)).toBe(true);
     // Centred on the divider: the left border of the panel column.
-    const dividerX = await page.getByTestId('ProductSidebarTab-summary').evaluate((el) => el.closest('.border-l.overflow-y-auto').getBoundingClientRect().left);
+    const dividerX = await page.getByTestId('ProductSidebarTab-summary').evaluate((el) => el.closest('.border-l.relative').getBoundingClientRect().left);
     expect(Math.abs(box.x + box.width / 2 - dividerX)).toBeLessThan(2);
 
     await collapse.click();
@@ -454,7 +454,7 @@ test.describe('Product side panel — divider toggle and collapsed strip', () =>
     const strip = page.getByTestId('ProductSidebarCollapsed');
     await expect(strip).toBeVisible();
     await expect(strip).toHaveAttribute('id', 'product-sidebar-panel');
-    const columnWidth = await strip.evaluate((el) => el.closest('.border-l.overflow-y-auto').getBoundingClientRect().width);
+    const columnWidth = await strip.evaluate((el) => el.closest('.border-l.relative').getBoundingClientRect().width);
     expect(Math.round(columnWidth)).toBe(48);
     await expect(strip.getByRole('button')).toHaveCount(2);
     await expect(strip.getByTestId('ProductSidebarStripSummary')).toHaveAttribute('aria-label', 'Resumen');

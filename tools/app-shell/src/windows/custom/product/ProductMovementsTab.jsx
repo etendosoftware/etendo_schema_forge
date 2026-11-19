@@ -551,7 +551,10 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
         // `relative` is load-bearing: the rows hold `sr-only` (position:absolute) spans, and an absolute box whose
         // containing block is OUTSIDE this scroll container is not clipped by it, so every loaded row kept adding
         // its static position to the content column's scrollable height (blank page after scrolling).
-        className="relative flex max-h-[calc(100vh-420px)] flex-col overflow-y-auto"
+        // ETP-5889: bleed to the card edges like the document lines of a standard window. DetailView wraps a
+        // custom tab in `p-2` (8px each side) and Product's content column adds `pr-2` (index.jsx), so the
+        // table cancels 8px on the left and 16px on the right; the filter bar above keeps the 8px inset.
+        className="relative -ml-2 -mr-4 flex max-h-[calc(100vh-420px)] flex-col overflow-y-auto"
         onScroll={onScroll}
         data-testid="product-movements-scroll">
         <div role="row" className={`${GRID} sticky top-0 z-30 border-b border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground`}>
