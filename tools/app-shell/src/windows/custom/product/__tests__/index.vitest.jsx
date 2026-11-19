@@ -47,18 +47,27 @@ describe('product window wrapper', () => {
 
   // The Movements table bleeds to the card edge with `-mr-N`: it cancels DetailView's `p-2` wrapper (2 units)
   // plus the content column's right padding. If either side changes alone the table over/under-shoots.
-  it('keeps the content column right padding coupled to the Movements table right bleed', () => {
+  it('keeps the content column right and bottom padding coupled to the Movements block bleed and the Total row offset', () => {
     render(<ProductApp windowName="product" />);
     const pr = Number(lastProps().sidebarFormScrollPaddingX.match(/(?:^|\s)pr-(\d+)(?:\s|$)/)[1]);
-    // Attribute-order independent: take the JSX opening tag that carries the scroll box testid, then its className.
+    // Attribute-order independent: take the JSX opening tag that carries a testid, then its literal className.
     const tabSrc = readFileSync(resolve(__dirname, '../ProductMovementsTab.jsx'), 'utf8');
-    const tag = tabSrc.match(/<[A-Za-z][^<>]*?data-testid="product-movements-scroll"[^<>]*>/s)?.[0]
-      ?? tabSrc.match(/<[A-Za-z][^<>]*?className="[^"]*"[^<>]*?data-testid="product-movements-scroll"[^<>]*>/s)?.[0];
-    expect(tag, 'ProductMovementsTab.jsx no longer has an element with data-testid="product-movements-scroll"').toBeTruthy();
-    const classAttr = tag.match(/className="([^"]*)"/)?.[1];
-    expect(classAttr, 'the product-movements-scroll element must keep a literal className carrying -mr-N').toBeTruthy();
-    const mr = Number(classAttr.match(/(?:^|\s)-mr-(\d+)(?:\s|$)/)?.[1]);
-    expect(Number.isFinite(mr), 'the scroll box className lost its -mr-N bleed').toBe(true);
+    const classOfTag = (testid) => {
+      const tag = tabSrc.match(new RegExp(`<[A-Za-z][^<>]*?data-testid="${testid}"[^<>]*>`, 's'))?.[0];
+      expect(tag, `ProductMovementsTab.jsx no longer has an element with data-testid="${testid}"`).toBeTruthy();
+      const cls = tag.match(/className="([^"]*)"/)?.[1];
+      expect(cls, `the ${testid} element must keep a literal className`).toBeTruthy();
+      return cls;
+    };
+    const tokenN = (cls, re, what) => {
+      const n = Number(cls.match(re)?.[1]);
+      expect(Number.isFinite(n), `${what} is missing from "${cls}"`).toBe(true);
+      return n;
+    };
+    const mr = tokenN(classOfTag('product-movements-block'), /(?:^|\s)-mr-(\d+)(?:\s|$)/, 'the block -mr-N bleed');
+    const bottom = tokenN(classOfTag('product-movements-total'), /(?:^|\s)-bottom-(\d+)(?:\s|$)/, 'the Total row -bottom-N');
+    const pb = Number(lastProps().sidebarFormScrollPaddingX.match(/(?:^|\s)pb-(\d+)(?:\s|$)/)[1]);
+    expect(bottom, 'Total row -bottom-N must cancel the content column pb-N so it sits flush with the card bottom').toBe(pb);
     // The custom-tab wrapper padding comes from the real DetailView source, not a literal in this test.
     const dvSrc = readFileSync(resolve(__dirname, '../../../../components/contract-ui/DetailView.jsx'), 'utf8');
     const wrapper = dvSrc.match(/className=\{`(p-\d+) flex flex-col gap-3[^`]*`\}/);

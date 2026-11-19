@@ -11,7 +11,8 @@ import ProductCustomTable from './ProductCustomTable';
 // compressing the form. ETP-5889: padding is `pr-2 pb-2` (what DetailView gives a standard window with a
 // sidebar), NOT `px-2`: the form card and the tab wrappers already inset the content 8px on the left, so a
 // left padding here stacked a second 8px and pushed the header fields 8px right of the Cancel button.
-// ProductMovementsTab relies on this exact right padding to bleed its table edge to edge.
+// ProductMovementsTab relies on this exact padding: `pr-2` for the `-mr-4` bleed of its table, and `pb-2`
+// for the `-bottom-2` of its sticky period total (flush with the card's bottom edge).
 const PRODUCT_CONTENT_CLASS = 'pr-2 pb-2 [&>*]:min-w-[680px]';
 
 export default function ProductApp({ windowName, recordId, ...props }) {

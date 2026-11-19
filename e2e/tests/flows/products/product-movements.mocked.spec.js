@@ -241,11 +241,12 @@ test.describe('Product movements tab — period total row', () => {
     const calls = await openMovementsWith(page, () => [200, page_([MOVEMENT, OUT_MOVEMENT], { netQuantity: -3, count: 2 })]);
     const total = page.getByTestId('product-movements-total');
     await expect(total).toBeVisible({ timeout: 10_000 });
-    await expect(total).toHaveAttribute('role', 'row');
+    await expect(total).toHaveAttribute('role', 'group');
+    expect(await total.evaluate((el) => Boolean(el.closest('[data-testid="product-movements-scroll"]')))).toBe(false);
     await expect(total).toContainText('Total del período');
     await expect(total.getByTestId('product-movements-total-count')).toHaveText('· 2 movimientos');
     await expect(total).toHaveCSS('position', 'sticky');
-    await expect(total).toHaveCSS('bottom', '0px');
+    await expect(total).toHaveCSS('bottom', '-8px');
     await expect(total).toHaveCSS('background-color', SURFACE_SUBTLE);
 
     const value = total.getByTestId('product-movements-total-value');
@@ -259,13 +260,58 @@ test.describe('Product movements tab — period total row', () => {
     const valueBox = await value.boundingBox();
     expect(Math.abs((qtyBox.x + qtyBox.width) - (valueBox.x + valueBox.width))).toBeLessThan(2);
 
-    // It is the last row of the table: below every movement row.
+    // It is pinned to the column bottom while the page is not scrolled (it may overlay the table's lower edge
+    // there, by design); scrolled to the end of the page it rests below every movement row.
+    await total.evaluate((el) => {
+      for (let n = el.parentElement; n; n = n.parentElement) {
+        const oy = getComputedStyle(n).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) { n.scrollTop = n.scrollHeight; return; }
+      }
+    });
     const lastRowBox = await page.getByTestId('product-movements-row').last().boundingBox();
-    expect((await total.boundingBox()).y).toBeGreaterThanOrEqual(lastRowBox.y + lastRowBox.height - 1);
+    await expect.poll(async () => (await total.boundingBox()).y - (lastRowBox.y + lastRowBox.height)).toBeGreaterThanOrEqual(-1);
 
     // Only the first page asked for the totals.
     expect(tabCalls(calls)).toHaveLength(1);
     expect(new URL(tabCalls(calls)[0]).searchParams.get('etgoTotals')).toBe('true');
+  });
+
+  test('the total is visible without scrolling the page, flush with the column bottom, and sticks to the table box once scrolled to the end', async ({ page }) => {
+    const MANY = Array.from({ length: 45 }, (_, i) => ({ ...MOVEMENT, id: `mov-many-${i}`, etgoDocLabel: `GR-${String(i).padStart(4, '0')}` }));
+    await openMovementsWith(page, () => [200, page_(MANY, { netQuantity: 540, count: MANY.length })]);
+    const total = page.getByTestId('product-movements-total');
+    await expect(total).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('product-movements-row')).toHaveCount(45);
+    const viewportHeight = page.viewportSize().height;
+
+    // The scrolling ancestor of the total (the product content column), found from the DOM, not from a class.
+    const columnHandle = await total.evaluateHandle((el) => {
+      for (let n = el.parentElement; n; n = n.parentElement) {
+        const oy = getComputedStyle(n).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) return n;
+      }
+      return null;
+    });
+    expect(await columnHandle.evaluate((n) => n !== null)).toBe(true);
+    await columnHandle.evaluate((n) => { n.scrollTop = 0; });
+
+    // Regression: without any scrolling the whole total row is inside the viewport and at the column bottom.
+    const first = await total.boundingBox();
+    expect(first.y).toBeGreaterThanOrEqual(0);
+    expect(first.y + first.height).toBeLessThanOrEqual(viewportHeight);
+    const columnBottom = await columnHandle.evaluate((n) => n.getBoundingClientRect().bottom);
+    expect(Math.abs(first.y + first.height - columnBottom)).toBeLessThanOrEqual(1);
+
+    // Scrolled to the end of the column, the total rests right under the table box (no gap).
+    await columnHandle.evaluate((n) => { n.scrollTop = n.scrollHeight; });
+    await expect.poll(async () => {
+      const t = await total.boundingBox();
+      const b = await page.getByTestId('product-movements-scroll').boundingBox();
+      return Math.round(t.y - (b.y + b.height));
+    }).toBeLessThanOrEqual(1);
+    const t2 = await total.boundingBox();
+    const b2 = await page.getByTestId('product-movements-scroll').boundingBox();
+    expect(Math.abs(t2.y - (b2.y + b2.height))).toBeLessThanOrEqual(1);
   });
 
   test('a net entry is green with a plus and one movement reads in the singular', async ({ page }) => {

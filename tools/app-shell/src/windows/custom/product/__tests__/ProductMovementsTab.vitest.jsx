@@ -2,7 +2,7 @@
 // ETP-5889 — the Product "Movements" tab: server-side filters, sorting and paging over the product's
 // transactions, with the source document and the resulting stock the backend adds to each row.
 import { createContext, useContext } from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mocks = vi.hoisted(() => ({
@@ -491,13 +491,16 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     expect(box.className).toContain('overflow-y-auto');
   });
 
-  it('bleeds the scroll box to the card edges (-ml-2 / -mr-4) so the table runs edge to edge', async () => {
+  it('bleeds the block (table + total) to the card edges (-ml-2 / -mr-4) and leaves the scroll box itself without bleed margins', async () => {
     route({ pages: [[row({ id: 'a-0' })]], total: 1 });
     render(<ProductMovementsTab data={storable} isActive />);
     await waitFor(() => expect(screen.getAllByTestId('product-movements-row')).toHaveLength(1));
-    const tokens = screen.getByTestId('product-movements-scroll').className.split(/\s+/);
+    const tokens = screen.getByTestId('product-movements-block').className.split(/\s+/);
     expect(tokens).toContain('-ml-2');
     expect(tokens).toContain('-mr-4');
+    const boxTokens = screen.getByTestId('product-movements-scroll').className.split(/\s+/);
+    expect(boxTokens).not.toContain('-ml-2');
+    expect(boxTokens).not.toContain('-mr-4');
   });
 
   it('keeps the table at least 340 px high (inline floor from the shared constant) and drops the card border', async () => {
@@ -512,16 +515,18 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     expect(box.className).not.toContain('rounded');
   });
 
-  it('pushes the total row to the bottom of the box when there are few rows (flex column + mt-auto, still sticky)', async () => {
+  it('renders the total as a sticky sibling of the scroll box (not inside it, no mt-auto), offset -bottom-2', async () => {
     mocks.apiFetch.mockImplementation(async (path) => (path.startsWith('/stock')
       ? respond([])
       : respond([row()], 1, { totals: { netQuantity: 4, count: 1 } })));
     render(<ProductMovementsTab data={storable} isActive />);
     const total = await screen.findByTestId('product-movements-total');
     const box = screen.getByTestId('product-movements-scroll');
-    expect(box.className.split(' ')).toEqual(expect.arrayContaining(['flex', 'flex-col', 'overflow-y-auto']));
-    expect(total.className.split(' ')).toEqual(expect.arrayContaining(['mt-auto', 'sticky', 'bottom-0', 'shrink-0', 'min-w-[900px]']));
-    expect(box.lastElementChild).toBe(total);
+    expect(box.className.split(' ')).toEqual(expect.arrayContaining(['flex', 'flex-col', 'overflow-y-auto', '[scrollbar-gutter:stable]']));
+    const tokens = total.className.split(' ');
+    expect(tokens).toEqual(expect.arrayContaining(['sticky', '-bottom-2', 'z-20', 'overflow-hidden']));
+    expect(tokens).not.toContain('mt-auto');
+    expect(box.contains(total)).toBe(false);
     // Rows must not shrink inside the flex column.
     expect(screen.getByTestId('product-movements-row').className).toContain('shrink-0');
   });
@@ -1251,7 +1256,7 @@ describe('ProductMovementsTab (ETP-5889)', () => {
       expect(value.className).toContain('text-[15px]');
       expect(value.className).toContain('font-bold');
       expect(total.className).toContain('sticky');
-      expect(total.className).toContain('bottom-0');
+      expect(total.className).toContain('-bottom-2');
       expect(total.className).toContain('bg-[var(--surface-subtle)]');
     });
 
@@ -1330,13 +1335,143 @@ describe('ProductMovementsTab (ETP-5889)', () => {
       expect(screen.queryByTestId('product-movements-total')).toBeNull();
     });
 
-    it('is the last row of the box and not one of the data rows', async () => {
+    it('is a labelled group outside the table box, a sibling right after it inside the block, and not one of the data rows', async () => {
+      withLabels();
       routeWithTotals([row(), row()], totalsOf(8, 2));
       render(<ProductMovementsTab data={storable} isActive />);
 
       const total = await screen.findByTestId('product-movements-total');
       expect(screen.getAllByTestId('product-movements-row')).toHaveLength(2);
-      expect(screen.getByTestId('product-movements-scroll').lastElementChild).toBe(total);
+      const box = screen.getByTestId('product-movements-scroll');
+      expect(total.getAttribute('role')).toBe('group');
+      expect(total.getAttribute('aria-label')).toBe('Total del período');
+      expect(box.contains(total)).toBe(false);
+      expect(total.parentElement).toBe(screen.getByTestId('product-movements-block'));
+      expect(box.nextElementSibling).toBe(total);
+      expect(within(total).queryAllByRole('cell')).toHaveLength(0);
+    });
+
+    describe('alignment with the table box (jsdom has no layout: sizes are stubbed)', () => {
+      const sizes = { offsetWidth: 1000, clientWidth: 985, scrollWidth: 1200 };
+      let observers;
+      const spies = [];
+      beforeEach(() => {
+        observers = [];
+        vi.stubGlobal('ResizeObserver', class {
+          constructor(cb) { this.cb = cb; observers.push(this); }
+          observe() {}
+          disconnect() {}
+        });
+        for (const prop of Object.keys(sizes)) {
+          const desc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, prop);
+          Object.defineProperty(HTMLElement.prototype, prop, {
+            configurable: true,
+            get() { return this.getAttribute?.('data-testid') === 'product-movements-scroll' ? sizes[prop] : (desc?.get ? desc.get.call(this) : 0); },
+          });
+          spies.push([prop, desc]);
+        }
+      });
+      afterEach(() => {
+        spies.splice(0).forEach(([prop, desc]) => {
+          if (desc) Object.defineProperty(HTMLElement.prototype, prop, desc); else delete HTMLElement.prototype[prop];
+        });
+        vi.unstubAllGlobals();
+        Object.assign(sizes, { offsetWidth: 1000, clientWidth: 985, scrollWidth: 1200 });
+      });
+
+      const grid = (total) => total.firstElementChild;
+
+      it('reserves the table scrollbar width on the right and gives the inner grid the table content width', async () => {
+        routeWithTotals([row()], totalsOf(4, 1));
+        render(<ProductMovementsTab data={storable} isActive />);
+        const total = await screen.findByTestId('product-movements-total');
+        expect(total.style.paddingRight).toBe('15px');
+        expect(grid(total).style.minWidth).toBe('1200px');
+      });
+
+      it('re-measures when the box is resized (ResizeObserver) and when the rows change', async () => {
+        routeWithTotals([row()], totalsOf(4, 1));
+        const { rerender } = render(<ProductMovementsTab data={storable} isActive />);
+        const total = await screen.findByTestId('product-movements-total');
+        expect(observers.length).toBeGreaterThan(0);
+        Object.assign(sizes, { clientWidth: 1000, scrollWidth: 1000 }); // overlay scrollbar / no overflow
+        act(() => observers.forEach((o) => o.cb()));
+        expect(total.style.paddingRight).toBe('0px');
+        expect(grid(total).style.minWidth).toBe('1000px');
+        Object.assign(sizes, { clientWidth: 980, scrollWidth: 1500 }); // rows loaded: wider content, scrollbar back
+        rerender(<ProductMovementsTab data={{ ...storable }} isActive />);
+        expect(total.style.paddingRight).toBe('20px');
+        expect(grid(total).style.minWidth).toBe('1500px');
+      });
+
+      // jsdom ignores scrollLeft writes: back it with a store so the tab's reads and writes are observable.
+      async function withScrollStore(fn) {
+        const store = new WeakMap();
+        const original = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollLeft');
+        Object.defineProperty(Element.prototype, 'scrollLeft', {
+          configurable: true,
+          get() { return store.get(this) ?? 0; },
+          set(v) { store.set(this, v); },
+        });
+        try {
+          await fn();
+        } finally {
+          if (original) Object.defineProperty(Element.prototype, 'scrollLeft', original); else delete Element.prototype.scrollLeft;
+        }
+      }
+
+      it('mirrors the table horizontal scroll onto the total row on every scroll event', () => withScrollStore(mirrorsHorizontalScroll));
+
+      // The browser clamps the Total's scrollLeft when its grid narrows, with NO scroll event. The layout effect keyed on
+      // gridWidth/scrollbarWidth must re-copy the box position after the new width is committed (drop those
+      // dependencies and these two tests fail: the Total stays at the clamped 0).
+      it('re-syncs the total scrollLeft to the box after a ResizeObserver re-measure, without any scroll event', () => withScrollStore(async () => {
+        routeWithTotals([row()], totalsOf(4, 1));
+        render(<ProductMovementsTab data={storable} isActive />);
+        const box = await screen.findByTestId('product-movements-scroll');
+        const total = await screen.findByTestId('product-movements-total');
+        box.scrollLeft = 120;
+        total.scrollLeft = 0; // what the browser did when the grid narrowed
+        Object.assign(sizes, { scrollWidth: 900, clientWidth: 970 });
+        act(() => observers.forEach((o) => o.cb()));
+        expect(grid(total).style.minWidth).toBe('900px');
+        expect(total.scrollLeft).toBe(120);
+      }));
+
+      it('re-syncs on the late path too: stale width at render, new width on the next render, still no scroll event', () => withScrollStore(async () => {
+        routeWithTotals([row()], totalsOf(4, 1));
+        const { rerender } = render(<ProductMovementsTab data={storable} isActive />);
+        const box = await screen.findByTestId('product-movements-scroll');
+        const total = await screen.findByTestId('product-movements-total');
+        box.scrollLeft = 120;
+        total.scrollLeft = 0;
+        Object.assign(sizes, { scrollWidth: 1600 });
+        rerender(<ProductMovementsTab data={{ ...storable }} isActive />);
+        expect(grid(total).style.minWidth).toBe('1600px');
+        expect(total.scrollLeft).toBe(120);
+      }));
+
+      // TOTAL_ROW_RESERVE_PX is not exported (module-private), so the literal 48 is asserted: it must stay equal to the
+      // bottomGap reserve so keyboard focus / scrolling clears the sticky Total.
+      it('keeps scroll-padding-bottom on the table scroller equal to the Total reserve so focus clears the sticky row', async () => {
+        routeWithTotals([row()], totalsOf(4, 1));
+        render(<ProductMovementsTab data={storable} isActive />);
+        const box = await screen.findByTestId('product-movements-scroll');
+        expect(box.style.scrollPaddingBottom).toBe('48px');
+      });
+
+      async function mirrorsHorizontalScroll() {
+        routeWithTotals([row()], totalsOf(4, 1));
+        render(<ProductMovementsTab data={storable} isActive />);
+        const box = await screen.findByTestId('product-movements-scroll');
+        const total = await screen.findByTestId('product-movements-total');
+        box.scrollLeft = 120;
+        fireEvent.scroll(box);
+        expect(total.scrollLeft).toBe(120);
+        box.scrollLeft = 300;
+        fireEvent.scroll(box);
+        expect(total.scrollLeft).toBe(300);
+      }
     });
 
     it('asks for the totals on the first page only: not on later pages, not on the probe', async () => {
