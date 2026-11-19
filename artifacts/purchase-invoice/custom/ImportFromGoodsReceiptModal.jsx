@@ -139,16 +139,18 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
 };
 
 /**
- * One `availableReceiptLines` row in the shape the popup reads. A line already on this invoice or
- * on another one is greyed «ya importado» (and shows its received quantity, as before); otherwise it
- * offers what the server says is left (draft invoices deducted), as the sales sibling. The OTHER
+ * One `availableReceiptLines` row in the shape the popup reads. A line already on this invoice, or
+ * with nothing left, is greyed (and shows its received quantity, as before); otherwise it offers what
+ * the server says is left (completed and draft invoices deducted). A line invoiced elsewhere only in
+ * part stays selectable for the rest: `invoicedElsewhere` does not grey it (review B1 — it greyed a
+ * partly invoiced line, and one linked only from a voided invoice, for good). The OTHER
  * draft invoices holding it (`inDraftDocuments`, documentNos) feed `describeReceiptLine`. The order
  * line's discount travels to the import;
  * the price (callout, `priceData`) feeds the row total.
  */
 const receiptLineRow = (r, priceData = {}) => {
   const pending = Number(r.pendingQuantity) || 0;
-  const imported = !!(r.importedHere || r.invoicedElsewhere) || pending === 0;
+  const imported = !!r.importedHere || pending === 0;
   return {
     ...r,
     salesOrderLine: r.orderLine ?? null,

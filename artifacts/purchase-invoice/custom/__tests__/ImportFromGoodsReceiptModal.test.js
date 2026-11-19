@@ -273,8 +273,9 @@ describe('ImportFromGoodsReceiptModal — lines shown on expand', () => {
 
   const cases = [
     { name: 'a line this invoice already holds is greyed at its received quantity', over: { importedHere: true, pendingQuantity: 0 }, imported: true, max: 5 },
-    // ETP-5828 QA UI-8: it used to be offered again on the purchase side (invoiced twice).
-    { name: 'a line invoiced elsewhere is greyed, as on the sales side', over: { invoicedElsewhere: true }, imported: true, max: 5 },
+    // Review B1: the server's pending already deducts other invoices, so a line invoiced elsewhere
+    // only in part stays selectable for what is left.
+    { name: 'a line partly invoiced elsewhere stays selectable for its pending', over: { invoicedElsewhere: true, pendingQuantity: 6 }, imported: false, max: 6 },
     { name: 'a line with nothing left is greyed', over: { pendingQuantity: 0 }, imported: true, max: 5 },
   ];
   for (const c of cases) {
