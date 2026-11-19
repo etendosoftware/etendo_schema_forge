@@ -11,6 +11,7 @@
  * `dangerouslySetInnerHTML` is allowlisted to the reviewed files below.
  */
 import { describe, it } from 'node:test';
+import Handlebars from 'handlebars';
 import { strict as assert } from 'node:assert';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
@@ -124,5 +125,35 @@ describe('ETP-5384 encode-on-output', () => {
       .map((f) => relative(ROOT, f))
       .filter((f) => !INNER_HTML_ALLOWLIST.includes(f));
     assert.deepEqual(offenders, []);
+  });
+});
+
+// JavaScript column of docs/security/html-encoding-fixtures.md (com.etendoerp.go): what `{{ }}`
+// emits. Java spells some entities differently; see the doc.
+const HTML_FIXTURES = [
+  ['<script>alert(document.cookie)</script>', '&lt;script&gt;alert(document.cookie)&lt;/script&gt;'],
+  ['<img src=x onerror=alert(1)>', '&lt;img src&#x3D;x onerror&#x3D;alert(1)&gt;'],
+  ['Tom & Jerry', 'Tom &amp; Jerry'],
+  ['" onmouseover="x', '&quot; onmouseover&#x3D;&quot;x'],
+  ["' onmouseover='x", '&#x27; onmouseover&#x3D;&#x27;x'],
+  ['&lt;', '&amp;lt;'],
+  ['x onmouseover=alert(1)>', 'x onmouseover&#x3D;alert(1)&gt;'],
+  ['Normal Value', 'Normal Value'],
+  ['', ''],
+  [null, ''],
+];
+
+describe('ETP-5384 encode-on-output: Handlebars fixtures', () => {
+  it('escapeExpression matches the JavaScript column of the fixtures doc', () => {
+    for (const [input, expected] of HTML_FIXTURES) {
+      assert.equal(Handlebars.escapeExpression(input), expected, String(input));
+    }
+  });
+
+  it('{{ }} renders stored markup inert', () => {
+    const html = Handlebars.compile('<td>{{description}}</td>')({
+      description: '<script>alert(document.cookie)</script>',
+    });
+    assert.equal(html, '<td>&lt;script&gt;alert(document.cookie)&lt;/script&gt;</td>');
   });
 });
