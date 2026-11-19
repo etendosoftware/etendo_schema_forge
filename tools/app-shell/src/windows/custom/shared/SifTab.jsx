@@ -20,6 +20,7 @@ import RequiredMark from '@/components/ui/required-mark.jsx';
 import { isSifFieldRequired } from '@/windows/custom/shared/sifRequiredFields.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { isVoidedStatus } from '@/lib/docStatus.js';
 function Field({ label, htmlFor, children, required = false }) {
   return (
     <div className="space-y-1.5">
@@ -391,7 +392,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
   // Modificada-error-registral follows AD readOnly logic: editable only when SII estado
   // is CO (Correcto) or AE (Aceptado con errores) and the invoice is not voided.
   const errorRegistralReadOnly = accessReadOnly ||
-    !['CO', 'AE'].includes(data?.aeatsiiEstado ?? '') || data?.documentStatus === 'VO';
+    !['CO', 'AE'].includes(data?.aeatsiiEstado ?? '') || isVoidedStatus(data?.documentStatus);
 
   // ETP-4751 (Block B/F): Classic parity for the SII module's ExemptTaxes line-save behaviour.
   // The invoice-LINE NeoHandler (InvoiceLineHandler#autoFillExemptionCauseAfterLineSave) stamps

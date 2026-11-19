@@ -1,6 +1,7 @@
 // Relative imports, not the `@/` alias: keeps this module loadable by plain `node --test`.
 import { resolveInvoicePaymentBadge } from '../../windows/custom/shared/invoicePaymentBadge.js';
 import { getCalendarDateRelation, todayCalendarISO } from '../../lib/dateOnly.js';
+import { isCompletedStatus } from '@/lib/docStatus.js';
 
 /**
  * Presentation rules of the customer portal (ETP-6209 Part B) — pure, no React.
@@ -89,7 +90,7 @@ export const PORTAL_HIGHLIGHTS = Object.freeze({
  */
 export function quotationValidity(document) {
   if (document?.kind !== 'QUOTATION' || !document.validUntil) return null;
-  const open = document.documentStatus === 'UE' || document.documentStatus === 'CO';
+  const open = document.documentStatus === 'UE' || isCompletedStatus(document.documentStatus);
   if (!open) return { state: 'answered' };
   return { state: getCalendarDateRelation(document.validUntil) === 'past' ? 'expired' : 'open' };
 }

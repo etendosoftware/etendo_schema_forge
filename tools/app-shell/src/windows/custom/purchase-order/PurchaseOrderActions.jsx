@@ -8,6 +8,7 @@ import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { isCompletedStatus, isDraftStatus } from '@/lib/docStatus.js';
 /* eslint-disable react/prop-types */
 
 /**
@@ -44,8 +45,8 @@ export default function PurchaseOrderActions({
   if (!data) return null;
 
   const docStatus = data.documentStatus;
-  const isDraft = docStatus === 'DR';
-  const isConfirmed = docStatus === 'CO';
+  const isDraft = isDraftStatus(docStatus);
+  const isConfirmed = isCompletedStatus(docStatus);
 
   // ─── Receive goods handler ───────────────────────────────────────────────────
 

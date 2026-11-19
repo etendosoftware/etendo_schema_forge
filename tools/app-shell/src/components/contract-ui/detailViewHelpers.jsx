@@ -25,6 +25,7 @@ import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 import {apiFetch} from '@/auth/api.js';
 import {AddLineButton} from '@/components/ui/add-line-button.jsx';
 import {evalTabReadOnly} from './evalTabReadOnly.js';
+import { isCompletedStatus } from '@/lib/docStatus.js';
 // Re-exported (not defined here) so this file's own React-component-heavy import
 // graph (PaymentLifecycleConfirmModal et al.) doesn't get pulled into callers —
 // like DataTable.jsx's inline-toggle error handling — that only need this one
@@ -2763,7 +2764,7 @@ function getDraftModeCompleted(draftMode, _headerData, isProcessed, statusField)
       draftMode?.enabled && (
           Array.isArray(draftMode.completedStatuses)
               ? draftMode.completedStatuses.includes(normalizeStatusValue(statusValue))
-              : (isProcessed || _headerData?.documentStatus === 'CO')
+              : (isProcessed || isCompletedStatus(_headerData?.documentStatus))
       )
   );
 }

@@ -11,9 +11,10 @@ import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkAct
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { filterPostingActions } from '@/lib/capabilityVisibility.js';
+import { isDraftStatus } from '@/lib/docStatus.js';
 
 export const buildInOutActions = (rows) => {
-  const hasDraft = rows.some((r) => (r.documentStatus || r.docStatus) === 'DR');
+  const hasDraft = rows.some((r) => isDraftStatus(r.documentStatus || r.docStatus));
   return hasDraft ? [{ value: 'CO', labelKey: 'confirm' }] : [];
 };
 

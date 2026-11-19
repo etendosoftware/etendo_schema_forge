@@ -10,6 +10,7 @@ import { buildMenuActionExecutedHandler } from './buildDocumentRowQuickActions.j
 // Plain (hook-free) module, never the `@/auth/api.js` barrel — see
 // makeInvoiceReactivateRowFilter's doc for why this file cannot use `useApiFetch`.
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
+import { isCompletedStatus, isDraftStatus } from '@/lib/docStatus.js';
 
 export function getInvoiceDraftMode(ui, options = {}) {
   const { showVerifactuProcessingModal = false, keepSaveWhenCompletedFields = [], editableLineFieldsWhenCompleted = [], afterProcess } = options;
@@ -110,8 +111,8 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
     menuActions: ({ row }) => {
       const isPosted = isRowPosted(row);
       const isProcessed = row?.processed === 'Y' || row?.processed === true;
-      const isCompleted = row?.documentStatus === 'CO';
-      const isDraft = row?.documentStatus === 'DR';
+      const isCompleted = isCompletedStatus(row?.documentStatus);
+      const isDraft = isDraftStatus(row?.documentStatus);
       return [
         // ETP-5378 — Confirmar from the grid, at parity with Pedido de Venta/Compra.
         // Unlike the albarán windows there is no popup to reuse: an invoice's form-view

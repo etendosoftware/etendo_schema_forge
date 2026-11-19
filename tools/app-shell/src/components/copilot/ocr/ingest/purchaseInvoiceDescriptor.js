@@ -3,6 +3,8 @@ import { isBack } from '../ocrFlowSignals.js';
 import { buildSearchUrl, deriveSelectorUrl, deriveSpecBase, readSearchRows } from '../ocrQuery.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
+import { isVoidedStatus } from '@/lib/docStatus.js';
+
 /**
  * Translate the vision-LLM extracted JSON for a purchase invoice into a list
  * of batch operations.
@@ -59,11 +61,6 @@ export async function checkBpHasLocation({ token, apiBaseUrl, bpId }) {
 
 const DUPLICATE_LOOKUP_LIMIT = 10;
 
-function docStatusCode(value) {
-  if (value && typeof value === 'object') return value.id ?? value.value ?? null;
-  return value ?? null;
-}
-
 /**
  * Existing purchase invoices of `bpId` carrying the same supplier document number
  * ("Nº documento", sent as `orderReference` by the descriptor), so the review modal can warn
@@ -105,7 +102,7 @@ export async function findDuplicatePurchaseInvoices({ token, apiBaseUrl, bpId, d
     const invoices = readSearchRows(json)
       .filter((row) => row?.id
         && (row.orderReference === undefined || String(row.orderReference ?? '').trim().toLowerCase() === needle)
-        && docStatusCode(row.documentStatus) !== 'VO')
+        && !isVoidedStatus(row.documentStatus))
       .map((row) => ({ id: row.id, documentNo: row.documentNo ?? null }));
     return { status: invoices.length ? 'duplicate' : 'none', invoices };
   } catch (e) {

@@ -1,3 +1,4 @@
+import { isCompletedStatus } from '@/lib/docStatus.js';
 // Single source of truth for the "Saldo pendiente" badge state of an invoice
 // (list grid + detail topbar, AR and AP alike).
 //
@@ -59,7 +60,7 @@ export function resolveInvoicePaymentBadge(record) {
   // credit?" (label swaps, due-date suppression) get the right answer on drafts too.
   const isCredit = grandTotal < 0;
 
-  if (record?.documentStatus !== 'CO') {
+  if (!isCompletedStatus(record?.documentStatus)) {
     return { kind: 'draft', amount: 0, isCredit };
   }
 
