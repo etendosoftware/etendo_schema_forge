@@ -1,3 +1,4 @@
+import { allIconsAs } from '@/test/iconMock.js';
 import { render, screen } from '@testing-library/react';
 
 // ETP-5493: the page must forward the period-aware trend fields to the chart untouched.
@@ -79,13 +80,8 @@ vi.mock('@/components/dashboard/FinancialTrendChart', () => ({
   ),
 }));
 
-vi.mock('lucide-react', () => ({
-  FileText: (props) => <svg {...props} />,
-  ShoppingCart: (props) => <svg {...props} />,
-  Users: (props) => <svg {...props} />,
-  DollarSign: (props) => <svg {...props} />,
-  TrendingUp: (props) => <svg {...props} />,
-}));
+vi.mock('@phosphor-icons/react', async importOriginal =>
+  allIconsAs(props => <svg {...props} />, importOriginal));
 
 import DashboardPage from '../DashboardPage.jsx';
 

@@ -1,6 +1,6 @@
 import { Children, Fragment } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { XIcon } from '@phosphor-icons/react';
 
 /**
  * Floating, viewport-fixed bulk-selection toolbar (ETP-4972).
@@ -186,7 +186,7 @@ export default function SelectionToolbar({ visible, closing, onClose, closeTitle
               an arbitrary value. Color: kept on --floating-toolbar-muted
               (already a close visual match) rather than introducing a new
               hardcoded white/50% literal — see PR notes. */}
-          <X className="h-[13px] w-[13px]" data-testid="SelectionToolbar__close" />
+          <XIcon className="h-[13px] w-[13px]" data-testid="SelectionToolbar__close" />
         </button>
       </div>
     </div>,

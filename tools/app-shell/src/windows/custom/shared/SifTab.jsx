@@ -15,15 +15,21 @@ import SifAttachmentsSection from '@/windows/custom/shared/SifAttachmentsSection
 // ETP-6179: the code once — some option labels already start with it ("F1 - Factura…").
 import { sifOptionLabel } from '@/windows/custom/shared/InvoiceSifStep.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
+import RequiredMark from '@/components/ui/required-mark.jsx';
+// The one rule that says which SIF fields are mandatory, shared with the "Datos fiscales" step.
+import { isSifFieldRequired } from '@/windows/custom/shared/sifRequiredFields.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
-function Field({ label, htmlFor, children }) {
+function Field({ label, htmlFor, children, required = false }) {
   return (
     <div className="space-y-1.5">
       <Label
         htmlFor={htmlFor}
         className="text-sm text-foreground font-medium"
-        data-testid="Label__b99c8b">{label}</Label>
+        data-testid="Label__b99c8b">
+        {label}
+        {required && <RequiredMark aria-hidden="true" data-testid={`RequiredMark__sif_${htmlFor}`} />}
+      </Label>
       {children}
     </div>
   );
@@ -245,17 +251,19 @@ function ExemptionCauseField({ ui, data, apiBaseUrl, token, editable, onChange }
 // on every keystroke/commit — there's no separate per-field save anymore, so
 // we no longer depend on DateField's `onBlur` firing (or firing with a fresh
 // value) at all. The batch header save picks this up like any other field.
-function OperationDateField({ ui, getDateVal, onChange, disabled }) {
+function OperationDateField({ ui, getDateVal, onChange, disabled, required }) {
   return (
     <Field
       label={ui('sifDataTabs.field.operationDate')}
       htmlFor="sif-etsgDateOperation"
+      required={required}
       data-testid="Field__b99c8b">
       <DateField
         id="sif-etsgDateOperation"
         value={getDateVal('etsgDateOperation')}
         onChange={iso => onChange?.('etsgDateOperation', iso)}
         disabled={disabled}
+        required={required}
         data-testid="DateField__b99c8b" />
     </Field>
   );
@@ -312,6 +320,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
   const {
     ui,
     specName,
+    isPurchaseInvoice,
     siiTypeField,
     siiTypeOptions,
     showSii,
@@ -438,6 +447,20 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
     }
   }, [showSii, data?.exemptionCauseWarning, ui]);
 
+  // The red `*` of a mandatory field (`sifRequiredFields.js`, the rule the "Datos fiscales" step
+  // of the invoice-creating modals uses too). Conditional on the invoice: a rectification
+  // reason/code is mandatory on a rectificative only — its document type's flag, or the SII type
+  // 'R' the reason field is shown for — and on a SALES invoice only (no system asks a purchase
+  // for a rectification code). Never on a field the user cannot edit (a completed or sent
+  // invoice, a read-only role), like the header form.
+  const requiredContext = {
+    rectificative: !isPurchaseInvoice
+      && (data?.isRectificative === true || getVal(siiTypeField) === 'R'),
+    verifactu: showVerifactu,
+  };
+  const isRequired = (name, editable) => editable && isSifFieldRequired(name, requiredContext);
+  const operationDateRequired = isRequired('etsgDateOperation', !dateReadOnly);
+
   const defaultTab = resolveDefaultTab(showSii, showVerifactu);
   const [activeTab, setActiveTab] = useState(defaultTab);
   // Read live (possibly unsaved) pending value so dependent Verifactu fields react
@@ -455,6 +478,21 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
   const vfInvTypeLabel = vfInvTypeOption
     ? sifOptionLabel(vfInvTypeOption, ui)
     : vfInvType || undefined;
+  // ETP-5747 review W1: on a sales rectificative SII "Tipo factura" can only be 'R' (the server
+  // enforces it), so only 'R' is offered. The label is looked up in the full list, so a value the
+  // record still holds before the 'R' default lands keeps its label instead of rendering blank.
+  const siiTypeValue = getVal(siiTypeField);
+  const siiTypeOption = siiTypeOptions.find(o => o.value === siiTypeValue);
+  const siiTypeLabel = siiTypeOption ? sifOptionLabel(siiTypeOption, ui) : siiTypeValue || undefined;
+  const siiTypeSelectOptions = data?.isRectificative && !isPurchaseInvoice
+    ? siiTypeOptions.filter(o => o.value === 'R')
+    : siiTypeOptions;
+  // ETP-5747 CP-6: a rectificative invoice can only be an R1-R5 for VERI*FACTU, so the dropdown
+  // offers only those. A non-R value it may still hold (legacy or Classic) keeps its label above,
+  // looked up in the full list, so the trigger never goes blank.
+  const vfInvTypeOptions = data?.isRectificative
+    ? VERIFACTU_INV_TYPE_OPTIONS.filter(o => o.value.startsWith('R'))
+    : VERIFACTU_INV_TYPE_OPTIONS;
 
   // Report up to DetailView whether the SIF tab has anything to show at all. ETP-4888
   // reintroduces a minimal TBAI rail (Adjuntos only — see the "tbai" panel below), so a
@@ -526,21 +564,26 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
               getDateVal={getDateVal}
               onChange={onChange}
               disabled={dateReadOnly}
+              required={operationDateRequired}
               data-testid="OperationDateField__b99c8b" />
             <Field
               label={ui('sifDataTabs.field.invoiceType')}
               htmlFor="sif-siiType"
+              required={isRequired(siiTypeField, !siiFieldReadOnly)}
               data-testid="Field__b99c8b">
               <Select
                 value={getVal(siiTypeField) || undefined}
                 onValueChange={setSiiType}
                 disabled={siiFieldReadOnly}
                 data-testid="Select__b99c8b">
-                <SelectTrigger id="sif-siiType" data-testid="SelectTrigger__b99c8b">
-                  <SelectValue placeholder="—" data-testid="SelectValue__b99c8b" />
+                <SelectTrigger
+                  id="sif-siiType"
+                  aria-required={isRequired(siiTypeField, !siiFieldReadOnly) || undefined}
+                  data-testid="SelectTrigger__b99c8b">
+                  <SelectValue placeholder="—" data-testid="SelectValue__b99c8b">{siiTypeLabel}</SelectValue>
                 </SelectTrigger>
                 <SelectContent data-testid="SelectContent__b99c8b">
-                  {siiTypeOptions.map(o => (
+                  {siiTypeSelectOptions.map(o => (
                     <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{sifOptionLabel(o, ui)}</SelectItem>
                   ))}
                 </SelectContent>
@@ -550,13 +593,17 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
               <Field
                 label={ui('sifDataTabs.field.rectificationReason')}
                 htmlFor="sif-siiMotivoRectif"
+                required={isRequired('aeatsiiMotivoRectif', !siiFieldReadOnly)}
                 data-testid="Field__b99c8b">
                 <Select
                   value={getVal('aeatsiiMotivoRectif') || undefined}
                   onValueChange={val => onChange?.('aeatsiiMotivoRectif', val)}
                   disabled={siiFieldReadOnly}
                   data-testid="Select__b99c8b">
-                  <SelectTrigger id="sif-siiMotivoRectif" data-testid="SelectTrigger__b99c8b">
+                  <SelectTrigger
+                    id="sif-siiMotivoRectif"
+                    aria-required={isRequired('aeatsiiMotivoRectif', !siiFieldReadOnly) || undefined}
+                    data-testid="SelectTrigger__b99c8b">
                     <SelectValue placeholder="—" data-testid="SelectValue__b99c8b" />
                   </SelectTrigger>
                   <SelectContent data-testid="SelectContent__b99c8b">
@@ -570,6 +617,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
             <Field
               label={ui('sifDataTabs.field.siiDescription')}
               htmlFor="sif-siiDesc"
+              required={isRequired('aeatsiiDescripcionSii', !siiCompletionLockedReadOnly)}
               data-testid="Field__b99c8b">
               <Input
                 id="sif-siiDesc"
@@ -577,6 +625,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 value={getVal('aeatsiiDescripcionSii')}
                 onChange={e => onChange?.('aeatsiiDescripcionSii', e.target.value)}
                 disabled={siiCompletionLockedReadOnly}
+                aria-required={isRequired('aeatsiiDescripcionSii', !siiCompletionLockedReadOnly) || undefined}
                 className="bg-card"
                 data-testid="Input__b99c8b" />
             </Field>
@@ -662,21 +711,26 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
               getDateVal={getDateVal}
               onChange={onChange}
               disabled={dateReadOnly}
+              required={operationDateRequired}
               data-testid="OperationDateField__b99c8b" />
             <Field
               label={ui('sifDataTabs.field.vfInvoiceType')}
               htmlFor="sif-vfInvType"
+              required={isRequired('etvfacInvType', !dateReadOnly)}
               data-testid="Field__b99c8b">
               <Select
                 value={getVal('etvfacInvType') || undefined}
                 onValueChange={val => onChange?.('etvfacInvType', val)}
                 disabled={dateReadOnly}
                 data-testid="Select__b99c8b">
-                <SelectTrigger id="sif-vfInvType" data-testid="SelectTrigger__b99c8b">
+                <SelectTrigger
+                  id="sif-vfInvType"
+                  aria-required={isRequired('etvfacInvType', !dateReadOnly) || undefined}
+                  data-testid="SelectTrigger__b99c8b">
                   <SelectValue placeholder="—" data-testid="SelectValue__b99c8b">{vfInvTypeLabel}</SelectValue>
                 </SelectTrigger>
                 <SelectContent data-testid="SelectContent__b99c8b">
-                  {VERIFACTU_INV_TYPE_OPTIONS.map(o => (
+                  {vfInvTypeOptions.map(o => (
                     <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{sifOptionLabel(o, ui)}</SelectItem>
                   ))}
                 </SelectContent>
@@ -685,6 +739,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
             <Field
               label={ui('sifDataTabs.field.vfOperationDescription')}
               htmlFor="sif-vfDesc"
+              required={isRequired('etvfacVerifacDesc', !dateReadOnly)}
               data-testid="Field__b99c8b">
               <Input
                 id="sif-vfDesc"
@@ -692,6 +747,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 value={getVal('etvfacVerifacDesc')}
                 onChange={e => onChange?.('etvfacVerifacDesc', e.target.value)}
                 disabled={dateReadOnly}
+                aria-required={isRequired('etvfacVerifacDesc', !dateReadOnly) || undefined}
                 className="bg-card"
                 data-testid="Input__b99c8b" />
             </Field>
@@ -751,13 +807,17 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
               <Field
                 label={ui('sifDataTabs.field.tbaiReverseinvoicecode')}
                 htmlFor="tbai-reverseinvoicecode"
+                required={isRequired('tbaiReverseinvoicecode', !isProcessed)}
                 data-testid="Field__tbai_reversecode">
                 <Select
                   value={getVal('tbaiReverseinvoicecode') || undefined}
                   onValueChange={val => onChange?.('tbaiReverseinvoicecode', val)}
                   disabled={isProcessed}
                   data-testid="Select__tbai_reversecode">
-                  <SelectTrigger id="tbai-reverseinvoicecode" data-testid="SelectTrigger__tbai_reversecode">
+                  <SelectTrigger
+                    id="tbai-reverseinvoicecode"
+                    aria-required={isRequired('tbaiReverseinvoicecode', !isProcessed) || undefined}
+                    data-testid="SelectTrigger__tbai_reversecode">
                     <SelectValue placeholder="—" data-testid="SelectValue__tbai_reversecode" />
                   </SelectTrigger>
                   <SelectContent data-testid="SelectContent__tbai_reversecode">

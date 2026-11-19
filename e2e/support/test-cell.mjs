@@ -22,7 +22,9 @@ const E2E_DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
 const FLOWS_DIR = join(E2E_DIR, 'tests', 'flows');
 
 export const CELLS = {
-  ventas: ['sales', 'contacts', 'sales-purchases'],
+  // before-financial-accounts: sales specs that must run before any financial account exists
+  // (ETP-6377); see tests/flows/before-financial-accounts/README.md.
+  ventas: ['sales', 'contacts', 'sales-purchases', 'before-financial-accounts'],
   compras: ['purchases', 'sales-purchases'],
   almacenes: ['inventory', 'products'],
   contabilidad: ['accounting'],

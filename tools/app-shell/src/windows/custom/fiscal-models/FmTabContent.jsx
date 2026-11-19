@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
-  TriangleAlert, OctagonAlert, CircleCheck, ChevronRight, ReceiptText,
-} from 'lucide-react';
+  WarningIcon,
+  WarningOctagonIcon,
+  CheckCircleIcon,
+  CaretRightIcon,
+  ReceiptIcon,
+} from '@phosphor-icons/react';
 import { EmptyState } from './FmCommon.jsx';
 import { formatAmount } from './fiscalModelsUtils.js';
 
@@ -73,7 +77,7 @@ export function SourcesTab({ decl, t, showTaxColumns = true, keyColumn = null, h
             style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}
             onClick={() => setOnlyIncidents(v => !v)}
           >
-            <TriangleAlert size={11} strokeWidth={2} data-testid="TriangleAlert__931756" />
+            <WarningIcon size={11} data-testid="TriangleAlert__931756" />
             {t('fm.sources.filter.incidents') ?? 'Con incidencias'}
             <span className="fm-toolbar__count-badge">{incidentRowCount}</span>
           </button>
@@ -82,7 +86,7 @@ export function SourcesTab({ decl, t, showTaxColumns = true, keyColumn = null, h
       {sources.length === 0 ? (
         // ETP-5584 (P11) — the window's one empty state (icon + title + text).
         <EmptyState
-          icon={<ReceiptText size={28} strokeWidth={1.5} data-testid="ReceiptText__931756" />}
+          icon={<ReceiptIcon size={28} data-testid="ReceiptText__931756" />}
           title={t('fm.sources.empty') ?? 'Sin facturas'}
           sub={t('fm.sources.empty_sub')}
           data-testid="fm-sources-empty" />
@@ -145,8 +149,8 @@ export function SourcesTab({ decl, t, showTaxColumns = true, keyColumn = null, h
                           title={tooltip}
                         >
                           {hasBlock
-                            ? <OctagonAlert size={12} strokeWidth={2} data-testid="OctagonAlert__931756" />
-                            : <TriangleAlert size={12} strokeWidth={2} data-testid="TriangleAlert__931756" />
+                            ? <WarningOctagonIcon size={12} data-testid="OctagonAlert__931756" />
+                            : <WarningIcon size={12} data-testid="TriangleAlert__931756" />
                           }
                         </span>
                       )}
@@ -172,7 +176,7 @@ function defaultIncidentAction(inc, onGoToSources, t) {
       onClick={() => onGoToSources()}
       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14, color: 'hsl(var(--foreground))', display: 'inline-flex', alignItems: 'center', gap: 2, textDecoration: 'underline' }}
     >
-      {t('fm.sources.title')} <ChevronRight size={13} strokeWidth={2} data-testid="ChevronRight__931756" />
+      {t('fm.sources.title')} <CaretRightIcon size={13} data-testid="ChevronRight__931756" />
     </button>
   );
 }
@@ -187,7 +191,7 @@ function defaultIncidentAction(inc, onGoToSources, t) {
  * @param {Function} [getOrigin]    (inc) => text of the Origen column (`null` → "—")
  * @param {Function} [renderAction] (inc) => node of the Acción column, or `null`
  */
-export function IncidentsTab({ decl, blocking, warning, t, onGoToSources, getMessage, getOrigin, renderAction }) {
+export function IncidentsTab({ decl, blocking, warning, gatingBlocking = blocking, t, onGoToSources, getMessage, getOrigin, renderAction }) {
   const incidents = decl.incidents?.items ?? [];
   // Per-session dismissal of the warning banner (no localStorage precedent found for
   // this pattern — see CertExpiryBanner.jsx, which also uses a plain local useState).
@@ -204,7 +208,7 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources, getMes
     // ETP-5584 (P11) — same empty state (icon + title + text) as every other tab.
     return (
       <EmptyState
-        icon={<CircleCheck size={28} strokeWidth={1.5} data-testid="CircleCheck__incidentsEmpty" />}
+        icon={<CheckCircleIcon size={28} data-testid="CircleCheck__incidentsEmpty" />}
         title={t('fm.incidents.empty') ?? 'Sin incidencias'}
         sub={t('fm.incidents.empty_sub')}
         data-testid="fm-incidents-empty" />
@@ -227,12 +231,18 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources, getMes
   // ETP-5597 — the banner follows the real severity: any blocking incident keeps the "resolve
   // before generating the file" text in the destructive role; warnings only get an amber,
   // non-blocking message (warnings never prevent file generation).
+  // ETP-5716 — the colour follows the severity of the rows (any blocking row → red). Only the
+  // TEXT depends on `gatingBlocking`, how many of them really gate the file (default: all): a
+  // model whose blocking rows do not all gate it (390: the AEAT errors, found on a file that was
+  // just generated) passes the smaller count and gets "review before presenting" instead of
+  // the false "resolve before generating".
   const hasBlocking = blocking > 0;
+  const blockText = gatingBlocking > 0 ? 'fm.incidents.block_sub' : 'fm.incidents.review_sub';
   const bannerBg = hasBlocking ? 'var(--status-destructive-bg)' : 'var(--status-warning-bg)';
   const bannerBorder = hasBlocking ? 'hsl(var(--destructive) / 0.3)' : 'var(--status-warning-border)';
   const bannerFg = hasBlocking ? 'hsl(var(--destructive))' : 'var(--status-warning-fg)';
   const bannerText = hasBlocking
-    ? (t('fm.incidents.block_sub') ?? 'Resuélvelas antes de generar el fichero')
+    ? (t(blockText) ?? 'Resuélvelas antes de generar el fichero')
     : (t('fm.incidents.warn_sub') ?? 'Revisa las advertencias. No impiden generar el fichero.');
 
   return (
@@ -290,7 +300,7 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources, getMes
         </div>
       ) : (
         <EmptyState
-          icon={<CircleCheck size={28} strokeWidth={1.5} data-testid="CircleCheck__931756" />}
+          icon={<CheckCircleIcon size={28} data-testid="CircleCheck__931756" />}
           title={t('fm.incidents.empty')}
           sub={t('fm.incidents.empty_sub')}
           data-testid="EmptyState__931756" />

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
 import { InfoBanner } from '@/components/InfoBanner';
-import { AlertTriangle } from 'lucide-react';
+import { WarningIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import RemittanceConfirmDialog from './RemittanceConfirmDialog.jsx';
@@ -94,7 +94,7 @@ export default function RemittanceProcessConfirmModal({ process, onConfirm, onCl
       data-testid="ConfirmDialog__remittance-process">
       {/* The bank already has the file of a remittance Enviada al banco (SB): say what editing it means. */}
       {isReactivate && record?.remittanceStatus === 'SB' && (
-        <InfoBanner tone="warning" icon={AlertTriangle} dismissible={false} data-testid="remittance-reactivate-sent-warning">
+        <InfoBanner tone="warning" icon={WarningIcon} dismissible={false} data-testid="remittance-reactivate-sent-warning">
           {ui('remittanceReactivateSentWarning')}
         </InfoBanner>
       )}

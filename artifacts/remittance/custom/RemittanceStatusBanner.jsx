@@ -1,4 +1,4 @@
-import { CheckCircle2, Info, AlertTriangle, Lock, Ban, Send } from 'lucide-react';
+import { CheckCircleIcon, InfoIcon, WarningIcon, LockIcon, ProhibitIcon, PaperPlaneRightIcon } from '@phosphor-icons/react';
 import { InfoBanner } from '@/components/InfoBanner';
 import { useUI } from '@/i18n';
 
@@ -10,14 +10,14 @@ import { useUI } from '@/i18n';
  * record is in, it is not a one-off advice.
  */
 const STATUS_BANNERS = {
-  PE: { tone: 'info', icon: Info, key: 'remittanceBannerPending' },
-  PR: { tone: 'info', icon: Lock, key: 'remittanceBannerProcessed' },
-  SB: { tone: 'info', icon: Send, key: 'remittanceBannerSent' },
-  CT: { tone: 'success', icon: CheckCircle2, key: 'remittanceBannerCollected' },
-  PT: { tone: 'success', icon: CheckCircle2, key: 'remittanceBannerPaid' },
-  CP: { tone: 'warning', icon: AlertTriangle, key: 'remittanceBannerPartiallyCollected' },
-  PP: { tone: 'warning', icon: AlertTriangle, key: 'remittanceBannerPartiallyPaid' },
-  AN: { tone: 'danger', icon: Ban, key: 'remittanceBannerVoided' },
+  PE: { tone: 'info', icon: InfoIcon, key: 'remittanceBannerPending' },
+  PR: { tone: 'info', icon: LockIcon, key: 'remittanceBannerProcessed' },
+  SB: { tone: 'info', icon: PaperPlaneRightIcon, key: 'remittanceBannerSent' },
+  CT: { tone: 'success', icon: CheckCircleIcon, key: 'remittanceBannerCollected' },
+  PT: { tone: 'success', icon: CheckCircleIcon, key: 'remittanceBannerPaid' },
+  CP: { tone: 'warning', icon: WarningIcon, key: 'remittanceBannerPartiallyCollected' },
+  PP: { tone: 'warning', icon: WarningIcon, key: 'remittanceBannerPartiallyPaid' },
+  AN: { tone: 'danger', icon: ProhibitIcon, key: 'remittanceBannerVoided' },
 };
 
 // ETP-6247 — a remittance settled by GO's «Cobrada» (markCollected sets EM_Etar_Automaticprocess

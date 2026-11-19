@@ -48,11 +48,11 @@ function snapshot() {
   return Object.fromEntries(ALL_FILES.map((rel) => [rel, read(rel)]));
 }
 
-function runHook(hook, { spaPort, tomcat = '0', envFile, worktree } = {}) {
+function runHook(hook, { spaPort, tomcat = '0', envFile, worktree, pathPrefix } = {}) {
   const state = join(env, 'build', 'local-env');
   if (envFile !== undefined) writeFileSync(join(state, 'env'), envFile);
   const vars = {
-    PATH: process.env.PATH,
+    PATH: pathPrefix ? `${pathPrefix}:${process.env.PATH}` : process.env.PATH,
     HOME: process.env.HOME,
     ETENDO_ROOT: env,
     LOCALENV_STATE: state,
@@ -286,5 +286,107 @@ describe('etendo-go plugin: app-shell .env.local ETENDO_URL', () => {
     symlinkSync(adopted, join(env, 'schema_forge'));
     runHook('up', { spaPort: 3105, worktree: 'w1' });
     assert.equal(readFileSync(join(adopted, 'tools', 'app-shell', '.env.local'), 'utf8'), copied('http://localhost:8080/etendo'), 'adopted');
+  });
+});
+
+describe('etendo-go plugin: backend feature flags from worktree.conf', () => {
+  const ENV = 'build/local-env/env';
+  const TAG = '# local-env etendo-go: worktree.conf feature-flag';
+
+  it('accepts a worktree with no feature flags when preparing the SPA', () => {
+    write('worktree.conf', 'core - feature/test\n');
+    const source = readFileSync(PLUGIN, 'utf8');
+    const fn = source.slice(source.indexOf('configured_feature_flags() {'), source.indexOf('\n# The `feature-flag`'));
+    const result = spawnSync('bash', ['-eu', '-c', `${fn}\nflags="$(configured_feature_flags)"\nprintf 'ok:%s' "$flags"`], {
+      env: { ...process.env, ETENDO_ROOT: env }, encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'ok:');
+  });
+
+  it('exports the boolean flags as ETGO_FLAG_* and replaces only its own lines on the next up', () => {
+    write('worktree.conf', 'core - env/x\nfeature-flag sepa-remittances=true\nfeature-flag import-batch-size=5\nfeature-flag invoice-inbox=false\n');
+    const hand = 'export ETGO_FLAG_HAND_WRITTEN=true\n';
+    runHook('up', { spaPort: 3105, envFile: `export ETGO_ALLOWED_ORIGINS=http://localhost:3105,http://127.0.0.1:3105\n${hand}` });
+
+    let lines = read(ENV);
+    assert.match(lines, new RegExp(`^export ETGO_FLAG_SEPA_REMITTANCES=true ${TAG}$`, 'm'));
+    assert.match(lines, new RegExp(`^export ETGO_FLAG_INVOICE_INBOX=false ${TAG}$`, 'm'));
+    assert.doesNotMatch(lines, /IMPORT_BATCH_SIZE/, 'a number is a SPA-only override');
+
+    write('worktree.conf', 'core - env/x\nfeature-flag invoice-inbox=true\n');
+    runHook('up', { spaPort: 3105 });
+    lines = read(ENV);
+    assert.doesNotMatch(lines, /SEPA_REMITTANCES/, 'a flag removed from worktree.conf is dropped');
+    assert.match(lines, /^export ETGO_FLAG_INVOICE_INBOX=true /m);
+    assert.match(lines, /^export ETGO_FLAG_HAND_WRITTEN=true$/m, 'a hand-written line is kept');
+  });
+});
+
+describe('etendo-go plugin: context.url at the environment Tomcat', () => {
+  const props = (url) => `bbdd.sid=etendo\ncontext.url=${url}\ncontext.url.copilot.mcp=https\\://x.trycloudflare.com\n`;
+
+  it('points a worktree copy at its Tomcat, escaped, and leaves main checkouts and remote URLs alone', () => {
+    for (const rel of ESCAPED_FILES) write(rel, props('http\\://localhost\\:8080/etendo'));
+
+    runHook('up', { spaPort: 3105 });
+    for (const rel of ESCAPED_FILES) assert.equal(read(rel), props('http\\://localhost\\:8080/etendo'), `main: ${rel}`);
+
+    const out = runHook('up', { spaPort: 3105, worktree: 'w1', tomcat: '1' });
+    for (const rel of ESCAPED_FILES) assert.equal(read(rel), props('http\\://localhost\\:8199/etendo'), rel);
+    assert.match(out.stdout, /^>> pointed context\.url at http:\/\/localhost:8199\/etendo in .*the Tomcat starting now picks it up/m);
+
+    for (const rel of ESCAPED_FILES) write(rel, props('https\\://go.example.com/etendo'));
+    runHook('up', { spaPort: 3105, worktree: 'w1' });
+    for (const rel of ESCAPED_FILES) assert.equal(read(rel), props('https\\://go.example.com/etendo'), `remote: ${rel}`);
+  });
+});
+
+describe('etendo-go plugin: Copilot with `setting copilot=on`', () => {
+  let bin;
+
+  beforeEach(() => {
+    // a fake uv: what the plugin starts must be this environment's process, not a real Copilot
+    bin = join(root, 'bin');
+    mkdirSync(bin);
+    writeFileSync(join(bin, 'uv'), '#!/bin/bash\nexec sleep 600\n', { mode: 0o755 });
+    write('modules/com.etendoerp.copilot/run.py', '');
+    write('gradle.properties', 'copilot.host=host.docker.internal\nCOPILOT_PORT=5005\n');
+    for (const rel of ESCAPED_FILES) write(rel, 'copilot.host=host.docker.internal\ncopilot.port=5005\n');
+    write('worktree.conf', 'core - env/x\nsetting copilot=on\n');
+  });
+
+  it('starts it on a reserved pair of ports, points the backend at it, shows it and stops it', () => {
+    const out = runHook('up', { spaPort: 3105, worktree: 'w1', pathPrefix: bin, tomcat: '1' });
+
+    const envFile = read('build/local-env/env');
+    const port = envFile.match(/^export COPILOT_PORT=(\d+)$/m)?.[1];
+    const mcp = envFile.match(/^export COPILOT_PORT_MCP=(\d+)$/m)?.[1];
+    assert.ok(Number(port) >= 5007 && Number(mcp) > Number(port), `reserved ${port}/${mcp}`);
+    for (const rel of ESCAPED_FILES) {
+      assert.equal(read(rel), `copilot.host=localhost\ncopilot.port=${port}\ncopilot.port.mcp=${mcp}\n`, rel);
+    }
+    assert.match(out.stdout, new RegExp(`^>> Copilot starting: http://localhost:${port} `, 'm'));
+    assert.match(runHook('status', { spaPort: 3105 }).stdout, new RegExp(`^Copilot\\thttp://localhost:${port} \\(running\\)$`, 'm'));
+
+    const again = runHook('up', { spaPort: 3105, worktree: 'w1', pathPrefix: bin });
+    assert.match(again.stdout, /^>> Copilot already running/m);
+    assert.equal(envFile, read('build/local-env/env'), 'the ports are reserved once');
+
+    assert.match(runHook('stop', { spaPort: 3105 }).stdout, /^>> Copilot stopped/m);
+    assert.match(runHook('status', { spaPort: 3105 }).stdout, /^Copilot\t.*\(stopped\)$/m);
+  });
+
+  it('does nothing without `setting copilot=on`, and warns when the module is not in the checkout', () => {
+    write('worktree.conf', 'core - env/x\n');
+    const off = runHook('up', { spaPort: 3105, worktree: 'w1', pathPrefix: bin });
+    assert.doesNotMatch(off.all, /Copilot/);
+    assert.doesNotMatch(runHook('status', { spaPort: 3105 }).stdout, /Copilot/);
+
+    write('worktree.conf', 'core - env/x\nsetting copilot=on\n');
+    rmSync(join(env, 'modules', 'com.etendoerp.copilot'), { recursive: true });
+    const missing = runHook('up', { spaPort: 3105, worktree: 'w1', pathPrefix: bin });
+    assert.match(missing.stderr, /setting copilot=on, but .*run\.py is not in this checkout/);
+    for (const rel of ESCAPED_FILES) assert.match(read(rel), /^copilot\.host=host\.docker\.internal$/m, rel);
   });
 });

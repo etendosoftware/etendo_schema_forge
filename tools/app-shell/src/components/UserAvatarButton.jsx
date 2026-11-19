@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Building2, ChevronRight, LogOut, User, Languages, Rocket } from 'lucide-react';
+import { BuildingsIcon, CaretRightIcon, RocketLaunchIcon, SignOutIcon, UserIcon } from '@phosphor-icons/react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n/index.js';
@@ -14,11 +14,8 @@ import { useLogout } from '@/auth/useLogout.js';
 import { useFeatureFlag, MY_COMPANIES_PAGE } from '@/lib/flags';
 import { ADMIN_NAME_I18N_KEY, resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
 import { useSupportSession } from '@/hooks/useSupportSession.js';
+import { LanguageMenuSection } from '@/components/LanguageMenuSection.jsx';
 
-const LOCALES = [
-  { code: 'en_US', flag: '🇺🇸', label: 'English' },
-  { code: 'es_ES', flag: '🇪🇸', label: 'Español' },
-];
 
 /**
  * Button that opens a small user menu with identity details and logout.
@@ -77,10 +74,10 @@ export function UserAvatarButton({ expanded = false }) {
       className="flex w-full items-center gap-2.5 px-3 py-2 text-sm rounded-md text-foreground hover:bg-muted/50 transition-colors"
     >
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        <User className="h-4 w-4" data-testid="User__9f3744" />
+        <UserIcon className="h-4 w-4" data-testid="User__9f3744" />
       </span>
       <span className="flex-1 text-left truncate">{username || '—'}</span>
-      <ChevronRight
+      <CaretRightIcon
         className="h-4 w-4 shrink-0 text-muted-foreground"
         data-testid="ChevronRight__9f3744" />
     </button>
@@ -105,98 +102,80 @@ export function UserAvatarButton({ expanded = false }) {
 
   return (
     <DropdownMenu data-testid="DropdownMenu__9f3744">
-        <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__9f3744">
-          {expanded ? (
-            <div className="w-full">{trigger}</div>
-          ) : (
-            trigger
+      <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__9f3744">
+        {expanded ? (
+          <div className="w-full">{trigger}</div>
+        ) : (
+          trigger
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side="right"
+        align="end"
+        sideOffset={12}
+        className="w-56"
+        data-testid="DropdownMenuContent__9f3744">
+        <div className="border-b px-4 py-3">
+          <p className="truncate text-sm font-semibold">{username || '—'}</p>
+          {(selectedRole?.name || selectedOrg?.name) && (
+            <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+              {selectedRole?.name && (
+                <p className="break-words" title={roleDisplay}>{ui('role')}: {roleDisplay}</p>
+              )}
+              {selectedOrg?.name && (
+                <p className="truncate" title={selectedOrg.name}>{ui('organization')}: {selectedOrg.name}</p>
+              )}
+            </div>
           )}
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          side="right"
-          align="end"
-          sideOffset={12}
-          className="w-56"
-          data-testid="DropdownMenuContent__9f3744">
-          <div className="border-b px-4 py-3">
-            <p className="truncate text-sm font-semibold">{username || '—'}</p>
-            {(selectedRole?.name || selectedOrg?.name) && (
-              <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-                {selectedRole?.name && (
-                  <p className="break-words" title={roleDisplay}>{ui('role')}: {roleDisplay}</p>
-                )}
-                {selectedOrg?.name && (
-                  <p className="truncate" title={selectedOrg.name}>{ui('organization')}: {selectedOrg.name}</p>
-                )}
-              </div>
-            )}
-          </div>
+        </div>
 
-          {setLocale && (
+        {setLocale && (
+          <>
+            <LanguageMenuSection
+              locale={locale}
+              setLocale={setLocale}
+              data-testid="LanguageMenuSection__9f3744" />
+            <DropdownMenuSeparator data-testid="DropdownMenuSeparator__9f3744" />
+          </>
+        )}
+
+        <div className="px-2 py-2">
+          {!isSupportMode && (
             <>
-              <div className="px-2 pt-2 pb-1">
-                <p className="flex items-center gap-1.5 px-2 pb-1 text-xs font-medium text-muted-foreground">
-                  <Languages className="h-3.5 w-3.5" data-testid="Languages__9f3744" />
-                  {ui('language')}
-                </p>
-                {LOCALES.map((l) => (
-                  <button
-                    key={l.code}
-                    type="button"
-                    onClick={() => setLocale(l.code)}
-                    data-testid={`user-menu-language-${l.code}`}
-                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors ${
-                      locale === l.code
-                        ? 'bg-muted font-semibold text-foreground'
-                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                    }`}
-                  >
-                    <span className="text-sm leading-none">{l.flag}</span>
-                    {l.label}
-                  </button>
-                ))}
-              </div>
-              <DropdownMenuSeparator data-testid="DropdownMenuSeparator__9f3744" />
+              <DropdownMenuItem
+                onSelect={() => navigate('/upgrade')}
+                data-testid="menu-tenant-upgrade"
+              >
+                <RocketLaunchIcon className="h-3.5 w-3.5 mr-2" data-testid="Rocket__9f3744" />
+                {ui('upgradeMenuAction')}
+              </DropdownMenuItem>
+              {myCompaniesEnabled && (
+                <DropdownMenuItem
+                  onSelect={() => navigate('/companies')}
+                  data-testid="menu-my-companies"
+                >
+                  <BuildingsIcon className="h-3.5 w-3.5 mr-2" data-testid="Building2__menu-my-companies" />
+                  {ui('myCompaniesMenuAction')}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onSelect={() => navigate('/account')}
+                data-testid="menu-account"
+              >
+                <UserIcon className="h-3.5 w-3.5 mr-2" data-testid="User__menu-account" />
+                {ui('account')}
+              </DropdownMenuItem>
             </>
           )}
-
-          <div className="px-2 py-2">
-            {!isSupportMode && (
-              <>
-                <DropdownMenuItem
-                  onSelect={() => navigate('/upgrade')}
-                  data-testid="menu-tenant-upgrade"
-                >
-                  <Rocket className="h-3.5 w-3.5 mr-2" data-testid="Rocket__9f3744" />
-                  {ui('upgradeMenuAction')}
-                </DropdownMenuItem>
-                {myCompaniesEnabled && (
-                  <DropdownMenuItem
-                    onSelect={() => navigate('/companies')}
-                    data-testid="menu-my-companies"
-                  >
-                    <Building2 className="h-3.5 w-3.5 mr-2" data-testid="Building2__menu-my-companies" />
-                    {ui('myCompaniesMenuAction')}
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem
-                  onSelect={() => navigate('/account')}
-                  data-testid="menu-account"
-                >
-                  <User className="h-3.5 w-3.5 mr-2" data-testid="User__menu-account" />
-                  {ui('account')}
-                </DropdownMenuItem>
-              </>
-            )}
-            <DropdownMenuItem
-              onClick={logout}
-              className="text-destructive focus:text-destructive focus:bg-destructive/10 dark:focus:bg-destructive/20"
-              data-testid="user-menu-logout">
-              <LogOut className="h-3.5 w-3.5 mr-2" data-testid="LogOut__9f3744" />
-              {ui('logout')}
-            </DropdownMenuItem>
-          </div>
-        </DropdownMenuContent>
+          <DropdownMenuItem
+            onClick={logout}
+            className="text-destructive focus:text-destructive focus:bg-destructive/10 dark:focus:bg-destructive/20"
+            data-testid="user-menu-logout">
+            <SignOutIcon className="h-3.5 w-3.5 mr-2" data-testid="LogOut__9f3744" />
+            {ui('logout')}
+          </DropdownMenuItem>
+        </div>
+      </DropdownMenuContent>
     </DropdownMenu>
   );
 }

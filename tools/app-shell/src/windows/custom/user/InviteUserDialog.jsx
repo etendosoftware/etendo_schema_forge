@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { Loader2, Mail, CheckCircle2, AlertCircle } from 'lucide-react';
+import {
+  CircleNotchIcon,
+  EnvelopeSimpleIcon,
+  CheckCircleIcon,
+  WarningCircleIcon,
+} from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -106,7 +111,7 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
               <DialogTitle
                 className="flex items-center gap-2 text-primary"
                 data-testid="DialogTitle__fdd5a3">
-                <CheckCircle2
+                <CheckCircleIcon
                   className="h-5 w-5 text-status-success-foreground"
                   data-testid="CheckCircle2__fdd5a3" />
                 {ui('inviteUserSuccessTitle')}
@@ -143,7 +148,7 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
           <form onSubmit={handleSubmit} className="space-y-4" data-testid="invite-user-form">
             <DialogHeader data-testid="DialogHeader__fdd5a3">
               <DialogTitle className="flex items-center gap-2" data-testid="DialogTitle__fdd5a3">
-                <Mail className="h-5 w-5 text-primary" data-testid="Mail__fdd5a3" />
+                <EnvelopeSimpleIcon className="h-5 w-5 text-primary" data-testid="Mail__fdd5a3" />
                 {ui('inviteUserModalTitle')}
               </DialogTitle>
               <DialogDescription data-testid="DialogDescription__fdd5a3">
@@ -156,7 +161,7 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
                 className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
                 data-testid="invite-user-error"
               >
-                <AlertCircle className="h-4 w-4 shrink-0" data-testid="AlertCircle__fdd5a3" />
+                <WarningCircleIcon className="h-4 w-4 shrink-0" data-testid="AlertCircle__fdd5a3" />
                 <span>{error}</span>
               </div>
             )}
@@ -193,7 +198,7 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
               >
                 {loading ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" data-testid="Loader2__fdd5a3" />
+                    <CircleNotchIcon className="mr-2 h-4 w-4 animate-spin" data-testid="Loader2__fdd5a3" />
                     {ui('inviteUserSending')}
                   </>
                 ) : (

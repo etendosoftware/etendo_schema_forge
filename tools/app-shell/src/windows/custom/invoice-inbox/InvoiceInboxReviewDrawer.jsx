@@ -1,5 +1,6 @@
+import { useCallback, useRef } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { Loader2 } from 'lucide-react';
+import { CircleNotchIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
 import { Button } from '@/components/ui/button';
@@ -8,8 +9,9 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { isReviewReadOnly } from './invoiceInboxReviewModel.js';
-import { useInvoiceInboxReview } from './useInvoiceInboxReview.js';
+import { useInvoiceInboxReviewEditor } from './useInvoiceInboxReviewEditor.js';
 import InvoiceInboxReviewHeader from './InvoiceInboxReviewHeader.jsx';
+import InvoiceInboxReviewSaveStatus from './InvoiceInboxReviewSaveStatus.jsx';
 import InvoiceInboxReviewViewer from './InvoiceInboxReviewViewer.jsx';
 import InvoiceInboxReviewForm from './InvoiceInboxReviewForm.jsx';
 import InvoiceInboxReviewFooter from './InvoiceInboxReviewFooter.jsx';
@@ -29,8 +31,8 @@ const DRAWER_CLASS = [
   'data-[state=open]:[animation:slide-in-from-right_260ms_ease-out]',
   'data-[state=closed]:[animation:slide-out-to-right_200ms_ease-in_forwards]',
 ].join(' ');
-/** The form pane: `min(560px, 55%)`, never under 420px. */
-const FORM_PANE_CLASS = 'flex w-[min(560px,55%)] min-w-[420px] flex-none flex-col border-l border-border bg-card';
+/** The form pane: `min(560px, 55%)`, never under 420px (nor wider than the drawer: a 420px viewport leaves a 372px drawer). */
+const FORM_PANE_CLASS = 'flex w-[min(560px,55%)] min-w-[min(420px,100%)] flex-none flex-col border-l border-border bg-card';
 
 function FormSkeleton() {
   return (
@@ -64,30 +66,55 @@ function ReviewError({ errorKey, errorText, onRetry }) {
  * its header and on Escape (Radix defaults).
  *
  * `row` is the list row of the open document (its file name and status fill the header while the
- * review read is in flight); the read itself is `useInvoiceInboxReview`. S1 is read only: the
- * form gets `readOnly`, the viewer has no write operations and the footer's Mark as reviewed /
- * Confirm are disabled. Discard goes through the page's ETP-6049 flow (`onDiscard`).
+ * review read is in flight); the read and the edits are `useInvoiceInboxReviewEditor` (S2: autosave
+ * over the `apply` action). The form is editable unless the document is not (`editable: false`:
+ * confirmed, discarded, foreign receiver); the viewer has no write operations. ETP-6051: "Confirmar
+ * factura" runs the editor's `confirm` and hands the answer to the page (`onConfirmed(result, document)`),
+ * which moves to the next pending document or closes the panel; without `onConfirmed` the button stays
+ * the disabled "Próximamente" one. Closing, moving to another document and discarding first wait for
+ * the pending saves (`flush`) and stay put when one failed. Discard goes through the page's
+ * ETP-6049 flow (`onDiscard`).
  *
  * @param {{id: string|null, row: object|null, nav: object, apiFetch: Function, apiBaseUrl: string,
  *   token?: string|null, onClose: () => void, onDiscard: (row: object) => void,
- *   discarding?: boolean}} props `nav` is the object `useInvoiceInboxReviewNav` returns
+ *   discarding?: boolean, onConfirmed?: (result: object, document: object) => void}} props `nav` is the object `useInvoiceInboxReviewNav` returns
  */
 export default function InvoiceInboxReviewDrawer({
-  id, row, nav, apiFetch, apiBaseUrl, token = null, onClose, onDiscard, discarding = false,
+  id, row, nav, apiFetch, apiBaseUrl, token = null, onClose, onDiscard, discarding = false, onConfirmed = null,
 }) {
   const ui = useUI();
   const orgCurrency = useCurrency();
-  const { review, loading, errorKey, errorText, reload } = useInvoiceInboxReview(apiFetch, id);
+  const editor = useInvoiceInboxReviewEditor(apiFetch, id);
+  const { review, loading, errorKey, errorText, reload, flush } = editor;
   const open = Boolean(id);
+  // Closing, moving on and discarding wait for the saves; a failed save keeps the panel where it is.
+  const closingRef = useRef(false);
+  const requestClose = useCallback(async () => {
+    // A confirm in flight cannot be left: its answer decides where the panel goes next.
+    if (closingRef.current || editor.confirming) return;
+    closingRef.current = true;
+    try {
+      if (await flush()) onClose();
+    } finally {
+      closingRef.current = false;
+    }
+  }, [flush, onClose, editor.confirming]);
+  const goPrev = useCallback(async () => { if (!editor.confirming && (await flush())) nav.goPrev(); }, [flush, nav, editor.confirming]);
+  const goNext = useCallback(async () => { if (!editor.confirming && (await flush())) nav.goNext(); }, [flush, nav, editor.confirming]);
+  const discard = useCallback(async () => { if (!editor.confirming && (await flush())) onDiscard(review ?? row); }, [flush, onDiscard, review, row, editor.confirming]);
+  const confirmEditor = editor.confirm;
+  const confirm = useCallback(async () => {
+    const result = await confirmEditor();
+    if (result) onConfirmed?.(result, review ?? row);
+  }, [confirmEditor, onConfirmed, review, row]);
   const headerDocument = review ?? row ?? {};
   const currency = review?.currency?.isoCode ?? orgCurrency;
   const locked = review ? isReviewReadOnly(review, false) : false;
-  const discardTarget = review ?? row;
 
   return (
     <Sheet
       open={open}
-      onOpenChange={(next) => { if (!next) onClose(); }}
+      onOpenChange={(next) => { if (!next) requestClose(); }}
       data-testid="Sheet__invoice-inbox-review">
       <SheetPortal data-testid="SheetPortal__invoice-inbox-review">
         <SheetOverlay className={VEIL_CLASS} data-testid="invoice-inbox-review-veil" />
@@ -100,10 +127,11 @@ export default function InvoiceInboxReviewDrawer({
           document={headerDocument}
           position={nav.position}
           total={nav.total}
-          canPrev={nav.canPrev}
-          canNext={nav.canNext && !nav.advancing}
-          onPrev={nav.goPrev}
-          onNext={nav.goNext}
+          canPrev={nav.canPrev && !editor.confirming}
+          canNext={nav.canNext && !nav.advancing && !editor.confirming}
+          onPrev={goPrev}
+          onNext={goNext}
+          saveStatus={<InvoiceInboxReviewSaveStatus save={editor.save} onRetry={editor.retry} data-testid="InvoiceInboxReviewSaveStatus__drawer" />}
           data-testid="InvoiceInboxReviewHeader__drawer" />
         <div className="flex min-h-0 flex-1">
           <div
@@ -132,16 +160,19 @@ export default function InvoiceInboxReviewDrawer({
               )}
               {review && (
                 <InvoiceInboxReviewForm
+                  key={review.id}
                   review={review}
                   currency={currency}
-                  readOnly
+                  readOnly={locked}
                   locked={locked}
                   settled={locked}
+                  editor={editor}
+                  apiBaseUrl={apiBaseUrl}
                   data-testid="InvoiceInboxReviewForm__drawer" />
               )}
               {nav.advancing && (
                 <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground" data-testid="invoice-inbox-review-advancing">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" data-testid="Loader2__review-advancing" />
+                  <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" aria-hidden="true" data-testid="Loader2__review-advancing" />
                   {ui('invoiceInboxReviewLoadingNext')}
                 </p>
               )}
@@ -150,8 +181,13 @@ export default function InvoiceInboxReviewDrawer({
               <InvoiceInboxReviewFooter
                 review={review}
                 locked={locked}
-                onDiscard={() => onDiscard(discardTarget)}
+                onDiscard={discard}
                 discarding={discarding}
+                onMarkReviewed={editor.markReviewed}
+                onConfirm={onConfirmed ? confirm : null}
+                saving={editor.saving}
+                marking={editor.marking}
+                confirming={editor.confirming}
                 data-testid="InvoiceInboxReviewFooter__drawer" />
             )}
           </div>

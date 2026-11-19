@@ -113,7 +113,7 @@ vi.mock('@/lib/statusBadge.js', () => ({
   statusLabel: (code) => code,
 }));
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import OrderPreview from '../OrderPreview.jsx';
 import GenericPreviewModal from '../GenericPreviewModal.jsx';
 import { useOrderPdf } from '../useOrderPdf.js';
@@ -554,6 +554,33 @@ describe('OrderPreview — email history wiring (ETP-5069)', () => {
     fireEvent.click(screen.getByTestId('send-modal-close'));
 
     expect(lastEmailsCardProps().refreshSignal).toBe(before);
+  });
+
+  describe('send modal close timer', () => {
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('hides the send modal once the close animation has run', () => {
+      renderOrderPreview();
+      fireEvent.click(screen.getByTestId('email-btn'));
+      fireEvent.click(screen.getByTestId('send-modal-close'));
+      expect(screen.getByTestId('send-modal')).toBeInTheDocument();
+
+      act(() => { vi.advanceTimersByTime(300); });
+
+      expect(screen.queryByTestId('send-modal')).not.toBeInTheDocument();
+    });
+
+    it('clears the pending close timer when the preview unmounts', () => {
+      const { unmount } = renderOrderPreview();
+      fireEvent.click(screen.getByTestId('email-btn'));
+      fireEvent.click(screen.getByTestId('send-modal-close'));
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+      unmount();
+
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 });
 

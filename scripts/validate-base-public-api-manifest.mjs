@@ -46,10 +46,74 @@ for (const [resource, entity] of Object.entries(entities)) {
   }
 }
 
+// Lookups (GET /api/v1/<resource>/lookups/<field>): top-level resources only, on a reference
+// field, with a selector, a JSON:API type and a fixed context of string values.
+let lookups = 0;
+for (const [resource, entity] of Object.entries(entities)) {
+  if (entity.parent?.pathSegment === 'lookups') {
+    // Hygiene: the lookup route only shadows a child list whose parent id is literally `lookups`.
+    errors.push(`${resource}: child pathSegment "lookups" is kept for lookups`);
+  }
+  for (const [field, value] of Object.entries(entity.fields ?? {})) {
+    if (value.lookup === undefined) continue;
+    lookups += 1;
+    const where = `${resource}.${field}: lookup`;
+    const lookup = value.lookup;
+    if (typeof lookup !== 'object' || lookup === null || Array.isArray(lookup)) {
+      errors.push(`${where} must be an object`);
+      continue;
+    }
+    if (entity.parent) errors.push(`${where} is not supported on a child resource`);
+    if (!value.reference) errors.push(`${where} needs a reference field`);
+    if (typeof lookup.selector !== 'string' || !lookup.selector) errors.push(`${where} selector is missing`);
+    if (typeof lookup.type !== 'string' || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(lookup.type)) errors.push(`${where} type must be kebab-case`);
+    const context = lookup.context;
+    if (typeof context !== 'object' || context === null || Array.isArray(context)
+      || Object.values(context).some((item) => typeof item !== 'string')) {
+      errors.push(`${where} context must be an object of string values`);
+    } else {
+      // q, limit and offset are filled by the gateway (search and page); a context key must not clash with them.
+      for (const name of Object.keys(context).filter((key) => ['q', 'limit', 'offset'].includes(key))) {
+        errors.push(`${where} context cannot use reserved parameter "${name}"`);
+      }
+    }
+  }
+}
+
+// Enums (the AD list values of a field): a non-empty list of distinct string codes, and a label
+// for each code. A field description, when present, is a non-empty string.
+let enums = 0;
+for (const [resource, entity] of Object.entries(entities)) {
+  for (const [field, value] of Object.entries(entity.fields ?? {})) {
+    const where = `${resource}.${field}`;
+    if (value.description !== undefined && (typeof value.description !== 'string' || !value.description.trim())) {
+      errors.push(`${where}: description must be a non-empty string`);
+    }
+    const codes = value.dataType?.enum;
+    if (codes === undefined && value.enumLabels === undefined) continue;
+    enums += 1;
+    if (!Array.isArray(codes) || codes.length === 0 || codes.some((code) => typeof code !== 'string')
+      || new Set(codes).size !== codes.length) {
+      errors.push(`${where}: dataType.enum must be a non-empty list of distinct string codes`);
+      continue;
+    }
+    if (value.dataType.type !== 'string') errors.push(`${where}: an enum field must be of type string`);
+    const labels = value.enumLabels;
+    if (typeof labels !== 'object' || labels === null || Array.isArray(labels)) {
+      errors.push(`${where}: enumLabels must be an object with a label per code`);
+      continue;
+    }
+    const missing = codes.filter((code) => typeof labels[code] !== 'string' || !labels[code]);
+    const unknown = Object.keys(labels).filter((code) => !codes.includes(code));
+    if (missing.length) errors.push(`${where}: enumLabels has no label for ${missing.join(', ')}`);
+    if (unknown.length) errors.push(`${where}: enumLabels names codes outside dataType.enum: ${unknown.join(', ')}`);
+  }
+}
+
 if (errors.length) {
   console.error(errors.join('\n'));
   process.exitCode = 1;
 } else {
   const children = Object.values(entities).filter((entity) => entity.parent).length;
-  console.log(`Validated ${Object.keys(entities).length} resources, ${children} child resources, ${relationships.length} relationships`);
+  console.log(`Validated ${Object.keys(entities).length} resources, ${children} child resources, ${relationships.length} relationships, ${lookups} lookups, ${enums} enums`);
 }

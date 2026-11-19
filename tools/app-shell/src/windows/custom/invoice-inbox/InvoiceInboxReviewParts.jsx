@@ -1,4 +1,10 @@
-import { AlertCircle, AlertTriangle, Calendar, CheckCircle2, Sparkles } from 'lucide-react';
+import {
+  WarningCircleIcon,
+  WarningIcon,
+  CalendarBlankIcon,
+  CheckCircleIcon,
+  SparkleIcon,
+} from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { StatusTag } from '@/components/ui/status-tag';
@@ -36,7 +42,7 @@ export function ReviewTag({ tone = 'neutral', label, testId, icon: Icon = null }
 
 /** The "Etendo AI proposes" chip: sparkles icon on the info (lavender) tone. */
 export function AiChip({ label, testId }) {
-  return <ReviewTag tone="info" label={label} testId={testId} icon={Sparkles} data-testid="ReviewTag__ai-chip" />;
+  return <ReviewTag tone="info" label={label} testId={testId} icon={SparkleIcon} data-testid="ReviewTag__ai-chip" />;
 }
 
 /** The red line under a field or a section that blocks confirmation. */
@@ -50,7 +56,8 @@ export function FieldError({ children, testId }) {
 }
 
 /**
- * A labelled field. Read only it shows the value in a read-only (or disabled) input; `invalid`
+ * A labelled field. Read only it shows the value in a read-only (or disabled) input; `control`
+ * replaces the input with an editable one (S2: a `CommitInput`, the date field); `invalid`
  * paints the red border and `aria-invalid`; `required` marks the label with the asterisk;
  * `icon` draws an icon inside the input at the right (the date field's calendar). `tag` sits at
  * the right of the label (the "Revisar" tag). A later `readOnly={false}` turns the same input
@@ -58,7 +65,7 @@ export function FieldError({ children, testId }) {
  */
 export function ReviewField({
   label, value, readOnly = true, disabled = false, required = false, invalid = false, tag = null,
-  error = null, placeholder, onChange, testId, className = '', icon: Icon = null,
+  error = null, placeholder, onChange, testId, className = '', icon: Icon = null, control = null,
 }) {
   return (
     <div className={className} data-testid={`${testId}-field`}>
@@ -72,36 +79,38 @@ export function ReviewField({
         </Label>
         {tag}
       </div>
-      <div className="relative">
-        <Input
-          id={testId}
-          value={value ?? ''}
-          readOnly={readOnly}
-          disabled={disabled}
-          placeholder={placeholder}
-          onChange={onChange}
-          aria-invalid={invalid || undefined}
-          className={`${Icon ? 'pr-9 ' : ''}${invalid ? 'border-destructive bg-[var(--status-destructive-bg)]' : ''}`}
-          data-testid={testId} />
-        {Icon && (
-          <Icon
-            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-            data-testid={`${testId}-icon`} />
-        )}
-      </div>
+      {control ?? (
+        <div className="relative">
+          <Input
+            id={testId}
+            value={value ?? ''}
+            readOnly={readOnly}
+            disabled={disabled}
+            placeholder={placeholder}
+            onChange={onChange}
+            aria-invalid={invalid || undefined}
+            className={`${Icon ? 'pr-9 ' : ''}${invalid ? 'border-destructive bg-[var(--status-destructive-bg)]' : ''}`}
+            data-testid={testId} />
+          {Icon && (
+            <Icon
+              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+              data-testid={`${testId}-icon`} />
+          )}
+        </div>
+      )}
       <FieldError testId={`${testId}-error`} data-testid="FieldError__a14703">{error}</FieldError>
     </div>
   );
 }
 
-/** The calendar icon of the date field, exported so the form does not import lucide twice. */
-export const DATE_FIELD_ICON = Calendar;
+/** The calendar icon of the date field, exported so the form does not import the icon twice. */
+export const DATE_FIELD_ICON = CalendarBlankIcon;
 
 const BANNER_TONES = {
-  warning: { box: 'border-status-warning-border/40 bg-status-warning/15 text-status-warning-foreground', Icon: AlertTriangle },
-  destructive: { box: 'border-destructive/30 bg-[var(--status-destructive-bg)] text-destructive', Icon: AlertCircle },
-  success: { box: 'border-status-success-border/40 bg-status-success/15 text-status-success-foreground', Icon: CheckCircle2 },
+  warning: { box: 'border-status-warning-border/40 bg-status-warning/15 text-status-warning-foreground', Icon: WarningIcon },
+  destructive: { box: 'border-destructive/30 bg-[var(--status-destructive-bg)] text-destructive', Icon: WarningCircleIcon },
+  success: { box: 'border-status-success-border/40 bg-status-success/15 text-status-success-foreground', Icon: CheckCircleIcon },
 };
 
 /** A banner: a title, an optional body. */
@@ -134,8 +143,8 @@ function RadioDot({ on, size }) {
 
 /**
  * A candidate as a full-row button with a custom radio (`role="radio"`): padding 10/12, radius
- * 10, border; selected = primary border + a 3px ring. Disabled while `readOnly` (S1: the choice
- * is S3). `compact` is the smaller variant of the product panel.
+ * 10, border; selected = primary border + a 3px ring. Disabled while `readOnly`. `compact` is the
+ * smaller variant of the product panel.
  */
 export function OptionRow({
   value, checked = false, readOnly = true, onSelect, testId, badge = null, compact = false, children,

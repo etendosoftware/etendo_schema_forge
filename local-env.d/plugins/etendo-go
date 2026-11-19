@@ -5,14 +5,16 @@
 # executable under <repo>/local-env.d/plugins as `<plugin> <hook>` with the
 # environment in LOCALENV_* variables (contract: etendo-localenv docs/design.md
 # §6.7). This one gives each local-env environment its own Etendo GO SPA:
-#   manifest         `seed GOClient v1` (part of the DB fingerprint)
+#   manifest         `seed GOClient v2` (part of the DB fingerprint)
 #   db-seed          the gradle invocations that load the GO sample client
 #   worktree-create  reserves SPA_PORT / BFF_PORT for the new environment, allows that SPA
-#                    origin, points the MCP / OAuth public URLs at it and the app-shell's
-#                    .env.local ETENDO_URL at its Tomcat
-#   up               `make dev-local-core` in the background, pointed at its Tomcat
-#   status           SPA URL, running or stopped
-#   stop|off|worktree-rm  stops that environment's SPA + BFF
+#                    origin, points the MCP / OAuth public URLs at it, the app-shell's
+#                    .env.local ETENDO_URL and context.url at its Tomcat
+#   up               `make dev-local-core` in the background, pointed at its Tomcat; the
+#                    `feature-flag` lines of worktree.conf for the SPA and, the boolean ones,
+#                    for the backend (ETGO_FLAG_*); Copilot when worktree.conf says `setting copilot=on`
+#   status           SPA URL, running or stopped; Copilot's when it is on
+#   stop|off|worktree-rm  stops that environment's SPA + BFF, and its Copilot
 # manifest and db-seed print nothing without modules/com.etendoerp.go.
 # Env: ETENDO_GO_SPA=0 skips starting the SPA (same as `local-env up --skip-plugin=etendo-go`).
 # Docs: docs/local-env-plugin.md
@@ -31,6 +33,9 @@ GO_MODULE="$ETENDO_ROOT/modules/com.etendoerp.go"
 STATE="${LOCALENV_PLUGIN_STATE:?run by local-env only}"
 PIDF="$STATE/spa.pid"
 LOGF="$STATE/spa.log"
+COPILOT_PIDF="$STATE/copilot.pid"
+COPILOT_LOGF="$STATE/copilot.log"
+COPILOT_DIR="$ETENDO_ROOT/modules/com.etendoerp.copilot"
 # the main checkout keeps the canonical ports; worktree-create reserves others
 SPA_PORT="${SPA_PORT:-3100}"
 BFF_PORT="${BFF_PORT:-3400}"
@@ -48,6 +53,168 @@ configured_feature_flags() {
     json+="${json:+,}\"$key\":$value"
   done < "$ETENDO_ROOT/worktree.conf"
   [[ -n "$json" ]] && printf '{%s}\n' "$json"
+  return 0
+}
+
+# The `feature-flag` lines of worktree.conf with a boolean value, for the backend: com.etendoerp.go's
+# PropertiesFeatureProvider reads `etendo.go.flags.<key>`, then the environment variable
+# ETGO_FLAG_<KEY> (upper case, - as _). They go into the environment's env file, which local-env
+# sources and Tomcat inherits, each line tagged so the next `up` replaces exactly the ones it wrote:
+# a line removed from worktree.conf is dropped, a hand-written ETGO_FLAG_ line is kept. A value in
+# Openbravo.properties still wins over the variable (the provider's own order).
+# sync_backend_flags: exit 0 when it changed the env file, 1 otherwise.
+BACKEND_FLAG_TAG="# local-env etendo-go: worktree.conf feature-flag"
+sync_backend_flags() {
+  local f="$LOCALENV_STATE/env" line kind assignment key value lines="" tmp
+  if [[ -f "$ETENDO_ROOT/worktree.conf" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ "$line" =~ ^[[:space:]]*# ]] && continue
+      read -r kind assignment _ <<< "$line" || true
+      [[ "$kind" == feature-flag && "$assignment" == *=* ]] || continue
+      key="${assignment%%=*}" value="${assignment#*=}"
+      [[ "$key" =~ ^[a-z][a-z0-9-]*$ && "$value" =~ ^(true|false)$ ]] || continue
+      key="$(tr 'a-z-' 'A-Z_' <<< "$key")"
+      lines+="export ETGO_FLAG_$key=$value $BACKEND_FLAG_TAG"$'\n'
+    done < "$ETENDO_ROOT/worktree.conf"
+  fi
+  # local-env may append to the env file after these lines: only the tagged lines decide
+  [[ "$(grep -F "$BACKEND_FLAG_TAG" "$f" 2>/dev/null || true)" == "${lines%$'\n'}" ]] && return 1
+  tmp="$(mktemp)"
+  { grep -vF "$BACKEND_FLAG_TAG" "$f" 2>/dev/null || true; printf '%s' "$lines"; } > "$tmp"
+  cat "$tmp" > "$f"; rm -f "$tmp"
+}
+
+# worktree.conf `setting copilot=on|off` (default off): this plugin runs the environment's Copilot.
+copilot_wanted() {
+  [[ -f "$ETENDO_ROOT/worktree.conf" ]] || return 1
+  awk '$1 == "setting" && $2 ~ /^copilot=/ { v = substr($2, 9) } END { exit !(v == "on") }' "$ETENDO_ROOT/worktree.conf"
+}
+copilot_pid() { local p; p="$(cat "$COPILOT_PIDF" 2>/dev/null || true)"; [[ -n "$p" ]] && kill -0 "$p" 2>/dev/null && echo "$p"; }
+
+# set_prop FILE KEY VALUE: KEY=VALUE in a .properties file, replacing the line or appending it.
+# VALUE is written as given (escape it for an Openbravo.properties). Exit 0 when FILE changed.
+set_prop() {
+  local f=$1 key=$2 value=$3 tmp
+  [[ -f "$f" ]] || return 1
+  tmp="$(mktemp)"
+  PROP_KEY="$key" PROP_VALUE="$value" awk '
+    BEGIN { key = ENVIRON["PROP_KEY"]; value = ENVIRON["PROP_VALUE"]
+            k = key; gsub(/\./, "\\.", k); re = "^[ \t]*" k "[ \t]*=" }
+    $0 ~ re { if (!done) print key "=" value; done = 1; next }
+    { print }
+    END { if (!done) print key "=" value }' "$f" > "$tmp"
+  if cmp -s "$tmp" "$f"; then rm -f "$tmp"; return 1; fi
+  cat "$tmp" > "$f"; rm -f "$tmp"
+}
+
+# The Openbravo.properties an environment's Tomcat reads, plus the ones a build deploys from.
+props_files() {
+  local f
+  for f in "$ETENDO_ROOT/config/Openbravo.properties" "$ETENDO_ROOT/WebContent/WEB-INF/Openbravo.properties" \
+           "$LOCALENV_STATE"/catalina/webapps/*/WEB-INF/Openbravo.properties; do
+    [[ -f "$f" ]] && echo "$f"
+  done
+}
+
+# context.url is the base com.etendoerp.go builds the URLs it hands out from when no app base URL
+# is configured (McpImageTools.publicUrl: the upload URLs of etendo_request_*_upload). A worktree
+# copies the main checkout's (:8080), so an MCP client was told to upload to another Tomcat. Set to
+# this environment's Tomcat URL in worktrees only (a main checkout may point it anywhere on
+# purpose), and only over a localhost value.
+# align_context_url: exit 0 when it changed a file (listed in ALIGNED), 1 otherwise.
+align_context_url() {
+  local f tmp escaped
+  ALIGNED=""
+  [[ -n "${LOCALENV_WORKTREE:-}" && "$LOCALENV_URL" =~ ^http://localhost:[0-9]+/ ]] || return 1
+  escaped="${LOCALENV_URL//:/\\:}"
+  while IFS= read -r f; do
+    tmp="$(mktemp)"
+    # ENVIRON, not -v: awk -v would turn the \: escapes into plain colons
+    CONTEXT_URL="$escaped" awk '
+      /^[ \t]*context\.url[ \t]*=[ \t]*http(\\)?:\/\/localhost(\\)?:[0-9]+(\/[^ \t\r]*)?[ \t\r]*$/ {
+        print "context.url=" ENVIRON["CONTEXT_URL"] (($0 ~ /\r$/) ? "\r" : ""); next
+      }
+      { print }' "$f" > "$tmp"
+    if cmp -s "$tmp" "$f"; then rm -f "$tmp"
+    else cat "$tmp" > "$f"; rm -f "$tmp"; ALIGNED="${ALIGNED:+$ALIGNED, }$f"; fi
+  done < <(props_files)
+  [[ -n "$ALIGNED" ]]
+}
+
+# Copilot reads its settings from environment variables named after gradle.properties keys
+# (copilot.port or COPILOT_PORT, read_optional_env_var): what docker's .env carries for its
+# container. Exported upper case with . as _, then this environment's ports on top.
+copilot_env() {
+  local line key value
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_.]*)[[:space:]]*=(.*)$ ]] || continue
+    key="$(tr 'a-z.' 'A-Z_' <<< "${BASH_REMATCH[1]}")" value="${BASH_REMATCH[2]}"
+    printf '%s=%s\0' "$key" "$value"
+  done < "$ETENDO_ROOT/gradle.properties"
+}
+
+# reserve_copilot_ports: COPILOT_PORT / COPILOT_PORT_MCP of this environment. The main checkout
+# keeps Copilot's defaults (5005 / 5006); a worktree reserves its own pair, from 5007, once, in
+# its env file, skipping the ports other environments reserved and anything listening.
+reserve_copilot_ports() {
+  local f="$LOCALENV_STATE/env"
+  COPILOT_PORT="$(sed -n 's/^export COPILOT_PORT=//p' "$f" 2>/dev/null | tail -1)"
+  COPILOT_PORT_MCP="$(sed -n 's/^export COPILOT_PORT_MCP=//p' "$f" 2>/dev/null | tail -1)"
+  [[ -n "$COPILOT_PORT" && -n "$COPILOT_PORT_MCP" ]] && return 0
+  if [[ -z "${LOCALENV_WORKTREE:-}" ]]; then COPILOT_PORT=5005 COPILOT_PORT_MCP=5006; return 0; fi
+  COPILOT_PORT="$(free_port 5007 COPILOT_PORT 5005 5006)"
+  COPILOT_PORT_MCP="$(free_port $((COPILOT_PORT + 1)) COPILOT_PORT_MCP 5005 5006 "$COPILOT_PORT")"
+  printf 'export COPILOT_PORT=%s\nexport COPILOT_PORT_MCP=%s\n' "$COPILOT_PORT" "$COPILOT_PORT_MCP" >> "$f"
+}
+
+# start_copilot: runs modules/com.etendoerp.copilot (`uv run python run.py`, the module's own
+# entry point) in its own session on this environment's ports, and points the backend at it
+# (copilot.host=localhost: the copied host.docker.internal resolves only from a container).
+# Exit 0 when it changed the backend's properties (Tomcat reads them at start).
+start_copilot() {
+  local p f port mcp changed=1
+  if [[ ! -f "$COPILOT_DIR/run.py" ]]; then
+    echo "WARNING: setting copilot=on, but $COPILOT_DIR/run.py is not in this checkout: Copilot not started" >&2; return 1
+  fi
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "WARNING: setting copilot=on, but uv is not installed: Copilot not started" >&2; return 1
+  fi
+  reserve_copilot_ports
+  port=$COPILOT_PORT mcp=$COPILOT_PORT_MCP
+  if ! p="$(copilot_pid)" && { port_busy "$port" || port_busy "$mcp"; }; then
+    echo "WARNING: setting copilot=on, but :$port or :$mcp is already in use by another process (a docker Copilot?): this environment's Copilot not started" >&2
+    return 1
+  fi
+  while IFS= read -r f; do
+    set_prop "$f" copilot.host localhost && changed=0
+    set_prop "$f" copilot.port "$port" && changed=0
+    set_prop "$f" copilot.port.mcp "$mcp" && changed=0
+  done < <(props_files)
+  if [[ -n "$p" ]]; then
+    echo ">> Copilot already running: http://localhost:$port (pid $p, log $COPILOT_LOGF)"
+    return $changed
+  fi
+  # the gradle.properties keys first, this environment's ports last (gradle.properties has its own)
+  ( cd "$COPILOT_DIR"
+    if [[ -f "$ETENDO_ROOT/gradle.properties" ]]; then
+      while IFS= read -r -d '' kv; do export "${kv?}"; done < <(copilot_env)
+    fi
+    export COPILOT_PORT="$port" COPILOT_PORT_MCP="$mcp" COPILOT_WAIT_FOR_DEBUGGER=false
+    exec perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' uv run python run.py
+  ) >> "$COPILOT_LOGF" 2>&1 < /dev/null &
+  echo $! > "$COPILOT_PIDF"
+  echo ">> Copilot starting: http://localhost:$port (MCP :$mcp, log $COPILOT_LOGF)"
+  return $changed
+}
+
+stop_copilot() {   # the process group of this environment's Copilot only
+  local p i=0
+  p="$(copilot_pid)" || { rm -f "$COPILOT_PIDF"; return 0; }
+  kill -TERM -- "-$p" 2>/dev/null || true
+  while kill -0 "$p" 2>/dev/null && (( i < 50 )); do sleep 0.2; i=$((i + 1)); done
+  kill -KILL -- "-$p" 2>/dev/null || true
+  rm -f "$COPILOT_PIDF"
+  echo ">> Copilot stopped (pid $p)"
 }
 
 port_busy() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
@@ -191,9 +358,20 @@ stop_spa() {   # the process group of this environment's SPA + BFF only
   echo ">> Etendo GO SPA stopped (:$SPA_PORT, BFF :$BFF_PORT)"
 }
 
+# tomcat_reads WHAT: says that WHAT changed in the backend's configuration. A Tomcat about to
+# start (LOCALENV_TOMCAT=1) reads it; one already running does not.
+tomcat_reads() {
+  if [[ "${LOCALENV_TOMCAT:-0}" == 1 ]]; then echo ">> $1 (the Tomcat starting now picks it up)"
+  else echo "WARNING: $1; a Tomcat of this environment that is already running still has the old configuration: restart it once" >&2; fi
+}
+
 case "$hook" in
   manifest)
-    [[ -d "$GO_MODULE" ]] && echo "seed GOClient v1"
+    # The version is bumped when com.etendoerp.go's GOClient sample dataset changes in a way a
+    # seeded DB must have: the fingerprint does not hash the dataset, so without a bump every
+    # environment keeps restoring the old seed. v2 (ETP-5850): GOClient's sequence for
+    # C_BPartner.EM_Etgo_Identifier, without which creating a contact fails.
+    [[ -d "$GO_MODULE" ]] && echo "seed GOClient v2"
     ;;
   db-seed)
     if [[ -d "$GO_MODULE" ]]; then
@@ -212,10 +390,19 @@ case "$hook" in
       echo ">> Pointed etgo.mcp.public.url / etgo.oauth2.public.url at :$spa in $ALIGNED"
     fi
     if align_app_shell_url; then echo ">> Pointed ETENDO_URL of $SF/tools/app-shell/.env.local at $LOCALENV_URL"; fi
+    if align_context_url; then echo ">> Pointed context.url at $LOCALENV_URL in $ALIGNED"; fi
     ;;
   up)
     # environments created before worktree-create did it; before any skip, for a `make dev` by hand
     if align_app_shell_url; then echo ">> Pointed ETENDO_URL of $SF/tools/app-shell/.env.local at $LOCALENV_URL"; fi
+    # backend configuration first: none of it depends on the SPA, and Tomcat reads it at start
+    if align_context_url; then tomcat_reads "pointed context.url at $LOCALENV_URL in $ALIGNED"; fi
+    if sync_backend_flags; then tomcat_reads "backend feature flags (ETGO_FLAG_*) of $ETENDO_ROOT/worktree.conf written to $LOCALENV_STATE/env"; fi
+    if copilot_wanted; then
+      if start_copilot; then tomcat_reads "pointed copilot.host / copilot.port at this environment's Copilot"; fi
+    else
+      stop_copilot >/dev/null
+    fi
     if [[ "${ETENDO_GO_SPA:-1}" == 0 ]]; then echo ">> ETENDO_GO_SPA=0: Etendo GO SPA not started"; exit 0; fi
     if [[ ! -d "$GO_MODULE" ]]; then echo ">> modules/com.etendoerp.go not in this checkout: Etendo GO SPA not started"; exit 0; fi
     if [[ ! -d "$CORE/packages/app-shell-core/src" ]]; then
@@ -310,8 +497,13 @@ case "$hook" in
     elif [[ "$port" != "$SPA_PORT" ]]; then
       printf 'SPA\thttp://localhost:%s (running; not the reserved :%s%s)\n' "$port" "$SPA_PORT" "$(makefile_ignores_spa_port && echo ": this branch's Makefile ignores SPA_PORT")"
     else printf 'SPA\thttp://localhost:%s (running)\n' "$port"; fi
+    if copilot_wanted || copilot_pid >/dev/null; then
+      port="$(sed -n 's/^export COPILOT_PORT=//p' "$LOCALENV_STATE/env" 2>/dev/null | tail -1)"
+      printf 'Copilot\thttp://localhost:%s (%s)\n' "${port:-5005}" "$(copilot_pid >/dev/null && echo running || echo stopped)"
+    fi
     ;;
   stop|off|worktree-rm)
+    stop_copilot
     stop_spa
     ;;
 esac

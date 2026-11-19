@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Info } from 'lucide-react';
-import { Calculator } from '@phosphor-icons/react';
+import { InfoIcon, Calculator } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { AccountSelect, useAccountSelectorPages } from '@/components/contract-ui';
 import { useUI, useLabel } from '@/i18n';
@@ -55,7 +54,7 @@ function AccountingSetupAlert({ ui }) {
       role="status"
       className="flex items-center gap-2 rounded-lg bg-[#EBEFFF] px-2 py-3 dark:bg-primary/25"
       data-testid="bp-category-accounts-no-type">
-      <Info className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" data-testid="Info__bpCategoryAccountsNoType" />
+      <InfoIcon className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" data-testid="Info__bpCategoryAccountsNoType" />
       <p className="flex min-w-0 flex-wrap gap-x-2 text-sm leading-5 text-[#2B48BC] dark:text-sidebar-accent-foreground">
         <span className="font-medium">{ui('bpCategoryAccountingSetupTitle')}</span>
         <span>{ui('bpCategoryNoTypeAccounts')}</span>
@@ -225,6 +224,6 @@ export default function BpCategoryAccountingPanel({ recordId, data, apiBaseUrl, 
 
 // Icon of this tab in DetailView's tab strip (`CustomLines.tabIcon`, see tabIcons.js): the Phosphor
 // calculator of the Figma, default `regular` weight. The strip renders every tab icon with
-// `className="h-4 w-4"`, which a Phosphor icon honours like a Lucide one (the classes size its svg
+// `className="h-4 w-4"`, which a Phosphor icon honours (the classes size its svg
 // and it draws in `currentColor`), so it matches the other tab icons with no extra props.
 BpCategoryAccountingPanel.tabIcon = Calculator;

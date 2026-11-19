@@ -1,22 +1,30 @@
 // @covers scripts/generate-base-public-api-manifest.mjs
+// @covers scripts/validate-base-public-api-manifest.mjs
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   assertNoFieldMapping,
   buildEntity,
-  fiscalMonitorWindows,
+  decisionsEntityOf,
+  enumOf,
   generateManifest,
   inputFieldsOf,
   isCurated,
+  isPublishedWindow,
   exposurePolicyOf,
   isLinesEntity,
   isPublicField,
+  lookupOf,
   neverExposedFields,
+  publicDescriptionOf,
   publicFieldName,
   publicFunctionalText,
+  publicResourceNames,
+  publicResourceOf,
 } from '../generate-base-public-api-manifest.mjs';
 
 const functional = {
@@ -75,7 +83,7 @@ describe('isCurated', () => {
 describe('isPublicField', () => {
   it('never publishes system, discarded or excluded fields, curated or not', () => {
     for (const curated of [true, false]) {
-      const options = { curated, specName: 'sales-order' };
+      const options = { curated };
       assert.equal(isPublicField({ name: 'x', visibility: 'system', publicApi: { exposed: true } }, options), false);
       assert.equal(isPublicField({ name: 'x', visibility: 'discarded', publicApi: { exposed: true } }, options), false);
       for (const name of neverExposedFields) {
@@ -153,6 +161,44 @@ describe('buildEntity — non-curated entity derives its form and read-only list
     assert.deepEqual(fields.active.dataType, { type: 'boolean' });
     assert.deepEqual(fields.status.dataType, { type: 'string' });
     assert.deepEqual(fields.description.dataType, { type: 'string' });
+  });
+
+  it('publishes the codes of an AD list as dataType.enum with their labels, on any resource', () => {
+    const { fields } = build('sales-order', [
+      { name: 'docStatus', visibility: 'readOnly', form: true, type: 'enum', enumValues: [
+        { value: 'DR', name: 'Draft', labels: { es_ES: 'Borrador' } }, { value: 'CO', name: 'Completed' },
+        { value: 'DR', name: 'Duplicate' }, { value: '', name: 'Empty' }, { name: 'No code' },
+      ] },
+      { name: 'unnamed', visibility: 'editable', form: true, type: 'enum', enumValues: [{ value: 'X' }] },
+      { name: 'noValues', visibility: 'editable', form: true, type: 'enum', enumValues: [] },
+      { name: 'flag', visibility: 'editable', form: true, type: 'boolean', enumValues: [{ value: 'Y', name: 'Yes' }] },
+      { name: 'partner', visibility: 'editable', form: true, type: 'foreignKey', reference: 'BusinessPartner', enumValues: [{ value: 'A', name: 'A' }] },
+    ]);
+    assert.deepEqual(fields.doc_status.dataType, { type: 'string', enum: ['DR', 'CO'] }, 'the first label of a repeated code wins; empty codes are dropped');
+    assert.deepEqual(fields.doc_status.enumLabels, { DR: 'Draft', CO: 'Completed' }, 'the label is the AD name, not a translation');
+    assert.deepEqual(fields.unnamed.enumLabels, { X: 'X' }, 'a code without a name is its own label');
+    for (const name of ['no_values', 'flag', 'partner']) {
+      assert.equal(fields[name].dataType.enum, undefined, `${name} publishes no enum`);
+      assert.equal(fields[name].enumLabels, undefined, `${name} publishes no labels`);
+    }
+    assert.equal(enumOf({ enumValues: null }), null);
+  });
+
+  it('publishes publicApi.description from decisions.json, and refuses an empty one or one citing an internal reference', () => {
+    const fieldsOf = (description) => {
+      const policy = exposurePolicyOf({ entities: { header: { fields: { name: { publicApi: { exposed: true, description } } } } } }, 'header');
+      return buildEntity({
+        specName: 'contacts', entityName: 'header', functional, parent: null, rawEntity: null, policy,
+        contract: contractFor('contacts', [{ name: 'name', visibility: 'editable', form: true, type: 'string' }]),
+      }).fields;
+    };
+    assert.equal(fieldsOf('  Required for a company.  ').name.description, 'Required for a company.');
+    assert.equal(fieldsOf(undefined).name.description, undefined);
+    assert.equal(build('contacts', [{ name: 'name', visibility: 'editable', form: true, type: 'string' }]).fields.name.description, undefined);
+    assert.throws(() => fieldsOf(''), /header\.name: publicApi\.description must be a non-empty string/);
+    assert.throws(() => fieldsOf(7), /must be a non-empty string/);
+    assert.throws(() => fieldsOf('See ETP-6175.'), /cites an internal reference/);
+    assert.throws(() => publicDescriptionOf({ publicApi: { description: 'Ask in Jira' } }, 'x'), /cites an internal reference/);
   });
 
   it('marks every derived field out when the entity has no write endpoint', () => {
@@ -237,31 +283,6 @@ describe('buildEntity — API-only input fields declared in decisions.json', () 
   });
 });
 
-describe('buildEntity — fiscal monitors are not derived', () => {
-  it('publishes no form field for any fiscal monitor without curation', () => {
-    for (const specName of fiscalMonitorWindows) {
-      const entity = build(specName, formFields);
-      assert.deepEqual(Object.keys(entity.fields), ['id'], specName);
-      assert.deepEqual(entity.operations, ['GET', 'LIST'], specName);
-      assert.equal(entity.group, 'Fiscal Monitors', specName);
-    }
-  });
-
-  it('covers the three monitors owned by the localization team', () => {
-    assert.deepEqual([...fiscalMonitorWindows].sort(), ['monitor-verifactu', 'sii-monitor', 'tbai-facturas-enviadas']);
-  });
-
-  it('publishes the curation of a curated fiscal monitor, still without excluded fields', () => {
-    const entity = build('sii-monitor', [
-      { name: 'documentNo', visibility: 'readOnly', form: true, type: 'string', publicApi: { exposed: true } },
-      { name: 'client', visibility: 'readOnly', form: true, type: 'foreignKey', publicApi: { exposed: true } },
-      { name: 'orderDate', visibility: 'editable', form: true, type: 'date' },
-    ]);
-    assert.deepEqual(Object.keys(entity.fields).sort(), ['document_no', 'id']);
-    assert.deepEqual(entity.operations, ['GET', 'LIST']);
-  });
-});
-
 describe('buildEntity — operations', () => {
   it('makes a resource with no writable field read-only, even if its window accepts writes', () => {
     const entity = build('matched-purchase-invoices', [
@@ -296,15 +317,6 @@ describe('buildEntity — conservative base exposure', () => {
     assert.deepEqual(buildWith({ window: { publicApi: { actions: [] } } }).processes, []);
     const entity = buildWith({ window: { publicApi: { actions: ['complete'] } } });
     assert.deepEqual(entity.processes.map((process) => process.action), ['complete']);
-  });
-
-  it('never publishes actions on a fiscal monitor, whatever the decisions say', () => {
-    const contract = completeContract();
-    const entity = buildEntity({
-      specName: [...fiscalMonitorWindows][0], entityName: 'header', contract, functional,
-      parent: null, rawEntity: null, policy: { actions: ['complete'], readOnly: false, readOnlyFields: new Set() },
-    });
-    assert.deepEqual(entity.processes, []);
   });
 
   it('publishes an entity with publicApi.readOnly as GET/LIST with every field out', () => {
@@ -391,10 +403,10 @@ describe('generateManifest — lines survive explicit child visibility', () => {
         { name: 'doc', type: 'foreignKey', visibility: 'system', reference: { targetTable: 'd_head', keyColumn: 'd_head_id' } },
       ],
     });
-    mkdirSync(join(root, 'doc'), { recursive: true });
-    writeFileSync(join(root, 'doc', 'contract.json'), JSON.stringify(contract));
-    writeFileSync(join(root, 'doc', 'decisions.json'), JSON.stringify({ window: { secondaryTabs: { exchangeRates: {} } } }));
-    writeFileSync(join(root, 'doc', 'schema-raw.json'), JSON.stringify({
+    mkdirSync(join(root, 'sales-order'), { recursive: true });
+    writeFileSync(join(root, 'sales-order', 'contract.json'), JSON.stringify(contract));
+    writeFileSync(join(root, 'sales-order', 'decisions.json'), JSON.stringify({ window: { secondaryTabs: { exchangeRates: {} } } }));
+    writeFileSync(join(root, 'sales-order', 'schema-raw.json'), JSON.stringify({
       entities: [
         { tableName: 'd_head', fields: [{ name: 'id', type: 'id', visibility: 'system', columnName: 'd_head_id' }] },
         child('d_line'), child('d_rate'), child('d_other'),
@@ -403,10 +415,10 @@ describe('generateManifest — lines survive explicit child visibility', () => {
   });
   after(() => rmSync(root, { recursive: true, force: true }));
 
-  it('keeps lines with CRUD next to the declared secondary tabs, and still drops undeclared children', async () => {
+  it('keeps order lines with CRUD and excludes even explicitly declared auxiliary tabs', async () => {
     const { entities } = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'none') });
-    assert.deepEqual(Object.keys(entities).sort(), ['doc', 'doc-exchangeRates', 'doc-lines']);
-    assert.deepEqual([...entities['doc-lines'].operations].sort(), ['GET', 'LIST', 'PATCH', 'POST', 'PUT']);
+    assert.deepEqual(Object.keys(entities).sort(), ['sales-order', 'sales-order-lines']);
+    assert.deepEqual([...entities['sales-order-lines'].operations].sort(), ['GET', 'LIST', 'PATCH', 'POST', 'PUT']);
   });
 });
 
@@ -442,6 +454,7 @@ describe('buildEntity — public names', () => {
     assert.equal(publicFieldName('movementQuantity'), 'movement_quantity');
     assert.equal(publicFieldName('pOPaymentTerms'), 'purchase_payment_terms');
     assert.equal(publicFieldName('etgoCurrency'), 'currency');
+    assert.equal(publicFieldName('etgoIscustomer'), 'is_customer');
   });
 });
 
@@ -488,6 +501,123 @@ describe('generateManifest', () => {
   });
 });
 
+describe('generateManifest — window selection and public resource names', () => {
+  let root;
+  const withCategory = (contract, category) => {
+    contract.frontendContract.window.category = category;
+    return contract;
+  };
+  const writeDecisions = (specName, decisions) => writeFileSync(join(root, specName, 'decisions.json'), JSON.stringify(decisions));
+
+  before(() => {
+    root = mkdtempSync(join(tmpdir(), 'public-api-manifest-selection-'));
+    // Allowlisted windows whose category is excluded by default.
+    writeArtifact(root, 'tax-category', withCategory(contractFor('tax-category', formFields, { entityName: 'taxCategory' }), 'configuration'));
+    writeArtifact(root, 'conversion-rates', withCategory(contractFor('conversion-rates', formFields, { entityName: 'conversionRate' }), 'finance'));
+    // decisions.json keys the entity `header` and renames it to the contract name.
+    writeDecisions('conversion-rates', { entities: { header: { name: 'conversionRate', publicApi: { readOnly: true } } } });
+    // Not allowlisted, same excluded category.
+    writeArtifact(root, 'payment-term', withCategory(contractFor('payment-term', formFields, { entityName: 'paymentTerm' }), 'configuration'));
+    // Renamed resource, and a window that references it.
+    writeArtifact(root, 'business-partner-category', withCategory(contractFor('business-partner-category', [
+      { name: 'name', visibility: 'editable', form: true, type: 'string' },
+    ], { entityName: 'businessPartnerCategory' }), 'contact'));
+    writeArtifact(root, 'contacts', contractFor('contacts', [
+      { name: 'name', visibility: 'editable', form: true, type: 'string', publicApi: { exposed: true } },
+      { name: 'businessPartnerCategory', visibility: 'editable', form: true, type: 'foreignKey', reference: 'BusinessPartnerCategory', publicApi: { exposed: true } },
+    ], { entityName: 'businessPartner' }));
+    writeDecisions('contacts', { entities: { businessPartner: { fields: { businessPartnerCategory: { publicApi: { lookup: true } } } } } });
+  });
+
+  after(() => rmSync(root, { recursive: true, force: true }));
+
+  it('publishes an allowlisted window whatever its category, and never a window outside the allowlist', async () => {
+    const { entities, policy } = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
+    assert.ok(entities['tax-category'], 'allowlisted configuration window');
+    assert.ok(entities['conversion-rates'], 'allowlisted finance window');
+    assert.equal(entities['payment-term'], undefined, 'configuration window outside the allowlist');
+    assert.ok(policy.excludedCategories.includes('configuration'));
+    assert.equal(policy.windowSelection, 'allowlist-overrides-excluded-categories');
+    assert.equal(isPublishedWindow('payment-term'), false);
+    assert.equal(isPublishedWindow('tax'), true);
+    assert.equal(isPublishedWindow('business-partner'), false, 'excludedWindows still wins');
+  });
+
+  it('reads publicApi.readOnly from a decisions entity keyed under another name', async () => {
+    const { entities } = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
+    const rates = entities['conversion-rates'];
+    assert.deepEqual(rates.operations, ['GET', 'LIST']);
+    assert.ok(Object.values(rates.fields).every((field) => field.direction === 'out'));
+    assert.deepEqual(entities['tax-category'].operations.includes('POST'), true, 'no readOnly declared: writable');
+  });
+
+  it('publishes a renamed window under its public name and keeps its NEO spec', async () => {
+    const { entities, policy } = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
+    assert.equal(entities['business-partner-category'], undefined);
+    const category = entities['contact-category'];
+    assert.equal(category.publicName, 'contact-category');
+    assert.equal(category.specName, 'business-partner-category');
+    assert.equal(category.source.artifact, 'business-partner-category');
+    assert.deepEqual(policy.publicResourceNames, publicResourceNames);
+  });
+
+  it('links a reference to the renamed resource by its public name, lookup type included', async () => {
+    const { entities } = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
+    const field = entities.contacts.fields.category;
+    assert.deepEqual(field.relationship, { resource: 'contact-category', cardinality: 'one', foreignKey: 'category' });
+    assert.equal(field.lookup.type, 'contact-category');
+  });
+});
+
+describe('buildEntity — a decisions `type` override reaches the manifest', () => {
+  it('publishes a string-extracted field as number/double once decisions declares "type": "number"', () => {
+    // resolve-curated applies the override and stamps explicitType; the manifest reads the contract type.
+    const entity = build('conversion-rates', [
+      { name: 'multipleRateBy', visibility: 'editable', form: true, type: 'number', explicitType: true },
+      { name: 'legacyRate', visibility: 'editable', form: true, type: 'string' },
+    ], { entityName: 'conversionRate' });
+    assert.deepEqual(entity.fields.multiple_rate_by.dataType, { type: 'number', format: 'double' });
+    assert.deepEqual(entity.fields.legacy_rate.dataType, { type: 'string' });
+  });
+
+  it('keeps the committed conversion-rates artifacts in step: decisions override, contract type, manifest type', async () => {
+    const root = new URL('../../artifacts/conversion-rates/', import.meta.url);
+    const decisions = JSON.parse(readFileSync(new URL('decisions.json', root), 'utf8'));
+    const contract = JSON.parse(readFileSync(new URL('contract.json', root), 'utf8'));
+    const entity = buildEntity({
+      specName: 'conversion-rates', entityName: 'conversionRate', contract, functional, parent: null, rawEntity: null,
+      policy: exposurePolicyOf(decisions, 'conversionRate'),
+    });
+    for (const [internal, published] of [['multipleRateBy', 'multiple_rate_by'], ['divideRateBy', 'divide_rate_by']]) {
+      assert.equal(decisions.entities.header.fields[internal].type, 'number', `decisions overrides ${internal}`);
+      const field = contract.frontendContract.entities.conversionRate.fields.find((candidate) => candidate.name === internal);
+      assert.equal(field.type, 'number', `contract carries the override for ${internal} (regenerate after changing decisions)`);
+      assert.deepEqual(entity.fields[published].dataType, { type: 'number', format: 'double' });
+      assert.equal(entity.fields[published].direction, 'out');
+    }
+    assert.equal(entity.fields.s_mfcr_synced, undefined, 'the curated entity leaves the sync flag out');
+  });
+});
+
+describe('publicResourceOf / decisionsEntityOf', () => {
+  it('maps only the declared renames', () => {
+    assert.equal(publicResourceOf('business-partner-category'), 'contact-category');
+    assert.equal(publicResourceOf('tax'), 'tax');
+    assert.ok(Object.isFrozen(publicResourceNames));
+  });
+
+  it('finds the decisions entity by key first, then by its declared name', () => {
+    const decisions = { entities: { header: { name: 'conversionRate', publicApi: { readOnly: true } }, conversionRate: undefined } };
+    assert.equal(decisionsEntityOf(decisions, 'conversionRate'), undefined, 'an own key wins, even when empty');
+    const renamed = { entities: { header: { name: 'conversionRate', publicApi: { readOnly: true } } } };
+    assert.equal(decisionsEntityOf(renamed, 'conversionRate'), renamed.entities.header);
+    assert.equal(decisionsEntityOf(renamed, 'header'), renamed.entities.header);
+    assert.equal(decisionsEntityOf(renamed, 'lines'), undefined);
+    assert.equal(decisionsEntityOf(null, 'header'), undefined);
+    assert.equal(exposurePolicyOf(renamed, 'conversionRate').readOnly, true);
+  });
+});
+
 describe('generateManifest — schema-raw.json is required', () => {
   let root;
 
@@ -514,6 +644,14 @@ describe('generateManifest — schema-raw.json is required', () => {
     assert.deepEqual(Object.keys(manifest.entities), []);
   });
 
+  it('does not require raw schemas for excluded operational or fiscal resources', async () => {
+    for (const specName of ['invoice-inbox', 'sales-invoice', 'purchase-invoice', 'warehouse', 'monitor-verifactu', 'sii-monitor', 'tbai-facturas-enviadas']) {
+      writeArtifact(root, specName, contractFor(specName, formFields), { rawSchema: false });
+    }
+    const { entities } = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
+    assert.deepEqual(Object.keys(entities), []);
+  });
+
   it('does not require schema-raw.json for windows that are not published', async () => {
     writeArtifact(root, 'absence', contractFor('absence', formFields), { rawSchema: false });
     const manifest = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
@@ -536,6 +674,7 @@ describe('generateManifest — child tabs and functional texts', () => {
           bankAccount: tab('c_bp_bankaccount', 'Bank Account'),
           locationAddress: tab('c_bpartner_location', 'Location/Address'),
           addressNote: tab('c_bp_address_note', 'Address Note'),
+          extra: tab('c_bp_extra', 'Extra'),
         },
       },
       backendContract: {
@@ -558,6 +697,7 @@ describe('generateManifest — child tabs and functional texts', () => {
         { tableName: 'c_bpartner', fields: [{ name: 'id', type: 'id', visibility: 'system', columnName: 'c_bpartner_id' }] },
         child('c_bp_bankaccount'),
         child('c_bpartner_location'),
+        child('c_bp_extra'),
         // A tab under a child tab (AD level 2), linked to the window's record as well.
         { ...child('c_bp_address_note'), level: 'subline' },
       ],
@@ -647,5 +787,148 @@ describe('assertNoFieldMapping — removed publicApi type/handlerId keys', () =>
       }
     }
     assert.ok(checked > 0);
+  });
+});
+
+describe('buildEntity — lookups declared in decisions.json', () => {
+  const fields = [
+    { name: 'paymentMethod', visibility: 'editable', form: true, type: 'foreignKey', reference: 'PaymentMethod' },
+    { name: 'description', visibility: 'editable', form: true, type: 'string' },
+    { name: 'secretMethod', visibility: 'system', form: true, type: 'foreignKey', reference: 'PaymentMethod' },
+  ];
+  const policyFor = (fieldDecisions) => exposurePolicyOf({ entities: { header: { fields: fieldDecisions } } }, 'header');
+  const buildWith = (fieldDecisions, { parent = null, entityName = 'header' } = {}) => buildEntity({
+    specName: 'sales-order', entityName, contract: contractFor('sales-order', fields, { entityName }), functional,
+    parent, rawEntity: null, policy: exposurePolicyOf({ entities: { [entityName]: { fields: fieldDecisions } } }, entityName),
+  });
+
+  it('attaches the selector, the JSON:API type of the reference and the fixed context to the published field', () => {
+    const entity = buildWith({ paymentMethod: { publicApi: { lookup: { context: { IsSOTrx: 'Y' } } } } });
+    assert.deepEqual(entity.fields.payment_method.lookup, { selector: 'paymentMethod', type: 'payment-method', context: { IsSOTrx: 'Y' } });
+    assert.equal(entity.fields.description.lookup, undefined);
+  });
+
+  it('accepts lookup: true as a lookup without context, and publishes none when it is absent or false', () => {
+    assert.deepEqual(buildWith({ paymentMethod: { publicApi: { lookup: true } } }).fields.payment_method.lookup.context, {});
+    assert.equal(buildWith({ paymentMethod: { publicApi: { lookup: false } } }).fields.payment_method.lookup, undefined);
+    assert.equal(buildWith({}).fields.payment_method.lookup, undefined);
+    assert.equal(policyFor({}).lookups.size, 0);
+  });
+
+  it('refuses a malformed lookup declaration', () => {
+    for (const lookup of ['yes', [], { context: [] }, { context: { IsSOTrx: true } }, { context: { 'bad name': 'Y' } }, { params: {} }]) {
+      assert.throws(() => lookupOf({ publicApi: { lookup } }, 'header.paymentMethod'), /header\.paymentMethod: publicApi\.lookup must be/);
+    }
+  });
+
+  it('refuses a context key the gateway sets itself: q, limit or offset', () => {
+    for (const name of ['q', 'limit', 'offset']) {
+      assert.throws(() => lookupOf({ publicApi: { lookup: { context: { [name]: '1' } } } }, 'header.paymentMethod'),
+        new RegExp(`header\\.paymentMethod: publicApi\\.lookup context cannot use "${name}"`));
+    }
+    assert.deepEqual(lookupOf({ publicApi: { lookup: { context: { Limit: 'x' } } } }, 'h.f').context, { Limit: 'x' }, 'only the exact names are reserved');
+  });
+
+  it('fails closed on a field that is not published', () => {
+    assert.throws(() => buildWith({ secretMethod: { publicApi: { lookup: true } } }), /sales-order\/header\.secretMethod: .*does not publish/);
+    assert.throws(() => buildWith({ unknownField: { publicApi: { lookup: true } } }), /does not publish/);
+  });
+
+  it('fails closed on a field that is not a reference', () => {
+    assert.throws(() => buildWith({ description: { publicApi: { lookup: true } } }), /needs a reference field/);
+  });
+
+  it('fails closed on a child resource', () => {
+    const parent = { resource: 'sales-order', entityName: 'header', foreignKey: 'salesOrder' };
+    assert.throws(() => buildWith({ paymentMethod: { publicApi: { lookup: true } } }, { parent, entityName: 'lines' }), /only supported on top-level resources/);
+  });
+
+  it('refuses a child resource whose path segment would be "lookups"', () => {
+    const parent = { resource: 'sales-order', entityName: 'header', foreignKey: 'salesOrder' };
+    assert.throws(() => buildWith({}, { parent, entityName: 'lookups' }), /kept for lookups/);
+  });
+});
+
+describe('validate-base-public-api-manifest — lookup, enum and description shape', () => {
+  let root;
+  const validator = new URL('../validate-base-public-api-manifest.mjs', import.meta.url).pathname;
+  const field = (extra = {}) => ({ sourceVisibility: 'editable', direction: 'inout', internalPath: 'paymentMethod', dataType: { type: 'string' }, reference: 'PaymentMethod', ...extra });
+  const manifestWith = (paymentMethod, parent) => ({
+    entities: {
+      'sales-order': { publicApi: true, operations: ['GET', 'LIST'], fields: { id: { internalPath: 'id' }, payment_method: paymentMethod }, ...(parent ? { parent } : {}) },
+    },
+  });
+  const run = (manifest) => {
+    const path = join(root, `manifest-${Math.random().toString(36).slice(2)}.json`);
+    writeFileSync(path, JSON.stringify(manifest));
+    try {
+      return { ok: true, output: execFileSync(process.execPath, [validator, path], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) };
+    } catch (error) {
+      return { ok: false, output: String(error.stderr) };
+    }
+  };
+
+  before(() => { root = mkdtempSync(join(tmpdir(), 'public-api-validator-')); });
+  after(() => rmSync(root, { recursive: true, force: true }));
+
+  it('accepts a well-formed lookup and counts it', () => {
+    const result = run(manifestWith(field({ lookup: { selector: 'paymentMethod', type: 'payment-method', context: { IsSOTrx: 'Y' } } })));
+    assert.equal(result.ok, true, result.output);
+    assert.match(result.output, /1 lookups/);
+  });
+
+  it('rejects a lookup without selector, with a bad type, a bad context or no reference', () => {
+    const cases = [
+      [field({ lookup: { type: 'payment-method', context: {} } }), /selector is missing/],
+      [field({ lookup: { selector: 'paymentMethod', type: 'PaymentMethod', context: {} } }), /type must be kebab-case/],
+      [field({ lookup: { selector: 'paymentMethod', type: 'payment-method', context: { IsSOTrx: 1 } } }), /context must be an object of string values/],
+      [field({ reference: null, lookup: { selector: 'paymentMethod', type: 'payment-method', context: {} } }), /needs a reference field/],
+      [field({ lookup: true }), /lookup must be an object/],
+    ];
+    for (const [value, message] of cases) {
+      const result = run(manifestWith(value));
+      assert.equal(result.ok, false);
+      assert.match(result.output, message);
+    }
+  });
+
+  it('rejects a lookup whose context uses q, limit or offset', () => {
+    for (const name of ['q', 'limit', 'offset']) {
+      const result = run(manifestWith(field({ lookup: { selector: 'paymentMethod', type: 'payment-method', context: { [name]: '1' } } })));
+      assert.equal(result.ok, false, name);
+      assert.match(result.output, new RegExp(`context cannot use reserved parameter "${name}"`));
+    }
+  });
+
+  it('accepts an enum with a label per code, and a description, and counts the enum', () => {
+    const result = run(manifestWith(field({ reference: null, dataType: { type: 'string', enum: ['1', '2'] }, enumLabels: { 1: 'NIF', 2: 'VAT' }, description: 'Kind of tax id.' })));
+    assert.equal(result.ok, true, result.output);
+    assert.match(result.output, /1 enums/);
+  });
+
+  it('rejects a malformed enum, its labels or an empty description', () => {
+    const enumField = (dataType, enumLabels, extra = {}) => field({ reference: null, dataType, enumLabels, ...extra });
+    const cases = [
+      [enumField({ type: 'string', enum: [] }, {}), /dataType.enum must be a non-empty list of distinct string codes/],
+      [enumField({ type: 'string', enum: ['1', '1'] }, { 1: 'a' }), /distinct string codes/],
+      [enumField({ type: 'string', enum: [1] }, { 1: 'a' }), /distinct string codes/],
+      [enumField({ type: 'string' }, { 1: 'a' }), /distinct string codes/],
+      [enumField({ type: 'number', enum: ['1'] }, { 1: 'a' }), /an enum field must be of type string/],
+      [enumField({ type: 'string', enum: ['1'] }, undefined), /enumLabels must be an object/],
+      [enumField({ type: 'string', enum: ['1', '2'] }, { 1: 'a' }), /enumLabels has no label for 2/],
+      [enumField({ type: 'string', enum: ['1'] }, { 1: 'a', 9: 'b' }), /enumLabels names codes outside dataType.enum: 9/],
+      [field({ description: ' ' }), /description must be a non-empty string/],
+    ];
+    for (const [value, message] of cases) {
+      const result = run(manifestWith(value));
+      assert.equal(result.ok, false, String(message));
+      assert.match(result.output, message);
+    }
+  });
+
+  it('rejects a lookup on a child resource', () => {
+    const result = run(manifestWith(field({ lookup: { selector: 'paymentMethod', type: 'payment-method', context: {} } }), { resource: 'sales-order', foreignKey: 'x', pathSegment: 'lines' }));
+    assert.equal(result.ok, false);
+    assert.match(result.output, /not supported on a child resource/);
   });
 });

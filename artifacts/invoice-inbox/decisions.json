@@ -8,6 +8,7 @@
   },
   "entities": {
     "header": {
+      "agentPrompt": "The invoice inbox (Bandeja de facturas): supplier documents a person uploaded in the app, read by OCR. status is one of these exact codes: PROCESSING (being read), PENDING_REVIEW, READY and ERROR (all three are still pending to become a purchase invoice; ERROR means something must be fixed, see errorCode), CONFIRMED (became the purchase invoice in invoice) and DISCARDED. For what is pending, filter status in [PENDING_REVIEW, READY, ERROR]; any other value matches nothing. An agent can only read the inbox: uploading, reviewing, confirming and discarding are done by a person in the app.",
       "methods": [
         "GET",
         "GETBYID"
@@ -95,6 +96,26 @@
           "grid": false,
           "form": false
         },
+        "errorDetail": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false
+        },
+        "currency": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false
+        },
+        "newProducts": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false
+        },
+        "totalMismatch": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false
+        },
         "discardedAt": {
           "visibility": "readOnly",
           "grid": false,
@@ -117,11 +138,11 @@
         },
         "currentData": {
           "visibility": "discarded",
-          "reason": "Large JSON text (up to 1 MB); never served in the list. The review panel (ETP-6050) reads the document through the `review` action (GET /sws/neo/invoice-inbox/header/{id}/action/review, REST only, hidden from MCP), not through this spec."
+          "reason": "Large JSON text (up to 1 MB); never served in the list. The review panel (ETP-6050) reads the document through the `review` action (GET /sws/neo/invoice-inbox/header/{id}/action/review) and edits it through the `apply` and `mark-reviewed` actions (POST, REST only, hidden from MCP), not through this spec."
         },
         "extractedData": {
           "visibility": "discarded",
-          "reason": "Large JSON text (up to 1 MB); never served in the list. The review panel (ETP-6050) reads the document through the `review` action (GET /sws/neo/invoice-inbox/header/{id}/action/review, REST only, hidden from MCP), not through this spec."
+          "reason": "Large JSON text (up to 1 MB); never served in the list. The review panel (ETP-6050) reads the document through the `review` action (GET /sws/neo/invoice-inbox/header/{id}/action/review) and edits it through the `apply` and `mark-reviewed` actions (POST, REST only, hidden from MCP), not through this spec."
         },
         "processingAttempts": {
           "visibility": "system",

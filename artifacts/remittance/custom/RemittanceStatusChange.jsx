@@ -1,4 +1,4 @@
-import { ArrowRight } from 'lucide-react';
+import { ArrowRightIcon } from '@phosphor-icons/react';
 import { StatusTag } from '@/components/ui/status-tag';
 import DocumentStatusPill from '@/components/contract-ui/DocumentStatusPill.jsx';
 import decisions from '../decisions.json';
@@ -38,7 +38,7 @@ export default function RemittanceStatusChange({ from, to }) {
   return (
     <div className="flex items-center justify-center gap-3" data-testid="remittance-status-change" data-from={from} data-to={to}>
       <StatusTag status={from} label={ui(source.key)} tone={source.tone} data-testid="StatusTag__from" />
-      <ArrowRight className="h-4 w-4 shrink-0 text-[hsl(var(--muted-foreground))]" aria-hidden="true" data-testid="ArrowRight__status-change" />
+      <ArrowRightIcon className="h-4 w-4 shrink-0 text-[hsl(var(--muted-foreground))]" aria-hidden="true" data-testid="ArrowRight__status-change" />
       <StatusTag status={to} label={ui(target.key)} tone={target.tone} data-testid="StatusTag__to" />
     </div>
   );

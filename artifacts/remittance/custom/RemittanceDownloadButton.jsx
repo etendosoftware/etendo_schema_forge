@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Download, Loader2 } from 'lucide-react';
+import { DownloadSimpleIcon, CircleNotchIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -56,8 +56,8 @@ export default function RemittanceDownloadButton({ data, apiBaseUrl }) {
             data-testid="remittance-file-download"
             className="h-10 w-10 flex items-center justify-center rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-60">
             {busy
-              ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" data-testid="Loader2__download" />
-              : <Download className="h-5 w-5" aria-hidden="true" data-testid="Download__download" />}
+              ? <CircleNotchIcon className="h-5 w-5 animate-spin" aria-hidden="true" data-testid="Loader2__download" />
+              : <DownloadSimpleIcon className="h-5 w-5" aria-hidden="true" data-testid="Download__download" />}
           </button>
         </TooltipTrigger>
         <TooltipContent data-testid="TooltipContent__remittance-download">{label}</TooltipContent>

@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react';
-import { X, Download, FileText } from 'lucide-react';
+import { XIcon, DownloadSimpleIcon, FileTextIcon } from '@phosphor-icons/react';
 
 /**
  * Full-screen modal overlay for previewing PDF documents.
@@ -47,7 +47,7 @@ export function DocumentPreview({ open, onClose, title = 'Document Preview', pdf
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-border/30 bg-muted shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <FileText
+            <FileTextIcon
               className="h-4 w-4 text-muted-foreground shrink-0"
               data-testid="FileText__152a2f" />
             <span className="text-sm font-medium text-foreground truncate">{title}</span>
@@ -60,7 +60,7 @@ export function DocumentPreview({ open, onClose, title = 'Document Preview', pdf
                 className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                 title="Download"
               >
-                <Download className="h-4 w-4" data-testid="Download__152a2f" />
+                <DownloadSimpleIcon className="h-4 w-4" data-testid="Download__152a2f" />
               </a>
             )}
             <button
@@ -68,7 +68,7 @@ export function DocumentPreview({ open, onClose, title = 'Document Preview', pdf
               className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
               title="Close"
             >
-              <X className="h-4 w-4" data-testid="X__152a2f" />
+              <XIcon className="h-4 w-4" data-testid="X__152a2f" />
             </button>
           </div>
         </div>
@@ -91,7 +91,7 @@ export function DocumentPreview({ open, onClose, title = 'Document Preview', pdf
             /* Placeholder when no PDF URL is available */
             (<div className="h-full flex flex-col items-center justify-center text-center px-8 bg-card rounded-lg shadow-lg">
               <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                <FileText className="h-8 w-8 text-muted-foreground" data-testid="FileText__152a2f" />
+                <FileTextIcon className="h-8 w-8 text-muted-foreground" data-testid="FileText__152a2f" />
               </div>
               <h3 className="text-base font-medium text-foreground mb-2">
                 Preview not available

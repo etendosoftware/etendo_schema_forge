@@ -63,6 +63,9 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   STEP_ID: 'stepId',
   SUPPORT_REQUESTED: 'supportRequested',
   TYPE: 'type',
+  // ETP-6239: `state` is denylisted by the payload policy, so the panel state travels as `panelState`.
+  PANEL_STATE: 'panelState',
+  TRIGGER: 'trigger',
   USERNAME: 'username',
   VALUE: 'value',
   VARIANT: 'variant',
@@ -179,6 +182,7 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   WALKTHROUGH_STARTED: defineEvent('walkthrough_started', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
       OBSERVABILITY_PROPERTY_KEYS.FLOW_ID,
       // The status the flow held BEFORE this run, which separates a first-timer
       // from a repeater from someone coming back to a revised tour.
@@ -191,6 +195,7 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   WALKTHROUGH_FINISHED: defineEvent('walkthrough_finished', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
       OBSERVABILITY_PROPERTY_KEYS.FLOW_ID,
       // 'completed' | 'abandoned' -- one event with an outcome rather than two
       // events, so the funnel is a single step with a breakdown.
@@ -324,6 +329,17 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
       OBSERVABILITY_PROPERTY_KEYS.ENTITY,
       OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+    ],
+  }),
+  // ETP-6050 — one event per time the Invoice Inbox page is shown. Makes the backend-only
+  // `invoice-inbox` flag measurable (adoption = this event over `session_started`). The tenant only
+  // (`account_id`) plus the spec: no user, file name, vendor, amount or document id.
+  INVOICE_INBOX_OPENED: defineEvent('invoice_inbox_opened', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
       OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
     ],
   }),
@@ -828,6 +844,7 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   REPORT_OPENED: defineEvent('report_opened', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
     properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
       OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
       OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
       OBSERVABILITY_PROPERTY_KEYS.SOURCE,
@@ -838,10 +855,11 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   }),
   // One per user change, once its result is visible or its request failed; never for the defaults,
   // "Limpiar filtros" or an aborted request. `type`: 'period' | 'organization' | 'account_level' |
-  // 'business_partner' | 'product' | 'comparison'.
+  // 'business_partner' | 'product' | 'comparison' | 'columns'.
   REPORT_FILTER_APPLIED: defineEvent('report_filter_applied', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
     properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
       OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
       OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
@@ -855,9 +873,23 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   REPORT_GROUP_TOGGLED: defineEvent('report_group_toggled', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
     properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
       OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
       OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
+      OBSERVABILITY_PROPERTY_KEYS.OUTCOME,
+    ],
+  }),
+  // ETP-6239 D8/D9: the "Personalizar informe" panel hidden or shown. `panelState`: 'collapsed' |
+  // 'expanded'. `trigger`: 'user' (the button) | 'auto_columns' (hidden by choosing Mes/Trimestre).
+  REPORT_PANEL_TOGGLED: defineEvent('report_panel_toggled', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
+      OBSERVABILITY_PROPERTY_KEYS.PANEL_STATE,
+      OBSERVABILITY_PROPERTY_KEYS.TRIGGER,
       OBSERVABILITY_PROPERTY_KEYS.OUTCOME,
     ],
   }),
@@ -866,6 +898,7 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   REPORT_DRILLDOWN: defineEvent('report_drilldown', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
     properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
       OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
       OBSERVABILITY_PROPERTY_KEYS.REPORT_SESSION_ID,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,

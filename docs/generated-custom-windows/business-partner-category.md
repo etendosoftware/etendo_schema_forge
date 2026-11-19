@@ -2,15 +2,25 @@
 
 ## Intent
 
-Business Partner Category lets users maintain the category master record used to classify business partners (customers, vendors, employees, etc.) and configure the accounting accounts associated with each category per accounting schema. The main form covers the category header fields; the **Accounting** tab exposes the GL accounts linked to each accounting schema for that category.
+Business Partner Category lets users maintain the category master record used to classify business partners (customers, vendors, employees, etc.): its search key, name, description, whether it is the default category, and whether its contacts are customers.
+
+The window also configures the accounting accounts associated with each category per accounting schema: the **Accounting** tab exposes the GL accounts linked to each accounting schema for that category.
 
 ## What this window should allow
 
 Users should be able to:
 
-- browse contact categories (columns depend on the `contact-category-type` flag, see below) and, with the flag on, narrow the list to customer or vendor/creditor categories with the contact-type quick filter
+- browse and search contact categories by Search Key and Name
 - open a category and maintain its header fields: Search Key, Name, Description, Default
-- with the flag on, set the **contact type** (Customer and/or Vendor/Creditor — at least one is required) and the accounts of each type from the Accounting tab: Cliente (receivables, prepayment, write-off) and Proveedor/Acreedor (liability, prepayment) — see *Contact type — ETP-5791* below
+- mark a category as a customer category
+
+With the `contact-category-type` flag on, the list columns change, a contact-type quick filter
+narrows the list to customer or vendor/creditor categories, and users set the **contact type**
+(Customer and/or Vendor/Creditor, at least one is required) and the accounts of each type from the
+Accounting tab: Cliente (receivables, prepayment, write-off) and Proveedor/Acreedor (liability,
+prepayment). See *Contact type — ETP-5791* below. These capabilities are written as prose, not as
+bullets, on purpose: the public API manifest publishes the bullets of this section as the
+`contact-category` capabilities, and the API exposes neither the vendor type nor the Accounting tab.
 
 > **Feature flag `contact-category-type` (ETP-5791, default OFF).** Everything under *Contact type —
 > ETP-5791* is shown only while the flag is on. With the flag **off** the window looks and behaves
@@ -272,3 +282,22 @@ Saving an account field of the accounting tab now refuses a summary (heading) ac
 ## Read-only role tier: no attachment uploads — ETP-5830
 
 With a `read-only` tier on this window the Attachments tab lists, previews and downloads files but shows no upload dropzone and no delete or description edit (`AttachmentsTab` `accessReadOnly`). Before ETP-5830 the dropzone stayed enabled and the upload failed with the raw backend 403; that error is now translated too. Full list of gates: [`app-shell-functional-flows.md`](app-shell-functional-flows.md) → *Read-only role access — every write path is gated*.
+
+## Public API — `contact-category` — ETP-6174
+
+The public API publishes the category header as `contact-category` (`/api/v1/contact-category`),
+read and write, with optimistic concurrency (`If-Match`). The public name is a rename in the
+generator's `publicResourceNames`; the NEO spec stays `business-partner-category`, which is what the
+gateway calls. The Accounting tab is not published. With no `exposed` curation, the published
+fields are the ones the form shows: `search_key`, `name`, `description`, `default` and `is_customer`
+(internal `etgoIscustomer`, named by the generator's public field-name table), plus `id` and
+`updated`. `searchKey` and `name` declare `publicApi.required: true` in `decisions.json`, so the
+OpenAPI create body lists `search_key` and `name` as required. `etgoIsvendor` is not in the form, so
+it is not published. With the `contact-category-type` feature flag on, `BusinessPartnerCategoryHandler`
+refuses a category saved with neither flag, so a category created through the API must send
+`is_customer: true`, and a vendor-only category cannot be created through the API, as in the app.
+Regenerated with `make regen ONLY=business-partner-category SKIP_EXTRACT=1 FROM_CACHE=1`: only the
+contract version and the copied `publicApi` change; the generated frontend does not.
+
+`contacts.category` is now a relationship to `contact-category`, and the contact's category lookup
+answers values of that type. Contract: `docs/public-api.md` §3, §4.2.2 and §4.6.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { ArrowRight, Loader2, ReceiptText, X } from 'lucide-react';
+import { ArrowRightIcon, CircleNotchIcon, ReceiptIcon, XIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { MODAL_STYLES } from './modal-styles.js';
 
@@ -207,7 +207,7 @@ export default function ActionChoiceModal({
           className={FOCUS_RING_CLS}
           style={closeBtnStyle}
         >
-          <X size={20} data-testid="X__6f7a22" />
+          <XIcon size={20} data-testid="X__6f7a22" />
         </button>
 
         <div style={headerStyle}>
@@ -372,7 +372,7 @@ export function nextOptionId(options, currentId, key) {
  * dialog's `aria-describedby` target.
  */
 function StaticOptionCard({ option, descriptionId }) {
-  const Icon = option.icon ?? ReceiptText;
+  const Icon = option.icon ?? ReceiptIcon;
   return (
     <div data-testid={option.testId} style={staticCardStyle}>
       <span style={iconBoxStyle} aria-hidden="true">
@@ -415,7 +415,7 @@ function SummaryTable({ columns, data }) {
 
 function OptionCard({ option, selected, disabled, onSelect, buttonRef }) {
   const variant = selected ? CARD_VARIANTS.selected : CARD_VARIANTS.idle;
-  const Icon = option.icon ?? ReceiptText;
+  const Icon = option.icon ?? ReceiptIcon;
   return (
     <button
       ref={buttonRef}
@@ -451,10 +451,10 @@ function OptionCard({ option, selected, disabled, onSelect, buttonRef }) {
 
 function PrimaryIcon({ loading, showArrow }) {
   if (loading) {
-    return <Loader2 size={24} className="animate-spin" data-testid="Loader2__6f7a22" />;
+    return <CircleNotchIcon size={24} className="animate-spin" data-testid="Loader2__6f7a22" />;
   }
   if (!showArrow) return null;
-  return <ArrowRight size={24} style={{ opacity: 0.9 }} data-testid="ArrowRight__6f7a22" />;
+  return <ArrowRightIcon size={24} style={{ opacity: 0.9 }} data-testid="ArrowRight__6f7a22" />;
 }
 
 // Single-option mode: label-only pill (no arrow), so the padding is symmetric — except

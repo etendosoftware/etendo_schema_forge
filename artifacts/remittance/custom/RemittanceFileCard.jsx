@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { WarningIcon, ArrowsClockwiseIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { Button } from '@/components/ui/button';
@@ -117,7 +117,7 @@ export function ReadinessProblemsBlock({ problems, onNavigate, testId, renderPro
   return (
     <div className="space-y-2" role="alert" data-testid={testId}>
       <p className="inline-flex items-center gap-1.5 text-sm font-medium text-[hsl(var(--status-warning-fg))]">
-        {!hideIcon && <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="AlertTriangle__readiness" />}
+        {!hideIcon && <WarningIcon className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="AlertTriangle__readiness" />}
         {ui('remittanceFileReadinessProblems')}
       </p>
       <ReadinessProblemList problems={problems} onNavigate={onNavigate} renderProblemActions={renderProblemActions} data-testid="ReadinessProblemList__block" />
@@ -175,7 +175,7 @@ function ReadinessCard({ data, apiBaseUrl, creditorValid = false }) {
       className="h-7 shrink-0 gap-1.5 px-2 text-xs text-[hsl(var(--muted-foreground))]"
       data-testid="remittance-file-readiness-recheck"
     >
-      <RefreshCw className={`h-3.5 w-3.5${loading ? ' animate-spin' : ''}`} aria-hidden="true" data-testid="RefreshCw__readiness" />
+      <ArrowsClockwiseIcon className={`h-3.5 w-3.5${loading ? ' animate-spin' : ''}`} aria-hidden="true" data-testid="RefreshCw__readiness" />
       {ui('remittanceFileReadinessRecheck')}
     </Button>
   );
@@ -192,7 +192,7 @@ function ReadinessCard({ data, apiBaseUrl, creditorValid = false }) {
   } else if (readiness && !readiness.ready) {
     body = (
       <div className={STRIP}>
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-status-warning-foreground" aria-hidden="true" data-testid="AlertTriangle__readiness-card" />
+        <WarningIcon className="mt-0.5 h-4 w-4 shrink-0 text-status-warning-foreground" aria-hidden="true" data-testid="AlertTriangle__readiness-card" />
         <div className="min-w-0 flex-1">
           <ReadinessProblemsBlock problems={problems} renderProblemActions={renderProblemActions} hideIcon testId="remittance-file-readiness-problems" data-testid="ReadinessProblemsBlock__card" />
         </div>

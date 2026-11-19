@@ -4,10 +4,17 @@ import { useGridView } from '@/hooks/useGridView.js';
 import { GridViewControls } from './GridViewControls.jsx';
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from './GridColumnHeaderControls.jsx';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, X, Loader2 } from 'lucide-react';
-// Same Iconic set and row-action buttons as RowQuickActions (every other list), so the hover
+import {
+  PlusIcon,
+  MagnifyingGlassIcon,
+  XIcon,
+  CircleNotchIcon,
+  CopyIcon,
+  PencilSimpleIcon,
+  TrashIcon,
+} from '@phosphor-icons/react';
+// Same icons and row-action buttons as RowQuickActions (every other list), so the hover
 // actions never mix icon families or sizes across windows.
-import { IconicCopyIcon, IconicEditIcon, IconicTrashIcon } from '@/components/ui/custom-icons';
 import { ROW_ACTION_BUTTON_NEUTRAL, ROW_ACTION_BUTTON_DESTRUCTIVE } from './rowVisuals.js';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -806,7 +813,7 @@ export function ListModalWindow({
         <div className="flex items-center gap-2">
           {view.showSearch && (
             <div className="relative w-[280px]">
-              <Search
+              <MagnifyingGlassIcon
                 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--text-disabled))]"
                 data-testid="Search__19eda5" />
               <input
@@ -851,7 +858,7 @@ export function ListModalWindow({
             data-testid="list-modal-new"
             className={view.newButton.button}
           >
-            <Plus
+            <PlusIcon
               className={view.newButton.icon}
               data-testid="Plus__19eda5" />
             {config?.newLabelKey ? ui(config.newLabelKey) : ui('newRecord')}
@@ -994,7 +1001,7 @@ export function ListModalWindow({
 
             {formError && (
               <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                <X size={16} className="mt-0.5 flex-shrink-0" data-testid="X__19eda5" />
+                <XIcon size={16} className="mt-0.5 flex-shrink-0" data-testid="X__19eda5" />
                 <span>{formError}</span>
               </div>
             )}
@@ -1102,7 +1109,7 @@ function DeleteConfirmDialog({ open, busy, onCancel, onConfirm, ui }) {
             data-testid="list-modal-delete-confirm"
             className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[hsl(var(--destructive))] px-4 text-sm font-medium leading-6 text-primary-foreground transition-colors hover:bg-[hsl(var(--destructive))] disabled:opacity-50"
           >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__19eda5" /> : null}
+            {busy ? <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__19eda5" /> : null}
             {ui('delete')}
           </button>
         </div>
@@ -1154,7 +1161,7 @@ function gridColumnStyle(col, gridView, header = false) {
 }
 
 /**
- * Hover row actions (edit / clone / delete) — the RowQuickActions look: Iconic icons at 20px on
+ * Hover row actions (edit / clone / delete) — the RowQuickActions look: 20px icons on
  * the shared 32px row-action buttons (`rowVisuals.js`), a 20px spinner on the row being deleted.
  * Each button renders only when its handler is given (a read-only role gets none).
  */
@@ -1169,7 +1176,7 @@ function ListModalRowActions({ row, onEdit, onClone, onDelete, deleting, classNa
           title={ui('edit')}
           data-testid={`list-modal-edit-${row.id}`}
           className={ROW_ACTION_BUTTON_NEUTRAL}>
-          <IconicEditIcon className="h-5 w-5" data-testid="IconicEditIcon__19eda5" />
+          <PencilSimpleIcon className="h-5 w-5" aria-hidden="true" data-testid="IconicEditIcon__19eda5" />
         </button>
       )}
       {onClone && (
@@ -1180,7 +1187,7 @@ function ListModalRowActions({ row, onEdit, onClone, onDelete, deleting, classNa
           title={ui('clone')}
           data-testid={`list-modal-clone-${row.id}`}
           className={ROW_ACTION_BUTTON_NEUTRAL}>
-          <IconicCopyIcon className="h-5 w-5" data-testid="IconicCopyIcon__19eda5" />
+          <CopyIcon className="h-5 w-5" aria-hidden="true" data-testid="IconicCopyIcon__19eda5" />
         </button>
       )}
       {onDelete && (
@@ -1193,8 +1200,8 @@ function ListModalRowActions({ row, onEdit, onClone, onDelete, deleting, classNa
           data-testid={`list-modal-delete-${row.id}`}
           className={cn(ROW_ACTION_BUTTON_DESTRUCTIVE, deleting && 'opacity-60 cursor-wait')}>
           {deleting
-            ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__19eda5" />
-            : <IconicTrashIcon className="h-5 w-5" data-testid="IconicTrashIcon__19eda5" />}
+            ? <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__19eda5" />
+            : <TrashIcon className="h-5 w-5" aria-hidden="true" data-testid="IconicTrashIcon__19eda5" />}
         </button>
       )}
     </div>

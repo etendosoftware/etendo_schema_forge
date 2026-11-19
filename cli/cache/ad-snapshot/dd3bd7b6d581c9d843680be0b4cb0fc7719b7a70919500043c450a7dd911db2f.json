@@ -2,7 +2,7 @@
   "sql": "SELECT rl.AD_Reference_ID, rl.Value, rl.Name, rlt_es.Name AS name_es FROM AD_Ref_List rl LEFT JOIN AD_Ref_List_Trl rlt_es ON rlt_es.AD_Ref_List_ID = rl.AD_Ref_List_ID AND rlt_es.AD_Language = 'es_ES' WHERE rl.AD_Reference_ID = ANY($1) AND rl.IsActive = 'Y' ORDER BY rl.SeqNo NULLS LAST, rl.Name COLLATE \"C\", rl.Value COLLATE \"C\", rl.AD_Reference_ID COLLATE \"C\", rl.AD_Ref_List_ID COLLATE \"C\"",
   "versions": {
     "09137cda8a4710d11b3c7b8733f2f71bb965ecd27a302829e4ddfa8900e06af4": {
-      "checksum": "c1627c1c152d5d0aa087820756f123991fe340976640e007b4618ff5faa91166",
+      "checksum": "29106d63b743584891c1066d8d9e5624022a260661a6e5375bf485ee86a9204e",
       "params": [
         [
           "150",
@@ -165,6 +165,12 @@
           "name": "Automatic",
           "name_es": "Automático",
           "value": "CRP"
+        },
+        {
+          "ad_reference_id": "FF80818130217A350130218D802B0011",
+          "name": "Accepted",
+          "name_es": "Accepted",
+          "value": "ETGO_AC"
         },
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
@@ -9591,7 +9597,7 @@
       ]
     },
     "98b34d1d4444abfaf694f634fec63ba7fb32b30b631a1100720b8f0bba71a009": {
-      "checksum": "c1627c1c152d5d0aa087820756f123991fe340976640e007b4618ff5faa91166",
+      "checksum": "29106d63b743584891c1066d8d9e5624022a260661a6e5375bf485ee86a9204e",
       "params": [
         [
           "FF80818130217A350130218D802B0011",
@@ -9754,6 +9760,12 @@
           "name": "Automatic",
           "name_es": "Automático",
           "value": "CRP"
+        },
+        {
+          "ad_reference_id": "FF80818130217A350130218D802B0011",
+          "name": "Accepted",
+          "name_es": "Accepted",
+          "value": "ETGO_AC"
         },
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",
@@ -17804,7 +17816,7 @@
       ]
     },
     "fa638b0275c54ed43e026984d9d0ead5c579201abcaa69a9a54077393354cc53": {
-      "checksum": "0f4a7159c57185fc09bc8b2252bd22f4c60439fa0e811385c2f453a0b7ec31ed",
+      "checksum": "0fe8e65fae3652c0b11930368a0f644e0955f223054a65c552b74e1373945c51",
       "params": [
         [
           "150",
@@ -17842,6 +17854,12 @@
           "name": "Automatic",
           "name_es": "Automático",
           "value": "CRP"
+        },
+        {
+          "ad_reference_id": "FF80818130217A350130218D802B0011",
+          "name": "Accepted",
+          "name_es": "Accepted",
+          "value": "ETGO_AC"
         },
         {
           "ad_reference_id": "FF80818130217A350130218D802B0011",

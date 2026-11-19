@@ -1,5 +1,12 @@
 import { useNavigate } from 'react-router-dom';
-import { Check, ArrowUp, ArrowDown, X, Plus, Minus } from 'lucide-react';
+import {
+  CheckIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+  XIcon,
+  PlusIcon,
+  MinusIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n';
 import { formatDashboardCompact, localeFromUi } from '@/lib/dashboardNumberFormat.js';
@@ -26,9 +33,9 @@ const HEADLINES = {
 };
 
 const HEADLINE_TONES = {
-  positive: { bg: 'var(--status-success-bg)', fg: 'var(--status-success-fg)', Icon: Check, testId: 'Check__81e75f' },
-  negative: { bg: 'var(--status-destructive-bg)', fg: 'hsl(var(--destructive))', Icon: X, testId: 'X__81e75f' },
-  neutral: { bg: 'hsl(var(--muted))', fg: 'hsl(var(--muted-foreground))', Icon: Minus, testId: 'Minus__81e75f' },
+  positive: { bg: 'var(--status-success-bg)', fg: 'var(--status-success-fg)', Icon: CheckIcon, testId: 'Check__81e75f' },
+  negative: { bg: 'var(--status-destructive-bg)', fg: 'hsl(var(--destructive))', Icon: XIcon, testId: 'X__81e75f' },
+  neutral: { bg: 'hsl(var(--muted))', fg: 'hsl(var(--muted-foreground))', Icon: MinusIcon, testId: 'Minus__81e75f' },
 };
 
 /**
@@ -146,7 +153,7 @@ export function FinancialSummaryCard({
                 className="flex items-center justify-center"
                 style={{ padding: '4px 8px', height: '32px', background: 'hsl(var(--foreground))', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
               >
-                <Plus
+                <PlusIcon
                   style={{ width: '20px', height: '20px', color: 'hsl(var(--background) / 0.9)' }}
                   data-testid="Plus__81e75f" />
                 <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: 'hsl(var(--card))' }}>
@@ -161,7 +168,7 @@ export function FinancialSummaryCard({
                 className="flex items-center justify-center"
                 style={{ padding: '4px 8px', height: '32px', background: 'hsl(var(--foreground))', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
               >
-                <Plus
+                <PlusIcon
                   style={{ width: '20px', height: '20px', color: 'hsl(var(--background) / 0.9)' }}
                   data-testid="Plus__81e75f" />
                 <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: 'hsl(var(--card))' }}>
@@ -247,7 +254,7 @@ export function FinancialSummaryCard({
             const showTrend = kpi?.hasPrevious !== false;
             const trendLabel = ui(trendPositive ? 'yoyUp' : 'yoyDown', { pct, comparison: comparisonText })
               .replace(/^[↑↓]\s*/, '');
-            const TrendIcon = trendPositive ? ArrowUp : ArrowDown;
+            const TrendIcon = trendPositive ? ArrowUpIcon : ArrowDownIcon;
             const formattedValue = kpi ? formatDashboardCompact(kpi.value, { currencyLabel, locale: numberLocale }) : '—';
             const valueTypography = getDashboardValueTypography(formattedValue);
             const badgeStyle = toneGood

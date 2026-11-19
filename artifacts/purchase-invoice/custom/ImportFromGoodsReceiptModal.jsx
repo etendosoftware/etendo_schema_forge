@@ -1,8 +1,10 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
+import { useUI } from '@/i18n';
 import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 import { listAll, listLines, newestCreatedFirst } from '@/windows/custom/shared/importActionClient.js';
 import useImportLoadFailureToast from '@/windows/custom/shared/useImportLoadFailureToast.js';
 import { pricingContextOf } from '@/windows/custom/shared/invoiceImportPricing.js';
+import { draftDocumentsOf } from '@/windows/custom/shared/inOutImport.js';
 
 /**
  * Goods receipt lines don't carry pricing — unit price, tax, and uOM are
@@ -75,12 +77,9 @@ const resolveLinePrice = async (base, productId, qty, invoiceHeader, auxData = {
   }
 };
 
-/** The pending rule of both reads: the one before ETP-6099 (see `fetchDocuments`). */
-const CLASSIC_PENDING = Object.freeze({ pendingBasis: 'classic' });
-
 /**
- * Whether the empty list is empty because of the currency — the old popup's rule, which the
- * classic `availableReceipts` also applies: a receipt has no currency of its own that counts, its
+ * Whether the empty list is empty because of the currency — the old popup's rule, which
+ * `availableReceipts` also applies: a receipt has no currency of its own that counts, its
  * backing purchase ORDER's does. Among the supplier's completed, not invoiced receipts, the list is
  * «emptied by currency» when there is at least one and none survives the filter: a receipt without
  * an order is never excluded (so it never counts as other-currency), one whose order is in another
@@ -121,16 +120,17 @@ const receiptsInOtherCurrency = async (base, invoiceId, bpId) => {
  * ETP-6099 — ONE `availableReceipts` read of the invoice lists the supplier's completed goods receipts
  * in the invoice's currency (server filtered), the covered ones too at `pendingLines: 0`
  * (`includeCovered`), which the popup hides (`isReceiptCovered`); `detail` adds `orderDocumentNo`.
- * `pendingBasis: 'classic'` (product decision) keeps the pending rule the popup had before it read
- * the action: a receipt line is pending at its full movement quantity unless THIS invoice already
- * holds it — no draft deduction, and a receipt invoiced elsewhere is listed again.
+ * Pending is the server's default rule, as on the sales sibling (ImportFromShipmentModal): what is
+ * left to invoice, draft invoices deducted. ETP-5828 QA UI-8 reversed the `pendingBasis: 'classic'`
+ * product decision (full movement quantity unless THIS invoice holds it, no draft deduction): it let
+ * the same receipt line be invoiced twice. A receipt invoiced elsewhere now comes covered.
  * Rejects with `ImportLoadError` on a refusal; the component shows
  * `describeLoadFailure`.
  */
 const fetchDocuments = async ({ base, bpId, invoiceId }) => {
   const rows = await listAll({
     apiFetch: moduleApiFetch, base, spec: 'purchase-invoice', targetId: invoiceId,
-    action: 'availableReceipts', params: { ...CLASSIC_PENDING, includeCovered: true, detail: true },
+    action: 'availableReceipts', params: { includeCovered: true, detail: true },
   });
   // Newest created first, as the old `_sortBy=creationDate desc` read listed them.
   const documents = newestCreatedFirst(rows).map(r => ({ ...r, movementDate: r.date }));
@@ -139,10 +139,13 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
 };
 
 /**
- * One `availableReceiptLines` row in the shape the popup reads. A line already on this invoice is
- * greyed (and shows its received quantity, as before); otherwise it offers what the server says is
- * left — under `pendingBasis: 'classic'` its full movement quantity, as before. The order line's
- * discount travels to the import;
+ * One `availableReceiptLines` row in the shape the popup reads. A line already on this invoice, or
+ * with nothing left, is greyed (and shows its received quantity, as before); otherwise it offers what
+ * the server says is left (completed and draft invoices deducted). A line invoiced elsewhere only in
+ * part stays selectable for the rest: `invoicedElsewhere` does not grey it (review B1 — it greyed a
+ * partly invoiced line, and one linked only from a voided invoice, for good). The OTHER
+ * draft invoices holding it (`inDraftDocuments`, documentNos) feed `describeReceiptLine`. The order
+ * line's discount travels to the import;
  * the price (callout, `priceData`) feeds the row total.
  */
 const receiptLineRow = (r, priceData = {}) => {
@@ -158,15 +161,30 @@ const receiptLineRow = (r, priceData = {}) => {
     _tax: priceData.tax || null,
     _uOM: priceData.uOM || r.uOM || null,
     _alreadyImported: imported,
+    _inDraftInvoices: draftDocumentsOf(r),
     _orderDiscount: Number(r.orderLineDiscount) || 0,
   };
+};
+
+/**
+ * ETP-5828 — the note of a greyed line other draft INVOICES took: «en factura borrador FC…»
+ * (several: «en facturas borrador …»), the same keys the order import uses. A line on THIS
+ * invoice, or with no other draft holding it, keeps the default «ya importado» (null). Selectable
+ * lines show no note. `ui` is injected (pure).
+ */
+const describeReceiptLine = (line, { imported }, ui) => {
+  const drafts = line?._inDraftInvoices;
+  if (!imported || line?.importedHere || !drafts?.length) return null;
+  return drafts.length === 1
+    ? ui('inDraftInvoiceOne', { documentNo: drafts[0] })
+    : ui('inDraftInvoiceMany', { documentNos: drafts.join(', ') });
 };
 
 /** ONE `availableReceiptLines` read per goods receipt, lines with nothing left included. */
 const fetchLines = async ({ base, docId, sharedContext }) => {
   const rows = await listLines({
     apiFetch: moduleApiFetch, base, spec: 'purchase-invoice', targetId: sharedContext?.invoiceId,
-    action: 'availableReceiptLines', params: { ...CLASSIC_PENDING, receiptId: docId, includeCovered: true, detail: true },
+    action: 'availableReceiptLines', params: { receiptId: docId, includeCovered: true, detail: true },
   });
   // The row total the popup shows once a document is expanded is the sum of its priced lines,
   // as before: the callout prices each line here, on expand (never on open).
@@ -229,6 +247,7 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo, sharedContext, base
 
 export default function ImportFromGoodsReceiptModal(props) {
   // ETP-6099 — a failed read is not «nothing to import»: tell the user, show an empty list.
+  const ui = useUI();
   const handlers = useImportLoadFailureToast(fetchDocuments, fetchLines);
   return (
     <ImportLinesModal
@@ -247,6 +266,7 @@ export default function ImportFromGoodsReceiptModal(props) {
       fetchLines={handlers.fetchLines}
       getDocDisplay={getDocDisplay}
       buildLineBody={buildLineBody}
+      describeLine={(line, state) => describeReceiptLine(line, state, ui)}
     />
   );
 }

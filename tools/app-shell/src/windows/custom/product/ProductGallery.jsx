@@ -1,6 +1,6 @@
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { useUI } from '@/i18n';
-import { BoxIcon } from './ProductListCells';
+import { PackageIcon } from '@phosphor-icons/react';
 import { useNeoImage } from '@/hooks/useNeoImage';
 import GalleryGrid from '@/components/ui/gallery-grid';
 import { TruncatedText } from '@/components/ui/truncated-text';
@@ -23,7 +23,7 @@ function ProductCard({ row, onNavigate, token, apiBaseUrl }) {
           <img src={imgSrc} alt={row.name} className="w-full h-full object-cover" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
-            <BoxIcon size={64} color="hsl(var(--text-disabled))" data-testid="BoxIcon__a29533" />
+            <PackageIcon size={64} color="hsl(var(--text-disabled))" data-testid="BoxIcon__a29533" />
           </div>
         )}
       </div>
@@ -54,7 +54,7 @@ export default function ProductGallery({ data, onNavigate, token, apiBaseUrl }) 
   if (!data || data.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-        <BoxIcon size={48} color="hsl(var(--text-disabled))" data-testid="BoxIcon__a29533" />
+        <PackageIcon size={48} color="hsl(var(--text-disabled))" data-testid="BoxIcon__a29533" />
         <p className="text-sm mt-3">{ui('noProductsFound')}</p>
       </div>
     );

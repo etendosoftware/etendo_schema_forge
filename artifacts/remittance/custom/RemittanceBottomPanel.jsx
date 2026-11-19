@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FileInput } from 'lucide-react';
+import { ListChecksIcon } from '@phosphor-icons/react';
 import { LinesEmptyState } from '@/components/contract-ui';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -37,7 +37,7 @@ function SelectFromInvoicesButton({ onClick, testId }) {
   const ui = useUI();
   return (
     <button type="button" data-testid={testId} onClick={onClick} style={BUTTON_STYLE}>
-      <FileInput size={13} aria-hidden="true" data-testid="FileInput__remittance" />
+      <ListChecksIcon size={13} aria-hidden="true" data-testid="FileInput__remittance" />
       {ui('remittanceSelectFromInvoices')}
     </button>
   );

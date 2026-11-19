@@ -3,7 +3,8 @@ import { ImageField } from '../ImageField.jsx';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 vi.mock('@/i18n', () => ({ useUI: () => (k) => k }));
-vi.mock('@/components/ui/custom-icons', () => ({
+vi.mock('@phosphor-icons/react', async (importOriginal) => ({
+  ...(await importOriginal()),
   TrashIcon: () => <span data-testid="trash-icon" />,
 }));
 

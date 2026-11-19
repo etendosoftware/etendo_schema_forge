@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Clock, Download, RefreshCw } from 'lucide-react';
+import { ClockIcon, DownloadSimpleIcon, ArrowsClockwiseIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { evalRowVisibleWhen } from '@/utils/recordActions.js';
 import { useAuthOptional } from '@etendosoftware/app-shell-core/auth';
@@ -83,7 +83,7 @@ export function buildRowMenuActions(row, openStep, downloadFile) {
     actions.push({
       key: 'changeStatus',
       labelKey: 'remittanceChangeStatus',
-      icon: Clock,
+      icon: ClockIcon,
       submenu: ROW_STATUS_STEPS.map(({ status, process }) => ({
         key: status,
         content: <RemittanceStatusChip status={status} data-testid="RemittanceStatusChip__row" />,
@@ -96,7 +96,7 @@ export function buildRowMenuActions(row, openStep, downloadFile) {
     actions.push({
       key: 'downloadFile',
       labelKey: 'remittanceFileDownload',
-      icon: Download,
+      icon: DownloadSimpleIcon,
       onClick: ({ row: clicked }) => downloadFile?.(clicked),
     });
   }
@@ -145,7 +145,7 @@ export default function RemittanceRoute(props) {
   // `onClick` opens the host-owned confirmation), only on PR and SB.
   const [regenerateRecord, setRegenerateRecord] = useState(null);
   const detailMenuActions = useCallback(({ data }) => (REGENERATE_STATUSES.has(data?.remittanceStatus)
-    ? [{ key: 'regenerateFile', labelKey: 'remittanceFileRegenerate', icon: RefreshCw, onClick: () => setRegenerateRecord(data) }]
+    ? [{ key: 'regenerateFile', labelKey: 'remittanceFileRegenerate', icon: ArrowsClockwiseIcon, onClick: () => setRegenerateRecord(data) }]
     : []), []);
   const rowQuickActions = useMemo(() => ({
     ...(decisions.window.rowQuickActions ?? {}),

@@ -132,7 +132,7 @@ The MCP publishes `createGoodsReceipt`, `createPurchaseInvoice` and `cloneRecord
 9. Select two or more **draft** purchase orders from the list and confirm exactly ONE document-action button, `Procesar (N)`, appears in the bulk action bar — there must be no second button beside it. Open it and verify the dialog's document-action dropdown offers only **Confirmar** (`CO`); **Reactivar** must not be listed, because no completed row is selected. (The kebab checked in step 13 is a separate control and may sit to its left.)
 10. From the list view, select one or more purchase orders, run `Clone`, close the result modal and confirm the cloned drafts appear in the list without manually pressing `Refresh`.
 12. On a draft purchase order with a vendor already chosen, change `Payment Terms` to a different value than the vendor default and save. Reopen the record and confirm the chosen value persisted (regression: the post-create cascade and PATCH path used to revert it).
-13. In the list view, select two or more completed orders. Verify a kebab (three-dot) button appears as the first item of the bulk-action group, just before `Procesar` (the button was named `Confirmar` before ETP-5302). Open the kebab and confirm the two items `Crear facturas` and `Crear albaranes` are listed. Trigger each one and verify a purchase invoice (in **Confirmado**, not Borrador — ETP-5381) and a draft goods receipt are created per selected order, and the resulting toast reads `PROCESO EJECUTADO: N registros procesados correctamente y 0 registros fallidos`. Then add one draft order to the selection and trigger either menu item: the toast must downgrade to a warning showing the per-order failure for the non-completed row while the completed orders still produce their documents. **ETP-5302:** the page must **not** reload — scroll down a long list, apply a filter, run the menu item, and confirm the filter and scroll position survive while only the rows refetch and the toast appears immediately. The same applies to the `Procesar` button beside the kebab, whose dialog confirm button now reads **Aceptar** / **Accept** rather than "Completado".
+13. In the list view, select two or more completed orders. Verify a kebab (three-dot) button appears as the first item of the bulk-action group, just before `Procesar` (the button was named `Confirmar` before ETP-5302). Open the kebab and confirm the two items `Crear facturas` and `Crear albaranes` are listed. Trigger each one and verify a purchase invoice (in **Confirmado**, not Borrador — ETP-5381) and a draft goods receipt are created per selected order, and the resulting toast reads `Proceso ejecutado: N registros procesados correctamente y 0 con error.` (sentence case since ETP-6286). Then add one draft order to the selection and trigger either menu item: the toast must downgrade to a warning showing the per-order failure for the non-completed row while the completed orders still produce their documents. **ETP-5302:** the page must **not** reload — scroll down a long list, apply a filter, run the menu item, and confirm the filter and scroll position survive while only the rows refetch and the toast appears immediately. The same applies to the `Procesar` button beside the kebab, whose dialog confirm button now reads **Aceptar** / **Accept** rather than "Completado".
 14. Re-run either menu item on the same selection without first completing the freshly created documents. **Since ETP-5381 the two halves behave differently.** For `Crear albaranes` (still a draft flow), each order reports back as failed with the client-side `Pedido {documentNo} ya tiene un albarán en borrador` message and no duplicate draft is created; complete one of those drafts (so its status moves to `CO` while leaving pending qty on the order) and trigger the item again — that order must succeed. For `Crear facturas`, the generated invoice is already `CO`, so the client-side "already has a draft invoice" probe finds nothing and the request reaches the backend, which rejects it with the "No pending lines to invoice in this purchase order" **400** once the order is fully invoiced. Verify no duplicate invoice is produced either way.
 15. On a draft purchase order, open the confirm modal and check both `Create receipt` and `Create invoice`. From the browser console, override `window.fetch` to return a 500 for the `createPurchaseInvoice` request (or `createGoodsReceipt` for the inverse case) and confirm. Verify the first request that succeeded actually created its document, the second one displays the localised error, and the modal stays open. Retry from the same modal without removing the override and verify (a) the already-completed step's card is green, locked, and shows "Already created" / "Ya creado" and (b) no duplicate document is created — the network tab must NOT show a second `documentAction=CO` (no `@AlreadyPosted@` 400) nor a second `createGoodsReceipt` request. Restore the original `fetch` and confirm again: only the previously-failed step runs, and the result modal lists both documents (receipt from the first attempt + invoice from the retry, or vice-versa) with their document numbers.
 16. Open the Send Email modal from the topbar and confirm: the business partner's email registered in `EM_Etgo_Email` is proposed as an editable `To` chip (when none is registered, the To list starts empty); the proposed chip can be removed; additional To recipients and CC recipients (via the `Add CC` affordance) can be added; entering a syntactically invalid email shows an inline validation error and disables Send; Send is also disabled while the final To list is empty (even with CC entries) or when more than 10 recipients are entered across To and CC; and the modal title reads the translated document name in the active UI language. Also confirm the `Asunto` and `Mensaje` fields are editable (not greyed-out/read-only), that they pre-fill with the auto-derived subject and an empty message, and that sending without touching either still succeeds normally.
@@ -736,6 +736,51 @@ shared by both handlers):
 - The handler is bound by `@NeoExtension(spec = "purchase-order", entity = "header")`; its
   `Java_Qualifier` and the `javaQualifier` in `decisions.json` were removed together.
 
+## Public API — complete action — ETP-6157
+
+`decisions.json` opts the window into the public API's `complete` action
+(`window.publicApi.actions: ["complete"]`), so the manifest (`public-api/base.v1.json`) declares
+`POST /api/v1/purchase-order/{id}/actions/complete`. It is the only action the window publishes. The gateway sends
+`{"docAction": "CO"}` to `POST /sws/neo/purchase-order/header/{id}/action/documentAction`, the same document action as
+the window's confirm button, and answers the order re-read with `document_status` `CO`.
+
+- The API key needs `public-api:process`; a key without it gets `403`.
+- The order needs a payment method, which it inherits from its contact's `purchase_payment_method` when it is created;
+  without one Etendo refuses with `422 business_rule`. A contact created through the API has none: the caller
+  looks one up and sets it first (see "Public API — payment-method lookup" below).
+- Completing an order that is already `CO` answers `200` with `meta.alreadyApplied: true` and runs nothing.
+- A `PATCH` or `DELETE` on the completed order answers `422`; no public action reopens or voids it.
+
+Evidence: `gateway/e2e/support/orders.ts` (`complete action`), shared by the sales and purchase order flows.
+Contract: `docs/public-api.md` §4.2.1.
+
+## Public API — payment-method lookup — ETP-6160
+
+`decisions.json` declares a lookup on the header's `paymentMethod`
+(`publicApi.lookup: { "context": { "IsSOTrx": "N" } }`), so the manifest publishes
+`GET /api/v1/purchase-order/lookups/payment_method`. It lists the tenant's active payment methods, the same list the app
+offers, as `{ type: "payment-method", id, attributes: { label } }`, with `filter[search]` and
+`page[number]` / `page[size]`. The gateway calls `GET /sws/neo/purchase-order/header/selectors/paymentMethod` with
+`IsSOTrx=N` fixed; a caller's own parameters are refused with `400`. The context is forwarded to the field's
+selector; whether it narrows the list depends on that field's validation rule, as in the app. Integrators must not
+rely on the list being filtered by sales or purchase.
+
+An integrator with no id known beforehand completes an order this way: `GET /api/v1/contacts/lookups/purchase_payment_method`,
+`PATCH` the contact's `purchase_payment_method` (with `If-Match`), create the order (it inherits the value), then
+`POST /api/v1/purchase-order/{id}/actions/complete`. Setting `payment_method` on the order directly, with an id from this
+window's lookup, works too.
+
+Evidence: `gateway/e2e/support/orders.ts` (`complete action`). Contract: `docs/public-api.md` §4.2.2.
+
+## Public API V1 warehouse selection
+
+The public API exposes this order and its lines, including the header's `complete` action.
+Choose the warehouse with `GET /api/v1/purchase-order/lookups/warehouse` and send the selected id as
+`data.attributes.warehouse` when creating the order. The field is optional: if it is omitted,
+Etendo assigns a warehouse when the order is created. There is no `relationships.warehouse`,
+because the warehouse collection is outside V1. Partial updates can omit an unchanged
+warehouse. Document-state validation remains with the runtime, as in the app.
+
 ## Fiscal data step before the invoice is created — ETP-6179
 
 - **Confirmar** with *Crear factura* ticked (`ConfirmModal` in `PurchaseOrderActions.jsx`) and
@@ -744,9 +789,14 @@ shared by both handlers):
   code. The invoice header carries the order, so Fecha operación and Descripción SII come from the
   order when it has them.
 - The list's bulk "Crear facturas" (`BulkPurchaseOrderMoreMenu`, one invoice per selected order)
-  shows the same read-only fiscal-data summary as the sales order's bulk menu, with SII fields only;
-  the rules (when it appears, "Según cada cliente / pedido", each order sending its own values) are in
+  shows the same editable fiscal-data step as the sales order's bulk menu (ONE set of values applied
+  to every invoice), with SII fields only and no rectification code; the rules (when it appears,
+  "Según cada cliente / pedido", what an untouched differing field sends, the `*`) are in
   [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).
 
 How the step itself works — the backend `sifDefaults` preview, when it appears, the
 `sifFields` it sends and the fail-open rule — is described once in [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. The header `eTGOCurrencyRate` (`EM_ETGO_Currency_Rate`) and the payment-details **Exchange Rate** (`finaccTxnConvertRate`, `Finacc_Txn_Convert_Rate`, read-only) are now `decimal` in the contract (`tsType: number`); the latter renders as a number field, without the former 12-character `maxLength`.

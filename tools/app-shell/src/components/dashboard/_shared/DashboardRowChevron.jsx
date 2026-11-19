@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide-react';
+import { CaretRightIcon } from '@phosphor-icons/react';
 
 const WRAPPER_STYLE = {
   display: 'flex',
@@ -19,7 +19,7 @@ const ICON_STYLE = {
 export function DashboardRowChevron() {
   return (
     <div style={WRAPPER_STYLE}>
-      <ChevronRight style={ICON_STYLE} data-testid="ChevronRight__e40207" />
+      <CaretRightIcon style={ICON_STYLE} data-testid="ChevronRight__e40207" />
     </div>
   );
 }

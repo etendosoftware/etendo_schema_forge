@@ -264,6 +264,8 @@ describe('buildOrderData / buildQuotationData — the shared parity fixtures of 
       customerAddressLines: ['Elm St 2'],
       documentNo: 'QT-1', currencyCode: 'USD', invoiceDate: '2026-10-30', validUntil: '2026-11-30',
       customerName: 'ACME Corp', paymentMethod: null, paymentTerms: null, notes: null,
+      // Not rejected (no documentStatus CJ): no "Motivo" line. Mirrored by PrintableDataTest.
+      rejectReason: null,
       lines: [{ lineNo: 10, productCode: '—', productName: 'Gadget', quantity: 4, unitPrice: 25,
         discount: null, taxName: 'VAT 10%', lineTotal: 100 }],
       netAmount: 100, taxAmount: 10, grandTotal: 110,

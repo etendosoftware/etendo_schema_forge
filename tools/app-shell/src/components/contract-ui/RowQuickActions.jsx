@@ -1,9 +1,16 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronRight, Loader2 } from 'lucide-react';
-// ETP-5600 — Figma "Sticky Acciones": edit, copy, mail, kebab and trash are the Iconic set on
-// the 20x20 frame (core custom-icons), so the band never mixes icon families.
-import { IconicCopyIcon, IconicDotsVerticalIcon, IconicEditIcon, IconicMailIcon, IconicTrashIcon } from '@/components/ui/custom-icons';
+import {
+  CaretRightIcon,
+  CircleNotchIcon,
+  CopyIcon,
+  DotsThreeVerticalIcon,
+  PencilSimpleIcon,
+  EnvelopeSimpleIcon,
+  TrashIcon,
+} from '@phosphor-icons/react';
+// ETP-5600 — Figma "Sticky Acciones": edit, copy, mail, kebab and trash on the 20x20 frame.
+// ETP-6155 — all Phosphor (regular), the one icon family of the app.
 import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
@@ -378,7 +385,7 @@ export default function RowQuickActions({
           title={ui('quickAction.edit')}
           data-testid="row-quick-action-edit"
         >
-          {inFlight.edit ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicEditIcon className="h-5 w-5" data-testid="Pencil__ec6673" />}
+          {inFlight.edit ? <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <PencilSimpleIcon className="h-5 w-5" data-testid="Pencil__ec6673" />}
         </button>
       )}
       {/* Clone — only when host wires onClone (no generic default exists); never on read-only. */}
@@ -392,7 +399,7 @@ export default function RowQuickActions({
           title={ui('quickAction.clone')}
           data-testid="row-quick-action-clone"
         >
-          {inFlight.duplicate ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicCopyIcon className="h-5 w-5" data-testid="Copy__ec6673" />}
+          {inFlight.duplicate ? <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <CopyIcon className="h-5 w-5" data-testid="Copy__ec6673" />}
         </button>
       )}
       {/* Email — gated by sendDocument.enabled (default true for eligible
@@ -408,7 +415,7 @@ export default function RowQuickActions({
           title={ui('quickAction.email')}
           data-testid="row-quick-action-email"
         >
-          {inFlight.email ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicMailIcon className="h-5 w-5" data-testid="Mail__ec6673" />}
+          {inFlight.email ? <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <EnvelopeSimpleIcon className="h-5 w-5" data-testid="Mail__ec6673" />}
         </button>
       )}
       {/* More — popover with menuActions[] */}
@@ -422,7 +429,7 @@ export default function RowQuickActions({
             title={ui('quickAction.more')}
             data-testid="row-quick-action-more"
           >
-            <IconicDotsVerticalIcon className="h-5 w-5" data-testid="MoreVertical__ec6673" />
+            <DotsThreeVerticalIcon className="h-5 w-5" data-testid="MoreVertical__ec6673" />
           </button>
           {showMenu && menuPos && createPortal(
             <>
@@ -471,7 +478,7 @@ export default function RowQuickActions({
                             data-testid="ActionIcon__ec6673" />
                         )}
                         <span className="flex-1">{subLabel}</span>
-                        <ChevronRight className="h-4 w-4 flex-shrink-0 text-[hsl(var(--text-disabled))]" aria-hidden="true" data-testid="ChevronRight__ec6673" />
+                        <CaretRightIcon className="h-4 w-4 flex-shrink-0 text-[hsl(var(--text-disabled))]" aria-hidden="true" data-testid="ChevronRight__ec6673" />
                       </button>
                       {subOpen && (
                         <div
@@ -524,7 +531,7 @@ export default function RowQuickActions({
                     ].filter(Boolean).join(' ')}
                   >
                     {pending ? (
-                      <Loader2
+                      <CircleNotchIcon
                         className="h-4 w-4 flex-shrink-0 animate-spin"
                         data-testid="Loader2__ec6673" />
                     ) : ActionIcon && (
@@ -554,7 +561,7 @@ export default function RowQuickActions({
           title={ui('quickAction.delete')}
           data-testid="row-quick-action-delete"
         >
-          {inFlight.delete ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicTrashIcon className="h-5 w-5" data-testid="IconicTrashIcon__ec6673" />}
+          {inFlight.delete ? <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <TrashIcon className="h-5 w-5" aria-hidden="true" data-testid="IconicTrashIcon__ec6673" />}
         </button>
       )}
     </div>

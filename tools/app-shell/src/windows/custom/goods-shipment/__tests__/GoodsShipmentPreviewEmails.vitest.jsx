@@ -90,10 +90,10 @@ vi.mock('@/components/ui/button.jsx', () => ({
   ),
 }));
 
-vi.mock('lucide-react', () => ({
-  Download: () => <span data-testid="icon-download" />,
-  Edit2: () => <span data-testid="icon-edit2" />,
-  Mail: () => <span data-testid="icon-mail" />,
+vi.mock('@phosphor-icons/react', () => ({
+  DownloadSimpleIcon: () => <span data-testid="icon-download" />,
+  PencilSimpleIcon: () => <span data-testid="icon-edit2" />,
+  EnvelopeSimpleIcon: () => <span data-testid="icon-mail" />,
 }));
 
 vi.mock('../../shared/preview-cards/SummaryCard.jsx', () => ({

@@ -41,15 +41,15 @@ vi.mock('sonner', () => ({
 vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
   (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
 
-// Stub the Iconic trash and edit icons on top of the real custom-icons module: makes the
-// rendered icons observable and keeps the file independent of the core version that ships them.
-vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
+// Stub the Phosphor row-action icons on top of the real module: makes the
+// rendered icons observable.
+vi.mock('@phosphor-icons/react', async (importOriginal) => ({
   ...(await importOriginal()),
-  IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
-  IconicEditIcon: (props) => <svg data-icon="iconic-edit" {...props} />,
-  IconicCopyIcon: (props) => <svg data-icon="iconic-copy" {...props} />,
-  IconicMailIcon: (props) => <svg data-icon="iconic-mail" {...props} />,
-  IconicDotsVerticalIcon: (props) => <svg data-icon="iconic-dots-vertical" {...props} />,
+  TrashIcon: (props) => <svg data-icon="phosphor-trash" {...props} />,
+  PencilSimpleIcon: (props) => <svg data-icon="phosphor-pencil" {...props} />,
+  CopyIcon: (props) => <svg data-icon="phosphor-copy" {...props} />,
+  EnvelopeSimpleIcon: (props) => <svg data-icon="phosphor-envelope" {...props} />,
+  DotsThreeVerticalIcon: (props) => <svg data-icon="phosphor-dots-vertical" {...props} />,
 }));
 
 import RowQuickActions from '../RowQuickActions.jsx';
@@ -168,7 +168,7 @@ describe('RowQuickActions', () => {
     ];
     setup({ menuActions });
     const more = screen.getByTestId('row-quick-action-more');
-    expect(within(more).getByTestId('MoreVertical__ec6673')).toHaveAttribute('data-icon', 'iconic-dots-vertical');
+    expect(within(more).getByTestId('MoreVertical__ec6673')).toHaveAttribute('data-icon', 'phosphor-dots-vertical');
     await user.click(more);
     expect(screen.getByText('Action A')).toBeTruthy();
     expect(screen.queryByText('Action B')).toBeNull();
@@ -179,7 +179,7 @@ describe('RowQuickActions', () => {
     const user = userEvent.setup();
     const { onEdit } = setup();
     const btn = screen.getByTestId('row-quick-action-edit');
-    expect(within(btn).getByTestId('Pencil__ec6673')).toHaveAttribute('data-icon', 'iconic-edit');
+    expect(within(btn).getByTestId('Pencil__ec6673')).toHaveAttribute('data-icon', 'phosphor-pencil');
     await user.click(btn);
     expect(onEdit).toHaveBeenCalledTimes(1);
     expect(onEdit).toHaveBeenCalledWith(DRAFT_ROW);
@@ -202,7 +202,7 @@ describe('RowQuickActions', () => {
     const user = userEvent.setup();
     const { onClone } = setup();
     const btn = screen.getByTestId('row-quick-action-clone');
-    expect(within(btn).getByTestId('Copy__ec6673')).toHaveAttribute('data-icon', 'iconic-copy');
+    expect(within(btn).getByTestId('Copy__ec6673')).toHaveAttribute('data-icon', 'phosphor-copy');
     await user.click(btn);
     expect(onClone).toHaveBeenCalledTimes(1);
   });
@@ -211,7 +211,7 @@ describe('RowQuickActions', () => {
     const user = userEvent.setup();
     const { onEmail } = setup({ documentPreview: true });
     const btn = screen.getByTestId('row-quick-action-email');
-    expect(within(btn).getByTestId('Mail__ec6673')).toHaveAttribute('data-icon', 'iconic-mail');
+    expect(within(btn).getByTestId('Mail__ec6673')).toHaveAttribute('data-icon', 'phosphor-envelope');
     await user.click(btn);
     expect(onEmail).toHaveBeenCalledTimes(1);
   });
@@ -220,7 +220,7 @@ describe('RowQuickActions', () => {
     const user = userEvent.setup();
     const { onDelete } = setup();
     const btn = screen.getByTestId('row-quick-action-delete');
-    expect(within(btn).getByTestId('IconicTrashIcon__ec6673')).toHaveAttribute('data-icon', 'iconic-trash');
+    expect(within(btn).getByTestId('IconicTrashIcon__ec6673')).toHaveAttribute('data-icon', 'phosphor-trash');
     await user.click(btn);
     expect(onDelete).toHaveBeenCalledTimes(1);
     expect(onDelete).toHaveBeenCalledWith(DRAFT_ROW);
@@ -358,9 +358,8 @@ describe('RowQuickActions', () => {
       setup({ menuActions });
       await user.click(screen.getByTestId('row-quick-action-more'));
       await user.click(screen.getByText('Complete'));
-      // Pending: button still rendered, but disabled. The Loader2 icon is mounted (testable by
-      // class `animate-spin`). We can't easily query lucide-react SVGs, but disabled state is
-      // enough of a signal that the in-flight branch executed.
+      // Pending: button still rendered, but disabled. The spinner replaces the icon (asserted in the
+      // delete case above), and the disabled state is enough of a signal that the in-flight branch executed.
       // The dropdown closes immediately on click; nothing else to assert without DOM hooks.
       resolveDoc({ ok: true });
       await new Promise((r) => setTimeout(r, 0));

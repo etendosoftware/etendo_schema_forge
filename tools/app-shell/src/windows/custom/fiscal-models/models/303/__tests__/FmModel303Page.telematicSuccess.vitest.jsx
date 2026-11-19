@@ -55,16 +55,8 @@ vi.mock('../../../FmOverlays.jsx', () => ({
   ),
   FileGenModal303: () => null,
 }));
-vi.mock('lucide-react', () => ({
-  // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
-  Check: () => null,
-  Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
-  TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
-  Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
-  TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
-  ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
-  FileCheck: () => null, Landmark: () => null,
-}));
+import { allIconsAs } from '@/test/iconMock.js';
+vi.mock('@phosphor-icons/react', async importOriginal => allIconsAs(() => null, importOriginal));
 
 // AeatSubmitFlow stand-in: one click reports a successful production filing.
 vi.mock('../AeatSubmitFlow.jsx', () => ({

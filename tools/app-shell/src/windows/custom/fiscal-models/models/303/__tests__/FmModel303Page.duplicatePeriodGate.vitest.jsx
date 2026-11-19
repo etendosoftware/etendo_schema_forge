@@ -86,13 +86,13 @@ vi.mock('@/components/attachments', () => ({
   AttachmentsTab: () => null,
   useAttachments: () => ({ upload: vi.fn() }),
 }));
-vi.mock('lucide-react', () => ({
+vi.mock('@phosphor-icons/react', () => ({
   // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
-  Check: () => null,
-  Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null, TriangleAlert: () => null,
-  CircleCheck: () => null, Calculator: () => null, Loader2: () => null,
-  TrendingUp: () => null, TrendingDown: () => null, ClipboardCheck: () => null,
-  ReceiptText: () => null, FileCheck: () => null,
+  CheckIcon: () => null,
+  DownloadSimpleIcon: () => null, ArrowLeftIcon: () => null, FloppyDiskIcon: () => null, WarningOctagonIcon: () => null, WarningIcon: () => null,
+  CheckCircleIcon: () => null, CalculatorIcon: () => null, CircleNotchIcon: () => null,
+  TrendUpIcon: () => null, TrendDownIcon: () => null, ClipboardTextIcon: () => null,
+  ReceiptIcon: () => null, SealCheckIcon: () => null,
 }));
 
 import FmModel303Page from '../FmModel303Page.jsx';

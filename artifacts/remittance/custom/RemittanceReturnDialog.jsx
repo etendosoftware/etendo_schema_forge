@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Search, SquareCheck } from 'lucide-react';
+import { WarningIcon, MagnifyingGlassIcon, CheckSquareIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -200,7 +200,7 @@ export default function RemittanceReturnDialog({ record, apiBaseUrl, onRefresh, 
           <div className="flex flex-col gap-2">
             <div className="flex h-10 items-center gap-3">
               <label className="relative flex h-10 min-w-0 flex-1 items-center">
-                <Search size={20} aria-hidden="true" className={cn('pointer-events-none absolute left-2', ICON)} data-testid="Search__remittance-return" />
+                <MagnifyingGlassIcon size={20} aria-hidden="true" className={cn('pointer-events-none absolute left-2', ICON)} data-testid="Search__remittance-return" />
                 <input
                   type="text"
                   value={query}
@@ -218,7 +218,7 @@ export default function RemittanceReturnDialog({ record, apiBaseUrl, onRefresh, 
                 aria-pressed={allSelected}
                 className="inline-flex h-10 shrink-0 items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium leading-6 transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                 data-testid="remittance-return-select-all">
-                <SquareCheck size={20} aria-hidden="true" className={ICON} data-testid="SquareCheck__remittance-return" />
+                <CheckSquareIcon size={20} aria-hidden="true" className={ICON} data-testid="SquareCheck__remittance-return" />
                 {ui(allSelected ? 'deselectAll' : 'selectAll')}
               </button>
             </div>
@@ -247,7 +247,7 @@ export default function RemittanceReturnDialog({ record, apiBaseUrl, onRefresh, 
             data-testid="remittance-return-date" />
           {!dateValid && <span className="text-xs text-destructive" role="alert" data-testid="remittance-return-date-error">{ui('remittanceReturnDateFuture')}</span>}
         </div>
-        <InfoBanner tone="danger" icon={AlertTriangle} dismissible={false} role="alert" data-testid="remittance-return-warning">
+        <InfoBanner tone="danger" icon={WarningIcon} dismissible={false} role="alert" data-testid="remittance-return-warning">
           {ui('remittanceReturnWarning')}
         </InfoBanner>
         {problems.length > 0 && (

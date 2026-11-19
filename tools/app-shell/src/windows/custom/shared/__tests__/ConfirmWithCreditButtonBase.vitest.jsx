@@ -80,7 +80,7 @@ vi.mock('@/components/contract-ui/CreateInvoiceConfirmModal', () => ({
     <div data-testid="create-invoice-confirm-modal" data-title={title ?? ''} data-sif-defaults-url={sifDefaultsUrl ?? ''}>
       <button
         data-testid="create-invoice-confirm-with-sif"
-        onClick={() => onConfirm(undefined, ['INV-ORIG'], { etvfacInvType: 'R4', aeatsiiMotivoRectif: 'R4' })} />
+        onClick={() => onConfirm(undefined, ['INV-ORIG'], { etvfacInvType: 'R1', aeatsiiMotivoRectif: 'R1' })} />
       <button data-testid="create-invoice-confirm" onClick={onConfirm} disabled={loading}>
         {loading ? 'soProcessing' : 'soCreateDocsBtn'}
       </button>
@@ -909,7 +909,7 @@ describe('ConfirmWithCreditButtonBase — respects isDocumentReadOnly (ETP-5205)
 
 // ETP-6179 — the return windows' rectificative invoice goes through the "Datos fiscales" step: the
 // CO "create rectificative invoice" modal is pointed at the return's own sifDefaults (whose preview
-// preselects R4 per system), and the values it hands back travel as `sifFields` in
+// leaves the rectification codes for the user to choose), and the values it hands back travel as `sifFields` in
 // createReturnInvoice, next to the rectified invoices.
 describe('ConfirmWithCreditButtonBase — fiscal data step of the rectificative invoice (ETP-6179)', () => {
   let originalLocation;
@@ -948,7 +948,7 @@ describe('ConfirmWithCreditButtonBase — fiscal data step of the rectificative 
       'data-sif-defaults-url', '/sws/neo/some-window/someWindow/REC-001/action/sifDefaults');
   });
 
-  it('sends the step values (R4 preselected) as sifFields with the rectified invoices', async () => {
+  it('sends the step values (the codes the user chose) as sifFields with the rectified invoices', async () => {
     openCoModal();
     fireEvent.click(screen.getByTestId('create-invoice-confirm-with-sif'));
 
@@ -957,7 +957,7 @@ describe('ConfirmWithCreditButtonBase — fiscal data step of the rectificative 
     expect(String(url)).toContain('/someWindow/REC-001/action/createReturnInvoice');
     expect(JSON.parse(init.body)).toEqual({
       originInvoices: ['INV-ORIG'],
-      sifFields: { etvfacInvType: 'R4', aeatsiiMotivoRectif: 'R4' },
+      sifFields: { etvfacInvType: 'R1', aeatsiiMotivoRectif: 'R1' },
     });
   });
 

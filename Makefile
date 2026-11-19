@@ -19,6 +19,7 @@ endif
 test: ## Run all unit tests (CLI data-fixes + repo scripts + app-shell + artifacts + vitest)
 	node --test 'cli/test/*.test.js'
 	node --test 'scripts/__tests__/*.test.js'
+	node --test 'e2e/tests/helpers/__tests__/*.test.js'
 	node --test 'tools/app-shell/src/**/__tests__/*.test.js'
 	node --test 'tools/app-shell/test/*.test.js'
 	node --test 'artifacts/**/__tests__/*.test.js'
@@ -293,7 +294,7 @@ test-e2e-headless: ## Build a no-PWA E2E bundle, serve+test+teardown on its own 
 
 .PHONY: test-e2e-purchase-sales
 test-e2e-purchase-sales: ## Run only the failing Sales Order and Purchase Order integration specs
-	E2E_FILES=tests/flows/sales/sales-order-happy-path.integration.spec.js,tests/flows/purchases/purchase-order-full-flow.integration.spec.js ./scripts/run-e2e-last-failed.sh
+	E2E_FILES=tests/flows/before-financial-accounts/sales-order-happy-path.integration.spec.js,tests/flows/purchases/purchase-order-full-flow.integration.spec.js ./scripts/run-e2e-last-failed.sh
 
 .PHONY: test-e2e-last-failed
 test-e2e-last-failed: ## Rerun only failed integration tests recorded by the previous Playwright run
@@ -435,6 +436,18 @@ gateway-dev-local-core: ## Start the gateway dev server against the linked local
 .PHONY: public-api-e2e
 public-api-e2e: ## Run the public API end-to-end suite against a RUNNING gateway (PUBLIC_API_BASE_URL, PUBLIC_API_KEY; localhost only)
 	cd gateway && npm run test:e2e
+
+# Unattended form used by the full Jenkins pipelines (docs/public-api.md §4.9). The install step
+# packs api-gateway-core from the schema_forge_core tag pinned in package.json (it is not
+# published); the run step signs in to NEO, mints two API keys, starts the gateway, runs the
+# suite and always cleans up. Environment variables: scripts/public-api-e2e-ci.mjs.
+.PHONY: public-api-e2e-ci-install
+public-api-e2e-ci-install: ## Install + build gateway/ with api-gateway-core from the pinned core tag (PUBLIC_API_CORE_DIR or a git clone)
+	node scripts/public-api-e2e-ci.mjs install
+
+.PHONY: public-api-e2e-ci
+public-api-e2e-ci: ## Sign in to NEO, create API keys, start the gateway and run the e2e suite (NEO_BASE_URL, PUBLIC_API_E2E_CREDENTIALS_FILE)
+	node scripts/public-api-e2e-ci.mjs run
 
 .PHONY: docs-api-sync
 docs-api-sync: ## Copy the running gateway OpenAPI contract into the Docusaurus portal
@@ -1101,8 +1114,8 @@ SEED        ?=
 # mcp-test. Every target needs `platform` in config.toml. Pass SEED=<run A's
 # seed> to start the second run of a stability pair.
 .PHONY: mcp-compare
-mcp-compare: ## Compare two MCP targets (SUITE=, TARGETS=a,b, SUBJECT=, REPEAT=, CONCURRENCY=, SEED=, MODEL=)
-	cd mcp-tests && uv run python -m runner.cli --targets $(TARGETS) --suite $(SUITE) $(if $(SUBJECT),--subject $(SUBJECT)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY)) $(if $(SEED),--seed $(SEED)) $(if $(MODEL),--model $(MODEL))
+mcp-compare: ## Compare two MCP targets (SUITE=, TARGETS=a,b, SUBJECT=, PROBE=, REPEAT=, CONCURRENCY=, SEED=, MODEL=)
+	cd mcp-tests && uv run python -m runner.cli --targets $(TARGETS) --suite $(SUITE) $(if $(SUBJECT),--subject $(SUBJECT)) $(if $(PROBE),--probe $(PROBE)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY)) $(if $(SEED),--seed $(SEED)) $(if $(MODEL),--model $(MODEL))
 
 # Plan §5.4 / §5.9 (S6): load the baseline dataset into a FRESHLY INITIALIZED target through its
 # own MCP, and record a seed manifest (.seeds/<target>.json). Order for an official comparison:
@@ -1128,6 +1141,27 @@ mcp-login: ## Pre-warm or refresh a target's OAuth token (TARGET=). Never a prer
 mcp-report: ## Derive summary.json + summary.md of a comparison (RUN=<compareId>|<path>)
 	@if [ -z "$(RUN)" ]; then echo "RUN is required, e.g. make mcp-report RUN=20261014T1000-cmp-a1b2"; exit 1; fi
 	cd mcp-tests && uv run python -m runner.report report $(RUN)
+
+# ETP-6236: after a KR2.1 comparison (BASE), measure again only the tasks it lost that have a
+# routine, with the routines target against the same reference, then write both KRs.
+.PHONY: mcp-compare-routines
+mcp-compare-routines: ## Rerun the lost tasks that have a routine and compose the child KR (BASE=, TARGETS=<routines target>,<reference>, REPEAT=, CONCURRENCY=, MODEL=)
+	@if [ -z "$(BASE)" ] || [ "$(origin TARGETS)" != "command line" ]; then echo "BASE and TARGETS are required, e.g. make mcp-compare-routines BASE=<compareId> TARGETS=local-routines,holded (the first target needs routines = true)"; exit 1; fi
+	@probes=$$(cd mcp-tests && uv run python -m runner.report routine-reruns $(BASE)) || exit 1; \
+	suite=$$(cd mcp-tests && uv run python -m runner.report routine-reruns $(BASE) --print-suite) || exit 1; \
+	echo "rerunning with routines: $$probes"; \
+	before=$$(ls mcp-tests/runs | grep -- '-cmp-' | sort | tail -1); \
+	(cd mcp-tests && uv run python -m runner.cli --targets $(TARGETS) --suite $$suite --probe $$probes $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY)) $(if $(MODEL),--model $(MODEL))) || exit $$?; \
+	after=$$(ls mcp-tests/runs | grep -- '-cmp-' | sort | tail -1); \
+	if [ "$$after" = "$$before" ]; then echo "no new comparison was written"; exit 1; fi; \
+	cd mcp-tests && uv run python -m runner.report routines $(BASE) $$after
+
+# ETP-6236: the three columns side by side — Etendo, Etendo + rutina and the reference. BASE is a
+# comparison without routines (KR2.1), WITH one whose Etendo target has `routines = true` (child KR).
+.PHONY: mcp-report-routines
+mcp-report-routines: ## Etendo vs Etendo + rutina vs reference, per task (BASE=<compareId>, WITH=<compareId>)
+	@if [ -z "$(BASE)" ] || [ -z "$(WITH)" ]; then echo "BASE and WITH are required, e.g. make mcp-report-routines BASE=<compareId> WITH=<compareId>"; exit 1; fi
+	cd mcp-tests && uv run python -m runner.report routines $(BASE) $(WITH)
 
 .PHONY: mcp-stability
 mcp-stability: ## Winner agreement between two comparisons; exit 2 if pins differ or a run is unofficial (A=, B=)

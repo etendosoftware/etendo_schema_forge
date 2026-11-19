@@ -17,6 +17,7 @@ import {
   translateBackendErrorBody,
   hasMappedMessageKey,
   translateImportRefusal,
+  translateMappedImportRefusal,
   isImportRefusalCode,
   translateQuotaRefusalBody,
   quotaRefusalFields,
@@ -4070,7 +4071,7 @@ describe('parseBackendError / translateBackendErrorResponse (ETP-5692)', () => {
 // com.etendoerp.go refuses a contact category, or a contact, saved with neither Customer nor
 // Vendor/Creditor. Both are AD_MESSAGE records of a module with no es_ES translation pack, so the
 // SPA's map is where they become Spanish. Reads the REAL locale files so a missing entry fails.
-describe('translateBackendError — contact-type refusals by identity', () => {
+describe('translateBackendError — contact-type and contact identity refusals by identity', () => {
   const es = localeTranslator('es_ES');
   const en = localeTranslator('en_US');
   // [messageKey, i18n key, the backend's English prose]
@@ -4079,6 +4080,15 @@ describe('translateBackendError — contact-type refusals by identity', () => {
       'At least one contact type must be checked: Customer or Vendor/Creditor.'],
     ['ETGO_BPartnerContactTypeRequired', 'backendError.bpartnerContactTypeRequired',
       'The contact must have at least one type: Customer or Vendor/Creditor.'],
+    // ETP-6175 — person or company identity (ContactIdentityRules).
+    ['ETGO_BPartnerPersonNamesRequired', 'backendError.bpartnerPersonNamesRequired',
+      'A person contact requires both a first name and a last name.'],
+    ['ETGO_BPartnerPersonNameNotAllowed', 'backendError.bpartnerPersonNameNotAllowed',
+      'The name of a person contact is built from its first and last name, so it cannot be set: send the first and last name instead.'],
+    ['ETGO_BPartnerCompanyNameRequired', 'backendError.bpartnerCompanyNameRequired',
+      'A company contact requires a legal name.'],
+    ['ETGO_BPartnerCompanyPersonNamesNotAllowed', 'backendError.bpartnerCompanyPersonNamesNotAllowed',
+      'First and last name are only for a person contact. To create or turn the contact into a person, send etgoIsperson=true (is_person: true in the public API) together with both names; for a company, leave them empty and send its legal name.'],
   ];
 
   for (const [messageKey, i18nKey, prose] of CASES) {
@@ -4969,6 +4979,82 @@ describe('translateImportRefusal / isImportRefusalCode — line-import refusals 
     const result = translateImportRefusal(body, t, FALLBACK);
     assert.equal(result, 'El pedido ya tiene una factura en borrador (INV-9). Confírmala o elimínala antes de generar otra.');
     assert.equal(result, translateBackendErrorBody(body, t, FALLBACK));
+  });
+
+  // The paths that are not an import action but can receive its refusal: a line saved from the
+  // grid or the form, and the document modals that read the body themselves.
+  describe('the same refusal outside an import action', () => {
+    const SERVER_TEXT = 'The warehouse is closed for inventory';
+    const PATHS = [
+      ['translateMappedImportRefusal', (body, t) => translateMappedImportRefusal(body, t)],
+      ['translateBackendErrorBody', (body, t) => translateBackendErrorBody(body, t, FALLBACK)],
+      ['translateBackendErrorResponse', (body, t) => translateBackendErrorResponse({ status: 422, json: async () => body }, t)],
+    ];
+    const ES_ABOVE_PENDING = 'No se pueden importar 9 de Fernet: solo quedan 2 pendientes en esta línea '
+      + '(las cantidades ya incluidas en documentos en borrador cuentan como usadas).';
+
+    const SENTENCES = [
+      ['es_ES', 'above the pending', DETAILS, ES_ABOVE_PENDING],
+      ['en_US', 'above the pending', DETAILS, 'Cannot import 9 of Fernet: only 2 is still pending on this line '
+        + '(quantities already in draft documents count as taken).'],
+      ['es_ES', 'above the line maximum', { ...DETAILS, pending: 4, maximumAllowed: 4 },
+        'No se puede guardar 9 de Fernet: el máximo para esta línea es 4.'],
+      ['en_US', 'above the line maximum', { ...DETAILS, pending: 4, maximumAllowed: 4 },
+        'Cannot save 9 of Fernet: the maximum for this line is 4.'],
+      // A maximum of 0 is still a maximum: it must not read as "nothing pending".
+      ['es_ES', 'a line maximum of 0', { ...DETAILS, pending: 0, maximumAllowed: 0 },
+        'No se puede guardar 9 de Fernet: el máximo para esta línea es 0.'],
+      ['es_ES', 'a null maximum', { ...DETAILS, maximumAllowed: null }, ES_ABOVE_PENDING],
+      // A quantity of 0 or below: the sign is the problem, whatever is pending (create or edit).
+      ['es_ES', 'a quantity not above 0', { ...DETAILS, requested: 0, quantityNotPositive: true },
+        'La cantidad de Fernet tiene que ser mayor que 0.'],
+      ['en_US', 'a quantity not above 0', { ...DETAILS, requested: -1, quantityNotPositive: true },
+        'The quantity of Fernet must be greater than 0.'],
+      ['es_ES', 'a negative edit with a maximum', { ...DETAILS, requested: -1, maximumAllowed: 4, quantityNotPositive: true },
+        'La cantidad de Fernet tiene que ser mayor que 0.'],
+    ];
+
+    for (const [locale, label, details, expected] of SENTENCES) {
+      it(`${locale}: ${label} renders the full sentence on every path`, async () => {
+        const t = fakeUiTranslator(loadLabels(locale));
+        for (const [path, render] of PATHS) {
+          assert.equal(await render(refusal('importQuantityExceedsPending', details), t), expected, path);
+        }
+      });
+    }
+
+    for (const [label, code] of [
+      ['another code', 'business_rule'],
+      ['an import code with no sentence', 'importSomethingNew'],
+      ['no code', undefined],
+    ]) {
+      it(`${label} keeps the server text, even when the body carries quantity details`, async () => {
+        const body = {
+          error: { status: 422, ...(code ? { code } : {}), message: SERVER_TEXT, ...DETAILS, maximumAllowed: 4 },
+        };
+        assert.equal(translateMappedImportRefusal(body, es), null);
+        assert.equal(translateBackendErrorBody(body, es, FALLBACK), SERVER_TEXT);
+        assert.equal(await translateBackendErrorResponse({ status: 422, json: async () => body }, es), SERVER_TEXT);
+      });
+    }
+
+    it('a mapped code whose sentence the locale lacks keeps the server text', async () => {
+      const body = refusal('importTargetNotDraft');
+      const noLabels = fakeUiTranslator({});
+      assert.equal(translateMappedImportRefusal(body, noLabels), null);
+      assert.equal(translateMappedImportRefusal(body, undefined), null);
+      assert.equal(translateBackendErrorBody(body, noLabels, FALLBACK), body.error.message);
+      assert.equal(
+        await translateBackendErrorResponse({ status: 422, json: async () => body }, noLabels),
+        body.error.message,
+      );
+    });
+
+    it('an inherited property name or an empty body is not a refusal', () => {
+      for (const body of [refusal('constructor'), refusal('toString'), {}, null, undefined]) {
+        assert.equal(translateMappedImportRefusal(body, es), null, JSON.stringify(body));
+      }
+    });
   });
 
   it('every mapped key exists in en_US and es_ES; the quantity sentences keep their placeholders', () => {

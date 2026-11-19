@@ -192,9 +192,6 @@ vi.mock('../DocumentStatusPill.jsx', () => ({
   default: ({ status }) => <span data-testid="status-pill">{status}</span>,
 }));
 
-vi.mock('@/components/attachments/AttachmentIcon', () => ({
-  AttachmentIcon: () => <span>📎</span>,
-}));
 
 const MockForm = ({ data }) => (
   <div data-testid="mock-form">

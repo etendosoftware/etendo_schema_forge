@@ -4,19 +4,17 @@ import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { TrendingUp, TrendingDown, Pencil } from 'lucide-react';
+import { TrendUpIcon, TrendDownIcon, PencilSimpleIcon } from '@phosphor-icons/react';
 import { getLayout303, matchesVisibility, isFieldRequired, resolveFieldLabelKey, isOptionDisabled, getInvalidSelectedOption, resolveOptionDisabledReasonKey } from './fm303Layouts.js';
 import { formatAmount, formatPercent, exceedsTypedIntegerDigits, exceedsTypedDecimalDigits, isUnparseableDraft } from '../../fiscalModelsUtils.js';
 
 const SECTION_ICON = {
-  iva_devengado: <TrendingUp
+  iva_devengado: <TrendUpIcon
     size={20}
-    strokeWidth={1.75}
     style={{ color: 'hsl(var(--foreground))' }}
     data-testid="TrendingUp__49d327" />,
-  iva_deducible: <TrendingDown
+  iva_deducible: <TrendDownIcon
     size={20}
-    strokeWidth={1.75}
     style={{ color: 'hsl(var(--foreground))' }}
     data-testid="TrendingDown__49d327" />,
 };
@@ -362,7 +360,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
             {unit && <span className="fm-aeat-cell__unit">{unit}</span>}
             {isCellEditable && !readOnly && (
               <button className="fm-aeat-cell__edit-btn" onClick={() => startEditingCell(boxNum)}>
-                <Pencil size={12} strokeWidth={1.5} data-testid="Pencil__49d327" />
+                <PencilSimpleIcon size={12} data-testid="Pencil__49d327" />
               </button>
             )}
           </>
@@ -617,7 +615,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                                       <span className="fm-aeat-cell__value">{val != null ? formatCell(val, 'amount') : ''}</span>
                                       {isCellEditable && !readOnly && (
                                         <button className="fm-aeat-cell__edit-btn" onClick={() => startEditingCell(boxNum)}>
-                                          <Pencil size={12} strokeWidth={1.5} data-testid="Pencil__49d327" />
+                                          <PencilSimpleIcon size={12} data-testid="Pencil__49d327" />
                                         </button>
                                       )}
                                     </>

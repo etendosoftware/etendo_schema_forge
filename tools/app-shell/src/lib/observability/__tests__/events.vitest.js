@@ -15,7 +15,7 @@ const SNAKE_CASE_EVENT_NAME = /^[a-z0-9]+(?:_[a-z0-9]+)*$/;
 
 describe('observability event catalog', () => {
   it('defines the four interactive-report events (ETP-6080) with their properties', () => {
-    const base = ['specName', 'reportSessionId'];
+    const base = ['account_id', 'specName', 'reportSessionId'];
     expect(OBSERVABILITY_EVENTS.REPORT_OPENED).toMatchObject({ name: 'report_opened', properties: [...base, 'source', 'outcome', 'durationMs', 'errorCode'] });
     expect(OBSERVABILITY_EVENTS.REPORT_FILTER_APPLIED).toMatchObject({ name: 'report_filter_applied', properties: [...base, 'type', 'outcome', 'durationMs', 'errorCode'] });
     expect(OBSERVABILITY_EVENTS.REPORT_GROUP_TOGGLED).toMatchObject({ name: 'report_group_toggled', properties: [...base, 'type', 'outcome'] });
@@ -26,6 +26,22 @@ describe('observability event catalog', () => {
     }
     expect(buildObservabilityEvent(OBSERVABILITY_EVENTS.REPORT_GROUP_TOGGLED, { specName: 'profit-loss', reportSessionId: 's1', type: 'expand', outcome: 'success', name: 'Ventas' }).properties)
       .toEqual({ specName: 'profit-loss', reportSessionId: 's1', type: 'expand', outcome: 'success' });
+  });
+
+  it('declares report_panel_toggled with panelState, trigger and outcome; state stays dropped', () => {
+    const event = OBSERVABILITY_EVENTS.REPORT_PANEL_TOGGLED;
+    expect(event.name).toBe('report_panel_toggled');
+    expect(event.properties).toEqual(expect.arrayContaining(['panelState', 'trigger', 'outcome']));
+    const { properties } = buildObservabilityEvent(event, {
+      specName: 'profit-loss', reportSessionId: 's1', panelState: 'collapsed', trigger: 'auto_columns', outcome: 'success', state: 'collapsed',
+    });
+    expect(properties).toEqual({ specName: 'profit-loss', reportSessionId: 's1', panelState: 'collapsed', trigger: 'auto_columns', outcome: 'success' });
+  });
+
+  it('declares account_id on the report and walkthrough events (ETP-6230)', () => {
+    for (const key of ['REPORT_OPENED', 'REPORT_FILTER_APPLIED', 'REPORT_GROUP_TOGGLED', 'REPORT_DRILLDOWN', 'WALKTHROUGH_STARTED', 'WALKTHROUGH_FINISHED']) {
+      expect(OBSERVABILITY_EVENTS[key].properties).toContain('account_id');
+    }
   });
 
   it('uses snake_case names for every event', () => {
@@ -234,5 +250,35 @@ describe('product_movements_tab_opened event', () => {
     });
     expect(Object.keys(properties).sort()).toEqual(Object.keys(declared).sort());
     expect(JSON.stringify(properties)).not.toMatch(/ABC|XYZ|u1|admin|a@x\.com/);
+  });
+});
+
+// ETP-6050 — the adoption event of the Invoice Inbox; counted by this exact name over `session_started`.
+describe('invoice_inbox_opened event', () => {
+  const declared = { account_id: 'client-1', category: 'product_usage', specName: 'invoice-inbox' };
+
+  it('is registered under its name, on the Mixpanel channel only', () => {
+    expect(OBSERVABILITY_EVENTS.INVOICE_INBOX_OPENED.name).toBe('invoice_inbox_opened');
+    expect(OBSERVABILITY_EVENTS.INVOICE_INBOX_OPENED.channels).toEqual([OBSERVABILITY_CHANNELS.MIXPANEL]);
+  });
+
+  it('allows exactly the tenant, the category and the spec', () => {
+    expect([...OBSERVABILITY_EVENTS.INVOICE_INBOX_OPENED.properties].sort()).toEqual(
+      [
+        OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
+        OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+        OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      ].sort(),
+    );
+    const { name, properties } = buildObservabilityEvent(OBSERVABILITY_EVENTS.INVOICE_INBOX_OPENED, declared);
+    expect(name).toBe('invoice_inbox_opened');
+    expect(properties).toEqual(declared);
+  });
+
+  it('drops anything that is not declared (file name, vendor, amount, document id)', () => {
+    const { properties } = buildObservabilityEvent(OBSERVABILITY_EVENTS.INVOICE_INBOX_OPENED, {
+      ...declared, fileName: 'f.pdf', vendor: 'ACME', amount: 99, documentId: 'D1',
+    });
+    expect(Object.keys(properties).sort()).toEqual(Object.keys(declared).sort());
   });
 });

@@ -214,7 +214,7 @@ Route tracking ignores query-string and hash-only changes.
 ### Interactive report events (ETP-6080, flag `dynamic-reports`)
 
 Emitted by the interactive report view (`components/reports/dynamic/reportTelemetry.js`), as agreed
-in the reports KPI analysis (PR #25). Every event carries `specName` (the report id) and
+in the reports KPI analysis (PR #25). Every event carries `specName` (the report id), `account_id` (ETP-6230, see below) and
 `reportSessionId`, a random UUID per report session. `reportSessionId` is in the host allowlist
 (`payload.js`) and in `TRUSTED_CONTEXT_KEYS` (`observability/core.js`): its name contains
 `session`, so without the trusted entry the gateway redacts it and the funnels break with no error.
@@ -223,10 +223,42 @@ Its value (36 characters) stays under the gateway's opaque-value scrub. `errorCo
 
 | Event | When | Properties |
 |-------|------|-----------|
-| `report_opened` | Once per report session, when the first request answers | `source` (`menu` when picked from the report list, else `deep_link`), `outcome`, `durationMs`, `errorCode` |
-| `report_filter_applied` | One per user change, when its result is visible or its request failed. Never for the defaults, "Limpiar filtros" or a change whose request was replaced inside the debounce | `type` (`period`, `organization`, `account_level`, `business_partner`, `product`, `comparison`), `outcome`, `durationMs` (none for `account_level`: nothing loads), `errorCode` |
-| `report_group_toggled` | A row folded or unfolded, expand all, collapse all | `type` (`expand`, `collapse`, `expand_all`, `collapse_all`), `outcome: success` |
-| `report_drilldown` | A drill-down step | `type` (`ledger`, `entry` timed from the click to the answer; `document` when the tab opens), `outcome` (`success`, `error` incl. a blocked pop-up, `no_document` for an entry with no window) |
+| `report_opened` | Once per report session, when the first request answers | `source` (`menu` when picked from the report list, else `deep_link`), `outcome`, `durationMs`, `errorCode`, `account_id` |
+| `report_filter_applied` | One per user change, when its result is visible or its request failed. Never for the defaults, "Limpiar filtros" or a change whose request was replaced inside the debounce | `type` (`period`, `organization`, `account_level`, `business_partner`, `product`, `comparison`, `columns`), `outcome`, `durationMs` (none for `account_level` and `comparison`: nothing loads), `errorCode`, `account_id` |
+| `report_group_toggled` | A row folded or unfolded, expand all, collapse all | `type` (`expand`, `collapse`, `expand_all`, `collapse_all`), `outcome: success`, `account_id` |
+| `report_drilldown` | A drill-down step | `type` (`ledger`, `entry` timed from the click to the answer; `document` when the tab opens), `outcome` (`success`, `error` incl. a blocked pop-up, `no_document` for an entry with no window), `account_id` |
+| `report_panel_toggled` | The "Personalizar informe" panel was hidden or shown (ETP-6239) | `panelState` (`collapsed`, `expanded`), `trigger` (`user` for the button, `auto_columns` when choosing Mes/Trimestre hid it), `outcome: success`, `account_id`. The property is `panelState` and not `state`: the payload policy denylists `state` (OAuth) and would drop it |
+
+### `account_id` and `internal_user` on report and walkthrough events (ETP-6230)
+
+The six events `report_opened`, `report_filter_applied`, `report_group_toggled`, `report_drilldown`,
+`walkthrough_started` and `walkthrough_finished` now carry an explicit `account_id`
+(`getSessionIdentity().clientId`, read per event, never memoized; omitted when the identity is not
+resolved yet). It is declared in each event's property list (`events.js`): before, the walkthrough
+events did not declare it, so `buildObservabilityEvent` dropped it and they relied only on the
+Mixpanel group super property that `trackSessionStarted` registers. That super property is not there
+yet when the event fires first (right after sign-in/onboarding, before `session_started` finished its
+flag-context await), which is why many `walkthrough_finished` events reached Mixpanel with no
+`account_id`. Report events go through `startReportTiming` / `trackReportEvent`; walkthrough events through `emit()`
+in `lib/walkthrough/walkthrough-events.js`.
+
+`internal_user` (boolean) is on every event once an email is known, sent as observability context
+(`setContext`, so it never depends on the Mixpanel super-property allowlist of core). It is derived
+from the signed-in account's email domain against `INTERNAL_EMAIL_DOMAINS`
+(`lib/observability/internalUser.js`: `etendo.software`, `etendo.ai`, `smfconsulting.es`; the domain is
+the text after the last `@`, compared case-insensitively), set by `useAccountIdentity` through
+`setInternalUserContext` (cleared when the user signs out). The email itself is never sent. The
+property is **absent** (not `false`) when no email is known. It is in `SAFE_EVENT_PROPERTY_KEYS` and
+`BOOLEAN_EVENT_PROPERTY_KEYS` (`payload.js`).
+
+**Saved reports must filter it null-safe.** Events with no `internal_user` (unknown email) count as
+external. Use "`internal_user` is not true" (the collector's `not (internal_user == true)`), never a
+filter that drops events where the property is missing; a plain `internal_user != true` that excludes
+nulls would silently remove those events from every KPI. See
+`etendo-kpis` `docs/mixpanel-saved-reports.md` (filters every report must carry).
+
+The SPA domain list is hard-coded in `internalUser.js`, while the backend list is configurable; the two
+must be kept in sync by hand (the domain is taken after the last `@` on both sides).
 
 ### Health Score events (ETP-4209)
 
@@ -414,7 +446,7 @@ await stop({ status: 'success' });
 Payloads are normalized before providers receive them:
 
 - Allowed common fields: `app`, `environment`, `hostname`, `mockMode`, `role_groups`,
-  `route`, `routePattern`, `timestamp`, and `windowName`.
+  `route`, `routePattern`, `tenant_type`, `timestamp`, and `windowName`.
 - Allowed KPI numeric fields: `accuracy`, `attempt`, `count`, `durationMs`,
   `position`, `score`, `step`, and `value`. These must be finite numbers within
   their configured bounds; strings and booleans are dropped for numeric keys.
@@ -451,6 +483,79 @@ free text per tenant. `useSessionStartTracking` keeps them in the common context
 with `setContext`, before `session_started` fires, follows a role switch, and
 clears them on unmount. In a Mixpanel `where`, filter with
 `"warehouse" in properties["role_groups"]`. Mapping: `lib/observability/roleGroups.js`.
+
+### `ad_user_id`, `ad_client_id`, `etgo_account_id` (ETP-6228)
+
+Every event carries the same internal identity so KPIs can count per environment or
+account, join SPA events with the backend's, and exclude test accounts:
+
+| Property | Value |
+|---|---|
+| `ad_user_id` | The AD_User of the session (internal id, no name or email). |
+| `ad_client_id` | The environment (AD_Client_ID). Same value as the former `account_id`. |
+| `etgo_account_id` | The ETGO_Account that **owns** the environment (one account, several environments). Not the account of the person signed in: an invited member signs in with their own account. |
+
+`useSessionStartTracking` keeps them in the common context with `setContext`, in a single
+write so a company switch replaces all three together. They are cleared on unmount and,
+for a session lost while the shell stays mounted, from `clearSessionScopedState` in
+`App.jsx` (`clearIdentityContext`). An id that is not known yet is left off the events; it is
+never copied from another tenant. `session_started` is not sent if the session changed while
+the group calls were in flight. Policy: the three keys are in the allowlist of `payload.js`;
+names and emails are dropped.
+
+**Sources.** `ad_user_id` is `useAuth().userId` and `etgo_account_id` is
+`useAuth().etgoAccountId`, both mapped by `schema_forge_core` from the session payload
+(`environment.userId`, `environment.etgoAccountId`). Until the core release and the backend
+expose them the SPA sends neither; it never falls back to `account.id`.
+
+**Transition.** `account_id` keeps being sent (session events and health events) with the
+same value as `ad_client_id`, and the Mixpanel group is registered under both keys
+(`group`/`groupSet` for `ad_client_id` and `account_id`), so saved reports and group reports
+keep working. No removal date is set: drop `account_id` (property and group key) once the
+reports move to `ad_client_id`.
+
+**Open items** (for the issue owner):
+- Backend events carry the same identity since ETP-6228 (`NeoTelemetryService`, owner account
+  from the flagged owner user, also returned as `environment.etgoAccountId` by
+  `GET /sws/go/session`); see the backend telemetry doc for its own open items (the legal rule,
+  ETP-5791, forbids business record ids only; the PM confirmed on 2026-11-19 that `ad_user_id` is
+  allowed).
+- `distinct_id` as hash of `ad_user_id` + device id: needs `identify`, which ETP-4352 (GDPR)
+  removed; pending a privacy decision.
+- `ETGO_Account` lookup table with the test-account flag in Mixpanel: flag name pending from
+  Platform.
+- Group Analytics must be active in the project, and the project's group-key limit must allow
+  both keys during the transition.
+- Formal privacy review: the code sends internal ids only.
+- `account_id` removal date.
+
+### `tenant_type` (ETP-6072)
+
+Every event carries `tenant_type` once the current environment is known, so KPIs
+can leave demo tenants out (consumer: `etendo-kpis`). It is not `environment`, which
+is the deployment (`VITE_APP_ENV`: prod, staging, e2e). The payload policy keeps only
+the two values below and drops anything else, including the backend casing.
+
+| Value | When |
+|---|---|
+| `demo` | The current row of `GET /sws/go/environments` has `environmentType` `DEMO` |
+| `productive` | It has `environmentType` `PRODUCTIVE`, also when a canceled subscription makes its `plan` read `free` |
+| *(absent)* | The list has not loaded, no row matches the session's client, or the row reports no type |
+
+The source is `environmentType`, never `plan`. `useTenantTypeContext` (mounted by
+`useSessionStartTracking`) keeps the value in the common context with `setContext`,
+follows the current tenant, and clears it on unmount. The list loads asynchronously,
+so events sent before it settles go out without the property: read its absence as
+unknown. `session_started` waits for the list (at most 5 s, then it goes out without
+the property), because it is the denominator of the adoption KPIs and a filter on the
+numerator alone would bias them. A company switch is a
+hard navigation, so the next page resolves the new tenant. Backend events of
+`com.etendoerp.go` do not go through the SPA; since ETP-6228 the backend sink adds the same
+`tenant_type` (`demo` | `productive`, from the same environment lifecycle) to the events built
+in a session, see `docs/backend-observability.md` in that module. Historical events
+are not backfilled. In a Mixpanel `where`, exclude demo tenants and keep the unknown
+ones with `not (properties["tenant_type"] == "demo")`. Mapping:
+`lib/observability/tenantType.js`.
 
 The health event helpers read `account_id` from the in-memory session identity
 (`lib/sessionIdentity.js`), which `trackSessionStarted` records on sign-in and

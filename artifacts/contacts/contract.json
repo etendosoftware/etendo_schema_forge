@@ -1,8 +1,8 @@
 {
-  "version": "0.8.0",
+  "version": "0.14.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-11-12T18:13:45.794Z",
-  "checksum": "b4de693813139470",
+  "updatedAt": "2026-11-18T20:02:10.276Z",
+  "checksum": "328c708fc989d926",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -580,7 +580,7 @@
             "publicApi": {
               "exposed": true,
               "name": "name",
-              "required": true
+              "description": "Name of the contact. Required for a company (is_person false or omitted). For a person Etendo derives it from first_name and last_name: send none; a value other than first name + last name is refused."
             }
           },
           {
@@ -606,6 +606,12 @@
             "validation": {
               "required": true,
               "maxLength": 22
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "category",
+              "lookup": true,
+              "description": "Category of the contact. When omitted on create, Etendo assigns the default category."
             }
           },
           {
@@ -623,6 +629,11 @@
             "validation": {
               "required": true,
               "maxLength": 60
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "firstName",
+              "description": "First name of a person. Required when is_person is true. Refused for a company, and on a create without is_person true."
             },
             "displayLogic": {
               "raw": "@EM_Etgo_Isperson@='Y'",
@@ -644,6 +655,11 @@
             "validation": {
               "required": true,
               "maxLength": 60
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "lastName",
+              "description": "Last name of a person. Required when is_person is true. Refused for a company, and on a create without is_person true."
             },
             "displayLogic": {
               "raw": "@EM_Etgo_Isperson@='Y'",
@@ -721,6 +737,11 @@
             "validation": {
               "required": true,
               "maxLength": 60
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "taxIdKey",
+              "description": "Kind of tax id held in tax_id. When omitted, Etendo applies the default kind before it validates tax_id."
             }
           },
           {
@@ -740,7 +761,8 @@
             },
             "publicApi": {
               "exposed": true,
-              "name": "taxId"
+              "name": "taxId",
+              "description": "Tax identification number. Etendo validates it for the kind in tax_id_key and refuses an invalid one."
             }
           },
           {
@@ -873,6 +895,11 @@
             "validation": {
               "required": true,
               "maxLength": 1
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "isPerson",
+              "description": "true for a person, false for a company. A contact created without it is a company, so a create that sends first_name or last_name without is_person true is refused. A person sends first_name and last_name; a company sends name. Switching a contact to a company clears its first and last name."
             }
           },
           {
@@ -1018,6 +1045,11 @@
               "required": true,
               "maxLength": 1
             },
+            "publicApi": {
+              "exposed": true,
+              "name": "isCustomer",
+              "description": "true when the contact can be used on sales documents. When omitted on create, Etendo applies the default (true), or the type defined by the contact's category."
+            },
             "displayLogic": {
               "raw": "false",
               "evaluable": true,
@@ -1040,6 +1072,11 @@
             "validation": {
               "required": true,
               "maxLength": 1
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "isVendor",
+              "description": "true when the contact can be used on purchase documents; a purchase order only accepts a vendor as its contact. When omitted on create, Etendo applies the default (false), or the type defined by the contact's category."
             },
             "displayLogic": {
               "raw": "false",
@@ -1422,6 +1459,14 @@
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_PaymentMethod_FinAccount"
             },
+            "publicApi": {
+              "exposed": true,
+              "lookup": {
+                "context": {
+                  "FIN_ISRECEIPT": "Y"
+                }
+              }
+            },
             "displayLogic": {
               "raw": "record.customer",
               "evaluable": true,
@@ -1551,6 +1596,14 @@
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_PaymentMethod_FinAccount"
+            },
+            "publicApi": {
+              "exposed": true,
+              "lookup": {
+                "context": {
+                  "FIN_ISRECEIPT": "N"
+                }
+              }
             },
             "displayLogic": {
               "raw": "record.vendor",

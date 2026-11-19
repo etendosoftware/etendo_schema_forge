@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, FileText, Users } from 'lucide-react';
+import { WarningIcon, FileTextIcon, UsersIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -54,8 +54,8 @@ export function confirmSummary(readiness, linesTotal, record) {
 
 // What each grouping option means, shown under its card (ActionChoiceModal needs a description).
 const GROUPING_CARD = {
-  P: { descriptionKey: 'remittanceGroupingNoneDescription', icon: FileText },
-  GGPD: { descriptionKey: 'remittanceGroupingByBpAndDueDateDescription', icon: Users },
+  P: { descriptionKey: 'remittanceGroupingNoneDescription', icon: FileTextIcon },
+  GGPD: { descriptionKey: 'remittanceGroupingByBpAndDueDateDescription', icon: UsersIcon },
 };
 
 /** The choice cards: the grouping param's options, or the single «Sin agrupar» card without a param. */
@@ -303,7 +303,7 @@ export default function RemittanceConfirmDialog({ process, record, apiBaseUrl, o
         )}
         {!checking && !checkFailed && problems.length > 0 && (
           <div className="flex items-start gap-3 rounded-[0_8px_8px_0] border-l-2 border-status-warning-border bg-status-warning px-4 py-2" data-testid="remittance-confirm-problems-banner">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-status-warning-foreground" aria-hidden="true" data-testid="AlertTriangle__confirm" />
+            <WarningIcon className="mt-0.5 h-4 w-4 shrink-0 text-status-warning-foreground" aria-hidden="true" data-testid="AlertTriangle__confirm" />
             <div className="min-w-0 flex-1">
               <ReadinessProblemsBlock problems={problems} onNavigate={onClose} hideIcon testId="remittance-confirm-problems" data-testid="ReadinessProblemsBlock__confirm" />
             </div>

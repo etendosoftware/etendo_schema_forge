@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useLayoutEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { RotateCcw, Check } from 'lucide-react';
+import { ArrowCounterClockwiseIcon, CheckIcon } from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { DataTable } from '@/components/contract-ui';
@@ -459,7 +459,7 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
       return [{
         key: 'aPRMProcessPayment',
         label: ui('confirm'),
-        icon: Check,
+        icon: CheckIcon,
         onClick: () => { setConfirmRow(row); return Promise.resolve(); },
       }];
     }
@@ -475,7 +475,7 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
         key: 'etprReactivatePayment',
         label: ui('reactivar'),
         destructive: true,
-        icon: RotateCcw,
+        icon: ArrowCounterClockwiseIcon,
         onClick: () => { setConfirm({ action: 'reactivate', row }); return Promise.resolve(); },
       }];
     }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle } from 'lucide-react';
+import { WarningIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -72,7 +72,7 @@ export default function RemittanceCollectDialog({ record, apiBaseUrl, onRefresh,
       data-testid="ActionChoiceModal__remittance-collect">
       <div className="flex flex-col gap-5">
       <RemittanceStatusChange from="SB" to="CT" data-testid="RemittanceStatusChange__collect" />
-      <InfoBanner tone="warning" icon={AlertTriangle} dismissible={false} role="alert" data-testid="remittance-collect-warning">
+      <InfoBanner tone="warning" icon={WarningIcon} dismissible={false} role="alert" data-testid="remittance-collect-warning">
         {ui('remittanceCollectWarning')}
       </InfoBanner>
       </div>

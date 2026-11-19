@@ -10,6 +10,7 @@ import Handlebars from 'handlebars';
 import { registerReportHelpers, buildJsreportHelpersString } from '../../../templates/reports/helpers/report-html-helpers.js';
 import { buildContractLabels } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
 import { expandBrandingPartial } from './reportBrandingPartialHelper.js';
+import { registerJsreportHelpers } from './reportJsreportHelpers.js';
 
 // ETP-4899 — profit-loss ("Pérdidas y Ganancias") is an INDENTED ACCOUNT-REPORT
 // TREE, mirroring Etendo Classic's GeneralAccountingReports, not a flat 3-category
@@ -525,6 +526,7 @@ describe('profit-loss template.hbs — Reference Amount column visibility', () =
 function renderExcel({ compareTo, locale = 'en_US', rows = ROWS } = {}) {
   const hb = Handlebars.create();
   registerReportHelpers(hb, HELPERS_CODE);
+  registerJsreportHelpers(hb, HELPERS_CODE);
   const template = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'));
   return template({
     css: '',
@@ -803,6 +805,52 @@ describe('profit-loss splitQuery — one account split by org / contact / produc
   });
 });
 
+// ETP-6239 — the period queries read ledger lines through the very same
+// predicates as the queries they mirror, so a bucket can never see a row the
+// plain report would not (org, schema, R/C closing entries, dimensions, year).
+describe('profit-loss periodQuery / splitPeriodQuery — predicate parity (ETP-6239)', () => {
+  const facts = (sql) => sql.slice(sql.indexOf('FROM fact_acct fa WHERE'), sql.indexOf(' GROUP BY'));
+  const PERIOD = CONTRACT.sql.periodQuery;
+  const SPLIT_PERIOD = CONTRACT.sql.splitPeriodQuery;
+
+  it('periodQuery reads fact_acct with exactly sql.query\'s predicates', () => {
+    assert.ok(facts(SQL).length > 200, 'extracted the main predicates');
+    assert.equal(facts(PERIOD), facts(SQL));
+  });
+
+  it('splitPeriodQuery reads fact_acct with exactly splitQuery\'s predicates, subtree included', () => {
+    assert.ok(facts(CONTRACT.sql.splitQuery).includes('fa.account_id IN (SELECT node_id FROM sub)'));
+    assert.equal(facts(SPLIT_PERIOD), facts(CONTRACT.sql.splitQuery));
+  });
+
+  it('both keep the closing/regularisation exclusion and the org-tree check', () => {
+    for (const sql of [PERIOD, SPLIT_PERIOD]) {
+      assert.match(sql, /fa\.factaccttype NOT IN \('R', 'C'\)/);
+      assert.match(sql, /ad_isorgincluded\(o\.ad_org_id, '__ORGID__', '__CLIENT_ID__'\) <> -1/);
+    }
+  });
+
+  it('take their periods from __PERIODS__ once, and group days before joining the buckets', () => {
+    for (const sql of [PERIOD, SPLIT_PERIOD]) {
+      assert.equal(sql.split('__PERIODS__').length, 2);
+      assert.match(sql, /days AS MATERIALIZED/);
+      assert.match(sql, /own_amt_sly/);
+      assert.match(sql, /own_amt_prev/);
+    }
+  });
+
+  it('split period query groups by dimension and period and returns what the engine reads', () => {
+    for (const col of ['AS dimension_id', 'AS dimension_name', 'f.idx', 'f.own_amt', 'f.own_amt_sly', 'f.own_amt_prev']) {
+      assert.ok(SPLIT_PERIOD.includes(col), col);
+    }
+    assert.match(SPLIT_PERIOD, /CASE '__SPLITBY__' WHEN 'org' THEN fa\.ad_org_id WHEN 'bpartner' THEN fa\.c_bpartner_id ELSE fa\.m_product_id END AS dimension_id/);
+  });
+
+  it('periods is not a declared parameter (applyPlaceholders would paste it raw)', () => {
+    assert.equal(findParam('periods'), undefined);
+  });
+});
+
 // ── ETP-6080: variation columns in every export, only with a comparison ─────
 
 const VAR_ROWS = [
@@ -852,10 +900,185 @@ describe('profit-loss exports — variation (ETP-6080)', () => {
     void variationAmount; void variationPct;
     const hb = Handlebars.create();
     registerReportHelpers(hb, HELPERS_CODE);
+    registerJsreportHelpers(hb, HELPERS_CODE);
     const excel = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))({
       meta: { ...META_BASE, labels: noVariation, params: { compareTo: 'true' } }, rows: VAR_ROWS,
     });
     assert.doesNotMatch(excel, /<td data-cell-type="number">716\.16</);
     assert.match(excel, /<th>Reference Amount<\/th>\s*<\/tr>/);
+  });
+});
+
+// ETP-6239 — the PDF's headline cards and "what Comparado is compared against".
+describe('profit-loss exports — headline cards and compared period (ETP-6239)', () => {
+  const PERIODS = [
+    { idx: 0, dateFrom: '2026-01-01', dateTo: '2026-02-28', partial: false },
+    { idx: 1, dateFrom: '2026-01-01', dateTo: '2026-01-31', partial: false },
+    { idx: 2, dateFrom: '2026-02-01', dateTo: '2026-02-28', partial: false },
+  ];
+  // from..to|sly|prev, bucket 0 first — what the view sends as `periods`.
+  const PERIODS_PARAM = '2026-01-01..2026-02-28|2025-01-01..2025-02-28|2025-11-01..2025-12-31,'
+    + '2026-01-01..2026-01-31|2025-01-01..2025-01-31|2025-12-01..2025-12-31,'
+    + '2026-02-01..2026-02-28|2025-02-01..2025-02-28|2026-01-01..2026-01-31';
+  const CELL = { amount: 10, sly: { amount: 5, variationAmount: 5, variationPct: 100 }, prev: { amount: 5, variationAmount: 5, variationPct: 100 } };
+  const PROW = { ...ROWS[0], cells: [CELL, CELL, CELL] };
+  const kpiCards = (compare) => [
+    { id: 'income', percent: false, value: 1200, refValue: 800, compare, delta: compare ? { amount: 50, unit: '%' } : null, trend: compare ? 'improves' : null, up: true, tone: null },
+    { id: 'expenses', percent: false, value: 400, refValue: 500, compare, delta: compare ? { amount: -20, unit: '%' } : null, trend: compare ? 'improves' : null, up: false, tone: null },
+    { id: 'result', percent: false, value: 800, refValue: 300, compare, delta: null, trend: null, up: true, tone: 'positive' },
+    { id: 'margin', percent: true, value: null, refValue: 37.5, compare, delta: null, trend: null, up: false, tone: null },
+  ];
+  const meta = (locale, params) => ({
+    ...META_BASE, locale, labels: LABELS[locale], periods: PERIODS, columnPages: [[0, 1], [2]], columnPageSize: 2, params: { periods: PERIODS_PARAM, ...params },
+  });
+  const pdf = (locale, params) => {
+    const hb = Handlebars.create();
+    registerReportHelpers(hb, HELPERS_CODE);
+    return hb.compile(expandBrandingPartial(readFileSync(resolve(ARTIFACT_DIR, 'template.hbs'), 'utf8')))({ css: '', meta: meta(locale, params), rows: [PROW] });
+  };
+
+  it('PDF: four cards with the value, the pill and "vs <compared>" when comparing', () => {
+    const html = pdf('es_ES', { columns: 'month', compareMode: 'sly', kpis: JSON.stringify(kpiCards(true)) });
+    assert.equal((html.match(/class="kpi-card/g) || []).length, 4);
+    for (const label of ['Ingresos', 'Gastos', 'Resultado del ejercicio', 'Margen']) assert.ok(html.includes(label), label);
+    assert.match(html, /1\.200,00/);
+    assert.match(html, /kpi-pill improves">&#9650; 50,00 %/);
+    assert.match(html, /kpi-pill improves">&#9660; -20,00 %/); // expenses fell: good news, arrow down
+    assert.match(html, /vs 800,00/);
+    assert.match(html, /vs 37,50 %/);
+    assert.match(html, /kpi-card positive/);
+    assert.match(html, /kpi-value">&mdash;/); // a missing margin
+  });
+
+  it('PDF: without a comparison the cards show no pill and no "vs"', () => {
+    const html = pdf('en_US', { columns: 'month', compareMode: 'none', kpis: JSON.stringify(kpiCards(false)) });
+    assert.equal((html.match(/class="kpi-card/g) || []).length, 4);
+    assert.doesNotMatch(html, /class="kpi-pill|class="kpi-sub/);
+  });
+
+  it('PDF: no cards when the render carries no kpis, or an invalid one', () => {
+    assert.doesNotMatch(pdf('es_ES', { columns: 'month', compareMode: 'none' }), /class="kpi-row"/);
+    assert.doesNotMatch(pdf('es_ES', { columns: 'month', compareMode: 'none', kpis: 'not json' }), /class="kpi-row"/);
+  });
+
+  it('PDF: the Comparado header names the compared month, the previous month, or the total range', () => {
+    const sly = pdf('es_ES', { columns: 'month', compareMode: 'sly' });
+    assert.match(sly, /Comparado<span class="cmp-against">\(ene 25\)<\/span>/);
+    assert.match(sly, /Comparado<span class="cmp-against">\(feb 25\)<\/span>/);
+    assert.match(sly, /Comparado<span class="cmp-against">\(01\/01\/2025 – 28\/02\/2025\)<\/span>/);
+    const prev = pdf('en_US', { columns: 'month', compareMode: 'prev' });
+    assert.match(prev, /Compared<span class="cmp-against">\(Dec 25\)<\/span>/);
+    assert.match(prev, /Compared<span class="cmp-against">\(11\/01\/2025 – 12\/31\/2025\)<\/span>/);
+    assert.doesNotMatch(pdf('es_ES', { columns: 'month', compareMode: 'none' }), /class="cmp-against"/);
+  });
+
+  it('Excel / CSV: the same text inside the one header cell, CSV through csvField', () => {
+    const hb = Handlebars.create();
+    registerReportHelpers(hb, HELPERS_CODE);
+    const data = { meta: meta('es_ES', { columns: 'quarter', compareMode: 'prev' }), rows: [PROW] };
+    registerJsreportHelpers(hb, HELPERS_CODE);
+    const excel = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))(data);
+    assert.match(excel, /<th>T1 26 Comparado \(T4 25\)<\/th>/);
+    assert.match(excel, /<th>Total Comparado \(01\/11\/2025 – 31\/12\/2025\)<\/th>/);
+    const built = buildJsreportHelpersString(HELPERS_CODE);
+    const names = [...built.matchAll(/^function\s+(\w+)\s*\(/gm)].map((m) => m[1]);
+    // eslint-disable-next-line no-new-func
+    const emitted = new Function(`${built}\nreturn { ${names.join(', ')} };`)();
+    const hbJs = Handlebars.create();
+    for (const [name, fn] of Object.entries(emitted)) hbJs.registerHelper(name, fn);
+    const csv = hbJs.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-csv.hbs'), 'utf8'))(data).split('\n')[0];
+    assert.match(csv, /,"?T1 26 Comparado \(T4 25\)"?,/);
+    assert.doesNotMatch(csv, /&quot;|&amp;/);
+  });
+
+  it('PDF without a comparison: 12 months + Total do not fit one page, so they print as two even pages, Concepto repeated', () => {
+    const periods = Array.from({ length: 13 }, (_, i) => ({ idx: i, dateFrom: '2026-01-01', dateTo: '2026-01-31', partial: false }));
+    const cells = periods.map(() => CELL);
+    const hb = Handlebars.create();
+    registerReportHelpers(hb, HELPERS_CODE);
+    const html = hb.compile(expandBrandingPartial(readFileSync(resolve(ARTIFACT_DIR, 'template.hbs'), 'utf8')))({
+      css: '',
+      meta: { ...META_BASE, locale: 'es_ES', labels: LABELS.es_ES, periods, columnPages: [periods.map((p) => p.idx)], columnPageSize: 13, params: { columns: 'month', compareMode: 'none' } },
+      rows: [{ ...ROWS[0], cells }],
+    });
+    const tables = html.split('<table class="report-table period-table').slice(1);
+    assert.equal(tables.length, 2);
+    assert.deepEqual(tables.map((t) => (t.match(/<th class="cell-amount period-group"/g) || []).length), [7, 6]);
+    assert.ok(tables.every((t) => t.includes('Concepto')));
+  });
+
+  it('PDF: the hidden-periods note is singular for 1 and plural for more, in es and en', () => {
+    const note = (locale, hiddenCount) => {
+      const hb = Handlebars.create();
+      registerReportHelpers(hb, HELPERS_CODE);
+      const html = hb.compile(expandBrandingPartial(readFileSync(resolve(ARTIFACT_DIR, 'template.hbs'), 'utf8')))({
+        css: '', meta: { ...meta(locale, { columns: 'month', compareMode: 'none' }), notes: { hiddenCount } }, rows: [PROW],
+      });
+      return /class="period-note">([^<]*)</.exec(html)[1];
+    };
+    assert.match(note('es_ES', 1), /^No se muestra 1 período anterior\./);
+    assert.match(note('es_ES', 2), /^No se muestran 2 períodos anteriores\./);
+    assert.match(note('en_US', 1), /^Not shown: 1 earlier period\./);
+    assert.match(note('en_US', 5), /^Not shown: 5 earlier periods\./);
+  });
+});
+
+// ETP-6080 (QA CP-31) — a null % (reference 0) must be an empty STRING cell: html-to-xlsx writes an
+// empty number cell as the literal NaN, which is invalid XML. Values are rounded to 2 decimals.
+describe('profit-loss exports — nullable variation cells (ETP-6080)', () => {
+  const NROWS = [
+    { ...ROWS[1], variationAmount: 5, variationPct: null },
+    { ...ROWS[2], variationAmount: 0, variationPct: 0 },
+    { ...ROWS[3], variationAmount: 12.3456, variationPct: 91.5492957746479 },
+  ];
+  const excelCells = (html) => [...html.matchAll(/<td data-cell-type="(\w+)">([^<]*)<\/td>/g)].map((m) => [m[1], m[2]]);
+
+  it('Excel rows: null % is an empty string cell, 0 stays numeric, long decimals are rounded', () => {
+    const cells = excelCells(renderExcel({ compareTo: true, rows: NROWS }));
+    assert.ok(cells.some(([t, v]) => t === 'string' && v === ''), 'null % -> empty string cell');
+    assert.ok(cells.some(([t, v]) => t === 'number' && v === '91.55'));
+    assert.ok(cells.some(([t, v]) => t === 'number' && v === '12.35'));
+    assert.ok(cells.filter(([t, v]) => t === 'number' && v === '0').length >= 1);
+    assert.ok(!cells.some(([t, v]) => t === 'number' && v === ''), 'no empty number cell (NaN in xlsx)');
+  });
+
+  it('CSV rows: empty cell for null, 0 for 0, rounded values', () => {
+    const lines = renderCsv({ compareTo: true, rows: NROWS }).trim().split('\n').slice(1);
+    assert.ok(lines[0].endsWith(',8000,5,'), lines[0]);
+    assert.ok(lines[1].endsWith(',0,0,0'), lines[1]);
+    assert.ok(lines[2].endsWith(',0,12.35,91.55'), lines[2]);
+  });
+
+  describe('period columns', () => {
+    const PERIODS = [{ idx: 0, dateFrom: '2026-01-01', dateTo: '2026-01-31', partial: false }];
+    const PARAM = '2026-01-01..2026-01-31|2025-01-01..2025-01-31|2025-12-01..2025-12-31';
+    const mk = (ref) => ({
+      meta: { ...META_BASE, locale: 'en_US', labels: LABELS.en_US, periods: PERIODS, columnPages: [[0]], columnPageSize: 1, params: { periods: PARAM, columns: 'month', compareMode: 'sly' } },
+      rows: [{ ...ROWS[1], cells: [{ amount: 10, sly: ref }] }],
+    });
+    const excel = (d) => { const hb = Handlebars.create(); registerReportHelpers(hb, HELPERS_CODE); registerJsreportHelpers(hb, HELPERS_CODE); return hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))(d); };
+    const csv = (d) => {
+      const built = buildJsreportHelpersString(HELPERS_CODE);
+      const names = [...built.matchAll(/^function\s+(\w+)\s*\(/gm)].map((m) => m[1]);
+      // eslint-disable-next-line no-new-func
+      const helpers = new Function(`${built}\nreturn { ${names.join(', ')} };`)();
+      const hb = Handlebars.create();
+      for (const [n, fn] of Object.entries(helpers)) hb.registerHelper(n, fn);
+      return hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-csv.hbs'), 'utf8'))(d);
+    };
+
+    it('Excel: reference 0 gives an empty string cell for the %, a real 0 stays numeric', () => {
+      const zero = excelCells(excel(mk({ amount: 0, variationAmount: 10, variationPct: null })));
+      assert.ok(zero.some(([t, v]) => t === 'string' && v === ''));
+      assert.ok(!zero.some(([t, v]) => t === 'number' && v === ''));
+      const real = excelCells(excel(mk({ amount: 10, variationAmount: 0, variationPct: 0 })));
+      assert.ok(real.filter(([t, v]) => t === 'number' && v === '0').length >= 2);
+    });
+
+    it('CSV: reference 0 gives an empty % cell, long decimals are rounded', () => {
+      const row = (d) => csv(d).trim().split('\n')[1];
+      assert.ok(row(mk({ amount: 0, variationAmount: 10, variationPct: null })).endsWith(',10,0,10,'));
+      assert.ok(row(mk({ amount: 5, variationAmount: 5, variationPct: 91.5492957746479 })).endsWith(',5,5,91.55'));
+    });
   });
 });

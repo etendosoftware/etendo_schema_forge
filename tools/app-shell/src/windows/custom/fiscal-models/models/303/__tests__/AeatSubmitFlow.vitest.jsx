@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/AeatSubmitFlow.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/AeatResultBanner.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/fiscalModelsUtils.js
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/submission390.js
 // Vitest tests for AeatSubmitFlow — the ETP-4456 Phase 2 AEAT 303 electronic
@@ -14,14 +15,8 @@ vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u ?? '' }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
-vi.mock('lucide-react', () => ({
-  Loader2: () => null,
-  TriangleAlert: () => null,
-  OctagonAlert: () => null,
-  CircleCheck: () => null,
-  Download: () => null,
-  Landmark: () => null,
-}));
+import { allIconsAs } from '@/test/iconMock.js';
+vi.mock('@phosphor-icons/react', async importOriginal => allIconsAs(() => null, importOriginal));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -33,6 +28,7 @@ import AeatSubmitFlow, {
   classifySubmitOutcome,
   resolveErrorCodeKey,
 } from '../AeatSubmitFlow.jsx';
+import { AeatResultBanner } from '../AeatResultBanner.jsx';
 
 // ── Pure helpers ────────────────────────────────────────────────────────────
 
@@ -717,6 +713,119 @@ describe('AeatSubmitFlow — onIncidentsChanged (Incidencias tab refresh, ETP-44
     expect(JSON.parse(stableApiFetch.mock.calls[0][1].body).testMode).toBe(true);
     await waitFor(() => expect(screen.getByText('fm.aeat.result.test.title')).toBeInTheDocument());
     expect(onIncidentsChanged).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ETP-5716 — a real presentation is validated first by the server, in the same request: the
+// loading text says so, and a validator rejection is told apart from a presentation error.
+describe('AeatSubmitFlow — validation before the presentation (ETP-5716)', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  /** The banner (AeatResultBanner root) that holds the given title. */
+  const bannerOf = (titleKey) => screen.getByText(titleKey).parentElement.parentElement;
+
+  it('a real presentation says "validating and presenting" while the request is in flight', async () => {
+    let resolveFetch;
+    stableApiFetch.mockReturnValueOnce(new Promise((resolve) => { resolveFetch = resolve; }));
+    renderFlow();
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+    await waitFor(() => expect(screen.getByText('fm.aeat.action.validating_submitting')).toBeInTheDocument());
+    expect(screen.queryByText('fm.aeat.action.submitting')).not.toBeInTheDocument();
+    expect(screen.getByTestId('AeatSubmitFlow__submit')).toBeDisabled();
+    resolveFetch({ ok: true, json: async () => ({ status: 'SUCCESS' }) });
+    await waitFor(() => expect(screen.getByText('fm.aeat.result.success.title')).toBeInTheDocument());
+  });
+
+  it('test mode keeps the plain "submitting" text while the request is in flight', async () => {
+    let resolveFetch;
+    stableApiFetch.mockReturnValueOnce(new Promise((resolve) => { resolveFetch = resolve; }));
+    renderFlow();
+    fireEvent.click(screen.getByTestId('AeatSubmitFlow__testMode'));
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+    await waitFor(() => expect(screen.getByText('fm.aeat.action.submitting')).toBeInTheDocument());
+    expect(screen.queryByText('fm.aeat.action.validating_submitting')).not.toBeInTheDocument();
+    resolveFetch({ ok: true, json: async () => ({ status: 'TEST_SUCCESS' }) });
+    await waitFor(() => expect(screen.getByText('fm.aeat.result.test.title')).toBeInTheDocument());
+  });
+
+  it('stage "validation": the "not presented, the AEAT found errors while validating" title with the error list', async () => {
+    const onSuccess = vi.fn();
+    stableApiFetch.mockReturnValueOnce(jsonResponse({
+      status: 'ERROR', stage: 'validation',
+      errors: ['390E01 - Casilla 33 incorrecta', '390E02 - Casilla 47 incorrecta'],
+    }));
+    renderFlow({ onSuccess });
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+    await waitFor(() => expect(screen.getByText('fm.aeat.result.validation_rejected.title')).toBeInTheDocument());
+    expect(screen.queryByText('fm.aeat.result.error.title')).not.toBeInTheDocument();
+    expect(bannerOf('fm.aeat.result.validation_rejected.title').style.color).toBe('var(--fm-danger-fg)');
+    const items = [...bannerOf('fm.aeat.result.validation_rejected.title').querySelectorAll('li')].map(li => li.textContent);
+    expect(items).toEqual(['390E01 - Casilla 33 incorrecta', '390E02 - Casilla 47 incorrecta']);
+    expect(onSuccess).not.toHaveBeenCalled();
+  });
+
+  it('VALIDATION_UNAVAILABLE shows its own message under the ordinary error title, not the validator title', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({
+      status: 'ERROR', stage: 'validation', errorCode: 'VALIDATION_UNAVAILABLE', errors: ['ignored'],
+    }));
+    renderFlow();
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+    await waitFor(() => expect(screen.getByText('fm.aeat.error.validationUnavailable')).toBeInTheDocument());
+    expect(resolveErrorCodeKey('VALIDATION_UNAVAILABLE')).toBe('fm.aeat.error.validationUnavailable');
+    expect(screen.getByText('fm.aeat.result.error.title')).toBeInTheDocument();
+    expect(screen.queryByText('fm.aeat.result.validation_rejected.title')).not.toBeInTheDocument();
+    expect(screen.queryByText('ignored')).not.toBeInTheDocument();
+  });
+
+  it('an ordinary presentation error keeps the previous title', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({
+      status: 'ERROR', errorCode: 'SUBMISSION_FAILED', errors: ['E0100803 - Razón social del Declarante'],
+    }));
+    renderFlow();
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+    await waitFor(() => expect(screen.getByText('fm.aeat.result.error.title')).toBeInTheDocument());
+    expect(screen.queryByText('fm.aeat.result.validation_rejected.title')).not.toBeInTheDocument();
+    expect(screen.getByText('E0100803 - Razón social del Declarante')).toBeInTheDocument();
+  });
+
+  it('a presentation-stage error keeps the previous title too', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'ERROR', stage: 'submission', errors: ['E1 - x'] }));
+    renderFlow();
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+    await waitFor(() => expect(screen.getByText('fm.aeat.result.error.title')).toBeInTheDocument());
+    expect(screen.queryByText('fm.aeat.result.validation_rejected.title')).not.toBeInTheDocument();
+  });
+});
+
+// The banner every AEAT result is shown in (the direct presentation and the 390 file validation).
+describe('AeatResultBanner', () => {
+  it.each([
+    ['success', 'var(--fm-success-fg)'],
+    ['warning', 'var(--fm-warning-fg)'],
+    ['danger', 'var(--fm-danger-fg)'],
+    ['info', 'var(--fm-info-fg)'],
+    ['something-else', 'var(--fm-info-fg)'],
+    [undefined, 'var(--fm-info-fg)'],
+  ])('tone %s is drawn in %s', (tone, colour) => {
+    render(<AeatResultBanner tone={tone} title="banner-title" />);
+    expect(screen.getByText('banner-title').parentElement.parentElement.style.color).toBe(colour);
+  });
+
+  it('shows the icon, the title, the body and its children', () => {
+    render(
+      <AeatResultBanner tone="danger" icon={<span data-testid="banner-icon" />} title="banner-title" body="banner-body">
+        <ul><li>child-line</li></ul>
+      </AeatResultBanner>,
+    );
+    expect(screen.getByTestId('banner-icon')).toBeInTheDocument();
+    expect(screen.getByText('banner-title')).toBeInTheDocument();
+    expect(screen.getByText('banner-body')).toBeInTheDocument();
+    expect(screen.getByText('child-line')).toBeInTheDocument();
+  });
+
+  it('renders no body block without a body', () => {
+    render(<AeatResultBanner tone="info" title="banner-title" />);
+    expect(screen.getByText('banner-title').parentElement.children).toHaveLength(1);
   });
 });
 

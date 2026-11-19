@@ -1,8 +1,8 @@
 {
-  "version": "0.56.0",
+  "version": "0.60.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-11-05T13:33:52.314Z",
-  "checksum": "417ce8d06cfbcc06",
+  "updatedAt": "2026-11-18T15:10:52.496Z",
+  "checksum": "71965abb356e5d0a",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -308,6 +308,9 @@
               "required": true,
               "maxLength": 22
             },
+            "publicApi": {
+              "lookup": true
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -338,6 +341,13 @@
               "cascadeParams": [
                 "IsSOTrx"
               ]
+            },
+            "publicApi": {
+              "lookup": {
+                "context": {
+                  "IsSOTrx": "N"
+                }
+              }
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
@@ -430,6 +440,13 @@
               "source": "DR"
             },
             "enumValues": [
+              {
+                "value": "ETGO_AC",
+                "name": "Accepted",
+                "labels": {
+                  "es_ES": "Accepted"
+                }
+              },
               {
                 "value": "AE",
                 "name": "Automatic Evaluation",
@@ -1229,8 +1246,8 @@
             "apiKey": "eTGOCurrencyRate",
             "column": "EM_ETGO_Currency_Rate",
             "label": "EM_ETGO_Currency_Rate",
-            "type": "string",
-            "tsType": "string",
+            "type": "decimal",
+            "tsType": "number",
             "visibility": "editable",
             "required": false,
             "grid": false,
@@ -2656,8 +2673,8 @@
             "apiKey": "finaccTxnConvertRate",
             "column": "Finacc_Txn_Convert_Rate",
             "label": "Exchange Rate",
-            "type": "string",
-            "tsType": "string",
+            "type": "decimal",
+            "tsType": "number",
             "visibility": "readOnly",
             "required": false,
             "grid": false,
@@ -3666,7 +3683,7 @@
             "name": "eTGOCurrencyRate",
             "apiKey": "eTGOCurrencyRate",
             "column": "EM_ETGO_Currency_Rate",
-            "type": "string",
+            "type": "decimal",
             "visibility": "editable",
             "required": false
           },
@@ -4662,7 +4679,7 @@
             "name": "finaccTxnConvertRate",
             "apiKey": "finaccTxnConvertRate",
             "column": "Finacc_Txn_Convert_Rate",
-            "type": "string",
+            "type": "decimal",
             "visibility": "readOnly",
             "required": false
           },
@@ -7061,7 +7078,7 @@
         "entity": "header",
         "field": "eTGOCurrencyRate",
         "runner": "node",
-        "description": "Field 'eTGOCurrencyRate' should have type 'string' in header"
+        "description": "Field 'eTGOCurrencyRate' should have type 'number' in header"
       },
       {
         "id": "t-field-type-header-eTGODelivStatusPurchase",
@@ -7581,7 +7598,7 @@
         "entity": "paymentDetails",
         "field": "finaccTxnConvertRate",
         "runner": "node",
-        "description": "Field 'finaccTxnConvertRate' should have type 'string' in paymentDetails"
+        "description": "Field 'finaccTxnConvertRate' should have type 'number' in paymentDetails"
       },
       {
         "id": "t-field-type-paymentDetails-finFinancialAccountID",

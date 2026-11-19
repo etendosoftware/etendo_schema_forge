@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CalendarDays, Check, ChevronDown } from 'lucide-react';
+import { CalendarBlankIcon, CheckIcon, CaretDownIcon } from '@phosphor-icons/react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { useLocaleSwitch, useUI } from '@/i18n';
@@ -143,7 +143,7 @@ export function DateRangePopoverContent({ value, onChange, onClose, extraPresets
               )}
             >
               <span className="flex-1">{preset.label}</span>
-              {active ? <Check className="mr-3 h-4 w-4 shrink-0" data-testid="Check__482ed1" /> : null}
+              {active ? <CheckIcon className="mr-3 h-4 w-4 shrink-0" data-testid="Check__482ed1" /> : null}
             </button>
           );
         })}
@@ -156,7 +156,7 @@ export function DateRangePopoverContent({ value, onChange, onClose, extraPresets
           )}
         >
           <span className="flex-1">{ui('dateRangeCustom')}</span>
-          {customMode ? <Check className="mr-3 h-4 w-4 shrink-0" data-testid="Check__482ed1" /> : null}
+          {customMode ? <CheckIcon className="mr-3 h-4 w-4 shrink-0" data-testid="Check__482ed1" /> : null}
         </button>
       </div>
       {/* Calendars + footer */}
@@ -219,7 +219,12 @@ export function DateRangePopoverContent({ value, onChange, onClose, extraPresets
  *   extraPresets?: Array<'last3m'|'last6m'>; // opt-in: adds "Last 3 / 6 months" before "Last 12 months"
  * }} props
  */
-export function DateRangePopover({ value, onChange, placeholder, extraPresets }) {
+/**
+ * @param {string} [testId] optional `data-testid` for the trigger button. Only set when given:
+ *   the trigger is a Radix `asChild` slot, where an explicit `undefined` on the child would
+ *   override the slot's own test id for every other caller.
+ */
+export function DateRangePopover({ value, onChange, placeholder, extraPresets, testId }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
@@ -233,12 +238,13 @@ export function DateRangePopover({ value, onChange, placeholder, extraPresets })
         <button
           type="button"
           className="inline-flex h-10 items-center justify-between gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium leading-6 text-[#121217] transition-colors hover:bg-muted"
+          {...(testId ? { 'data-testid': testId } : {})}
         >
-          <CalendarDays
+          <CalendarBlankIcon
             className="h-5 w-5 shrink-0 text-[#828FA3]"
             data-testid="CalendarDays__482ed1" />
           <span className="mx-1 truncate text-left">{triggerLabel}</span>
-          <ChevronDown
+          <CaretDownIcon
             className="h-4 w-4 shrink-0 text-[#828FA3]"
             data-testid="ChevronDown__482ed1" />
         </button>

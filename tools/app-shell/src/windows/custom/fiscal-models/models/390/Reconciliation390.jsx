@@ -12,7 +12,7 @@
 // Rendered with the system notice banner (`@/components/InfoBanner.jsx`, the one every GO window
 // uses — status-* tokens), never with colours of its own.
 import React from 'react';
-import { ArrowRight, CircleCheck, Info, TriangleAlert } from 'lucide-react';
+import { ArrowRightIcon, CheckCircleIcon, InfoIcon, WarningIcon } from '@phosphor-icons/react';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { formatAmount } from '../../fiscalModelsUtils.js';
 import { missingPeriodsLabel } from './preload390.js';
@@ -30,7 +30,7 @@ export default function Reconciliation390({ reconciliation, preload, year, onVie
     if (!preload || status !== 'no303') return null;
     return (
       <div className="fm-390-reconcile-row" data-testid="Reconciliation390">
-        <InfoBanner tone="info" icon={Info} dismissible={false} data-testid="Reconciliation390__banner">
+        <InfoBanner tone="info" icon={InfoIcon} dismissible={false} data-testid="Reconciliation390__banner">
           <span data-testid="Reconciliation390__no303">{t('fm.m390.reconcile.no303', { year })}</span>
         </InfoBanner>
       </div>
@@ -42,7 +42,7 @@ export default function Reconciliation390({ reconciliation, preload, year, onVie
     <div className="fm-390-reconcile-row" data-testid="Reconciliation390">
       <InfoBanner
         tone={ok ? 'success' : 'warning'}
-        icon={ok ? CircleCheck : TriangleAlert}
+        icon={ok ? CheckCircleIcon : WarningIcon}
         dismissible={false}
         role={ok ? undefined : 'status'}
         data-testid="Reconciliation390__banner"
@@ -54,7 +54,7 @@ export default function Reconciliation390({ reconciliation, preload, year, onVie
             data-testid="Reconciliation390__viewDetail"
           >
             {t('fm.m390.reconcile.view_detail')}
-            <ArrowRight size={14} strokeWidth={1.75} data-testid="ArrowRight__reconciliation390" />
+            <ArrowRightIcon size={14} data-testid="ArrowRight__reconciliation390" />
           </button>
         )}
       >

@@ -4,7 +4,7 @@
 // origin and its actions ("Ir a la casilla", "Ver facturas", "Editar en Organización", "Ver
 // facturas de venta/compra"). The incidents come from the backend (incidents390.js).
 import React from 'react';
-import { ChevronRight } from 'lucide-react';
+import { CaretRightIcon } from '@phosphor-icons/react';
 import { IncidentsTab } from '../../FmTabContent.jsx';
 import {
   incidentActions390, incidentOrigin390, incidentText390, normalizeIncidents390,
@@ -37,7 +37,7 @@ function ActionButtons({ actions, handlers, t }) {
           data-testid={`Incidents390Tab__action_${a.id}`}
         >
           {t(a.labelKey, { box: a.box })}
-          <ChevronRight size={13} strokeWidth={2} aria-hidden="true" data-testid="ChevronRight__incident390" />
+          <CaretRightIcon size={13} aria-hidden="true" data-testid="ChevronRight__incident390" />
         </button>
       ))}
     </span>
@@ -46,12 +46,13 @@ function ActionButtons({ actions, handlers, t }) {
 
 /**
  * @param {object}   props.incidents        `{ blocking, warning, items }` of the declaration
+ * @param {number}   [props.gatingBlocking] blocking incidents that really gate Generar / Presentar
  * @param {Function} [props.onGoToBox]      (box) => void — "Ir a la casilla"
  * @param {Function} [props.onViewInvoices] (box) => void — "Ver facturas" (Facturas tab filtered)
  * @param {Function} [props.onViewSettlements] () => void — "Ver detalle por trimestre" (the year's 303s)
  * @param {Function} [props.onNavigate]     (path) => void — Organization / invoice lists
  */
-export default function Incidents390Tab({ incidents, onGoToBox, onViewInvoices, onViewSettlements, onNavigate, t }) {
+export default function Incidents390Tab({ incidents, gatingBlocking, onGoToBox, onViewInvoices, onViewSettlements, onNavigate, t }) {
   const normalized = normalizeIncidents390(incidents);
   const handlers = { onGoToBox, onViewInvoices, onViewSettlements, onNavigate };
   const renderAction = (item) => {
@@ -68,6 +69,7 @@ export default function Incidents390Tab({ incidents, onGoToBox, onViewInvoices, 
         decl={{ incidents: normalized }}
         blocking={normalized.blocking}
         warning={normalized.warning}
+        gatingBlocking={gatingBlocking}
         t={t}
         getMessage={(item) => incidentText390(item, t)}
         getOrigin={(item) => incidentOrigin390(item, t)}

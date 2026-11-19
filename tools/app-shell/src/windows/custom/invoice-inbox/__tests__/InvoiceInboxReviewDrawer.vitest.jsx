@@ -11,7 +11,9 @@
 // New file justification: the panel components have no test; InvoiceInboxPage.vitest.jsx mocks the
 // table and only drives the page flows (it gets the open/close/discard integration cases instead).
 // The sections are rendered together through the drawer, the way a user sees them.
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
+import { FileTextIcon, ImageIcon } from '@phosphor-icons/react';
+import { findIcon } from '@/test/iconGlyph.js';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -72,7 +74,23 @@ function makeReview(over = {}, doc = {}) {
 }
 
 let answers;
-const apiFetch = vi.fn(async (url) => {
+// The confirm action answer: `{status, body}` (default: 404), or a function / promise like `answers`.
+let confirmAnswer = null;
+// The mark-reviewed action answer, same shapes as `confirmAnswer`.
+let markAnswer = null;
+const apiFetch = vi.fn(async (url, init) => {
+  if (/\/action\/mark-reviewed$/.test(url)) {
+    const handler = markAnswer;
+    const out = typeof handler === 'function' ? await handler(url, init) : handler;
+    const { status = 200, body } = out ?? { status: 404, body: {} };
+    return { ok: status >= 200 && status < 300, status, json: async () => body };
+  }
+  if (/\/action\/confirm$/.test(url)) {
+    const handler = confirmAnswer;
+    const out = typeof handler === 'function' ? await handler(url, init) : handler;
+    const { status = 200, body } = out ?? { status: 404, body: {} };
+    return { ok: status >= 200 && status < 300, status, json: async () => body };
+  }
   const id = decodeURIComponent(url.match(/\/header\/([^/]+)\/action\/review/)?.[1] ?? '');
   const answer = answers[id];
   if (answer instanceof Promise) return answer;
@@ -113,6 +131,8 @@ beforeEach(() => {
   apiFetch.mockClear();
   mockPickerFetch.mockClear();
   answers = {};
+  confirmAnswer = null;
+  markAnswer = null;
 });
 
 describe('review drawer — shell, loading and the header', () => {
@@ -150,11 +170,11 @@ describe('review drawer — shell, loading and the header', () => {
 
   it('header: the file icon follows the file type (PDF document, image picture)', async () => {
     const pdf = await renderLoaded(makeReview());
-    expect(tid('FileIcon__review-header').getAttribute('class')).toMatch(/file-text/);
+    expect(findIcon(tid('invoice-inbox-review-header'), FileTextIcon)).toBe(tid('FileIcon__review-header'));
     pdf.unmount();
     answers = {};
     await renderLoaded(makeReview({ fileName: 'scan.PNG' }));
-    expect(tid('FileIcon__review-header').getAttribute('class')).toMatch(/lucide-image/);
+    expect(findIcon(tid('invoice-inbox-review-header'), ImageIcon)).toBe(tid('FileIcon__review-header'));
   });
 
   it('header: "{n} de {total}" never wraps, and prev / next call the nav', async () => {
@@ -164,8 +184,9 @@ describe('review drawer — shell, loading and the header', () => {
     expect(position.className).toMatch(/whitespace-nowrap/);
     fireEvent.click(tid('invoice-inbox-review-prev'));
     fireEvent.click(tid('invoice-inbox-review-next'));
-    expect(nav.goPrev).toHaveBeenCalledTimes(1);
-    expect(nav.goNext).toHaveBeenCalledTimes(1);
+    // Moving on first waits for the pending saves (`flush`), so the nav call is async.
+    await waitFor(() => expect(nav.goPrev).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(nav.goNext).toHaveBeenCalledTimes(1));
   });
 
   it('header: no position text when the document is not among the loaded rows; chevrons disable at the ends', async () => {
@@ -210,13 +231,15 @@ describe('review drawer — shell, loading and the header', () => {
 });
 
 describe('review drawer — supplier', () => {
-  it('linked: name, "taxId · city" and how it was matched; Change is inert', async () => {
+  it('linked: name, "taxId · city" and how it was matched; Change opens the search', async () => {
     await renderLoaded(makeReview());
     expect(tid('invoice-inbox-review-vendor')).toHaveAttribute('data-state', 'linked');
     expect(tid('invoice-inbox-review-vendor-name')).toHaveTextContent('ACME SL');
     expect(tid('invoice-inbox-review-vendor-meta')).toHaveTextContent('B1234 · Madrid');
     expect(tid('invoice-inbox-review-vendor-matched-by')).toHaveTextContent('Vinculado por NIF');
-    expect(tid('invoice-inbox-review-vendor-change')).toHaveAttribute('aria-disabled', 'true');
+    expect(tid('invoice-inbox-review-vendor-change')).not.toHaveAttribute('aria-disabled');
+    fireEvent.click(tid('invoice-inbox-review-vendor-change'));
+    expect(tid('invoice-inbox-review-vendor-change-panel')).toBeInTheDocument();
   });
 
   it('linked by name reads "Vinculado por nombre"; an unknown matchedBy shows no tag', async () => {
@@ -261,11 +284,11 @@ describe('review drawer — supplier', () => {
     expect(tid('invoice-inbox-review-vendor-in-document')).toHaveTextContent('sin NIF legible');
   });
 
-  it('ambiguous candidates are disabled radios in the read-only panel', async () => {
+  it('ambiguous candidates are enabled radios (the choice is live from S2)', async () => {
     await renderLoaded(ambiguous(2));
     const radio = tid('invoice-inbox-review-vendor-candidate-c0');
     expect(radio).toHaveAttribute('role', 'radio');
-    expect(radio).toBeDisabled();
+    expect(radio).not.toBeDisabled();
     expect(within(tid('invoice-inbox-review-vendor-ambiguous')).getAllByRole('radio')).toHaveLength(3);
   });
 
@@ -281,8 +304,9 @@ describe('review drawer — supplier', () => {
     expect(tid('invoice-inbox-review-vendor-new-address')).toHaveValue('Rue 1');
     expect(tid('invoice-inbox-review-vendor-new-postalcode')).toHaveValue('75001');
     expect(tid('invoice-inbox-review-vendor-new-city')).toHaveValue('Paris');
-    expect(tid('invoice-inbox-review-vendor-new-country')).toHaveValue('Francia');
-    expect(tid('invoice-inbox-review-vendor-search-existing')).toHaveAttribute('aria-disabled', 'true');
+    // The country is a picker (its chip shows the NAME); "Buscar existente" is live.
+    expect(tid('invoice-inbox-review-vendor-new-country-field')).toHaveTextContent('Francia');
+    expect(tid('invoice-inbox-review-vendor-search-existing')).not.toHaveAttribute('aria-disabled');
   });
 
   it('new without a country falls back to España; without a name and missing vendor it shows the required error', async () => {
@@ -290,15 +314,15 @@ describe('review drawer — supplier', () => {
       header: { vendor: { state: 'new', extracted: { taxId: 'X1' } } },
       validation: { missing: ['vendor'] },
     }));
-    expect(tid('invoice-inbox-review-vendor-new-country')).toHaveValue('España');
+    expect(tid('invoice-inbox-review-vendor-new-country-field')).toHaveTextContent('España');
     expect(tid('invoice-inbox-review-vendor-new-name-error')).toHaveTextContent('Indica el proveedor');
     expect(tid('invoice-inbox-review-vendor-new-name')).toHaveAttribute('aria-invalid', 'true');
   });
 
-  it('none: the inert picker hint and, when missing, the red error', async () => {
+  it('none: the vendor search and, when missing, the red error', async () => {
     await renderLoaded(makeReview({}, { header: { vendor: { state: 'none' } }, validation: { missing: ['vendor'] } }));
     expect(tid('invoice-inbox-review-vendor')).toHaveAttribute('data-state', 'none');
-    expect(tid('invoice-inbox-review-vendor-none-hint')).toHaveAttribute('placeholder', 'Selecciona un proveedor de Etendo…');
+    expect(within(tid('invoice-inbox-review-vendor-none')).getByPlaceholderText('Selecciona un proveedor de Etendo…')).toBeInTheDocument();
     expect(tid('invoice-inbox-review-vendor-error')).toHaveTextContent('Indica el proveedor');
   });
 
@@ -336,7 +360,7 @@ describe('review drawer — lines and products', () => {
     fireEvent.click(tid('invoice-inbox-review-line-0-product'));
     expect(tid('invoice-inbox-review-line-0-product')).toHaveAttribute('aria-expanded', 'true');
     expect(tid('invoice-inbox-review-line-0-panel')).toHaveTextContent('Cambiar por otro producto');
-    expect(tid('invoice-inbox-review-line-0-search')).toHaveAttribute('aria-disabled', 'true');
+    expect(within(tid('invoice-inbox-review-line-0-search')).getByPlaceholderText('Buscar en el catálogo de Etendo…')).toBeInTheDocument();
     fireEvent.click(tid('invoice-inbox-review-line-0-product'));
     expect(maybe('invoice-inbox-review-line-0-panel')).toBeNull();
   });
@@ -351,7 +375,7 @@ describe('review drawer — lines and products', () => {
     expect(tid('invoice-inbox-review-line-0-likely')).toHaveTextContent('Más probable');
     expect(tid('invoice-inbox-review-line-0-candidate-p1')).toHaveTextContent('K1 · Cat · Ud');
     expect(tid('invoice-inbox-review-line-0-none-option')).toHaveTextContent('Ninguno · crear producto nuevo');
-    expect(tid('invoice-inbox-review-line-0-candidate-p0')).toBeDisabled();
+    expect(tid('invoice-inbox-review-line-0-candidate-p0')).not.toBeDisabled();
   });
 
   it('ambiguous with exactly 1 candidate uses the singular "1 producto posible"', async () => {
@@ -392,21 +416,24 @@ describe('review drawer — lines and products', () => {
 
   it('numeric cells carry the full value in title, and the amount is quantity x price', async () => {
     await renderLoaded(makeReview({}, { lines: [line({ quantity: 1234.5, unitPrice: 10.25, taxRate: 21 })] }));
-    for (const part of ['quantity', 'price', 'tax']) {
+    for (const part of ['quantity', 'price']) {
       const input = tid(`invoice-inbox-review-line-0-${part}`);
       expect(input.title).toBe(input.value);
       expect(input.title).not.toBe('');
     }
+    // The VAT cell is a read-only display of the effective rate (the tax is chosen with the selector).
+    expect(tid('invoice-inbox-review-line-0-tax')).toHaveValue('21%');
+    expect(tid('invoice-inbox-review-line-0-tax')).toHaveAttribute('readonly');
     expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(M(12653.63));
     expect(tid('invoice-inbox-review-line-0-amount').title).toBe(tid('invoice-inbox-review-line-0-amount').textContent);
   });
 
-  it('the line section counts lines in its title and all fields are read-only; add / delete are inert', async () => {
+  it('the line section counts lines in its title; fields, add and delete are live', async () => {
     await renderLoaded(makeReview({}, { lines: [line({ index: 0 }), line({ index: 1, description: 'B' })] }));
     expect(tid('invoice-inbox-review-lines-title')).toHaveTextContent('Líneas · 2');
-    expect(tid('invoice-inbox-review-line-1-description')).toHaveAttribute('readonly');
-    expect(tid('invoice-inbox-review-add-line')).toHaveAttribute('aria-disabled', 'true');
-    expect(tid('invoice-inbox-review-line-delete-0')).toHaveAttribute('aria-disabled', 'true');
+    expect(tid('invoice-inbox-review-line-1-description')).not.toHaveAttribute('readonly');
+    expect(tid('invoice-inbox-review-add-line')).not.toBeDisabled();
+    expect(tid('invoice-inbox-review-line-delete-0')).not.toHaveAttribute('aria-disabled');
   });
 
   it('zero lines: only the header row and the "no amount" line, no rows, totals in zeros', async () => {
@@ -438,22 +465,24 @@ describe('review drawer — lines and products', () => {
 });
 
 describe('review drawer — header section, currency and totals', () => {
-  it('invoice number and formatted date are read-only', async () => {
+  it('invoice number and formatted date are editable', async () => {
     await renderLoaded(makeReview());
     expect(tid('invoice-inbox-review-invoice-no')).toHaveValue('F-100');
-    expect(tid('invoice-inbox-review-invoice-no')).toHaveAttribute('readonly');
+    expect(tid('invoice-inbox-review-invoice-no')).not.toHaveAttribute('readonly');
     expect(tid('invoice-inbox-review-invoice-date')).toHaveValue(formatCalendarDate('2026-08-01', 'es_ES'));
   });
 
   it('the raw date is shown when the parsed one is missing', async () => {
     await renderLoaded(makeReview({}, { header: { invoiceDate: null, invoiceDateRaw: '1 ago 26' } }));
-    expect(tid('invoice-inbox-review-invoice-date')).toHaveValue('1 ago 26');
+    // The shared date field cannot show free text: the printed date is a hint under it.
+    expect(tid('invoice-inbox-review-invoice-date')).toHaveValue('');
+    expect(tid('invoice-inbox-review-invoice-date-raw')).toHaveTextContent('1 ago 26');
   });
 
   it('a missing date gets the "Revisar" tag, the red field and its error', async () => {
     await renderLoaded(makeReview({}, { header: { invoiceDate: null }, validation: { missing: ['invoiceDate'] } }));
     expect(tid('invoice-inbox-review-invoice-date-tag')).toHaveTextContent('Revisar');
-    expect(tid('invoice-inbox-review-invoice-date')).toHaveAttribute('aria-invalid', 'true');
+    expect(tid('invoice-inbox-review-invoice-date-control')).toHaveAttribute('aria-invalid', 'true');
     expect(tid('invoice-inbox-review-invoice-date-error')).toHaveTextContent('Indica la fecha de factura');
   });
 
@@ -473,7 +502,7 @@ describe('review drawer — header section, currency and totals', () => {
   it('totals: base, one IVA row per rate (ascending) and "Total *" with the document total', async () => {
     await renderLoaded(makeReview({}, {
       lines: [line({ index: 0, quantity: 1, unitPrice: 100, taxRate: 21 }), line({ index: 1, quantity: 2, unitPrice: 50, taxRate: 10 }), line({ index: 2, quantity: 1, unitPrice: 100, taxRate: 21 })],
-      header: { totalAmount: 352, totalSource: 'printed' },
+      header: { totalAmount: 400, totalSource: 'printed' },
     }));
     expect(tid('invoice-inbox-review-total-base')).toHaveTextContent(M(300));
     const rows = screen.getAllByTestId(/^invoice-inbox-review-total-tax-\d+$/);
@@ -481,7 +510,24 @@ describe('review drawer — header section, currency and totals', () => {
     expect(tid('invoice-inbox-review-total-tax-21')).toHaveTextContent(M(42));
     expect(tid('invoice-inbox-review-total-tax-21-label')).toHaveTextContent(`IVA 21% s/ ${M(200)}`);
     expect(tid('invoice-inbox-review-total-label')).toHaveTextContent('Total*');
+    // The printed 400 never reaches the big Total: it is the lines total (the banner carries the printed one).
     expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(352));
+  });
+
+  it('a confirmed row shows the grand total of the created invoice as its Total', async () => {
+    await renderLoaded(makeReview({ status: 'CONFIRMED', editable: false, invoice: { id: 'I1', documentNo: 'FC1', identifier: 'FC1', grandTotal: 217.8 } }, {
+      lines: [line({ index: 0, quantity: 1, unitPrice: 180, taxRate: 21 })],
+      header: { totalAmount: 257.8, totalSource: 'printed' },
+    }));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(217.8));
+  });
+
+  it('a confirmed row without an invoice total falls back to the lines total', async () => {
+    await renderLoaded(makeReview({ status: 'CONFIRMED', editable: false, invoice: { id: 'I1', documentNo: 'FC1', identifier: 'FC1' } }, {
+      lines: [line({ index: 0, quantity: 1, unitPrice: 180, taxRate: 21 })],
+      header: { totalAmount: 257.8, totalSource: 'printed' },
+    }));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(217.8));
   });
 
   it('the totals card is always shown, also on a settled document', async () => {
@@ -513,11 +559,11 @@ describe('review drawer — banners', () => {
     expect(maybe('invoice-inbox-review-banners')).toBeNull();
   });
 
-  it('confirmed: "{documentNo} registrada en Etendo · Completada", no link', async () => {
+  it('confirmed: "{documentNo} registrada en Etendo · Completada", with the link to the invoice', async () => {
     await renderLoaded(makeReview({ status: 'CONFIRMED', editable: false, invoice: { id: 'I1', documentNo: '10000007', identifier: '10000007 - 2026-08-10 - 121.00' } }));
     expect(tid('invoice-inbox-review-banner-confirmed-title')).toHaveTextContent('10000007 registrada en Etendo · Completada');
     expect(tid('invoice-inbox-review-banner-confirmed-title')).not.toHaveTextContent('2026-08-10');
-    expect(within(tid('invoice-inbox-review-banner-confirmed')).queryByRole('link')).toBeNull();
+    expect(within(tid('invoice-inbox-review-banner-confirmed')).getByRole('link')).toHaveAttribute('href', '/purchase-invoice/I1');
     expect(tid('invoice-inbox-review-banner-confirmed-body')).toHaveTextContent('el PDF original queda adjunto');
   });
 
@@ -530,7 +576,7 @@ describe('review drawer — banners', () => {
     await renderLoaded(makeReview({ status: 'READY' }, {
       header: { duplicate: { state: 'found', invoices: [{ documentNo: '10000003' }], inbox: [{ fileName: 'a.pdf' }, { fileName: 'b.pdf' }] } },
     }));
-    expect(tid('invoice-inbox-review-banner-duplicate-body')).toHaveTextContent('Ya existe la factura 10000003 de este proveedor con el número F-100.');
+    expect(tid('invoice-inbox-review-banner-duplicate-body')).toHaveTextContent('Ya existe la factura 10000003 de este proveedor con el número F-100: no se puede confirmar hasta resolverlo.');
     expect(tid('invoice-inbox-review-banner-duplicate-inbox-body')).toHaveTextContent('a.pdf, b.pdf');
     expect(tid('invoice-inbox-review-footer')).toBeInTheDocument();
   });
@@ -585,7 +631,7 @@ describe('review drawer — footer', () => {
     expect(discard.textContent.trim()).toBe('');
     expect(discard.className).toMatch(/text-destructive/);
     fireEvent.click(discard);
-    expect(onDiscard).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onDiscard).toHaveBeenCalledTimes(1));
     expect(onDiscard.mock.calls[0][0]).toMatchObject({ id: 'D1', status: 'PENDING_REVIEW' });
   });
 
@@ -602,12 +648,11 @@ describe('review drawer — footer', () => {
     expect(tid('invoice-inbox-review-pending')).toHaveTextContent('2 obligatorios pendientes');
   });
 
-  it('Mark as reviewed and Confirm are disabled with the coming-soon tooltip', async () => {
+  it('Confirm stays disabled with the coming-soon tooltip; Mark as reviewed is live on a valid document', async () => {
     await renderLoaded(makeReview());
-    for (const id of ['invoice-inbox-review-mark-reviewed', 'invoice-inbox-review-confirm']) {
-      expect(tid(id)).toBeDisabled();
-      expect(tid(`${id}-wrapper`)).toHaveAttribute('title', 'Próximamente');
-    }
+    expect(tid('invoice-inbox-review-confirm')).toBeDisabled();
+    expect(tid('invoice-inbox-review-confirm-wrapper')).toHaveAttribute('title', 'Próximamente');
+    expect(tid('invoice-inbox-review-mark-reviewed')).not.toBeDisabled();
     expect(tid('invoice-inbox-review-confirm')).toHaveTextContent('Confirmar factura');
   });
 
@@ -702,13 +747,13 @@ describe('review drawer — errors, retry and races', () => {
   });
 });
 
-describe('review drawer — it never writes', () => {
+describe('review drawer — reads and discards write nothing', () => {
   it('opening, reading and discarding through the footer fire only GETs of the review action', async () => {
     const { onDiscard } = await renderLoaded(makeReview({ status: 'READY' }, { lines: [line({ product: { state: 'ambiguous', candidates: [{ id: 'p1', name: 'P' }] } })] }));
     fireEvent.click(tid('invoice-inbox-review-line-0-product'));
     fireEvent.click(tid('invoice-inbox-review-line-0-product'));
     fireEvent.click(tid('invoice-inbox-review-discard'));
-    expect(onDiscard).toHaveBeenCalled();
+    await waitFor(() => expect(onDiscard).toHaveBeenCalled());
     expect(apiFetch).toHaveBeenCalledTimes(1);
     for (const [url, options] of apiFetch.mock.calls) {
       expect(url).toBe('/header/D1/action/review');
@@ -717,11 +762,231 @@ describe('review drawer — it never writes', () => {
     }
   });
 
-  it('disabled footer actions and inert controls fire nothing when clicked', async () => {
+  it('the disabled Confirm button and the "Cambiar" toggle fire nothing when clicked', async () => {
     await renderLoaded(makeReview({}, { header: { vendor: { state: 'linked', details: { name: 'A' } } } }));
-    for (const id of ['invoice-inbox-review-confirm', 'invoice-inbox-review-mark-reviewed', 'invoice-inbox-review-vendor-change', 'invoice-inbox-review-add-line', 'invoice-inbox-review-line-delete-0']) {
+    for (const id of ['invoice-inbox-review-confirm', 'invoice-inbox-review-vendor-change']) {
       fireEvent.click(tid(id));
     }
     expect(apiFetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── ETP-6051: confirm from the footer, refusal and blocker banners ──────────────────────────────
+describe('review drawer — confirm', () => {
+  const confirmBtn = () => tid('invoice-inbox-review-confirm');
+  const CONFIRMED_BODY = { id: 'D1', status: 'CONFIRMED', invoice: { id: 'I1', documentNo: 'FC1' }, createdProducts: 0 };
+  const withConfirm = async (review, props = {}) => {
+    const onConfirmed = props.onConfirmed ?? vi.fn();
+    const out = await renderLoaded(review, { ...props, onConfirmed });
+    return { ...out, onConfirmed };
+  };
+  const confirmCalls = () => apiFetch.mock.calls.filter(([url]) => /\/action\/confirm$/.test(url));
+
+  it('is enabled on a valid PENDING_REVIEW and on a READY document (reviewed or not)', async () => {
+    const first = await withConfirm(makeReview({ updated: 'T0' }));
+    expect(confirmBtn()).toBeEnabled();
+    expect(confirmBtn()).toHaveTextContent(L('invoiceInboxReviewConfirm'));
+    first.unmount();
+    await withConfirm(makeReview({ status: 'READY', updated: 'T0' }));
+    expect(confirmBtn()).toBeEnabled();
+  });
+
+  it('is disabled while a required field is pending, with a PROCESSING-like unreadable error, and for a read-only document', async () => {
+    const first = await withConfirm(makeReview({}, { validation: { missing: ['vendor'] } }));
+    expect(confirmBtn()).toBeDisabled();
+    first.unmount();
+    const second = await withConfirm(makeReview({ status: 'ERROR', errorCode: 'UNREADABLE' }));
+    expect(confirmBtn()).toBeDisabled();
+    second.unmount();
+    await withConfirm(makeReview({ status: 'ERROR', errorCode: 'FOREIGN_RECEIVER', editable: false }));
+    expect(maybe('invoice-inbox-review-confirm')).toBeNull();
+  });
+
+  it('without onConfirmed (a footer rendered on its own) it stays the disabled "Próximamente" button', async () => {
+    await renderLoaded(makeReview());
+    expect(confirmBtn()).toBeDisabled();
+    expect(tid('invoice-inbox-review-confirm-wrapper')).toHaveAttribute('title', L('comingSoon'));
+  });
+
+  it('a failed confirm (ERROR / CONFIRM_FAILED) reads "Reintentar", is enabled, and shows the stored reason', async () => {
+    await withConfirm(makeReview({ status: 'ERROR', errorCode: 'CONFIRM_FAILED', errorDetail: 'No hay un período contable abierto', updated: 'T0' }));
+    expect(confirmBtn()).toHaveTextContent(L('invoiceInboxReviewRetryConfirm'));
+    expect(confirmBtn()).toBeEnabled();
+    expect(tid('invoice-inbox-review-banner-confirm-failed-title')).toHaveTextContent(L('invoiceInboxErrorConfirmFailed'));
+    expect(tid('invoice-inbox-review-banner-confirm-failed')).toHaveTextContent('No hay un período contable abierto');
+  });
+
+  it('a failed confirm with a stored identifier shows it translated, from errorInfo, not the raw JSON', async () => {
+    const info = { code: 'step_failed', params: { step: 'line', n: 2, reason: 'Tax is required' } };
+    await withConfirm(makeReview({ status: 'ERROR', errorCode: 'CONFIRM_FAILED', errorDetail: '{"v":1,"code":"step_failed"}', errorInfo: info, updated: 'T0' }));
+    const banner = tid('invoice-inbox-review-banner-confirm-failed');
+    expect(banner).toHaveTextContent('Línea 2: Tax is required');
+    expect(banner).not.toHaveTextContent('"v":1');
+  });
+
+  it('a failed confirm without a stored reason shows the no-detail text', async () => {
+    await withConfirm(makeReview({ status: 'ERROR', errorCode: 'CONFIRM_FAILED' }));
+    expect(tid('invoice-inbox-review-banner-confirm-failed')).toHaveTextContent(L('invoiceInboxConfirmFailedNoDetail'));
+  });
+
+  it('an ERROR / MISSING_FIELDS document completed since is confirmable; with fields still pending it is not', async () => {
+    const done = await withConfirm(makeReview({ status: 'ERROR', errorCode: 'MISSING_FIELDS' }));
+    expect(confirmBtn()).toBeEnabled();
+    done.unmount();
+    await withConfirm(makeReview({ status: 'ERROR', errorCode: 'MISSING_FIELDS' }, { validation: { missing: ['vendor'] } }));
+    expect(confirmBtn()).toBeDisabled();
+  });
+
+  it('clicking sends the confirm with the document token and hands the answer and the review to onConfirmed', async () => {
+    confirmAnswer = { status: 200, body: CONFIRMED_BODY };
+    const { onConfirmed } = await withConfirm(makeReview({ updated: 'TOK-9' }));
+    fireEvent.click(confirmBtn());
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalledTimes(1));
+    expect(confirmCalls()).toHaveLength(1);
+    expect(JSON.parse(confirmCalls()[0][1].body)).toEqual({ updated: 'TOK-9' });
+    expect(confirmCalls()[0][1].method).toBe('POST');
+    expect(onConfirmed.mock.calls[0][0]).toEqual(CONFIRMED_BODY);
+    expect(onConfirmed.mock.calls[0][1]).toMatchObject({ id: 'D1' });
+  });
+
+  it('while the request is in flight the button is locked with a spinner, navigation and discard are blocked, and a second click sends nothing', async () => {
+    let release;
+    confirmAnswer = () => new Promise((resolve) => { release = () => resolve({ status: 200, body: CONFIRMED_BODY }); });
+    const { nav, onClose, onDiscard } = await withConfirm(makeReview({ updated: 'T0' }));
+    fireEvent.click(confirmBtn());
+    await waitFor(() => expect(confirmBtn()).toBeDisabled());
+    expect(tid('Loader2__review-confirming')).toBeInTheDocument();
+    expect(tid('invoice-inbox-review-next')).toBeDisabled();
+    expect(tid('invoice-inbox-review-prev')).toBeDisabled();
+    expect(tid('invoice-inbox-review-discard')).toBeDisabled();
+    fireEvent.click(tid('invoice-inbox-review-close'));
+    fireEvent.click(confirmBtn());
+    fireEvent.click(tid('invoice-inbox-review-discard'));
+    await act(async () => { await Promise.resolve(); });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onDiscard).not.toHaveBeenCalled();
+    expect(nav.goNext).not.toHaveBeenCalled();
+    expect(confirmCalls()).toHaveLength(1);
+    await act(async () => { release(); });
+  });
+
+  it('while mark-reviewed runs both footer buttons are locked from the first instant, and a click on either sends nothing more', async () => {
+    let release;
+    markAnswer = () => new Promise((resolve) => { release = () => resolve({ status: 200, body: makeReview({ status: 'READY', reviewed: true, updated: 'T1' }) }); });
+    await withConfirm(makeReview({ updated: 'T0' }));
+    const markCalls = () => apiFetch.mock.calls.filter(([url]) => /\/action\/mark-reviewed$/.test(url));
+    fireEvent.click(tid('invoice-inbox-review-mark-reviewed'));
+    // Synchronously after the click: `marking` is on before the save flush resolves.
+    expect(tid('invoice-inbox-review-mark-reviewed')).toBeDisabled();
+    expect(confirmBtn()).toBeDisabled();
+    expect(tid('Loader2__review-marking')).toBeInTheDocument();
+    fireEvent.click(tid('invoice-inbox-review-mark-reviewed'));
+    fireEvent.click(confirmBtn());
+    await waitFor(() => expect(markCalls()).toHaveLength(1));
+    await act(async () => { await Promise.resolve(); });
+    expect(markCalls()).toHaveLength(1);
+    expect(confirmCalls()).toHaveLength(0);
+    await act(async () => { release(); });
+    await waitFor(() => expect(maybe('invoice-inbox-review-mark-reviewed')).toBeNull());
+    expect(confirmBtn()).not.toBeDisabled();
+  });
+
+  it.each([
+    ['duplicate_invoice', 'invoiceInboxConfirmErrorDuplicate', 409],
+    ['price_list_tax_included', 'invoiceInboxConfirmErrorPriceListTax', 422],
+    ['missing_exchange_rate', 'invoiceInboxConfirmErrorExchangeRate', 422],
+    ['vendor_address_missing', 'invoiceInboxConfirmErrorVendorAddress', 422],
+    ['QUOTA_EXCEEDED', 'invoiceInboxConfirmErrorQuota', 402],
+  ])('%s shows a full-width dismissible refusal banner with its complete text and NO retry link', async (code, key, status) => {
+    confirmAnswer = { status, body: { error: { code } } };
+    const { onConfirmed } = await withConfirm(makeReview({ updated: 'T0' }));
+    fireEvent.click(confirmBtn());
+    const banner = await screen.findByTestId('invoice-inbox-review-refusal');
+    expect(banner).toHaveTextContent(L(key));
+    expect(banner).toHaveTextContent(L('invoiceInboxConfirmRefusedTitle'));
+    expect(within(banner).queryByRole('link')).toBeNull();
+    expect(within(tid('invoice-inbox-review-refusal-wrap')).queryByText(L('retry'))).toBeNull();
+    // At the TOP of the form's body: before the vendor section.
+    const form = tid('invoice-inbox-review-form');
+    expect(form.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_CONTAINED_BY).toBeTruthy();
+    expect(onConfirmed).not.toHaveBeenCalled();
+    // The header keeps its close button and its save-status slot stays free of the long text.
+    expect(tid('invoice-inbox-review-close')).toBeInTheDocument();
+    expect(tid('invoice-inbox-review-save-status')).not.toHaveTextContent(L(key));
+    fireEvent.click(tid('invoice-inbox-review-refusal-dismiss'));
+    expect(maybe('invoice-inbox-review-refusal')).toBeNull();
+  });
+
+  it('a refusal goes away on the next edit', async () => {
+    confirmAnswer = { status: 409, body: { error: { code: 'duplicate_invoice' } } };
+    answers = { D1: { body: makeReview({ updated: 'T0' }) } };
+    await withConfirm(makeReview({ updated: 'T0' }));
+    fireEvent.click(confirmBtn());
+    await screen.findByTestId('invoice-inbox-review-refusal');
+    fireEvent.change(tid('invoice-inbox-review-invoice-no'), { target: { value: 'F-101' } });
+    await waitFor(() => expect(maybe('invoice-inbox-review-refusal')).toBeNull());
+  });
+
+  it('confirm_failed reloads the document: the stored ERROR banner with its reason replaces a refusal', async () => {
+    confirmAnswer = { status: 500, body: { error: { code: 'confirm_failed', detail: 'Período cerrado' } } };
+    await withConfirm(makeReview({ updated: 'T0' }));
+    answers = { D1: { body: makeReview({ status: 'ERROR', errorCode: 'CONFIRM_FAILED', errorDetail: 'Período cerrado', updated: 'T1' }) } };
+    fireEvent.click(confirmBtn());
+    expect(await screen.findByTestId('invoice-inbox-review-banner-confirm-failed')).toHaveTextContent('Período cerrado');
+    expect(maybe('invoice-inbox-review-refusal')).toBeNull();
+    await waitFor(() => expect(confirmBtn()).toHaveTextContent(L('invoiceInboxReviewRetryConfirm')));
+  });
+
+  it.each([
+    ['stale_document', 'invoiceInboxSaveErrorStale'],
+    ['not_confirmable', 'invoiceInboxSaveErrorNotConfirmable'],
+  ])('%s reloads the document and shows the notice', async (code, key) => {
+    confirmAnswer = { status: 409, body: { error: { code, documentStatus: 'CONFIRMED' } } };
+    await withConfirm(makeReview({ updated: 'T0' }));
+    fireEvent.click(confirmBtn());
+    expect(await screen.findByTestId('invoice-inbox-review-notice')).toHaveTextContent(L(key));
+    expect(maybe('invoice-inbox-review-refusal')).toBeNull();
+  });
+
+  it('not_valid shows the missing counter and the save error, no refusal banner', async () => {
+    confirmAnswer = { status: 422, body: { error: { code: 'not_valid', missing: ['vendor'], documentStatus: 'ERROR', updated: 'T9' } } };
+    await withConfirm(makeReview({ updated: 'T0' }));
+    fireEvent.click(confirmBtn());
+    expect(await screen.findByTestId('invoice-inbox-review-save-error')).toHaveTextContent(L('invoiceInboxSaveErrorNotValid'));
+    expect(tid('invoice-inbox-review-pending')).toHaveTextContent('1 obligatorio pendiente');
+    expect(maybe('invoice-inbox-review-refusal')).toBeNull();
+  });
+
+  it.each([
+    ['exchangeRate', 'invoiceInboxBlockerExchangeRateTitle', 'invoiceInboxBlockerExchangeRateBody'],
+    ['vendorAddress', 'invoiceInboxBlockerVendorAddressTitle', 'invoiceInboxBlockerVendorAddressBody'],
+  ])('the %s blocker the server reports shows its banner and keeps Confirm disabled', async (blocker, titleKey, bodyKey) => {
+    await withConfirm(makeReview({}, { validation: { missing: [blocker] } }));
+    expect(tid(`invoice-inbox-review-banner-blocker-${blocker}-title`)).toHaveTextContent(L(titleKey));
+    expect(tid(`invoice-inbox-review-banner-blocker-${blocker}-body`)).toHaveTextContent(L(bodyKey));
+    expect(confirmBtn()).toBeDisabled();
+  });
+
+  it('the footer keeps 76px of right padding clear of the chat bubble and its actions wrap in their own group', async () => {
+    await withConfirm(makeReview());
+    expect(tid('invoice-inbox-review-footer').className).toContain('pr-[76px]');
+    expect(within(tid('invoice-inbox-review-footer-actions')).getByTestId('invoice-inbox-review-confirm')).toBeInTheDocument();
+  });
+
+  it('the duplicate banner says the confirm is blocked until it is resolved', async () => {
+    await withConfirm(makeReview({}, { header: { duplicate: { state: 'found', invoices: [{ documentNo: '10000003' }], inbox: [] } } }));
+    expect(tid('invoice-inbox-review-banner-duplicate-body')).toHaveTextContent('no se puede confirmar hasta resolverlo');
+  });
+
+  it('a CONFIRMED document shows the link to its invoice in the banner and no footer', async () => {
+    await renderLoaded(makeReview({ status: 'CONFIRMED', editable: false, invoice: { id: 'I1', documentNo: '10000007' } }));
+    expect(tid('invoice-inbox-review-invoice-link')).toHaveAttribute('href', '/purchase-invoice/I1');
+    expect(tid('invoice-inbox-review-invoice-link')).toHaveTextContent(L('invoiceInboxReviewOpenInvoice', { doc: '10000007' }));
+    expect(maybe('invoice-inbox-review-footer')).toBeNull();
+  });
+
+  it('a CONFIRMED document without an invoice id shows no link', async () => {
+    await renderLoaded(makeReview({ status: 'CONFIRMED', editable: false, invoice: { documentNo: '10000007' } }));
+    expect(maybe('invoice-inbox-review-invoice-link')).toBeNull();
   });
 });

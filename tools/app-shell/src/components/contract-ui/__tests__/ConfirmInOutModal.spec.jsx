@@ -1086,6 +1086,51 @@ describe('ConfirmInOutModal', () => {
       expect(JSON.parse(callsTo(fetchMock, 'createInvoice')[0][1].body)).not.toHaveProperty('sifFields');
     });
 
+    it('blocks the confirm while a mandatory field is empty, and enables it once filled', async () => {
+      const fetchMock = mockSif(ok({ ...PREVIEW, fields: { ...PREVIEW.fields, aeatsiiDescripcionSii: '' } }));
+      render(<ConfirmInOutModal {...SIF_PROPS} />);
+      fireEvent.click(primary());
+      await screen.findByTestId('invoice-sif-step');
+      expect(screen.getByTestId('RequiredMark__sifstep_sif-step-aeatsiiDescripcionSii')).toBeInTheDocument();
+      expect(primary()).toBeDisabled();
+      expect(screen.getByTestId('invoice-sif-step-required')).toHaveTextContent('requiredFieldsMissing');
+
+      fireEvent.change(screen.getByTestId('Input__sifstep_aeatsiiDescripcionSii'), { target: { value: 'Venta' } });
+      expect(primary()).not.toBeDisabled();
+      expect(screen.queryByTestId('invoice-sif-step-required')).not.toBeInTheDocument();
+      fireEvent.click(primary());
+      await waitFor(() => expect(BASE_PROPS.onConfirmed).toHaveBeenCalledTimes(1));
+      expect(JSON.parse(callsTo(fetchMock, 'createInvoice')[0][1].body).sifFields.aeatsiiDescripcionSii).toBe('Venta');
+    });
+
+    // A customer return's rectificative comes with R1 preselected by the backend preview: nothing
+    // blocks, the code stays editable, and clearing it blocks the confirm again.
+    it('a rectificative with R1 preselected confirms at once; clearing the code blocks it', async () => {
+      const fetchMock = mockSif(ok({
+        ...PREVIEW,
+        rectificative: true,
+        fields: { ...PREVIEW.fields, aeatsiiMotivoRectif: 'R1' },
+        fieldSpecs: [...PREVIEW.fieldSpecs, { name: 'aeatsiiMotivoRectif', system: 'SII', type: 'option' }],
+      }));
+      render(<ConfirmInOutModal {...SIF_PROPS} />);
+      fireEvent.click(primary());
+      const step = await screen.findByTestId('invoice-sif-step');
+      const motive = step.querySelector('select');
+      expect(motive).toHaveValue('R1');
+      expect(screen.getByTestId('RequiredMark__sifstep_sif-step-aeatsiiMotivoRectif')).toBeInTheDocument();
+      expect(primary()).not.toBeDisabled();
+
+      fireEvent.change(motive, { target: { value: '' } });
+      expect(primary()).toBeDisabled();
+      expect(screen.getByTestId('invoice-sif-step-required')).toHaveTextContent('invoiceSifStep.rectificationRequired');
+
+      fireEvent.change(motive, { target: { value: 'R2' } });
+      expect(primary()).not.toBeDisabled();
+      fireEvent.click(primary());
+      await waitFor(() => expect(BASE_PROPS.onConfirmed).toHaveBeenCalledTimes(1));
+      expect(JSON.parse(callsTo(fetchMock, 'createInvoice')[0][1].body).sifFields.aeatsiiMotivoRectif).toBe('R2');
+    });
+
     it('blocks the confirm on a rectificative until the rectification code is chosen', async () => {
       mockSif(ok({
         ...PREVIEW,

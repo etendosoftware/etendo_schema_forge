@@ -1,5 +1,6 @@
 import { useUI } from '@/i18n';
-import { formatCurrency, formatGroupedNumber } from '@/lib/formatCurrency.js';
+import { formatGroupedNumber } from '@/lib/formatCurrency.js';
+import { formatMoney } from './invoiceInboxMoney.js';
 import { computeTotals, documentTotal } from './invoiceInboxReviewModel.js';
 
 const MAX_RATE_DECIMALS = 2;
@@ -18,29 +19,29 @@ function TotalRow({ label, value, testId, first = false }) {
  * the lines) and the Total on a muted band (bold, a red asterisk, a large amount), in the
  * document's currency (`formatCurrency`). Always shown: with no lines it shows zeros.
  *
- * @param {{header: object, lines: object[], currency: string}} props
+ * @param {{header: object, lines: object[], currency: string, scale?: number}} props `scale` = the currency's decimals
  */
-export default function InvoiceInboxReviewTotals({ header, lines, currency }) {
+export default function InvoiceInboxReviewTotals({ lines, currency, scale = 2, invoiceTotal = null }) {
   const ui = useUI();
-  const totals = computeTotals(lines);
-  const total = documentTotal(header, totals);
+  const totals = computeTotals(lines, scale);
+  const total = documentTotal(totals, invoiceTotal, scale);
   return (
     <section className="overflow-hidden rounded-xl border border-border" data-testid="invoice-inbox-review-totals">
       <TotalRow
         first
         label={ui('invoiceInboxReviewTotalBase')}
-        value={formatCurrency(currency, totals.base)}
+        value={formatMoney(currency, totals.base, scale)}
         testId="invoice-inbox-review-total-base"
         data-testid="TotalRow__9b4c54" />
       {totals.taxes.map((tax) => (
         <TotalRow
-          key={tax.rate}
-          label={ui('invoiceInboxReviewTotalTax', {
+          key={`${tax.rate}-${tax.docTaxAmount ?? 'D'}`}
+          label={ui(tax.docTaxAmount === 'L' ? 'invoiceInboxReviewTotalTaxLine' : 'invoiceInboxReviewTotalTax', {
             rate: formatGroupedNumber(tax.rate, { maximumFractionDigits: MAX_RATE_DECIMALS }),
-            base: formatCurrency(currency, tax.base),
+            base: formatMoney(currency, tax.base, scale),
           })}
-          value={formatCurrency(currency, tax.amount)}
-          testId={`invoice-inbox-review-total-tax-${tax.rate}`}
+          value={formatMoney(currency, tax.amount, scale)}
+          testId={`invoice-inbox-review-total-tax-${tax.rate}${tax.docTaxAmount === 'L' ? '-L' : ''}`}
           data-testid="TotalRow__9b4c54" />
       ))}
       <div className="flex items-baseline justify-between border-t border-border bg-muted/50 px-3.5 py-3">
@@ -49,7 +50,7 @@ export default function InvoiceInboxReviewTotals({ header, lines, currency }) {
           <span className="ml-[3px] text-destructive" aria-hidden="true">*</span>
         </span>
         <span className="text-xl font-extrabold leading-tight tracking-tight tabular-nums" data-testid="invoice-inbox-review-total">
-          {formatCurrency(currency, total)}
+          {formatMoney(currency, total, scale)}
         </span>
       </div>
     </section>

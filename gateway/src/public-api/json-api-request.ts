@@ -35,12 +35,17 @@ export function resolveResourceObject(
   return { attributes: resource.attributes ?? {}, relationships: resource.relationships ?? {} };
 }
 
+/** A published field by public name; own keys only, so `constructor` or `__proto__` is never a field. */
+function fieldOf(entity: PublicApiEntity, key: string): WritableField | undefined {
+  return Object.hasOwn(entity.fields, key) ? entity.fields[key] as WritableField : undefined;
+}
+
 /** Maps attributes to internal paths; a foreign key is refused here, it lives under `relationships`. */
 export function mapAttributes(entity: PublicApiEntity, attributes: unknown): Record<string, unknown> {
   if (!isRecord(attributes)) throw new BadRequestException('"attributes" must be an object');
   const mapped: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(attributes)) {
-    const field = entity.fields[key] as WritableField | undefined;
+    const field = fieldOf(entity, key);
     if (!isWritable(field)) throw new BadRequestException(`Field "${key}" is not writable by the public API`);
     // Accepting a foreign key here would let the same link be written (and read back) in two places.
     if (field.relationship) {
@@ -56,7 +61,7 @@ export function mapRelationships(entity: PublicApiEntity, relationships: unknown
   if (!isRecord(relationships)) throw new BadRequestException('"relationships" must be an object');
   const mapped: Record<string, unknown> = {};
   for (const [key, relationship] of Object.entries(relationships)) {
-    const field = entity.fields[key] as WritableField | undefined;
+    const field = fieldOf(entity, key);
     if (!isWritable(field) || !field.relationship) {
       throw new BadRequestException(`Relationship "${key}" is not writable by the public API`);
     }

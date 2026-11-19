@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { CaretDownIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -91,7 +91,7 @@ function StatusChipSelector({ data, apiBaseUrl, onRefresh }) {
             className="inline-flex cursor-pointer items-center gap-1 rounded-lg transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
             data-testid="remittance-status-selector">
             <RemittanceStatusChip status={current} data-testid="RemittanceStatusChip__selector" />
-            <ChevronDown className="mr-1 h-4 w-4 shrink-0 text-[hsl(var(--muted-foreground))]" aria-hidden="true" data-testid="ChevronDown__selector" />
+            <CaretDownIcon className="mr-1 h-4 w-4 shrink-0 text-[hsl(var(--muted-foreground))]" aria-hidden="true" data-testid="ChevronDown__selector" />
           </button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-auto min-w-[200px] p-2" data-testid="remittance-status-menu">

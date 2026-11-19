@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Lock } from 'lucide-react';
+import { WarningIcon, LockIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -97,7 +97,7 @@ function CreditorIdRow({ info, ui, editable, processed, draft, onDraft, alignToI
             : <span className={VALUE} data-testid="remittance-sepa-creditor-value">—</span>}
           {processed && info.remittanceCreditorId && (
             <span className="inline-flex items-center gap-1 text-xs text-[hsl(var(--muted-foreground))]" data-testid="remittance-sepa-creditor-locked">
-              <Lock className="h-3 w-3 shrink-0" aria-hidden="true" data-testid="Lock__sepa-creditor" />
+              <LockIcon className="h-3 w-3 shrink-0" aria-hidden="true" data-testid="Lock__sepa-creditor" />
               {ui('sepaCreditorIdLocked')}
             </span>
           )}
@@ -109,7 +109,7 @@ function CreditorIdRow({ info, ui, editable, processed, draft, onDraft, alignToI
           className="inline-flex min-w-0 items-center gap-1.5 text-xs text-[hsl(var(--status-warning-fg))]"
           data-testid="remittance-sepa-creditor-missing"
         >
-          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="AlertTriangle__sepa-creditor" />
+          <WarningIcon className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="AlertTriangle__sepa-creditor" />
           <span>{ui('remittanceSepaCreditorIdUnavailable', { missing: missingParts })}</span>
         </span>
       )}

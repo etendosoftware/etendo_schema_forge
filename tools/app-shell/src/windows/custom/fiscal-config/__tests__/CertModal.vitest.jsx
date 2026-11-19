@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-config/CertModal.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-config/CircularProgress.jsx
 // Vitest render tests for CertModal (replaces source-reading tests)
 
 const stableApiFetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({}) }));
@@ -13,21 +14,21 @@ vi.mock('@/components/ui/button', () => ({
     <button onClick={onClick} disabled={disabled} {...rest}>{children}</button>
   ),
 }));
-vi.mock('lucide-react', () => ({
-  FileText: () => null,
-  Upload: () => null,
-  Eye: () => null,
-  EyeOff: () => null,
-  Lock: () => null,
-  TriangleAlert: () => null,
-  Check: () => null,
-  Info: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  FileTextIcon: () => null,
+  UploadSimpleIcon: () => null,
+  EyeIcon: () => null,
+  EyeSlashIcon: () => null,
+  LockIcon: () => null,
+  WarningIcon: () => null,
+  CheckIcon: () => null,
+  InfoIcon: () => null,
 }));
 vi.mock('../FiscalStepItem.jsx', () => ({
   default: ({ n, label }) => <span data-testid={`step-${n}`}>{label}</span>,
 }));
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import CertModal from '../CertModal.jsx';
 
 const baseProps = {
@@ -194,6 +195,39 @@ describe('CertModal', () => {
       />
     );
     expect(screen.getByText('fiscal.cert.verifying.title')).toBeInTheDocument();
+  });
+
+  // The ring (CircularProgress + useSimulatedProgress): the backend reports no real progress, so
+  // it advances on its own to 90 % and waits there.
+  it('the verify ring starts at 0 %, advances while it waits and stops at 90 %', () => {
+    vi.useFakeTimers();
+    try {
+      const { container } = render(
+        <CertModal
+          {...baseProps}
+          debugInitialState={{ step: 'verify', file: { name: 'cert.p12', size: 1024 } }}
+        />
+      );
+      const percent = () => container.ownerDocument.querySelector('svg text').textContent;
+      const arc = () => container.ownerDocument.querySelectorAll('svg circle')[1];
+      const circumference = 2 * Math.PI * 54;
+      expect(percent()).toBe('0%');
+      expect(Number(arc().getAttribute('stroke-dashoffset'))).toBeCloseTo(circumference);
+
+      act(() => { vi.advanceTimersByTime(80 * 10); });
+      expect(percent()).toBe('40%');
+      expect(Number(arc().getAttribute('stroke-dashoffset'))).toBeCloseTo(circumference * 0.6);
+
+      act(() => { vi.advanceTimersByTime(80 * 100); });
+      expect(percent()).toBe('90%');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows no ring outside the verify step', () => {
+    render(<CertModal {...baseProps} />);
+    expect(document.querySelector('svg text')).toBeNull();
   });
 
   it('shows info warning box in pick step', () => {

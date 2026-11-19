@@ -25,15 +25,15 @@ vi.mock('@/components/ui/badge', () => ({
   Badge: ({ children }) => <span data-testid="badge">{children}</span>,
 }));
 
-// Mock lucide icons
-vi.mock('lucide-react', () => ({
-  Store: (props) => <svg data-testid="icon-store" {...props} />,
-  ShoppingCart: (props) => <svg data-testid="icon-shopping-cart" {...props} />,
-  FlaskConical: (props) => <svg data-testid="icon-flask" {...props} />,
-  Package: (props) => <svg data-testid="icon-package" {...props} />,
-  Loader2: (props) => <svg data-testid="icon-loader" {...props} />,
-  CheckCircle2: (props) => <svg data-testid="icon-check" {...props} />,
-  ExternalLink: (props) => <svg data-testid="icon-external" {...props} />,
+// Mock Phosphor icons
+vi.mock('@phosphor-icons/react', () => ({
+  StorefrontIcon: (props) => <svg data-testid="icon-store" {...props} />,
+  ShoppingCartIcon: (props) => <svg data-testid="icon-shopping-cart" {...props} />,
+  FlaskIcon: (props) => <svg data-testid="icon-flask" {...props} />,
+  PackageIcon: (props) => <svg data-testid="icon-package" {...props} />,
+  CircleNotchIcon: (props) => <svg data-testid="icon-loader" {...props} />,
+  CheckCircleIcon: (props) => <svg data-testid="icon-check" {...props} />,
+  ArrowSquareOutIcon: (props) => <svg data-testid="icon-external" {...props} />,
 }));
 
 const mockInstallApp = vi.fn();

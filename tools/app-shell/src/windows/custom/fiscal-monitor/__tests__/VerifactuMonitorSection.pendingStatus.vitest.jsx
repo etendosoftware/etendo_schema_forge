@@ -10,9 +10,9 @@ const stableApiFetch = vi.hoisted(() => vi.fn());
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
-vi.mock('lucide-react', () => ({
-  TriangleAlert: () => null,
-  ArrowUpRight: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  WarningIcon: () => null,
+  ArrowUpRightIcon: () => null, UploadSimpleIcon: () => null,
 }));
 vi.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ checked, onChange }) => (

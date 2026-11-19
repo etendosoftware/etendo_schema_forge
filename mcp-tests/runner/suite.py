@@ -25,6 +25,10 @@ SUITE_SCHEMA_VERSIONS = (1, 2)
 PLATFORMS = ("etendo-go", "holded")
 CATEGORIES = ("query", "write", "flow", "error")
 NOT_POSSIBLE_KINDS = ("goal", "setup")
+#: ETP-5850: the files a probe hands the agent (`files:`), by bare name, from this folder. The
+#: agent uploads them with the harness's `upload_file` tool, as a real client would with its own
+#: file access; the platform's MCP decides where they go.
+FILES_DIR = Path(__file__).resolve().parent.parent / "fixtures" / "files"
 #: Tool-shaped words a prompt may never contain, whatever the catalogue says:
 #: Etendo's own tool family. The live catalogue check at preflight covers the
 #: rest (any other vendor's names), see `prompt_tool_mentions`.
@@ -101,6 +105,28 @@ class NotPossible:
 
 
 @dataclass(frozen=True)
+class Routine:
+    """A routine of the Etendo GO MCP, as `etendo_routine` mode save takes it (ETP-6236).
+
+    `name`, `description`, `params` and `steps` are sent verbatim; the suite declares the steps the
+    routine runs, never what the agent should call. The agent only learns the routine exists from
+    `etendo_routine` mode list, exactly as a real user's agent would.
+    """
+
+    name: str
+    description: str
+    steps: tuple[dict[str, Any], ...]
+    params: dict[str, Any] = field(default_factory=dict)
+
+    def save_args(self) -> dict[str, Any]:
+        args: dict[str, Any] = {"mode": "save", "name": self.name, "description": self.description,
+                                "steps": [dict(s) for s in self.steps]}
+        if self.params:
+            args["params"] = dict(self.params)
+        return args
+
+
+@dataclass(frozen=True)
 class PlatformBlock:
     """What one platform needs to run and verify a v2 probe."""
 
@@ -110,6 +136,9 @@ class PlatformBlock:
     expect_answer: dict[str, Any] | None = None
     expect_outcome: str | None = None
     not_possible: NotPossible | None = None
+    #: ETP-6236: a saved `etendo_routine` that solves this task, installed before the run on a
+    #: target with `routines = true` (the "Etendo + routine" column, a child KR of KR2.1).
+    routine: Routine | None = None
 
 
 @dataclass(frozen=True)
@@ -135,6 +164,10 @@ class Probe:
     not_possible: NotPossible | None = None
     # v2 only: the per-platform blocks, keyed by platform. None on a v1 probe.
     platforms: dict[str, PlatformBlock] | None = field(default=None, compare=False)
+    # ETP-6236: the routine of the resolved platform block, if it declares one.
+    routine: Routine | None = None
+    # ETP-5850: names of files under FILES_DIR handed to the agent (see agent.UPLOAD_TOOL).
+    files: tuple[str, ...] = ()
 
     @property
     def verifies(self) -> bool:
@@ -166,6 +199,7 @@ class Probe:
             expect_answer=block.expect_answer,
             expect_outcome=block.expect_outcome,
             not_possible=block.not_possible,
+            routine=block.routine,
         )
 
 
@@ -354,12 +388,57 @@ def _load_v2_probes(data: dict[str, Any], path: Path) -> list[Probe]:
                 raise ValueError(f"Probe {probe_id!r}: unknown platform {platform!r} (known: {PLATFORMS}).")
             blocks[platform] = _parse_block(raw or {}, f"{probe_id}/{platform}",
                                             mode=entry.get("mode", "read"))
+            if blocks[platform].routine is not None and platform != "etendo-go":
+                raise ValueError(f"Probe {probe_id!r}: a routine is an Etendo GO MCP feature; "
+                                 f"`platforms.{platform}` cannot declare one.")
         prompt = entry["prompt"].strip()
         probe = Probe(id=probe_id, mode=entry.get("mode", "read"), prompt=prompt,
-                      exclusive=exclusive, category=category, platforms=blocks)
+                      exclusive=exclusive, category=category, platforms=blocks,
+                      files=_parse_files(entry.get("files"), probe_id))
         _lint_prompt(probe)
         probes.append(probe)
     return probes
+
+
+def _parse_files(raw: Any, probe_id: str) -> tuple[str, ...]:
+    """The `files:` of a v2 probe: bare names of files that exist under FILES_DIR."""
+    if raw is None:
+        return ()
+    if not isinstance(raw, list) or not raw:
+        raise ValueError(f"Probe {probe_id!r}: files must be a non-empty list of file names.")
+    for name in raw:
+        if not isinstance(name, str) or Path(name).name != name or not (FILES_DIR / name).is_file():
+            raise ValueError(f"Probe {probe_id!r}: file {name!r} is not a file name under "
+                             f"{FILES_DIR.relative_to(FILES_DIR.parent.parent)}/.")
+    return tuple(raw)
+
+
+#: A routine name as `etendo_routine` accepts it.
+_ROUTINE_NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,59}")
+
+
+def _parse_routine(raw: Any, where: str) -> Routine | None:
+    """The `routine:` of a platform block (ETP-6236). The server validates the steps themselves."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError(f"Probe {where}: routine must be a mapping {{name, description, params, steps}}.")
+    unknown = set(raw) - {"name", "description", "params", "steps"}
+    if unknown:
+        raise ValueError(f"Probe {where}: routine has unknown keys {sorted(unknown)}.")
+    name = raw.get("name")
+    if not isinstance(name, str) or not _ROUTINE_NAME.fullmatch(name):
+        raise ValueError(f"Probe {where}: routine.name must be lowercase letters, digits, '-' or '_'.")
+    description = str(raw.get("description") or "").strip()
+    if not description:
+        raise ValueError(f"Probe {where}: routine.description is required.")
+    steps = raw.get("steps")
+    if not isinstance(steps, list) or not steps or not all(isinstance(s, dict) for s in steps):
+        raise ValueError(f"Probe {where}: routine.steps must be a non-empty list of {{id, tool, args}}.")
+    params = raw.get("params") or {}
+    if not isinstance(params, dict):
+        raise ValueError(f"Probe {where}: routine.params must be a mapping.")
+    return Routine(name=name, description=description, steps=tuple(steps), params=params)
 
 
 def _parse_block(raw: dict[str, Any], where: str, *, mode: str = "read") -> PlatformBlock:
@@ -377,7 +456,7 @@ def _parse_block(raw: dict[str, Any], where: str, *, mode: str = "read") -> Plat
             raise ValueError(f"Probe {where}: notPossible.missingTools must be a list of tool names.")
         return PlatformBlock(not_possible=NotPossible(np["kind"], np["reason"].strip(), tuple(missing)))
 
-    unknown = set(raw) - {"setup", "teardown", "expectEffect", "expectAnswer", "expectOutcome"}
+    unknown = set(raw) - {"setup", "teardown", "expectEffect", "expectAnswer", "expectOutcome", "routine"}
     if unknown:
         raise ValueError(f"Probe {where}: unknown keys {sorted(unknown)}.")
     outcome = raw.get("expectOutcome")
@@ -403,6 +482,7 @@ def _parse_block(raw: dict[str, Any], where: str, *, mode: str = "read") -> Plat
         expect_effect=_parse_effect(raw.get("expectEffect"), where, allow_where=True),
         expect_answer=answer,
         expect_outcome=outcome,
+        routine=_parse_routine(raw.get("routine"), where),
     )
     if block.expect_outcome == "refused":
         # Plan §5.5: refused = OBJECTIVE no effect AND the agent not reporting

@@ -2,10 +2,10 @@
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-vi.mock('lucide-react', () => ({
-  ChevronDown: () => <span data-testid="chevron" />,
-  X: () => <span data-testid="x-icon" />,
-  Check: () => <span data-testid="check-icon" />,
+vi.mock('@phosphor-icons/react', () => ({
+  CaretDownIcon: () => <span data-testid="chevron" />,
+  XIcon: () => <span data-testid="x-icon" />,
+  CheckIcon: () => <span data-testid="check-icon" />,
 }));
 vi.mock('@/lib/buildUrlWithParams.js', () => ({
   buildUrlWithParams: (url, params) => {
@@ -394,7 +394,7 @@ describe('InlineSearchCombo — ETP-5846 current selection is identified on reop
     expect(screen.getByTestId('inline-add-option-tax-iva10')).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByTestId('inline-add-option-tax-exento')).toHaveAttribute('aria-selected', 'false');
     // The marker is visible, not ARIA-only: the check icon is rendered INSIDE the
-    // committed row (the lucide mock stands in for the real `Check`).
+    // committed row (the Phosphor mock stands in for the real `Check`).
     await waitFor(() => {
       expect(within(screen.getByTestId('inline-add-option-tax-iva21')).getByTestId('check-icon')).toBeInTheDocument();
     });
@@ -695,5 +695,28 @@ describe('InlineSearchCombo — ETP-5902 labelPrefix', () => {
     await waitFor(() => screen.getByTestId('inline-add-option-tax-iva21'));
     await user.pointer({ target: screen.getByTestId('inline-add-option-tax-iva21'), keys: '[MouseLeft>]' });
     expect(onChange).toHaveBeenCalledWith('iva21', 'IVA 21%', expect.objectContaining({ labelPrefix: '21%' }));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The panel is portaled to <body>: inside a modal Radix dialog (the invoice inbox review drawer)
+// <body> has `pointer-events: none`, so the panel must opt back in or its options cannot be clicked.
+// ---------------------------------------------------------------------------
+
+describe('InlineSearchCombo — portaled panel accepts pointer events', () => {
+  it('the open panel sets pointer-events: auto, and a click on an option picks it under a pointer-events:none body', async () => {
+    const user = userEvent.setup();
+    try {
+      const { input, onChange } = renderCombo();
+      await user.click(input);
+      // The modal dialog locks <body> after the field is focused; the portaled panel still opts in.
+      document.body.style.pointerEvents = 'none';
+      const panel = await screen.findByTestId('inline-add-options-tax');
+      expect(panel.style.pointerEvents).toBe('auto');
+      fireEvent.mouseDown(screen.getByTestId('inline-add-option-tax-iva21'));
+      expect(onChange).toHaveBeenCalledWith('iva21', 'IVA 21%', expect.anything());
+    } finally {
+      document.body.style.pointerEvents = '';
+    }
   });
 });
