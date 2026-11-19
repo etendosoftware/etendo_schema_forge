@@ -667,6 +667,7 @@
       "exclude": true
     },
     "transactions": {
+      "agentPrompt": "Every stock movement of this product, one row per movement: goods receipts and shipments, returns, movements between warehouses, physical inventories, internal consumptions and production. List it with parentId = the product id (spec product, entity transactions): movementDate, movementQuantity (positive in, negative out), etgoDocKind (the document type, e.g. goods-receipt, goods-shipment), etgoWarehouse and the cost. This is the place to answer what moved, came in or went out for one product, instead of reading the lines of each document type.",
       "readOnly": true,
       "fields": {
         "movementDate": {

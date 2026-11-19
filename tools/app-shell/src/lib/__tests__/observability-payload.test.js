@@ -190,6 +190,26 @@ describe('observability payload normalization', () => {
     assert.deepEqual(payload.role_groups, ['warehouse']);
   });
 
+  it('keeps the identity ids and carries them from the common context (ETP-6228)', () => {
+    const ids = { ad_user_id: 'U1', ad_client_id: 'C1', etgo_account_id: 'A1', account_id: 'C1' };
+    assert.deepEqual(sanitizeEventProperties(ids), ids);
+    const payload = buildEventPayload({
+      context: { app: 'app-shell', ...ids },
+      properties: { action: 'view' },
+      timestamp: '2026-11-18T00:00:00.000Z',
+    });
+    assert.equal(payload.ad_client_id, 'C1');
+    assert.equal(payload.etgo_account_id, 'A1');
+    assert.equal(payload.ad_user_id, 'U1');
+  });
+
+  it('drops email and name keys sent next to the identity ids (ETP-6228)', () => {
+    assert.deepEqual(
+      sanitizeEventProperties({ ad_user_id: 'U1', email: 'a@x.com', name: 'Alice', user_email: 'a@x.com' }),
+      { ad_user_id: 'U1' }
+    );
+  });
+
   it('still drops a list on any other key', () => {
     assert.deepEqual(sanitizeEventProperties({ status: ['opened'], tags: ['a'] }), {});
   });

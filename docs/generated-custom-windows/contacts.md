@@ -1859,7 +1859,7 @@ exposes on `businessPartner` (all writable, `inout`):
 | `last_name` | `etgoLastname` | Required for a person, refused for a company. |
 | `name` | `name` | Required for a company. For a person it is derived from first and last name, as the form does; a value other than that derivation is refused. No longer `required` in the manifest. |
 | `tax_id_key` | `oBTIKTaxIDKey` | AD list, published as an enum with its codes and labels. Defaulted before `tax_id` is validated. |
-| `category` | `businessPartnerCategory` | Lookup `GET /api/v1/contacts/lookups/category`, no context. |
+| `category` | `businessPartnerCategory` | Relationship to `contact-category`; lookup `GET /api/v1/contacts/lookups/category`, no context. |
 
 The rules live on the server (Etendo GO), not in the manifest: the manifest `required` flag cannot express a
 condition, so none of these fields is `required` and each carries a `publicApi.description` that states the rule
@@ -1875,14 +1875,36 @@ a stale form; the company one tells the user to mark the contact as a person, ma
 
 The category lookup forwards no context: the form's category selector has no validation rule and sends none,
 so the list is the tenant's active categories the key's role can read. Omitting `category` on create keeps the
-form's default (the organization's default category). Contact categories are not a public resource in V1, so
-`category` is a plain id attribute; the resource itself is later work.
+form's default (the organization's default category). Contact categories are a public resource
+(`contact-category`, published from the Business Partner Category window), so `category` is a relationship: it is
+written and read under `relationships` with `type` `contact-category`, the type the lookup values carry.
 
 The window itself is unchanged: `publicApi` only affects the public API manifest (the regen only bumps the
 contract version, `0.9.0` to `0.13.0`; the generated frontend does not change).
 
 Evidence: `gateway/e2e/contacts.e2e.ts` (cases marked `[GO]` need the server rules), `gateway/test/public-api-manifest.test.ts`.
 Contract: `docs/public-api.md` §4.3 (*Person or company*) and §4.2.2.
+
+## Public API — customer and vendor flags — ETP-6373
+
+The public API publishes the Cliente / Proveedor checkboxes of the Financial tab, so an integrator can do what
+the app lets a user do. `decisions.json` exposes on `businessPartner` (writable, `inout`):
+
+| Public field | Internal field | Notes |
+|--------------|----------------|-------|
+| `is_customer` | `customer` (`IsCustomer`) | JSON boolean. The contact can be used on sales documents. Omitted on create: `true` (AD default `Y`). |
+| `is_vendor` | `vendor` (`IsVendor`) | JSON boolean. The contact can be used on purchase documents. Omitted on create: `false`. |
+
+Why: the API validates reference fields with the app's selectors, and the purchase order's contact selector only
+offers vendors, so a contact created through the API without `is_vendor: true` cannot be used on a purchase order
+(`422` `reference_not_allowed`). With the `contact-category-type` flag on, a flag omitted on create is taken from the
+contact's category (`ContactTypeRules`, `com.etendoerp.go`), as in the app; the field descriptions say so.
+With the flag on, a create or `PATCH` that leaves both flags `false` is refused by `ContactTypeRules`
+(message key `ETGO_BPartnerContactTypeRequired`): the public API answers `400` with code `bad_request` and Etendo's
+message as `detail`.
+
+The window itself is unchanged: `publicApi` only affects the public API manifest.
+Contract: `docs/public-api.md` §4.3 (*Customer and vendor*).
 
 ## SEPA mandate (Financiero → «Mandato SEPA», ETP-6148, behind `sepa-remittances`)
 
@@ -1946,3 +1968,12 @@ In both cases the location `name` is `"<city>, <addressLine1>"`. Calle and Núme
 - The number is never written twice. The keys are not gated by the flag: where it was never on, the structured columns are empty and Calle carries the same address line as before.
 
 **Shared composer.** `composeAddressLines` and the field-length constants come from the core helper `@etendosoftware/app-shell-core/lib/locationAddress.js`, imported by both `LocationEditorModal.jsx` and the import descriptor, so the modal and the import build the same address (see "Shared address composer" above).
+
+## Agent prompt: portal link — ETP-5850
+
+The `businessPartner` entity's `agentPrompt` adds that a link for a customer to see their documents
+is the customer portal link (contacts action `portalLink`, com.etendoerp.go
+`ContactPortalLinkAction`), and that the contact's record URL only opens for users of the app. In the
+first pilots of MCP test `w-portal-link` the agent handed over the record URL instead. The text lives
+in this window's `decisions.json` and in `com.etendoerp.go`'s `ETGO_SF_ENTITY` sourcedata; keep both
+equal.

@@ -14,7 +14,9 @@ test('publishes only explicitly curated fields for Contacts and Product', () => 
     'email',
     'first_name',
     'id',
+    'is_customer',
     'is_person',
+    'is_vendor',
     'last_name',
     'name',
     'payment_method',
@@ -42,7 +44,8 @@ test('publishes the seven UI selectors with their transaction context', () => {
   const lookups = Object.fromEntries(Object.entries(manifest.entities).flatMap(([resource, entity]: [string, any]) =>
     Object.entries(entity.fields).filter(([, field]: [string, any]) => field.lookup).map(([name, field]: [string, any]) => [`${resource}.${name}`, field.lookup])));
   assert.deepEqual(lookups, {
-    'contacts.category': { selector: 'businessPartnerCategory', type: 'business-partner-category', context: {} },
+    // The lookup values are sent back as the contact-category relationship, so they carry its type.
+    'contacts.category': { selector: 'businessPartnerCategory', type: 'contact-category', context: {} },
     'contacts.payment_method': { selector: 'paymentMethod', type: 'payment-method', context: { FIN_ISRECEIPT: 'Y' } },
     'contacts.purchase_payment_method': { selector: 'pOPaymentMethod', type: 'payment-method', context: { FIN_ISRECEIPT: 'N' } },
     'purchase-order.warehouse': { selector: 'warehouse', type: 'warehouse', context: {} },
@@ -77,15 +80,56 @@ test('does not publish Contacts child tabs without explicit public API curation'
   assert.equal(manifest.entities['contacts-basicDiscount'], undefined);
 });
 
-test('publishes exactly the twelve resources in the agreed V1 scope', () => {
+test('publishes exactly the sixteen resources in the agreed V1 scope', () => {
   assert.deepEqual(Object.keys(manifest.entities).sort(), [
-    'contacts', 'contacts-contact', 'contacts-locationAddress', 'product', 'product-category',
-    'product-costing', 'purchase-order', 'purchase-order-lines', 'sales-order', 'sales-order-lines',
-    'sales-quotation', 'sales-quotation-quotationLine',
+    'contact-category', 'contacts', 'contacts-contact', 'contacts-locationAddress', 'conversion-rates',
+    'product', 'product-category', 'product-costing', 'purchase-order', 'purchase-order-lines',
+    'sales-order', 'sales-order-lines', 'sales-quotation', 'sales-quotation-quotationLine',
+    'tax', 'tax-category',
   ]);
   assert.deepEqual(manifest.entities['product-costing'].operations, ['GET', 'LIST']);
   assert.deepEqual(Object.keys(manifest.entities).filter((name) => name.startsWith('contacts-')).sort(),
     ['contacts-contact', 'contacts-locationAddress']);
+});
+
+test('publishes tax, tax category and conversion rates read-only, from windows outside the default categories', () => {
+  for (const resource of ['tax', 'tax-category', 'conversion-rates']) {
+    const entity = manifest.entities[resource];
+    assert.deepEqual(entity.operations, ['GET', 'LIST'], resource);
+    for (const [name, field] of Object.entries(entity.fields) as Array<[string, any]>) {
+      assert.equal(field.direction, 'out', `${resource}.${name}`);
+    }
+  }
+  assert.deepEqual(manifest.entities.tax.fields.tax_category.relationship, { resource: 'tax-category', cardinality: 'one', foreignKey: 'tax_category' });
+  assert.equal(manifest.entities['tax-accounting'], undefined);
+  const rates = manifest.entities['conversion-rates'].fields;
+  assert.deepEqual(Object.keys(rates).sort(), [
+    'currency', 'divide_rate_by', 'id', 'multiple_rate_by', 'to_currency', 'updated', 'valid_from_date', 'valid_to_date',
+  ], 'curated: the downloader sync flag is not published');
+  for (const name of ['multiple_rate_by', 'divide_rate_by']) {
+    assert.deepEqual(rates[name].dataType, { type: 'number', format: 'double' }, `NEO answers a Rate as a JSON number: ${name}`);
+  }
+  for (const lines of ['sales-order-lines', 'purchase-order-lines', 'sales-quotation-quotationLine']) {
+    const tax = manifest.entities[lines].fields.tax;
+    assert.deepEqual(tax.relationship, { resource: 'tax', cardinality: 'one', foreignKey: 'tax' }, `${lines}.tax`);
+    assert.equal(tax.direction, 'inout', `${lines}.tax stays writable`);
+  }
+  assert.equal(manifest.policy.windowSelection, 'allowlist-overrides-excluded-categories');
+});
+
+test('publishes the business partner category window as contact-category, writable, on its own NEO spec', () => {
+  const category = manifest.entities['contact-category'];
+  assert.equal(category.specName, 'business-partner-category', 'the gateway calls NEO with the spec, never the public name');
+  assert.equal(category.entityName, 'businessPartnerCategory');
+  assert.deepEqual([...category.operations].sort(), ['DELETE', 'GET', 'LIST', 'PATCH', 'POST', 'PUT']);
+  assert.equal(category.fields.updated.direction, 'out');
+  assert.deepEqual(Object.keys(category.fields).sort(), ['default', 'description', 'id', 'is_customer', 'name', 'search_key', 'updated']);
+  assert.equal(category.fields.is_customer.internalPath, 'etgoIscustomer');
+  for (const name of ['search_key', 'name']) assert.equal(category.fields[name].required, true, `contact-category.${name} is required`);
+  for (const name of ['description', 'default', 'is_customer']) assert.equal(category.fields[name].required, undefined, name);
+  assert.equal(manifest.entities['business-partner-category'], undefined);
+  assert.equal(manifest.entities['contact-category-accounting'], undefined);
+  assert.deepEqual(manifest.entities.contacts.fields.category.relationship, { resource: 'contact-category', cardinality: 'one', foreignKey: 'category' });
 });
 
 test('orders expose an optional warehouse attribute without a dangling warehouse relationship', () => {
