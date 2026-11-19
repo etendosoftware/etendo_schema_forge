@@ -22,9 +22,10 @@
 //         (create body or update) with the rest of the header, never to the account: the block hands
 //         it to the form (`onChange('iBAN', value)`) and the header's «Guardar» sends it. The server
 //         normalizes and validates it (422 ETGO_RemittanceIbanInvalid); a blank value is ignored (the
-//         trigger copies the account's). The read model carries `remittanceIban`, `accountIban`, their
-//         `*Valid` flags and `ibanSource` ('remittance' | 'account' | 'missing'); `iban` / `ibanValid`
-//         are the effective ones.
+//         server proposes the account's on create and when the account changes or the type switches
+//         collection <-> payment; the trigger only freezes it once processed). The read model
+//         carries `remittanceIban`, `accountIban`, their `*Valid` flags and `ibanSource`
+//         ('remittance' | 'account' | 'missing'); `iban` / `ibanValid` are the effective ones.
 
 import { normalizeCreditorIdInfo } from '@/lib/sepaCreditorIdApi.js';
 

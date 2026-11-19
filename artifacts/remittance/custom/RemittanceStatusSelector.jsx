@@ -31,12 +31,13 @@ export const SELECTABLE_STATUSES = new Set(['PR', 'SB']);
  * RemittanceCollectDialog, with the «A → B» chips), which posts the action and refreshes the record
  * through `onRefresh`. On any other status it renders nothing: the plain pill stays as it is.
  */
-const CONFIRM_EVENT = 'remittance:open-confirm-modal';
+/** The window event the header's «Confirmar» dispatches and ConfirmHost listens to; the route imports it. */
+export const REMITTANCE_CONFIRM_EVENT = 'remittance:open-confirm-modal';
 const CONFIRM_PROCESS = { name: 'confirm', ...decisions.window.processOverrides.confirm };
 
 /**
  * ETP-6247 — hosts the «Confirmar» dialog. The header's primary «Confirmar» (the draftMode button of the
- * route, saved-first and disabled without lines) dispatches `remittance:open-confirm-modal`; this opens the same
+ * route, saved-first and disabled without lines) dispatches REMITTANCE_CONFIRM_EVENT; this opens the same
  * RemittanceConfirmDialog the declared process used to, only on a saved, pending remittance.
  */
 function ConfirmHost({ data, apiBaseUrl, onRefresh }) {
@@ -45,8 +46,8 @@ function ConfirmHost({ data, apiBaseUrl, onRefresh }) {
   useEffect(() => {
     if (!pending) return undefined;
     const handler = () => setOpen(true);
-    window.addEventListener(CONFIRM_EVENT, handler);
-    return () => window.removeEventListener(CONFIRM_EVENT, handler);
+    window.addEventListener(REMITTANCE_CONFIRM_EVENT, handler);
+    return () => window.removeEventListener(REMITTANCE_CONFIRM_EVENT, handler);
   }, [pending]);
   if (!open || !pending) return null;
   return (

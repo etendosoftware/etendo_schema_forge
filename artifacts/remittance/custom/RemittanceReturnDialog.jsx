@@ -74,6 +74,7 @@ function LineRow({ line, info, checked, onToggle, ui, locale }) {
   } else if (!returnable) {
     note = ui(REASON_KEYS[info?.reasonCode] ?? 'remittanceReturnReasonNotSettled');
   }
+  // committed-selection-ok: multi-select checklist, aria-selected comes from each line's own checked state
   return (
     <li
       role="option"

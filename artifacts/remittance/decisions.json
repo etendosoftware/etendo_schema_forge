@@ -307,14 +307,14 @@
           "grid": false,
           "form": false,
           "required": false,
-          "reason": "ETP-6247 — REM_REMITTANCE.CREDITOR_IDENTIFIER: the remittance's own SEPA creditor identifier (AT-02), the one its file carries. Writable on create and update while not processed so the custom block can preload it (the account's, else the one computed from the organization) and save it with the general «Guardar»; RemittanceHeaderWrites normalizes and validates it (ETGO_SepaCreditorId* keys), collections only, never written to the account. A blank one is ignored: the trigger copies the account's on insert, and confirm keeps the organization's computed one as the copy. form:false: the custom block owns it."
+          "reason": "ETP-6247 — REM_REMITTANCE.CREDITOR_IDENTIFIER: the remittance's own SEPA creditor identifier (AT-02), the one its file carries. Writable on create and update while not processed so the custom block can preload it (the account's, else the one computed from the organization) and save it with the general «Guardar»; RemittanceHeaderWrites normalizes and validates it (ETGO_SepaCreditorId* keys), collections only, never written to the account. A blank one is ignored: RemittanceHeaderWrites proposes the account's valid one on create and when the account changes or the type switches between collection and payment (the Classic form gets it from the REM_Remittance_SepaDefaults callout), and confirm keeps the organization's computed one as the copy. REM_REMITTANCE_TRG no longer defaults it: it only freezes it once the remittance is processed. form:false: the custom block owns it."
         },
         "directDebitScheme": {
           "visibility": "editable",
           "grid": false,
           "form": false,
           "required": false,
-          "reason": "ETP-6247 — REM_REMITTANCE.DD_SCHEME: CORE | B2B, only for collection remittances (default CORE, set by REM_REMITTANCE_TRG on insert). Writable while the remittance is not processed (RemittanceHeaderWrites normalizes it, 422 ETGO_RemittanceSchemeInvalid / ETGO_RemittanceOptionsCollectionOnly); the SEPA file carries it in LclInstrm/Cd. form:false: the custom «Opciones avanzadas» block owns it."
+          "reason": "ETP-6247 — REM_REMITTANCE.DD_SCHEME: CORE | B2B, only for collection remittances (default CORE, set by RemittanceHeaderWrites on the create of a collection, and by the REM_Remittance_SepaDefaults callout in the Classic form; REM_REMITTANCE_TRG only freezes it once processed). Writable while the remittance is not processed (RemittanceHeaderWrites normalizes it, 422 ETGO_RemittanceSchemeInvalid / ETGO_RemittanceOptionsCollectionOnly); the SEPA file carries it in LclInstrm/Cd. form:false: the custom «Opciones avanzadas» block owns it."
         },
         "financed": {
           "visibility": "editable",
@@ -328,13 +328,13 @@
           "grid": false,
           "form": false,
           "required": false,
-          "reason": "ETP-6247 — REM_REMITTANCE.IBAN: the remittance's own IBAN, copied from the account by REM_REMITTANCE_TRG on insert and when the account or type changes (while not processed), and the one its SEPA file always carries. Writable on create and update so the custom «Datos para el fichero SEPA» block can send the IBAN typed for THIS remittance before its first save (RemittanceHeaderWrites normalizes and validates it, 422 ETGO_RemittanceIbanInvalid); never written to the account. form:false keeps it out of the generic form: the custom block owns it."
+          "reason": "ETP-6247 — REM_REMITTANCE.IBAN: the remittance's own IBAN, proposed from the account by RemittanceHeaderWrites on create and when the account changes or the type switches between collection and payment (the Classic form gets it from the REM_Remittance_SepaDefaults callout; REM_REMITTANCE_TRG only freezes it once processed), and the one its SEPA file always carries. Writable on create and update so the custom «Datos para el fichero SEPA» block can send the IBAN typed for THIS remittance before its first save (RemittanceHeaderWrites normalizes and validates it, 422 ETGO_RemittanceIbanInvalid); never written to the account. form:false keeps it out of the generic form: the custom block owns it."
         },
         "eTARAutomaticprocess": {
           "visibility": "readOnly",
           "grid": false,
           "form": false,
-          "reason": "ETP-6247 — EM_Etar_Automaticprocess (com.etendoerp.automated.remittance, «Process Automated»). The server sets it to Y on every remittance GO creates and before confirm; kept in the payload (not shown) only so processOverrides.reactivate can hide «Reactivar» on an automated remittance."
+          "reason": "ETP-6247 — EM_Etar_Automaticprocess (com.etendoerp.automated.remittance, «Process Automated»). A remittance created through GO keeps it N (confirm resets it to N before REM processes it, so the payments are not settled automatically); it becomes Y only on markCollected («Cobrada»), which settles the payments. Kept in the payload (not shown) only so the custom RemittanceStatusBanner can tell a remittance settled by GO's «Cobrada» (whose SEPA file «Confirmar» generated) apart from one settled otherwise; «Reactivar» is hidden by the status (processOverrides.reactivate), not by this flag."
         },
         "chargedate": {
           "visibility": "discarded",

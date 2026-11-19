@@ -1,8 +1,8 @@
 {
-  "version": "0.32.0",
+  "version": "0.33.0",
   "generatedAt": "2026-11-05T18:53:39.346Z",
-  "updatedAt": "2026-11-19T13:37:50.743Z",
-  "checksum": "522a9dd5bcb700e8",
+  "updatedAt": "2026-11-19T19:21:42.160Z",
+  "checksum": "06e0ed68a469a7ce",
   "frontendContract": {
     "window": {
       "id": "FF8080812E71F7C7012E71FD0499001B",
@@ -374,6 +374,9 @@
             "validation": {
               "required": true,
               "maxLength": 32
+            },
+            "callout": {
+              "className": "org.openbravo.module.remittance.ad_callouts.REM_Remittance_SepaDefaults"
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
@@ -2912,6 +2915,13 @@
         "description": "Rule 'REM_Remittance-REM_Remittance_Type_ID-readOnlyLogic' (readOnlyLogic) should be declared"
       },
       {
+        "id": "t-rule-declared-REM-Remittance-SepaDefaults-FIN-Financial-Account-ID",
+        "category": "rule-declared",
+        "rule": "REM_Remittance_SepaDefaults_FIN_Financial_Account_ID",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance_SepaDefaults_FIN_Financial_Account_ID' (callout) should be declared"
+      },
+      {
         "id": "t-rule-declared-REM-Remittance-SinglePayment-readOnlyLogic",
         "category": "rule-declared",
         "rule": "REM_Remittance-SinglePayment-readOnlyLogic",
@@ -3422,7 +3432,7 @@
       }
     ],
     "summary": {
-      "total": 183,
+      "total": 184,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 2,
@@ -3431,13 +3441,13 @@
         "field-type": 28,
         "readonlylogic-evaluable": 11,
         "readonlylogic-valid": 11,
-        "rule-declared": 47,
+        "rule-declared": 48,
         "selector-endpoint": 6,
         "system-field": 34,
         "visibility": 2
       },
       "byRunner": {
-        "node": 183,
+        "node": 184,
         "junit": 0
       }
     }

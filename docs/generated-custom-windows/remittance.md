@@ -324,12 +324,14 @@ order only, not `saveBeforeProcesses`.
 | `markCollected` (ETP-6247) | none: same as `markSent` | `@RemittanceStatus@='SB'` (no longer straight from PR in the UI; the backend still allows it) | `RemittanceCollectDialog` (the chips «Enviada al banco → Cobrada» and the settlement warning), which posts the action itself | `markCollected` → `{ status: 'CT'\|'PT', settledOn }` |
 | `reactivate` | «Reactivar», `primary-danger` | PR or SB (same clause as `markCollected`): once collected, partial or voided it is refused (422 `ETGO_RemittanceReactivateNotAllowed`) | a confirmation, because it deletes the payments the process created: `customComponents.processConfirmModal` → `RemittanceProcessConfirmModal` | `reactivate` → `{ status: 'PE' }` |
 
-The gates name the data key (`remittanceStatus`, or `eTARAutomaticprocess`), not the column. `evalDisplayLogicRaw`
+The gates name the data key (`remittanceStatus`), not the column. `evalDisplayLogicRaw`
 lower-cases only the first letter of `@X@`, and a key that is not in the record counts as visible,
-so `@EM_ETAR_AUTOMATICPROCESS@` would always pass. For the key to be in the record,
-`eTARAutomaticprocess` (`EM_Etar_Automaticprocess`, module `com.etendoerp.automated.remittance`) is
-`readOnly` with `form`/`grid` false, like `processed`; the server sets it to Y on create and on
-confirm.
+so a column-named gate such as `@EM_ETAR_AUTOMATICPROCESS@` would always pass. No gate reads
+`eTARAutomaticprocess` (`EM_Etar_Automaticprocess`, module `com.etendoerp.automated.remittance`):
+it is `readOnly` with `form`/`grid` false, like `processed`, only so `RemittanceStatusBanner` can
+read it. A remittance created through GO keeps it **N** (create leaves it N, and `confirm` resets
+it to N before REM processes the remittance, so nothing is settled automatically); it becomes **Y**
+only on `markCollected` («Cobrada»), which settles the payments.
 
 - **Success (Reactivar):** `handleProcessSuccess` toasts (`reactivateCompleted`) and
   force-reads the header and the lines. Processed makes the document read-only, which hides line
@@ -352,7 +354,7 @@ the banner renders as the first child of the detail content, under the top bar. 
 | `PE` | info | `remittanceBannerPending` |
 | `PR` | info | `remittanceBannerProcessed` (Pendiente de envío: file generated, payments in Remesado, invoices uncollected; download the file, send it to the bank and move the remittance to Enviada al banco; reactivable) |
 | `SB` | info | `remittanceBannerSent` (Enviada al banco: waiting for the bank; move it to Cobrada, reactivable) |
-| `CT` / `PT` | success | `remittanceBannerCollected` / `remittanceBannerPaid`; on an automated remittance (`eTARAutomaticprocess` Y, ETP-6247), `remittanceBannerCollectedFile` / `remittanceBannerPaidFile`: the payments are settled and the SEPA file is generated, download it from «Fichero SEPA» |
+| `CT` / `PT` | success | `remittanceBannerCollected` / `remittanceBannerPaid`; on a remittance settled by GO's «Cobrada» (`eTARAutomaticprocess` Y, set by `markCollected`, ETP-6247), `remittanceBannerCollectedFile` / `remittanceBannerPaidFile`: the payments are settled and the SEPA file is generated, download it from «Fichero SEPA» |
 | `CP` / `PP` | warning | `remittanceBannerPartiallyCollected` / `remittanceBannerPartiallyPaid` |
 | `AN` | danger | `remittanceBannerVoided` |
 
@@ -921,10 +923,17 @@ make regen ONLY=financial-account,remittance PUSH_TO_NEO=1
 
 Push only to a database whose `org.openbravo.module.remittance` already has `REM_REMITTANCE.REMITTANCE_STATUS` (the merged and built ETP-6148 change), and whose `REM_*` tables carry no `EM_ETGO_*` column.
 
-ETP-6247: `eTARAutomaticprocess` became `readOnly`, so the push opens its `ETGO_SF_FIELD` row
-`7F6A3B65CE804149AE7C87D6E905CF3D` (`ISINCLUDED`/`ISREADONLY` Y). Until it is pushed and exported,
-the offline regen-check reports that one row as drift, and NEO does not serve the key, so
-«Reactivar» is gated on `remittanceStatus` instead.
+ETP-6247: `eTARAutomaticprocess` became `readOnly`, so the push opened its `ETGO_SF_FIELD` row
+`7F6A3B65CE804149AE7C87D6E905CF3D` (`ISINCLUDED`/`ISREADONLY` Y, already pushed and exported). NEO
+serves the key only for `RemittanceStatusBanner`; «Reactivar» is gated on `remittanceStatus`.
+
+ETP-6247: the AD declares the Classic callout `REM_Remittance_SepaDefaults` on
+`FIN_Financial_Account_ID`, so the contract lists it on `financialAccount` (plus its `rule-declared`
+test). It changes nothing in GO and needs no push: the SPA posts a callout for every ID-valued
+change anyway (it never reads the contract's `callout`), and `RemittanceHeaderHandler` answers
+every header callout itself through `RemittanceNameCallout`, which returns nothing for the account.
+In GO the IBAN, creditor identifier and scheme come from `RemittanceHeaderWrites` instead (on
+create, and when the account changes or the type switches between collection and payment).
 A push creates `ETGO_SF_FIELD` rows that point to the `AD_COLUMN` rows of the spec's tables.
 
 ## Manual verification

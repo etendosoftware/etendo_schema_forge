@@ -328,19 +328,37 @@ describe('returns: returnState / returnLines / lines', () => {
   it('fetchRemittanceLines asks for the parent lines, drops grid summaries and null rows', async () => {
     const apiFetch = vi.fn().mockResolvedValue(jsonResponse({ response: { data: [{ id: 'l1' }, { id: 'sum', isGridSummary: true }, null, { id: 'l2' }] } }));
     const lines = await fetchRemittanceLines(apiFetch, 'rem 1');
-    expect(apiFetch.mock.calls[0][0]).toBe('/lines?parentId=rem%201&_startRow=0&_endRow=999');
+    // Relative path only: the window's apiFetch carries the base URL, so no options override it.
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    expect(apiFetch.mock.calls[0]).toEqual(['/lines?parentId=rem%201&_sortBy=lineNo%20asc&_startRow=0&_endRow=199']);
     expect(lines.map((l) => l.id)).toEqual(['l1', 'l2']);
   });
 
-  it('fetchRemittanceLines reads a bare data array and a payload that is not a list as empty', async () => {
+  it('fetchRemittanceLines pages through every line instead of stopping at the first 1000', async () => {
+    const page = (start, count) => Array.from({ length: count }, (_, i) => ({ id: `l${start + i}` }));
+    const total = 1203;
+    const apiFetch = vi.fn(async (url) => {
+      const start = Number(/_startRow=(\d+)/.exec(url)[1]);
+      const end = Number(/_endRow=(\d+)/.exec(url)[1]);
+      return jsonResponse({ response: { data: page(start, Math.max(0, Math.min(end + 1, total) - start)) } });
+    });
+    const lines = await fetchRemittanceLines(apiFetch, 'r');
+    expect(lines).toHaveLength(total);
+    expect(lines.at(-1).id).toBe('l1202');
+    // Seven pages of 200: the seventh is short (3 rows), so no eighth request.
+    expect(apiFetch).toHaveBeenCalledTimes(7);
+    expect(apiFetch.mock.calls.at(-1)[0]).toBe('/lines?parentId=r&_sortBy=lineNo%20asc&_startRow=1200&_endRow=1399');
+  });
+
+  it('fetchRemittanceLines reads a bare data array and refuses a payload that is not a list', async () => {
     expect(await fetchRemittanceLines(vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: 'x' }] })), 'r')).toEqual([{ id: 'x' }]);
-    expect(await fetchRemittanceLines(vi.fn().mockResolvedValue(jsonResponse({ response: { data: { id: 'x' } } })), 'r')).toEqual([]);
-    expect(await fetchRemittanceLines(vi.fn().mockResolvedValue(jsonResponse({})), 'r')).toEqual([]);
+    await expect(fetchRemittanceLines(vi.fn().mockResolvedValue(jsonResponse({ response: { data: { id: 'x' } } })), 'r')).rejects.toThrow(/no readable row array/);
+    await expect(fetchRemittanceLines(vi.fn().mockResolvedValue(jsonResponse({})), 'r')).rejects.toThrow(/no readable row array/);
   });
 
   it('fetchRemittanceLines throws when refused', async () => {
     const apiFetch = vi.fn().mockResolvedValue(jsonResponse({}, { ok: false, status: 500 }));
-    await expect(fetchRemittanceLines(apiFetch, 'r')).rejects.toMatchObject({ status: 500, message: 'lines 500' });
+    await expect(fetchRemittanceLines(apiFetch, 'r')).rejects.toMatchObject({ name: 'NeoListError', status: 500 });
   });
 });
 

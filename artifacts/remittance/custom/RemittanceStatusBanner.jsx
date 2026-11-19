@@ -20,8 +20,9 @@ const STATUS_BANNERS = {
   AN: { tone: 'danger', icon: Ban, key: 'remittanceBannerVoided' },
 };
 
-// ETP-6247 — an automated remittance (EM_Etar_Automaticprocess = Y) reaches Cobrada/Pagada on
-// «Confirmar», which also generates the SEPA file: its banner says so and where to download it.
+// ETP-6247 — a remittance settled by GO's «Cobrada» (markCollected sets EM_Etar_Automaticprocess
+// = Y; it stays N until then) was confirmed first, and «Confirmar» generated its SEPA file: the
+// Cobrada/Pagada banner says so and where to download it.
 const FILE_BANNER_KEYS = {
   CT: 'remittanceBannerCollectedFile',
   PT: 'remittanceBannerPaidFile',

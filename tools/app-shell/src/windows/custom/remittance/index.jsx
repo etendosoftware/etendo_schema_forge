@@ -18,6 +18,7 @@ import { RemittanceStatusChip } from '@generated/remittance/custom/RemittanceSta
 import { FILE_STATUSES, REGENERATE_STATUSES, downloadRemittanceFile, fileActionErrorMessage, resolveLatestRemittanceFile } from '@generated/remittance/custom/remittanceFileApi.js';
 import RemittanceDownloadButton from '@generated/remittance/custom/RemittanceDownloadButton.jsx';
 import RemittanceRegenerateDialog from '@generated/remittance/custom/RemittanceRegenerateDialog.jsx';
+import { REMITTANCE_CONFIRM_EVENT } from '@generated/remittance/custom/RemittanceStatusSelector.jsx';
 import RemittanceApp from '@generated/remittance/generated/web/remittance/index.jsx';
 
 /**
@@ -34,7 +35,6 @@ export const REMITTANCE_WINDOW_ID = 'FF8080812E71F7C7012E71FD0499001B';
  * this event). «Confirmar» is always there while the remittance is pending (new or saved) and disabled while it has
  * no lines (`disableWhenEmpty`, with `disabledEmptyTitleKey` as its tooltip); a pending edit is saved first.
  */
-export const REMITTANCE_CONFIRM_EVENT = 'remittance:open-confirm-modal';
 export const REMITTANCE_DRAFT_MODE = {
   enabled: true,
   label: 'confirm',

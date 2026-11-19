@@ -35,6 +35,7 @@ import {
   extractBackendMessageParams,
 } from '@/lib/backendErrors.js';
 import { downloadBlobAsFile } from '@/windows/custom/shared/pdfUtils.js';
+import { fetchNeoList } from '@etendosoftware/app-shell-core/lib/import/fetchNeoList.js';
 
 export const GROUPING_NONE = 'P';
 
@@ -269,13 +270,23 @@ export async function markRemittanceCollected(apiFetch, remittanceId) {
   return { status: textOrNull(data.status), settledOn: textOrNull(data.settledOn) };
 }
 
-/** The remittance's lines (invoice, partner, amount, currency) for the return picker. */
+/**
+ * Every line of the remittance (invoice, partner, amount, currency) for the return picker, read
+ * page by page with the shared `fetchNeoList` until a short page comes back: a single
+ * `_endRow=999` request silently showed only the first 1000 lines. The window's `apiFetch` already
+ * carries the base URL, so it is called with the relative path only (the helper's own `baseUrl: ''`
+ * option would drop it).
+ *
+ * @throws {NeoListError} when a page is refused or is not a row list (failing is not empty)
+ */
+/** The lines grid's own order (decisions.json `window.detailSortBy`), so paging is deterministic and the dialog matches the grid. */
+const LINES_SORT = 'lineNo asc';
+
 export async function fetchRemittanceLines(apiFetch, remittanceId) {
-  const res = await apiFetch(`/lines?parentId=${encodeURIComponent(remittanceId)}&_startRow=0&_endRow=999`);
-  if (!res.ok) throw await httpError(res, 'lines');
-  const json = await res.json();
-  const data = json?.response?.data ?? json?.data ?? [];
-  return Array.isArray(data) ? data.filter((l) => l && !l.isGridSummary) : [];
+  const rows = await fetchNeoList(`/lines?parentId=${encodeURIComponent(remittanceId)}&_sortBy=${encodeURIComponent(LINES_SORT)}`, {
+    fetchFn: (url) => apiFetch(url),
+  });
+  return rows.filter((l) => l && !l.isGridSummary);
 }
 
 /** The per-line refusals of a 422 `ETGO_RemittanceReturnNotAllowed`: `[{ lineId, reasonCode, documentNo, message }]`. */

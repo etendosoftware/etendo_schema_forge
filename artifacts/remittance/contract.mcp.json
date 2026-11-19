@@ -1,8 +1,8 @@
 {
-  "version": "0.32.0",
+  "version": "0.33.0",
   "generatedAt": "2026-11-05T18:53:39.346Z",
   "updatedAt": "2026-11-18T18:39:02.248Z",
-  "contractChecksum": "522a9dd5bcb700e8",
+  "contractChecksum": "06e0ed68a469a7ce",
   "apiPrediction": {
     "specName": "remittance",
     "baseUrl": "/sws/neo/remittance",
