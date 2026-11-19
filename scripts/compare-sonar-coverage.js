@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Coverage-decrease gate: this repo's ONE implementation of the rule enforced by Jenkins'
 // "Compare Coverage Results" stage (sonarUtils.compareCoverage). Called by
-// `run-sonar.sh --compare-coverage` (pre-push) and by the `Sonar Build` job of
-// .github/workflows/test.yml. See docs/coverage-gate.md. (com.etendoerp.go's
+// `run-sonar.sh --compare-coverage` (pre-push) and by the unit tests + Sonar job of the mini and
+// full pipelines (.github/actions/unit-tests-sonar). See docs/coverage-gate.md. (com.etendoerp.go's
 // run-sonar.sh still has its own Python copy — a known duplicate.)
 //
 // Rule, on OVERALL coverage read live from Sonar:
@@ -297,7 +297,7 @@ export function evaluateCoverage({ current, base, tolerance, minimum }) {
 
 const f2 = (n) => n.toFixed(2);
 
-/** Base branches whose pushes are always analysed by the `Sonar Build` job. */
+/** Base branches whose pushes are always analysed (mini pipeline on develop, full pipeline on main). */
 export const ANALYSED_BASE_BRANCHES = ['develop', 'main'];
 
 /**

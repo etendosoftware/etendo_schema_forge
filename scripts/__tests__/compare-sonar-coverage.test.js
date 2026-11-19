@@ -1,6 +1,8 @@
 // @covers scripts/compare-sonar-coverage.js
 // @covers run-sonar.sh
-// @covers .github/workflows/test.yml
+// @covers .github/actions/unit-tests-sonar/action.yml
+// @covers .github/workflows/mini-pipeline.yml
+// @covers .github/workflows/full-pipeline.yml
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -882,7 +884,10 @@ describe('CLI entry point', () => {
 
 describe('wiring guardrails', () => {
   const runSonar = readFileSync(join(REPO_ROOT, 'run-sonar.sh'), 'utf8');
-  const workflow = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'test.yml'), 'utf8');
+  const action = readFileSync(join(REPO_ROOT, '.github', 'actions', 'unit-tests-sonar', 'action.yml'), 'utf8');
+  const mini = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'mini-pipeline.yml'), 'utf8');
+  const full = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'full-pipeline.yml'), 'utf8');
+  const job = (workflow, id) => new RegExp(`\n {2}${id}:\n([\\s\\S]*?)(?=\n {2}[A-Za-z_-]+:\n|$)`).exec(workflow)?.[1];
 
   it('run-sonar.sh delegates the gate to scripts/compare-sonar-coverage.js', () => {
     assert.match(runSonar, /node\s+"\$SCRIPT_DIR\/scripts\/compare-sonar-coverage\.js"\s+"\$\{CMP_ARGS\[@\]\}"/);
@@ -894,39 +899,61 @@ describe('wiring guardrails', () => {
     assert.doesNotMatch(runSonar, /^\s*(export\s+)?COVERAGE_(TOLERANCE|MINIMUM)=/m);
   });
 
-  it('the sonar job runs the compare step on successful PRs in ci context', () => {
-    const job = /\n {2}sonar:\n([\s\S]*?)(?=\n {2}[A-Za-z_-]+:\n|$)/.exec(workflow)?.[1];
-    assert.ok(job, 'sonar job present');
-    const step = /- name: Compare coverage with the base branch\n([\s\S]*?)(?=\n {6}- |$)/.exec(job)?.[1];
-    assert.ok(step, 'compare step present in the sonar job');
-    assert.match(step, /if: github\.event_name == 'pull_request' && needs\.test\.result == 'success'/);
+  it('the action runs the compare step on PRs in ci context, with the quality gate, after the scan', () => {
+    const step = /- name: Compare coverage with the base branch\n([\s\S]*?)(?=\n {4}- |$)/.exec(action)?.[1];
+    assert.ok(step, 'compare step present in the action');
+    assert.match(step, /if: github\.event_name == 'pull_request'/);
     assert.match(step, /node scripts\/compare-sonar-coverage\.js --context ci/);
     assert.match(step, /--report-task \.scannerwork\/report-task\.txt --check-quality-gate/);
     assert.match(step, /--pull-request "\$PR_NUMBER" --base-branch "\$BASE_BRANCH"/);
-    assert.ok(job.indexOf('sonarqube-scan-action') < job.indexOf('Compare coverage with the base branch'),
+    assert.ok(action.indexOf('make test-ci-coverage') < action.indexOf('sonarqube-scan-action'), 'the scan runs after the tests');
+    assert.ok(action.indexOf('sonarqube-scan-action') < action.indexOf('Compare coverage with the base branch'),
       'compare runs after the scan');
   });
 
-  it('the sonar job fails closed on a PR whose tests did not succeed', () => {
-    const job = /\n {2}sonar:\n([\s\S]*?)(?=\n {2}[A-Za-z_-]+:\n|$)/.exec(workflow)?.[1];
-    assert.match(job, /if: \$\{\{ !cancelled\(\) && \(github\.event_name == 'pull_request' \|\|/,
-      'the job runs on every non-cancelled PR');
-    const step = /- name: Fail when the tests did not succeed\n([\s\S]*?)(?=\n {6}- |$)/.exec(job)?.[1];
-    assert.ok(step, 'fail-closed step present');
-    assert.match(step, /if: github\.event_name == 'pull_request' && needs\.test\.result != 'success'/);
-    assert.match(step, /::error title=Coverage gate::/);
-    assert.match(step, /exit 1/);
+  it('the scan and the compare step only run when every test passed (no always() on them)', () => {
+    const fromScan = action.slice(action.indexOf('- name: Sonar analysis'));
+    assert.doesNotMatch(fromScan, /if: (always|failure)\(\)/);
+  });
+
+  it('the mini pipeline runs the action on PRs and pushes to develop, under its own job name', () => {
+    assert.match(mini, /pull_request:\n {4}branches: \[develop\]/);
+    assert.match(mini, /push:\n {4}branches: \[develop\]/);
+    const unit = job(mini, 'unit-tests-sonar');
+    assert.ok(unit, 'unit-tests-sonar job present');
+    assert.match(unit, /name: 'Mini Pipeline: Unit tests \+ Sonar \+ coverage'/);
+    assert.match(unit, /uses: \.\/\.github\/actions\/unit-tests-sonar/);
+    assert.match(unit, /fetch-depth: 0/);
+    assert.match(job(mini, 'mocked'), /if: github\.event_name != 'push'/);
+  });
+
+  it('the full pipeline runs the action on cuts and keeps main analyzed on a validated push', () => {
+    const unit = job(full, 'unit-tests');
+    assert.ok(unit, 'unit-tests job present');
+    assert.match(unit, /name: Unit tests \+ Sonar \+ coverage/);
+    assert.match(unit, /uses: \.\/\.github\/actions\/unit-tests-sonar/);
+    assert.match(unit, /needs\.route\.outputs\.validated_run == ''/);
+    const cut = job(full, 'validated-cut-sonar');
+    assert.ok(cut, 'validated-cut-sonar job present');
+    assert.match(cut, /if: needs\.route\.outputs\.validated_run != ''/);
+    assert.match(cut, /name: unit-coverage/);
+    assert.match(full, /'Unit tests \+ Sonar \+ coverage', 'Mocked E2E \(full pipeline\)'/, 'Route requires the unit tests');
   });
 
   it('pins the scan action to a commit sha and declares least-privilege permissions', () => {
-    assert.match(workflow, /sonarqube-scan-action@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
-    assert.doesNotMatch(workflow, /@master\b/);
-    assert.match(workflow, /^permissions:\n {2}contents: read\n/m);
-    assert.doesNotMatch(workflow, /: write-all|: read-all/);
+    for (const text of [action, full]) {
+      assert.match(text, /sonarqube-scan-action@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
+      assert.doesNotMatch(text, /@master\b/);
+    }
+    for (const text of [mini, full]) {
+      assert.match(text, /^permissions:\n {2}contents: read\n/m);
+      assert.doesNotMatch(text, /: write-all|: read-all/);
+    }
   });
 
   it('gives each push sha its own concurrency group', () => {
-    assert.match(workflow, /group: tests-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}/);
+    assert.match(mini, /group: mini-pipeline-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}/);
+    assert.match(full, /group: full-pipeline-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}/);
   });
 });
 
