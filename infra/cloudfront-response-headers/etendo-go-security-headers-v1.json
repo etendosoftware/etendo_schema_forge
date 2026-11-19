@@ -9,7 +9,7 @@
       "AccessControlMaxAgeSec": 31536000
     },
     "ContentTypeOptions": { "Override": true },
-    "FrameOptions": { "Override": true, "FrameOption": "DENY" },
+    "FrameOptions": { "Override": true, "FrameOption": "SAMEORIGIN" },
     "ReferrerPolicy": { "Override": true, "ReferrerPolicy": "strict-origin-when-cross-origin" }
   },
   "CustomHeadersConfig": {
