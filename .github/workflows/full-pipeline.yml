@@ -178,9 +178,7 @@ jobs:
           # The whole history: Sonar's blame and new-code detection need it.
           fetch-depth: 0
 
-      # ETP-6387: the action comes from this run's own commit (the merge ref on a PR), not from the
-      # PR head checked out above: a head older than the action (the main into develop back-merge,
-      # a branch that never merged develop) would not have it. Tests and scripts stay the head's.
+      # The action from this run's own commit, as in mini-pipeline.yml (ETP-6387).
       - name: Checkout the unit tests action
         uses: actions/checkout@v4
         with:
