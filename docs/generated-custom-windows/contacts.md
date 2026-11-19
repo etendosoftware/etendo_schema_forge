@@ -1885,6 +1885,27 @@ contract version, `0.9.0` to `0.13.0`; the generated frontend does not change).
 Evidence: `gateway/e2e/contacts.e2e.ts` (cases marked `[GO]` need the server rules), `gateway/test/public-api-manifest.test.ts`.
 Contract: `docs/public-api.md` §4.3 (*Person or company*) and §4.2.2.
 
+## Public API — customer and vendor flags — ETP-6373
+
+The public API publishes the Cliente / Proveedor checkboxes of the Financial tab, so an integrator can do what
+the app lets a user do. `decisions.json` exposes on `businessPartner` (writable, `inout`):
+
+| Public field | Internal field | Notes |
+|--------------|----------------|-------|
+| `is_customer` | `customer` (`IsCustomer`) | JSON boolean. The contact can be used on sales documents. Omitted on create: `true` (AD default `Y`). |
+| `is_vendor` | `vendor` (`IsVendor`) | JSON boolean. The contact can be used on purchase documents. Omitted on create: `false`. |
+
+Why: the API validates reference fields with the app's selectors, and the purchase order's contact selector only
+offers vendors, so a contact created through the API without `is_vendor: true` cannot be used on a purchase order
+(`422` `reference_not_allowed`). With the `contact-category-type` flag on, a flag omitted on create is taken from the
+contact's category (`ContactTypeRules`, `com.etendoerp.go`), as in the app; the field descriptions say so.
+With the flag on, a create or `PATCH` that leaves both flags `false` is refused by `ContactTypeRules`
+(message key `ETGO_BPartnerContactTypeRequired`): the public API answers `400` with code `bad_request` and Etendo's
+message as `detail`.
+
+The window itself is unchanged: `publicApi` only affects the public API manifest.
+Contract: `docs/public-api.md` §4.3 (*Customer and vendor*).
+
 ## SEPA mandate (Financiero → «Mandato SEPA», ETP-6148, behind `sepa-remittances`)
 
 A customer's SEPA direct-debit mandate is edited in the **Financial** tab, in a **Mandato SEPA** section right after the SIF defaults. It reuses the two columns the OBSEPAD module (`org.openbravo.sepa.iso20022.coredirectdebit.customertobank`) adds to `C_BPartner`; Etendo GO adds no column.

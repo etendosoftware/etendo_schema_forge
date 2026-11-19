@@ -488,7 +488,12 @@
           "grid": true,
           "form": false,
           "section": "principal",
-          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.vendor.md"
+          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.vendor.md",
+          "publicApi": {
+            "exposed": true,
+            "name": "isVendor",
+            "description": "true when the contact can be used on purchase documents; a purchase order only accepts a vendor as its contact. When omitted on create, Etendo applies the default (false), or the type defined by the contact's category."
+          }
         },
         "purchasePricelist": {
           "visibility": "editable",
@@ -536,7 +541,12 @@
           "grid": true,
           "form": false,
           "section": "principal",
-          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.customer.md"
+          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.customer.md",
+          "publicApi": {
+            "exposed": true,
+            "name": "isCustomer",
+            "description": "true when the contact can be used on sales documents. When omitted on create, Etendo applies the default (true), or the type defined by the contact's category."
+          }
         },
         "priceList": {
           "visibility": "editable",

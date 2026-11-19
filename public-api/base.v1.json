@@ -351,6 +351,26 @@
           "reference": null,
           "description": "true for a person, false for a company. A contact created without it is a company, so a create that sends first_name or last_name without is_person true is refused. A person sends first_name and last_name; a company sends name. Switching a contact to a company clears its first and last name."
         },
+        "is_customer": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "customer",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null,
+          "description": "true when the contact can be used on sales documents. When omitted on create, Etendo applies the default (true), or the type defined by the contact's category."
+        },
+        "is_vendor": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "vendor",
+          "dataType": {
+            "type": "boolean"
+          },
+          "reference": null,
+          "description": "true when the contact can be used on purchase documents; a purchase order only accepts a vendor as its contact. When omitted on create, Etendo applies the default (false), or the type defined by the contact's category."
+        },
         "payment_method": {
           "sourceVisibility": "editable",
           "direction": "inout",
@@ -421,7 +441,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.13.0",
+        "contractVersion": "0.14.0",
         "backendEntity": true
       }
     },
@@ -627,7 +647,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.13.0",
+        "contractVersion": "0.14.0",
         "backendEntity": true
       }
     },
@@ -752,7 +772,7 @@
       },
       "source": {
         "artifact": "contacts",
-        "contractVersion": "0.13.0",
+        "contractVersion": "0.14.0",
         "backendEntity": true
       }
     },
