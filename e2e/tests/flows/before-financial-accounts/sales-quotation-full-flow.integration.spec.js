@@ -13,7 +13,7 @@ import { login, navigateTo } from '../../helpers/auth.js';
 import { noteFinancialAccountPrecondition } from '../../helpers/financial-account-helpers.js';
 import { ensureOpenPeriod } from '../../helpers/period-helpers.js';
 import { ensureStockOnHand, DEFAULT_WAREHOUSE_NAME } from '../../helpers/inventory-helpers.js';
-import { selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
+import { ensureCustomerSetup, selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
 import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
@@ -436,6 +436,9 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await slow(page);
     // Runs before any spec creates a financial account; see the folder's README.
     await noteFinancialAccountPrecondition(page, test.info());
+    // A fresh tenant has no contacts; provision the customer instead of borrowing one
+    // an earlier spec left behind (it never touches financial accounts).
+    await ensureCustomerSetup(page);
 
     // ETP-5079: the onboarding dataset no longer seeds any visible product, so
     // the lines added below have nothing to pick unless the suite provisions
@@ -588,6 +591,15 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     const negQuotationProductName = (await negQuotationRow.locator('[data-cell-key="product"]').textContent())?.trim();
     await ensureStockOnHand(page, {
       productName: negQuotationProductName,
+      warehouseName: DEFAULT_WAREHOUSE_NAME,
+      minQty: 200,
+    });
+    // The baseline POSITIVE line ships stock out, so its product needs stock on hand too.
+    // This spec runs on a tenant fresh from onboarding (flows/before-financial-accounts/),
+    // where nothing has received that product yet; it used to pass only because the
+    // purchase specs, running first, left goods receipts of it behind.
+    await ensureStockOnHand(page, {
+      productName: PRODUCT_FIXTURE_ALPHA.name,
       warehouseName: DEFAULT_WAREHOUSE_NAME,
       minQty: 200,
     });
@@ -952,6 +964,9 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await slow(page);
     // Runs before any spec creates a financial account; see the folder's README.
     await noteFinancialAccountPrecondition(page, test.info());
+    // A fresh tenant has no contacts; provision the customer instead of borrowing one
+    // an earlier spec left behind (it never touches financial accounts).
+    await ensureCustomerSetup(page);
 
     // ETP-5079: no product is seeded on a fresh tenant — provision the two
     // fixtures the negative lines below are built from.
