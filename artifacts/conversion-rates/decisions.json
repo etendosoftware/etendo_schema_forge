@@ -10,6 +10,7 @@
   "entities": {
     "header": {
       "name": "conversionRate",
+      "methods": ["GET", "GETBYID", "DELETE"],
       "publicApi": { "readOnly": true },
       "fields": {
         "organization": { "grid": false, "form": false, "visibility": "readOnly" },

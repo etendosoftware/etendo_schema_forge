@@ -1,8 +1,8 @@
 {
   "version": "0.10.0",
   "generatedAt": "2026-05-21T20:22:50.312Z",
-  "updatedAt": "2026-11-19T17:25:21.036Z",
-  "checksum": "202a7e2ecda70017",
+  "updatedAt": "2026-11-19T17:42:25.146Z",
+  "checksum": "010a52292f0cacf2",
   "frontendContract": {
     "window": {
       "id": "116",
@@ -534,15 +534,20 @@
       "conversionRate": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
+        "post": false,
+        "put": false,
+        "patch": false,
         "delete": true,
         "listUrl": "/sws/neo/conversion-rates/conversionRate",
         "detailUrl": "/sws/neo/conversion-rates/conversionRate/{id}",
         "supportedFilters": [
           "currency",
           "toCurrency"
+        ],
+        "methods": [
+          "GET",
+          "GETBYID",
+          "DELETE"
         ]
       }
     },

@@ -11,9 +11,14 @@
  *       → {creates, closes, error?, errorKey?, errorField?}
  *     createManualCurrency {toCurrency, multipleRateBy, validFromDate?}   ("Nueva divisa")
  *     createManualRate {toCurrency, multipleRateBy, validFromDate?}       ("Nueva tasa")
- *     updateManualRate {id, multipleRateBy, confirm?}                     ("Modificar tasa")
- *       without `confirm` it saves nothing and answers {saved: false, proposal: {forward: {old, new},
- *       inverse: {old, new}, validFrom, validTo}, warning}; with `confirm: true` it saves.
+ *       (both answer the forward row; 409 ETGO_ConvRateCurrencyHasRates / ETGO_ConvRateCurrencyNoRates
+ *       carry `error.field: "toCurrency"`)
+ * - record action  POST   /conversionRate/{id}/action/updateManualRate  {multipleRateBy, confirm?}
+ *       ("Modificar tasa"; `multipleRateBy` is always the FORWARD rate, 1 org = X). Without
+ *       `confirm` it saves nothing and answers {saved: false, proposal: {forward: {fromIso, toIso,
+ *       old, new}, inverse: {fromIso, toIso, old, new}, validFrom, validTo (null when open)},
+ *       warning}; with `confirm: true` it saves and answers the forward row.
+ * Generic POST/PUT/PATCH are closed (405 ETGO_ConvRateUseActions).
  *     currentRates → [{currencyId, isoCode, name, symbol, origin, rate, validFrom, lastDownloadAt}]
  *     serverClock → {now: "yyyy-MM-ddTHH:mm:00"} (the server's wall clock: default and upper bound
  *       of "Válido desde", which can never be later than now)
@@ -97,8 +102,8 @@ export async function previewManualRate(apiFetch, body, signal) {
  * is read by the caller through `extractErrorMessage`, whose body is still unread thanks to the
  * clone) and `response.data` of a 2xx answer (`data.error` when the action refuses in-band).
  */
-async function writeAction(apiFetch, name, body, signal) {
-  const res = await apiFetch(actionPath(name), {
+async function writeAction(apiFetch, name, body, signal, path = actionPath(name)) {
+  const res = await apiFetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -123,7 +128,13 @@ export function createManualRate(apiFetch, body) {
  * warning}`); with `confirm: true` it saves both directions.
  */
 export function updateManualRate(apiFetch, { id, multipleRateBy, confirm = false }, signal) {
-  return writeAction(apiFetch, 'updateManualRate', confirm ? { id, multipleRateBy, confirm: true } : { id, multipleRateBy }, signal);
+  return writeAction(
+    apiFetch,
+    'updateManualRate',
+    confirm ? { multipleRateBy, confirm: true } : { multipleRateBy },
+    signal,
+    `${ENTITY_PATH}/${encodeURIComponent(id)}/action/updateManualRate`,
+  );
 }
 
 export function deleteManualRate(apiFetch, id) {

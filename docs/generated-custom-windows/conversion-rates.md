@@ -18,9 +18,11 @@ one list of currencies, each expanding into its rates filtered by currency, peri
 first manual rate for an active currency with no rates ("Nueva divisa"); add a new manual rate that
 closes the one in force ("Nueva tasa"); edit or delete any manual rate.
 
-`decisions.json` sets `window.readOnly: false`, so `make regen … PUSH_TO_NEO=1` writes
-`ISPOST/ISPUT/ISPATCH/ISDELETE = Y` on `ETGO_SF_ENTITY`. The page itself writes only through the
-actions listed under *One process with the MCP* (and DELETE). The **public API
+`decisions.json` declares `entities.header.methods: ["GET", "GETBYID", "DELETE"]` (with
+`window.readOnly: false`, which would otherwise also drop DELETE), so `make regen … PUSH_TO_NEO=1`
+writes `ISGET/ISGETBYID/ISDELETE = Y` and `ISPOST/ISPUT/ISPATCH = N` on `ETGO_SF_ENTITY`. Every
+write goes through the actions under *One process with the MCP*; the handler also answers a
+generic POST/PUT/PATCH with `405 ETGO_ConvRateUseActions`. The **public API
 stays read-only** (`entities.header.publicApi.readOnly: true` is kept): opening it to writes is a
 separate decision.
 
@@ -37,7 +39,7 @@ separate decision.
 **Synced** is shown only as the *Automática* / *Manual* tag (currency row) and as the Origen column of the printout; no other place shows the flag.
 
 ## States
-`etgoRateStatus`, served by `com.etendoerp.go`, is a real, filterable column with two values:
+`etgoRateStatus`, served by `com.etendoerp.go`, is a real, filterable list column (reference `ETGO_ConvRate_Status`, read-only AD field *Status* on tab 198) with two values:
 - `CURRENT` → **Vigente**: the rate that rules now (its range contains the current date and time);
 - `HISTORIC` → **Histórico**: a rate that no longer rules.
 
@@ -60,11 +62,11 @@ The former lock (`etgoUsedInAccounting`) is gone: editing or deleting a rate nev
 - Deleting the rate in force leaves the currency without a rate from that date.
 
 ## Reactive behavior and dependencies
-- **One process with the MCP.** Every write goes through the actions the MCP uses — `createManualCurrency` (Nueva divisa), `createManualRate` (Nueva tasa), `updateManualRate` (Modificar: proposal, then `confirm: true`) — and `previewManualRate` takes `mode: "newCurrency" | "newRate"`. Delete stays `DELETE /conversionRate/{id}`. The server creates the inverse rate, closes the previous open range at `start − 1 minute` in both directions, refuses overlapping ranges (`ETGO_ConvRateOverlap`), refuses a future start, refuses any write on a synced rate and any change other than the rate of an existing one (`ETGO_ConvRateFieldNotEditable`). The UI shows the preview, the proposal and the messages; it only mirrors the required/positive/no-future checks.
+- **One process with the MCP.** Every write goes through the actions the MCP uses — `createManualCurrency` (Nueva divisa), `createManualRate` (Nueva tasa), `updateManualRate` (Modificar: proposal, then `confirm: true`) — and `previewManualRate` takes `mode: "newCurrency" | "newRate"`. Delete stays `DELETE /conversionRate/{id}`. The server creates the inverse rate, closes the previous open range at `start − 1 minute` in both directions, refuses overlapping ranges (`ETGO_ConvRateOverlap`), refuses a future start, refuses any write on a synced rate, a first rate for a currency that already has rates (`ETGO_ConvRateCurrencyHasRates`) and a new range for one that has none (`ETGO_ConvRateCurrencyNoRates`), both bound to `toCurrency`. `updateManualRate` is a record action (`POST /conversionRate/{id}/action/updateManualRate`, body `{multipleRateBy, confirm?}`, the forward rate) and changes nothing but the rate. The UI shows the preview, the proposal and the messages; it only mirrors the required/positive/no-future checks.
 - **Forward rows only.** The list only the rows whose `currency` is the organization currency (criteria `currency = <org currency id>`). The inverse rows exist but are never listed; the inverse value of a period is the forward row's `divideRateBy`.
 - **Period filter = Válido desde within the period.** Criteria `periodStart <= validFromDate < periodEnd` (story: *Solo se muestran tasas con Válido desde dentro de los últimos 30 días*). A day is `[D 00:00, D+1 00:00)`; *Últimos 30 días* (default) is today and the 29 days before it. A rate that started before the period is not listed, even if it is still in force; the currency row still shows it in its header line.
 - **Datetimes are server-local wall clock.** NEO answers `validFromDate` / `validToDate` as `yyyy-MM-ddTHH:mm:ss` with no offset (NeoDateFormat, ETP-5100). The page reads and writes them as text (`conversionRatesModel.js`), never through `new Date(string)`, shows them as `dd/MM/yyyy HH:mm` and sends `validFromDate` as `yyyy-MM-ddTHH:mm:00`.
-- **Open range.** A `validToDate` in year 2999 or later (the open range, `9999-12-31`) is shown as «—» (*sin fecha de fin*).
+- **Open range.** A `validToDate` that is null (NEO answers null for an open range) or in year 2999 or later (stored as `2999-12-31`) is shown as «—» (*sin fecha de fin*).
 - **Display rule for automatic daily ranges.** The downloader stores each daily range closing at `00:00` of the same day (`17/11/2026 00:00 → 17/11/2026 00:00`). For a synced row whose `validToDate` is at `00:00` on or after its `validFromDate` day, the page shows that day at `23:59` (`17/11/2026 23:59`). Manual ranges are shown as stored (`18/11/2026 14:29`).
 - **Numbers.** Rates are shown with 4 decimals through `formatGroupedNumber` (instance separators); the rate is typed in the shared `MaskedAmountInput` (ungrouped, instance decimal separator) and parsed with `parseLocaleNumber`.
 - **Downstream consumer:** these records are read at invoice completion by `InvoiceExchangeRateValidator.checkRateForCompletion()` (`com.etendoerp.go`) through the AD general-rate lookup. A missing rate for the needed pair is what triggers the `SMFCR_NoRateOnComplete` block on the invoice windows.
@@ -104,7 +106,7 @@ Not shared (no generic equivalent exists): the square currency-symbol chip and t
 8. *Imprimir*: the preview lists the rates of the listed currencies with the filters in the header.
 
 ## Automated evidence
-- `artifacts/conversion-rates/decisions.json` — `layoutType: "custom"`, `readOnly: false`, `etgoRateStatus` exposed read-only, `currency` / `divideRateBy` / `validToDate` / `organization` / `conversionRateType` read-only or hidden. `toCurrency` and `validFromDate` carry `readOnlyLogicJs: "!!record.id || record.sMFCRSynced === true"` (set on create only, matching the rate-only edit rule) next to the AD `readOnlyLogic: "@sMFCRSynced@='Y'"`: the JS variant drives the generated form, the AD string is the one `contract.mcp.json` carries (it has no JS variant). The backend enforces the rule on every channel anyway (`ETGO_ConvRateFieldNotEditable`, 400, with `error.field`).
+- `artifacts/conversion-rates/decisions.json` — `layoutType: "custom"`, `readOnly: false`, `etgoRateStatus` exposed read-only, `currency` / `divideRateBy` / `validToDate` / `organization` / `conversionRateType` read-only or hidden. `toCurrency` and `validFromDate` carry `readOnlyLogicJs: "!!record.id || record.sMFCRSynced === true"` (set on create only, matching the rate-only edit rule) next to the AD `readOnlyLogic: "@sMFCRSynced@='Y'"`: the JS variant drives the generated form, the AD string is the one `contract.mcp.json` carries (it has no JS variant). The backend enforces the rule on every channel anyway: an existing rate only changes through `updateManualRate`, which takes the rate alone.
 - `tools/app-shell/src/windows/custom/conversion-rates/` — `ConversionRatesPage.jsx` (toolbar, filters in the URL, print, dialogs), `CurrencyRatesList.jsx` (the accordion list), `ManualRateDialog.jsx`, `ConversionRateBadges.jsx`, `conversionRatesApi.js` (requests), `conversionRatesFormat.js` (`formatRate`), `conversionRatesModel.js` (pure helpers: wall clock, display rule, period bounds, criteria, currency list, no-future check).
 - Shared: `contract-ui/ListModalRowActions.jsx`, `ReportDrawer.jsx` (`rows`), `DeleteConfirmDialog.jsx` (`title` / `message`).
 - Backend: `com.etendoerp.go` (actions `currentRates`, `manualCurrencyOptions`, `previewManualRate`, `serverClock`, the write validation and `etgoRateStatus`); `com.smf.currency.conversionrate` owns the downloader.

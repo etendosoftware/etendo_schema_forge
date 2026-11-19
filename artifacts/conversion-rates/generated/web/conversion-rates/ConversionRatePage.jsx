@@ -50,15 +50,20 @@ export const api = {
     "conversionRate": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
+      "post": false,
+      "put": false,
+      "patch": false,
       "delete": true,
       "listUrl": "/sws/neo/conversion-rates/conversionRate",
       "detailUrl": "/sws/neo/conversion-rates/conversionRate/{id}",
       "supportedFilters": [
         "currency",
         "toCurrency"
+      ],
+      "methods": [
+        "GET",
+        "GETBYID",
+        "DELETE"
       ]
     }
   },
