@@ -515,9 +515,10 @@ Layout (Holded reference):
   body is a single row. Values use the app font. «IBAN *» is an input with one help line below
   (the inline error, or the empty-account hint).
 
-- **IBAN (of the remittance, never of the account).** `REM_REMITTANCE.IBAN`, property `iBAN`. A trigger
-  copies the account's IBAN into the remittance on create and, before processing, whenever the account
-  changes (overwriting what was typed). The remittance's own IBAN is what its SEPA file carries.
+- **IBAN (of the remittance, never of the account).** `REM_REMITTANCE.IBAN`, property `iBAN`. The server
+  (`RemittanceHeaderWrites`) writes the account's IBAN into the remittance on create when none is sent and,
+  before processing, when an update changes the account or switches between collection and payment
+  (overwriting what was stored); the database copies nothing. The remittance's own IBAN is what its SEPA file carries.
   - The input opens on the **effective** IBAN (the remittance's own, else the account's copy) . With a value
     (typed, copied from the account or the remittance's own) **nothing is shown under it**: no «De la remesa» / «De la
     cuenta». Only while the field is **empty** and the account has no valid IBAN, a neutral grey hint says «Esta cuenta no
@@ -528,7 +529,7 @@ Layout (Holded reference):
     (`onChange('iBAN', normalized)`, the `formFooter` slot's callback), so it travels in the body of the
     header's create (it can be given before the first save) or update, with the header's «Guardar». The
     server normalizes (upper case, no separators) and validates length 15–34 and mod 97 (422
-    `ETGO_RemittanceIbanInvalid`); a blank value is ignored (the trigger copies the account's). While
+    `ETGO_RemittanceIbanInvalid`); a blank value is ignored (the server then writes the account's, on create and when the account or the kind of type changes). While
     typing an invalid or empty value the form field is left empty.
   - **Save gate.** While the effective IBAN is not valid, the block registers a required, never-filled
     field (`sepaFileIban`) with the header form, so «Guardar» stays disabled. It is presented like any other
@@ -537,7 +538,7 @@ Layout (Holded reference):
     format error. The server refuses an IBAN-less save with 422 `ETGO_RemittanceAccountIbanRequired` («La remesa
     necesita un IBAN válido»).
   - Changing the account drops an IBAN the user had typed (the form field is cleared), because the
-    trigger replaces it on the server and a new remittance would otherwise still send it.
+    server resolves a blank value into the new account's IBAN and a new remittance would otherwise still send the typed one.
   - On a processed remittance the IBAN is read-only (the value only).
 - **Collection options** (scheme, financed) sit above this card. See «Collection options» below.
 - **Creditor identifier (AT-02).** A plain input like the IBAN, for a collection type (hidden on payment). A
@@ -567,7 +568,7 @@ Layout (Holded reference):
   (it has no creditor identifier; `saveCreditorId` on it answers 422). On a remittance that is **not
   saved yet** (record `new`) the value (the account's, or the proposal) is read-only with the note that
   it can be edited once the remittance is saved: the server has nothing to store a copy on until then, and
-  the creation trigger copies the account's value.
+  the server writes the account's value on create.
 
 **Contract (confirmed by the backend, isolated in `sepaFileDataApi.js`):**
 
@@ -839,7 +840,7 @@ backend does not send it, the block degrades to `sepaFileData.collection === tru
 ### SEPA creditor identifier
 
 REM stores the bank account default and the collection's own identifier separately. A collection
-copies the account default when it is created; older collections without a copy take the account's
+gets the account default from the server when it is created (the database copies nothing); older collections without a copy take the account's
 first value on confirmation or regeneration. The file uses the remittance's copy, so later changes
 to the bank account apply to future collections only. The UI is described under «Datos para el fichero
 SEPA» above; the account's field in [financial-account-management.md](financial-account-management.md).
