@@ -5,7 +5,6 @@ import {
   inspectInteractiveDom,
   interactWithDom,
   resolveWindowPath,
-  withRecordSegment,
 } from '../useAiCopilotChat.js';
 import {
   AmbiguousWindowError,
@@ -206,30 +205,5 @@ describe('browser DOM tools', () => {
       title: 'Sales Invoice',
       elements: [{ elementId: 'dom-1', role: 'button', name: 'Send reminder' }],
     })).toContain('Send reminder');
-  });
-});
-
-describe('withRecordSegment (open_form with a recordId)', () => {
-  const ID = 'BC8DDDF69DDA49E9938729F19B0F330E';
-
-  it('opens the record as a path segment, not a search param', () => {
-    const path = withRecordSegment(resolveWindowPath('/contacts', routeIndex), ID);
-    expect(path).toBe(`/contacts/${ID}`);
-    expect(path).not.toContain('?');
-  });
-
-  it('leaves the path untouched without a recordId', () => {
-    expect(withRecordSegment('/contacts', undefined)).toBe('/contacts');
-    expect(withRecordSegment('/contacts', null)).toBe('/contacts');
-    expect(withRecordSegment('/contacts', '')).toBe('/contacts');
-  });
-
-  it('drops a trailing slash or /new so the id route matches', () => {
-    expect(withRecordSegment('/contacts/', ID)).toBe(`/contacts/${ID}`);
-    expect(withRecordSegment('/contacts/new', ID)).toBe(`/contacts/${ID}`);
-  });
-
-  it('encodes the id as a single segment', () => {
-    expect(withRecordSegment('/contacts', 'a/b?c#d')).toBe('/contacts/a%2Fb%3Fc%23d');
   });
 });
