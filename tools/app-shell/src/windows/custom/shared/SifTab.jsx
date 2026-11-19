@@ -340,6 +340,7 @@ export default function SifTab({
     getVal,
     getDateVal,
     setSiiType,
+    siiTaxType,
   } = useSifFieldPatcher({ data, recordId, token, apiBaseUrl, onChange, locked: accessReadOnly });
   const apiFetch = useApiFetch(apiBaseUrl);
 
@@ -700,6 +701,7 @@ export default function SifTab({
                 getDateVal={getDateVal}
                 onChange={onChange}
                 readOnly={siiFieldReadOnly}
+                siiTaxType={siiTaxType}
                 step={1}
                 data-testid="SiiImportDuaSection__b99c8b" />
             )}

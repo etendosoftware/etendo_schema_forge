@@ -27,6 +27,10 @@ import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
  * and DUA date unless Multiple DUA is checked, so both carry the red `*` (and the error outline
  * while empty) in that case.
  *
+ * LC (customs complementary liquidation): the field holds the liquidation number, not a DUA —
+ * no 18-character counter; a non-blocking warning when it does not start with the accepted
+ * prefixes (IVA: LC, A01, A02 — AEAT error 1271; IGIC: CLC, 599), see `isLcNumberPrefixOff`.
+ *
  * DUA format: a DUA has 18 characters. The counter and the warning are a hint only — the SII
  * module checks the DUA format for IGIC organizations only, so for IVA it must never block a save.
  *
@@ -39,6 +43,32 @@ const ERROR_OUTLINE = 'border-destructive focus-visible:ring-destructive focus-w
 
 function isChecked(value) {
   return value === true || value === 'Y';
+}
+
+// Prefixes of a customs complementary-liquidation number (Tipo factura LC). AEAT SII for IVA
+// rejects others with error 1271; Classic's IGIC validation
+// (SII2025ReceivedInvoicesValidations.evaluateDocNoForF5OrLCInvoices) requires CLC or 599.
+export const LC_PREFIXES = Object.freeze({ IVA: ['LC', 'A01', 'A02'], IGIC: ['CLC', '599'] });
+
+/**
+ * True when a non-empty LC number does not start with an accepted prefix (hint only, never
+ * blocks). With an unknown tax type, either set is accepted.
+ *
+ * @param {string} value the DUA field value
+ * @param {'IVA'|'IGIC'|null} taxType the organization's SII tax type
+ */
+export function isLcNumberPrefixOff(value, taxType) {
+  const v = String(value ?? '').trim().toUpperCase();
+  if (!v) return false;
+  const prefixes = LC_PREFIXES[taxType] ?? [...LC_PREFIXES.IVA, ...LC_PREFIXES.IGIC];
+  return !prefixes.some(prefix => v.startsWith(prefix));
+}
+
+/** i18n key of the LC prefix hint for the organization's tax type. */
+export function lcHintKey(taxType) {
+  if (taxType === 'IGIC') return 'sifDataTabs.dua.lcHintIgic';
+  if (taxType === 'IVA') return 'sifDataTabs.dua.lcHintIva';
+  return 'sifDataTabs.dua.lcHintAny';
 }
 
 /** True when a non-empty DUA does not have its 18 characters (hint only, never blocks). */
@@ -66,7 +96,9 @@ function DuaField({ label, htmlFor, required, aside, helper, children }) {
   );
 }
 
-export default function SiiImportDuaSection({ ui, siiTypeKey, getVal, getDateVal, onChange, readOnly, step }) {
+export default function SiiImportDuaSection({
+  ui, siiTypeKey, getVal, getDateVal, onChange, readOnly, step, siiTaxType = null,
+}) {
   const enabled = useFeatureFlag(SII_IMPORT_DUA) === true;
   if (!enabled || !DUA_TYPE_KEYS.has(siiTypeKey)) return null;
 
@@ -76,6 +108,10 @@ export default function SiiImportDuaSection({ ui, siiTypeKey, getVal, getDateVal
   const duaDate = getDateVal('aeatsiiFechaDua');
   const duaMissing = duaRequired && !dua.trim();
   const dateMissing = duaRequired && !duaDate;
+  // LC: the field holds the customs complementary-liquidation number, not an 18-char DUA.
+  const isLc = siiTypeKey === 'LC';
+  const showLengthHint = !isLc && isDuaLengthOff(dua);
+  const showLcHint = isLc && isLcNumberPrefixOff(dua, siiTaxType);
 
   const modeControl = (
     <div className="flex items-center gap-2" data-testid="SiiImportDuaSection__mode">
@@ -105,13 +141,14 @@ export default function SiiImportDuaSection({ ui, siiTypeKey, getVal, getDateVal
             label={ui('sifDataTabs.field.dua')}
             htmlFor="sif-dua"
             required={duaRequired}
-            aside={(
+            aside={isLc ? null : (
               <span
-                className={`text-xs tabular-nums ${isDuaLengthOff(dua) ? 'text-status-warning-foreground' : 'text-muted-foreground'}`}
+                className={`text-xs tabular-nums ${showLengthHint ? 'text-status-warning-foreground' : 'text-muted-foreground'}`}
                 data-testid="SiiImportDuaSection__duaCounter">
                 {`${dua.trim().length} / ${DUA_LENGTH}`}
               </span>
             )}
+            helper={isLc ? ui('sifDataTabs.dua.lcHelper') : undefined}
             data-testid="DuaField__dua">
             <Input
               id="sif-dua"
@@ -139,7 +176,7 @@ export default function SiiImportDuaSection({ ui, siiTypeKey, getVal, getDateVal
               className={dateMissing ? ERROR_OUTLINE : undefined}
               data-testid="DateField__siiDuaDate" />
           </DuaField>
-          {isDuaLengthOff(dua) && (
+          {showLengthHint && (
             <InfoBanner
               tone="warning"
               icon={TriangleAlert}
@@ -147,6 +184,16 @@ export default function SiiImportDuaSection({ ui, siiTypeKey, getVal, getDateVal
               className="col-span-2"
               data-testid="SiiImportDuaSection__duaHint">
               {ui('sifDataTabs.dua.lengthHint')}
+            </InfoBanner>
+          )}
+          {showLcHint && (
+            <InfoBanner
+              tone="warning"
+              icon={TriangleAlert}
+              dismissible={false}
+              className="col-span-2"
+              data-testid="SiiImportDuaSection__lcHint">
+              {ui(lcHintKey(siiTaxType))}
             </InfoBanner>
           )}
         </div>
