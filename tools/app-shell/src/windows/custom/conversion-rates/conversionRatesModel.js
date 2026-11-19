@@ -15,10 +15,7 @@
 /** A validity end at or after this year means "no end date" (the open range, `9999-12-31`). */
 export const OPEN_END_YEAR = 2999;
 
-/** Rows per currency the history shows until the user asks for all of them. */
-export const RECENT_ROWS_PER_CURRENCY = 3;
-
-/** Upper bound of one history read; the history is grouped client-side from a single read. */
+/** Upper bound of one history read; the rates are grouped by currency client-side from one read. */
 export const HISTORY_MAX_ROWS = 5000;
 
 /** `etgoRateStatus` values (computed by the backend): the rate rules now, or it no longer does. */
@@ -27,9 +24,6 @@ export const RATE_STATUS = Object.freeze({ CURRENT: 'CURRENT', HISTORIC: 'HISTOR
 /** Period filter ids of the history. */
 export const PERIODS = Object.freeze(['last30', 'thisMonth', 'thisYear', 'custom']);
 export const DEFAULT_PERIOD = 'last30';
-
-/** Origin filter ids of the history. `auto` is `sMFCRSynced = true`. */
-export const ORIGINS = Object.freeze(['all', 'auto', 'manual']);
 
 /** Status filter ids of the history (`all` plus every `RATE_STATUS`). */
 export const STATUSES = Object.freeze(['all', RATE_STATUS.CURRENT, RATE_STATUS.HISTORIC]);
@@ -207,17 +201,14 @@ export function periodBounds(period, custom = {}, reference = new Date()) {
  * @param {object} filters
  * @param {string|null} filters.orgCurrencyId
  * @param {string|null} [filters.currencyId] `toCurrency` filter (null = all)
- * @param {string} [filters.origin] one of {@link ORIGINS}
  * @param {string} [filters.status] one of {@link STATUSES}
  * @param {{from: string|null, to: string|null}} [filters.bounds] from {@link periodBounds}
  * @returns {Array<object>}
  */
-export function buildHistoryCriteria({ orgCurrencyId, currencyId, origin = 'all', status = 'all', bounds }) {
+export function buildHistoryCriteria({ orgCurrencyId, currencyId, status = 'all', bounds }) {
   const criteria = [];
   if (orgCurrencyId) criteria.push({ fieldName: 'currency', operator: 'equals', value: orgCurrencyId });
   if (currencyId) criteria.push({ fieldName: 'toCurrency', operator: 'equals', value: currencyId });
-  if (origin === 'auto') criteria.push({ fieldName: 'sMFCRSynced', operator: 'equals', value: true });
-  if (origin === 'manual') criteria.push({ fieldName: 'sMFCRSynced', operator: 'equals', value: false });
   if (status && status !== 'all') criteria.push({ fieldName: 'etgoRateStatus', operator: 'equals', value: status });
   if (bounds?.to) criteria.push({ fieldName: 'validFromDate', operator: 'lessThan', value: bounds.to });
   if (bounds?.from) criteria.push({ fieldName: 'validToDate', operator: 'greaterOrEqual', value: bounds.from });
@@ -249,44 +240,67 @@ function compareValues(a, b) {
 }
 
 /**
- * Groups forward rows by destination currency, in the order of `currencyOrder` (the "Vigentes
- * hoy" cards) and then by ISO code. Inside each group the rows are newest first; `visible` is
- * the slice to render: the {@link RECENT_ROWS_PER_CURRENCY} most recent unless `showAll`, then
- * ordered by `sort` (`{key, direction}`).
+ * The accordion list: one entry per currency that has rates — every currency with a rate in
+ * force now (`currentRates`, in its order) plus any other currency that has rows in the read
+ * (then by ISO code) — narrowed to `currencyId` when the Divisa filter is set. Each entry carries
+ * the header data (current forward rate, its start or the last download) and `rows`: its rates of
+ * the period, newest first, then ordered by `sort` (`{key, direction}`).
  *
- * @param {Array<object>} rows
- * @param {object} [opts]
- * @param {string[]} [opts.currencyOrder] currency ids in display order
- * @param {boolean} [opts.showAll]
- * @param {{key: string, direction: 'asc'|'desc'}} [opts.sort]
- * @returns {Array<{currencyId: string, identifier: string, rows: object[], visible: object[]}>}
+ * A currency known only from its rows (no rate in force) takes its ISO code from the row
+ * identifier and its origin from the rows' `sMFCRSynced`; name and symbol stay empty for the
+ * caller to fill.
+ *
+ * @param {Array<object>} currentRates action `currentRates`
+ * @param {Array<object>} rows forward rows of the period
+ * @param {{currencyId?: string|null, sort?: {key: string, direction: 'asc'|'desc'}}} [opts]
+ * @returns {Array<{currencyId: string, isoCode: string, name: string, symbol: string,
+ *   automatic: boolean, rate: number|null, validFrom: string|null, lastDownloadAt: string|null,
+ *   rows: object[]}>}
  */
-export function groupRatesByCurrency(rows, { currencyOrder = [], showAll = false, sort } = {}) {
-  const groups = new Map();
-  for (const row of rows ?? []) {
-    const id = row.toCurrency;
-    if (!groups.has(id)) groups.set(id, { currencyId: id, identifier: row['toCurrency$_identifier'] ?? '', rows: [] });
-    groups.get(id).rows.push(row);
+export function buildCurrencyList(currentRates, rows, { currencyId = null, sort } = {}) {
+  const byId = new Map();
+  for (const r of currentRates ?? []) {
+    byId.set(r.currencyId, {
+      currencyId: r.currencyId,
+      isoCode: r.isoCode ?? '',
+      name: r.name ?? '',
+      symbol: r.symbol ?? '',
+      automatic: r.origin === 'AUTO',
+      rate: r.rate ?? null,
+      validFrom: r.validFrom ?? null,
+      lastDownloadAt: r.lastDownloadAt ?? null,
+      rows: [],
+    });
   }
-  const rank = (id) => {
-    const i = currencyOrder.indexOf(id);
-    return i === -1 ? Number.MAX_SAFE_INTEGER : i;
-  };
-  const ordered = [...groups.values()].sort((a, b) => (rank(a.currencyId) - rank(b.currencyId))
-    || a.identifier.localeCompare(b.identifier));
-  for (const group of ordered) {
-    group.rows.sort((a, b) => compareValues(b.validFromDate, a.validFromDate));
-    const slice = showAll ? [...group.rows] : group.rows.slice(0, RECENT_ROWS_PER_CURRENCY);
+  const extra = [];
+  for (const row of rows ?? []) {
+    let entry = byId.get(row.toCurrency);
+    if (!entry) {
+      entry = {
+        currencyId: row.toCurrency,
+        isoCode: row['toCurrency$_identifier'] ?? '',
+        name: '',
+        symbol: '',
+        automatic: row.sMFCRSynced === true,
+        rate: null,
+        validFrom: null,
+        lastDownloadAt: null,
+        rows: [],
+      };
+      byId.set(row.toCurrency, entry);
+      extra.push(entry);
+    }
+    entry.rows.push(row);
+  }
+  extra.sort((a, b) => a.isoCode.localeCompare(b.isoCode));
+  const ordered = [...(currentRates ?? []).map((r) => byId.get(r.currencyId)), ...extra]
+    .filter((e) => !currencyId || e.currencyId === currencyId);
+  for (const entry of ordered) {
+    entry.rows.sort((a, b) => compareValues(b.validFromDate, a.validFromDate));
     if (sort?.key) {
       const sign = sort.direction === 'asc' ? 1 : -1;
-      slice.sort((a, b) => sign * compareValues(a[sort.key], b[sort.key]));
+      entry.rows.sort((a, b) => sign * compareValues(a[sort.key], b[sort.key]));
     }
-    group.visible = slice;
   }
   return ordered;
-}
-
-/** Whether any group has more rows than the recent slice shows. */
-export function hasHiddenRows(groups) {
-  return (groups ?? []).some((g) => g.rows.length > RECENT_ROWS_PER_CURRENCY);
 }

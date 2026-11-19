@@ -10,7 +10,7 @@ import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchS
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 import { extractErrorMessage } from '@/hooks/useEntity.js';
 import { OriginBadge } from './ConversionRateBadges.jsx';
-import { formatRate } from './CurrentRatesSection.jsx';
+import { formatRate } from './conversionRatesFormat.js';
 import {
   fetchManualCurrencyOptions, fetchServerClock, previewManualRate, createManualRate, updateManualRate,
 } from './conversionRatesApi.js';
@@ -29,7 +29,8 @@ const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
  * - `newCurrency` — "Nueva divisa": the destination is picked among the active currencies that
  *   have no rates yet (`manualCurrencyOptions {withoutRates: true}`);
  * - `newRate` — "Nueva tasa · CHF": the destination is fixed (a manual card or group header);
- * - `edit` — "Modificar tasa · CHF": PATCH of a manual row's rate and/or start (any state).
+ * - `edit` — "Modificar tasa · CHF": PATCH of a manual row's RATE only (any state); the range is
+ *   read-only (change it by deleting the rate and creating a new one).
  */
 export const DIALOG_MODES = Object.freeze({ NEW_CURRENCY: 'newCurrency', NEW_RATE: 'newRate', EDIT: 'edit' });
 
@@ -60,6 +61,23 @@ function initialState(mode, row, now = nowWallClock()) {
     };
   }
   return { rateText: '', dateIso: wallClockDate(now), time: wallClockTime(now) };
+}
+
+/** Message keys whose refusal belongs to "Válido desde" when the answer names no field. */
+const START_FIELD_ERROR_KEYS = ['ETGO_ConvRateOverlap', 'ETGO_ConvRateFutureStart', 'ETGO_ConvRateInvalidValidFrom'];
+
+/**
+ * The field a refusal belongs to (`toCurrency` | `multipleRateBy` | `validFromDate`), or null:
+ * `errorField` of a `previewManualRate` answer, `field` of a write's `error` body, or — when
+ * neither is present — `validFromDate` for one of {@link START_FIELD_ERROR_KEYS} in `errorKey` /
+ * `messageKeys`.
+ */
+export function refusedField(answer) {
+  if (!answer || typeof answer !== 'object') return null;
+  const named = answer.errorField ?? answer.field;
+  if (named) return named;
+  const keys = [answer.errorKey, ...(Array.isArray(answer.messageKeys) ? answer.messageKeys : [])];
+  return keys.some((k) => START_FIELD_ERROR_KEYS.includes(k)) ? 'validFromDate' : null;
 }
 
 /** The inverse of a rate, for the edit summary only (the server stores the real one). */
@@ -206,7 +224,7 @@ export function ManualRateDialog({
 
   // The server's "now": default of Válido desde (new rates) and its upper bound (every mode).
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || mode === DIALOG_MODES.EDIT) return undefined;
     const ctrl = new AbortController();
     setServerNow(null);
     fetchServerClock(apiFetch, ctrl.signal)
@@ -262,7 +280,10 @@ export function ManualRateDialog({
   let dateError = null;
   if (touched.date && validFrom == null) dateError = ui('convRateValidFromRequired');
   else if (inFuture) dateError = ui('convRateValidFromFuture');
-  const inputsValid = Boolean(dest && rate != null && validFrom && !inFuture);
+  // Modificar: only the rate is editable (the range is fixed; change it by deleting and creating).
+  const inputsValid = isEdit
+    ? rate != null
+    : Boolean(dest && rate != null && validFrom && !inFuture);
 
   // Debounced preview of what creating the rate would do; stale answers are aborted.
   const previewSeq = useRef(0);
@@ -289,6 +310,11 @@ export function ManualRateDialog({
   }, [open, isEdit, inputsValid, apiFetch, destCurrencyId, rate, validFrom]);
 
   const previewError = preview?.error ?? null;
+  const [submitErrorField, setSubmitErrorField] = useState(null);
+  // A refusal bound to a field (overlap / future start → Válido desde) marks that field.
+  const errorField = (previewError && refusedField(preview)) || (submitError && submitErrorField) || null;
+  const startInError = Boolean(dateError) || errorField === 'validFromDate';
+  const rateInError = Boolean(rateError) || errorField === 'multipleRateBy';
   const canSubmit = inputsValid && !submitting && !previewError;
 
   async function submit(event) {
@@ -297,17 +323,15 @@ export function ManualRateDialog({
     if (!canSubmit) return;
     setSubmitting(true);
     setSubmitError(null);
+    setSubmitErrorField(null);
     try {
       let res;
       if (isEdit) {
-        const body = {};
-        if (rate !== Number(row.multipleRateBy)) body.multipleRateBy = rate;
-        if (validFrom !== toWallClock(parseWallClock(row.validFromDate))) body.validFromDate = validFrom;
-        if (Object.keys(body).length === 0) {
+        if (rate === Number(row.multipleRateBy)) {
           onClose();
           return;
         }
-        res = await updateManualRate(apiFetch, row.id, body);
+        res = await updateManualRate(apiFetch, row.id, { multipleRateBy: rate });
       } else {
         res = await createManualRate(apiFetch, {
           toCurrency: dest.currencyId,
@@ -316,6 +340,8 @@ export function ManualRateDialog({
         });
       }
       if (!res.ok) {
+        const body = await res.clone().json().catch(() => null);
+        setSubmitErrorField(refusedField(body?.error ?? body));
         setSubmitError(await extractErrorMessage(res, ui));
         return;
       }
@@ -333,6 +359,64 @@ export function ManualRateDialog({
   let submitLabel = ui('convRateCreateCurrency');
   if (mode === DIALOG_MODES.NEW_RATE) submitLabel = ui('convRateCreateRate');
   if (isEdit) submitLabel = ui('convRateSaveChanges');
+
+  const rateField = (
+    <Field label={ui('convRateRate')} required data-testid="Field__convrate-rate">
+      <div
+        className={`flex ${FIELD_HEIGHT} items-center gap-1.5 rounded-lg border bg-card px-3 text-sm shadow-[0px_1px_2px_rgba(18,18,23,0.05)] focus-within:ring-2 focus-within:ring-focus-ring ${rateInError ? 'border-destructive' : 'border-[hsl(var(--border-control))]'}`}>
+        <span className="whitespace-nowrap text-muted-foreground">{ui('convRateOneOrg', { currency: orgIso })}</span>
+        <MaskedAmountInput
+          bare
+          grouping={false}
+          value={form.rateText}
+          onChange={(clean) => setForm((f) => ({ ...f, rateText: clean }))}
+          onBlur={() => setTouched((t) => ({ ...t, rate: true }))}
+          isRawAllowed={(raw) => !String(raw).includes('-')}
+          aria-label={ui('convRateRate')}
+          aria-invalid={rateInError ? true : undefined}
+          aria-describedby={rateError ? 'convrate-rate-error' : undefined}
+          className="w-full min-w-0 border-0 bg-transparent p-0 outline-none focus-visible:ring-0 tabular-nums"
+          data-testid="convrate-dialog-rate" />
+        <span className="text-muted-foreground">{destIso}</span>
+      </div>
+      {rateError && (
+        <span id="convrate-rate-error" className="block text-xs font-normal text-destructive" data-testid="convrate-dialog-rate-error">
+          {rateError}
+        </span>
+      )}
+    </Field>
+  );
+
+  // Válido desde: in error (red border, aria-invalid) on a field error or on a server refusal of
+  // the start (overlap, future); the hint stays under it, as in the error design.
+  const validFromField = (
+    <Field label={ui('convRateValidFromDateTime')} required data-testid="Field__convrate-from">
+      <div className={`flex gap-2${startInError ? ' [&>div]:border-destructive' : ''}`} data-invalid={startInError ? 'true' : undefined}>
+        <DateField
+          value={form.dateIso}
+          onChange={(iso) => {
+            setForm((f) => ({ ...f, dateIso: iso }));
+            setTouched((t) => ({ ...t, date: true }));
+          }}
+          required
+          data-testid="convrate-dialog-date" />
+        <Input
+          type="time"
+          value={form.time}
+          onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
+          onBlur={() => setTouched((t) => ({ ...t, date: true }))}
+          required
+          aria-label={ui('convRateTime')}
+          aria-invalid={startInError ? true : undefined}
+          className={`w-[96px] shrink-0 bg-card${startInError ? ' border-destructive' : ''}`}
+          data-testid="convrate-dialog-time" />
+      </div>
+      {dateError && (
+        <span className="block text-xs font-normal text-destructive" data-testid="convrate-dialog-date-error">{dateError}</span>
+      )}
+      <span className="block text-xs font-normal text-muted-foreground">{ui('convRateValidFromHint')}</span>
+    </Field>
+  );
 
   const orgText = orgName ? `${orgIso} · ${orgName}` : orgIso;
   const destText = dest ? [dest.isoCode, dest.name].filter(Boolean).join(' · ') : '';
@@ -409,13 +493,6 @@ export function ManualRateDialog({
                 {optionsLoaded && options.length === 0 ? ui('convRateNoCurrencyAvailable') : ui('convRateNewCurrencyHint')}
               </div>
             )}
-            {isEdit && row && (
-              <div className="-mt-1.5 text-xs text-muted-foreground" data-testid="convrate-dialog-range">
-                {isOpenEnded(row.validToDate)
-                  ? ui('convRateEditRangeOpen', { from: formatWallClock(row.validFromDate) })
-                  : ui('convRateEditRangeClosed', { from: formatWallClock(row.validFromDate), to: displayValidTo(row) })}
-              </div>
-            )}
             {mode === DIALOG_MODES.NEW_RATE && currency?.rate != null && (
               <div className="-mt-1.5 text-xs text-muted-foreground" data-testid="convrate-dialog-current">
                 {ui('convRateCurrentRateLine', {
@@ -427,61 +504,37 @@ export function ManualRateDialog({
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <Field label={ui('convRateRate')} required data-testid="Field__convrate-rate">
-                <div
-                  className={`flex ${FIELD_HEIGHT} items-center gap-1.5 rounded-lg border bg-card px-3 text-sm shadow-[0px_1px_2px_rgba(18,18,23,0.05)] focus-within:ring-2 focus-within:ring-focus-ring ${rateError ? 'border-destructive' : 'border-[hsl(var(--border-control))]'}`}>
-                  <span className="whitespace-nowrap text-muted-foreground">{ui('convRateOneOrg', { currency: orgIso })}</span>
-                  <MaskedAmountInput
-                    bare
-                    grouping={false}
-                    value={form.rateText}
-                    onChange={(clean) => setForm((f) => ({ ...f, rateText: clean }))}
-                    onBlur={() => setTouched((t) => ({ ...t, rate: true }))}
-                    isRawAllowed={(raw) => !String(raw).includes('-')}
-                    aria-label={ui('convRateRate')}
-                    aria-invalid={rateError ? true : undefined}
-                    aria-describedby={rateError ? 'convrate-rate-error' : undefined}
-                    className="w-full min-w-0 border-0 bg-transparent p-0 outline-none focus-visible:ring-0 tabular-nums"
-                    data-testid="convrate-dialog-rate" />
-                  <span className="text-muted-foreground">{destIso}</span>
+            {isEdit ? (
+              <>
+                <div className="max-w-[240px]">{rateField}</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label={ui('convRateValidFromDateTime')} data-testid="Field__convrate-from">
+                    <Input
+                      value={formatWallClock(row?.validFromDate)}
+                      readOnly
+                      disabled
+                      aria-label={ui('convRateValidFromDateTime')}
+                      data-testid="convrate-dialog-valid-from" />
+                  </Field>
+                  <Field label={ui('convRateValidToDateTime')} data-testid="Field__convrate-to">
+                    <Input
+                      value={displayValidTo(row) ?? ui('convRateOpenEnd')}
+                      readOnly
+                      disabled
+                      aria-label={ui('convRateValidToDateTime')}
+                      data-testid="convrate-dialog-valid-to" />
+                  </Field>
                 </div>
-                {rateError && (
-                  <span id="convrate-rate-error" className="block text-xs font-normal text-destructive" data-testid="convrate-dialog-rate-error">
-                    {rateError}
-                  </span>
-                )}
-              </Field>
-              <Field label={ui('convRateValidFromDateTime')} required data-testid="Field__convrate-from">
-                <div className="flex gap-2">
-                  <DateField
-                    value={form.dateIso}
-                    onChange={(iso) => {
-                      setForm((f) => ({ ...f, dateIso: iso }));
-                      setTouched((t) => ({ ...t, date: true }));
-                    }}
-                    required
-                    data-testid="convrate-dialog-date" />
-                  <Input
-                    type="time"
-                    value={form.time}
-                    onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
-                    onBlur={() => setTouched((t) => ({ ...t, date: true }))}
-                    required
-                    aria-label={ui('convRateTime')}
-                    aria-invalid={dateError ? true : undefined}
-                    className={`w-[96px] shrink-0 bg-card${dateError ? ' border-destructive' : ''}`}
-                    data-testid="convrate-dialog-time" />
+                <div className="-mt-1.5 text-xs text-muted-foreground" data-testid="convrate-dialog-edit-hint">
+                  {ui('convRateEditOnlyRate')}
                 </div>
-                {dateError ? (
-                  <span className="block text-xs font-normal text-destructive" data-testid="convrate-dialog-date-error">{dateError}</span>
-                ) : (
-                  mode === DIALOG_MODES.NEW_RATE && (
-                    <span className="block text-xs font-normal text-muted-foreground">{ui('convRateValidFromHint')}</span>
-                  )
-                )}
-              </Field>
-            </div>
+              </>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {rateField}
+                {validFromField}
+              </div>
+            )}
 
             {isEdit && row && (
               <>
@@ -495,7 +548,7 @@ export function ManualRateDialog({
                 <EditNote ui={ui} data-testid="EditNote__51f9a2" />
               </>
             )}
-            {!isEdit && (
+            {!isEdit && !previewError && (
               <PreviewSummary
                 preview={preview}
                 mode={mode}

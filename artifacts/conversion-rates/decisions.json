@@ -14,9 +14,9 @@
       "fields": {
         "organization": { "grid": false, "form": false, "visibility": "readOnly" },
         "currency": { "grid": true, "form": true, "searchable": true, "inputMode": "selector", "visibility": "readOnly", "publicApi": { "exposed": true } },
-        "toCurrency": { "grid": true, "form": true, "searchable": true, "inputMode": "selector", "readOnlyLogic": "@sMFCRSynced@='Y'", "publicApi": { "exposed": true } },
+        "toCurrency": { "grid": true, "form": true, "searchable": true, "inputMode": "selector", "readOnlyLogic": "@sMFCRSynced@='Y'", "readOnlyLogicJs": "!!record.id || record.sMFCRSynced === true", "publicApi": { "exposed": true } },
         "conversionRateType": { "grid": false, "form": false, "visibility": "readOnly" },
-        "validFromDate": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'", "publicApi": { "exposed": true } },
+        "validFromDate": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'", "readOnlyLogicJs": "!!record.id || record.sMFCRSynced === true", "publicApi": { "exposed": true }, "_note": "ETP-6365: set on create only; an existing rate changes its rate alone (PATCH multipleRateBy)." },
         "validToDate": { "grid": true, "form": true, "visibility": "readOnly", "publicApi": { "exposed": true } },
         "multipleRateBy": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'", "type": "number", "publicApi": { "exposed": true }, "_note": "Explicit numeric type: AD reference 800019 (Rate) is not mapped by the core extractor, so it is extracted as string while NEO answers a JSON number. Remove once ref 800019 is mapped in schema_forge_core." },
         "divideRateBy": { "grid": true, "form": true, "visibility": "readOnly", "type": "number", "publicApi": { "exposed": true }, "_note": "Explicit numeric type, same reason as multipleRateBy. Read-only since ETP-6365: the server derives it from multipleRateBy." },

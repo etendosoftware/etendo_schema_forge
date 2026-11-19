@@ -3,8 +3,8 @@ import { EntityForm } from '@/components/contract-ui';
 // @sf-generated-start fields:conversionRate
 const fields = [
   { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency', required: true, readOnly: true, section: 'other', reference: 'Currency', inputMode: 'selector', defaultValue: '@SQL=SELECT C_CURRENCY_ID FROM AD_CLIENT  WHERE AD_CLIENT_ID = @AD_CLIENT_ID@' },
-  { key: 'toCurrency', column: 'C_Currency_ID_To', type: 'selector', label: 'To Currency', required: true, section: 'principal', reference: 'Currency', inputMode: 'selector', defaultValue: '@SQL=SELECT C_CURRENCY_ID FROM AD_CLIENT  WHERE AD_CLIENT_ID = @AD_CLIENT_ID@', readOnlyLogic: (record) => (record['sMFCRSynced'] === true || record['sMFCRSynced'] === 'Y') },
-  { key: 'validFromDate', column: 'ValidFrom', type: 'date', label: 'Valid From Date', required: true, section: 'principal', readOnlyLogic: (record) => (record['sMFCRSynced'] === true || record['sMFCRSynced'] === 'Y') },
+  { key: 'toCurrency', column: 'C_Currency_ID_To', type: 'selector', label: 'To Currency', required: true, section: 'principal', reference: 'Currency', inputMode: 'selector', defaultValue: '@SQL=SELECT C_CURRENCY_ID FROM AD_CLIENT  WHERE AD_CLIENT_ID = @AD_CLIENT_ID@', readOnlyLogic: (record) => !!record.id || record.sMFCRSynced === true },
+  { key: 'validFromDate', column: 'ValidFrom', type: 'date', label: 'Valid From Date', required: true, section: 'principal', readOnlyLogic: (record) => !!record.id || record.sMFCRSynced === true },
   { key: 'validToDate', column: 'ValidTo', type: 'date', label: 'Valid To Date', readOnly: true, section: 'other' },
   { key: 'multipleRateBy', column: 'MultiplyRate', type: 'number', label: 'Multiple Rate By', required: true, section: 'principal', readOnlyLogic: (record) => (record['sMFCRSynced'] === true || record['sMFCRSynced'] === 'Y') },
   { key: 'divideRateBy', column: 'DivideRate', type: 'number', label: 'Divide Rate By', required: true, readOnly: true, section: 'other' },
