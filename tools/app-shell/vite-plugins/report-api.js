@@ -140,6 +140,9 @@ function listReports() {
             outputs: contract.outputs,
             parameters: contract.parameters || [],
             sections: contract.sections || [],
+            // ETP-6084: the dynamic view's chart-tree contract (mirrors core's buildReportDescriptor).
+            ...(contract.tree ? { tree: contract.tree } : {}),
+            ...(contract.amountColumns ? { amountColumns: contract.amountColumns } : {}),
           });
         }
       } catch { /* skip malformed */ }

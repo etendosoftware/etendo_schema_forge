@@ -1,3 +1,6 @@
+// @covers artifacts/report-trial-balance/template.hbs
+// @covers artifacts/report-trial-balance/template-excel.hbs
+// @covers artifacts/report-trial-balance/template-csv.hbs
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -345,5 +348,97 @@ describe('report-trial-balance — template-csv.hbs dimension column (ETP-5013)'
     const lines = renderCsv({ grouped: true }).trimEnd().split('\n');
     assert.match(lines[1], /^35000000,Productos terminados,,/, 'blank dimension is an empty field, not a missing one');
     assert.doesNotMatch(lines[1], /undefined|null/);
+  });
+});
+
+// ── Part 4 (ETP-6084): the chart-tree shape, used when meta.chartTotals is present ─────────────
+// The old flat/grouped shape (Parts 1-3) must stay byte-identical; the dynamic view's tree adds a branch.
+
+function renderChart(file, { mode = '', movements = false, balanced = true } = {}) {
+  const built = buildJsreportHelpersString(HELPERS_CODE);
+  const names = [...built.matchAll(/^function\s+(\w+)\s*\(/gm)].map((m) => m[1]);
+  // eslint-disable-next-line no-new-func
+  const helpers = new Function(`${built}\nreturn { ${names.join(', ')} };`)();
+  const hb = Handlebars.create();
+  for (const [name, fn] of Object.entries(helpers)) hb.registerHelper(name, fn);
+  const cell = (amount) => ({ amount, sly: { amount: amount - 1, variationAmount: 1, variationPct: 10 }, prev: { amount: amount - 2, variationAmount: 2, variationPct: -5 } });
+  const node = (value, name, indent, elementlevel, isDimension, [o, d, c, cl]) => ({
+    value, name, indent, elementlevel, isDimension, account_value: isDimension ? '430' : value,
+    cells: [{ opening: cell(o), debit: cell(d), credit: cell(c), closing: cell(cl) }] });
+  const rows = [node('43', 'Deudores', 0, 'C', false, [0, 10, 5, 5]), node('430', 'Clientes', 1, 'S', false, [0, 10, 5, 5]), node('', 'Laura, M', 2, 'DIM', true, [0, 10, 5, 5])];
+  const meta = {
+    ...buildMeta({ groupBy: '', grouped: false }),
+    labels: { ...LABELS, level: 'Nivel', periodCompared: 'Comparado', periodVarAmount: 'Var.', periodVarPct: 'Var. %', unbalanced: 'Descuadre',
+      cmpDebit: 'Debe comparado', varDebit: 'Var. debe', varPctDebit: 'Var. % debe', cmpCredit: 'Haber comparado', varCredit: 'Var. haber', varPctCredit: 'Var. % haber', cmpClosing: 'Saldo final comparado', varClosing: 'Var. saldo final', varPctClosing: 'Var. % saldo final' },
+    params: { accountLevel: 'S', groupBy: '', compareMode: mode, periods: '2026-01-01..2026-01-31|2025-01-01..2025-01-31|2025-12-01..2025-12-31', dateFrom: '2026-01-01', dateTo: '2026-01-31' },
+    locale: 'es_ES', compareMovements: movements,
+    chartTotals: [{ opening: cell(0), debit: cell(10), credit: cell(10), closing: cell(0) }],
+    chartBalance: { balanced, debitCreditDiff: balanced ? 0 : 12.5, closingDiff: 0 },
+  };
+  const src = readFileSync(join(ARTIFACT_DIR, file), 'utf8').replace(/\{\{>\s*document-branding\s*\}\}/g, BRANDING_PARTIAL);
+  return hb.compile(src)({ css: '', meta, rows });
+}
+
+describe('report-trial-balance — chart-tree HTML (ETP-6084)', () => {
+  it('indents tree rows by `indent`, marks dimension rows and bolds non-leaf nodes', () => {
+    const html = renderChart('template.hbs');
+    assert.match(html, /padding-left: calc\(4px \+ 1 \* 12px\);">Clientes/);
+    assert.match(html, /class="tree-row dim-row"><td><\/td>|class="tree-row dim-row">\s*<td><\/td>/);
+    assert.match(html, /class="tree-row heading">\s*<td>43</);
+  });
+
+  it('prints TOTALES from meta.chartTotals and never uses the flat sumFieldWhere', () => {
+    const html = renderChart('template.hbs');
+    assert.match(html, /<tr class="acct-total">\s*<td colspan="2">Total<\/td>/);
+    assert.doesNotMatch(html, /Missing helper|undefined/);
+  });
+
+  it('shows no compare columns without a compare mode', () => {
+    assert.doesNotMatch(renderChart('template.hbs'), /Comparado/);
+  });
+
+  it('compares the closing only, unless meta.compareMovements is set', () => {
+    const closingOnly = renderChart('template.hbs', { mode: 'sly' });
+    const withMovements = renderChart('template.hbs', { mode: 'sly', movements: true });
+    assert.equal((closingOnly.match(/>Comparado</g) || []).length, 1);
+    assert.equal((withMovements.match(/>Comparado</g) || []).length, 3);
+    assert.match(closingOnly, /10,00 %/);
+  });
+
+  it('notes an unbalanced trial balance only when meta.chartBalance says so', () => {
+    assert.doesNotMatch(renderChart('template.hbs'), /Descuadre/);
+    assert.match(renderChart('template.hbs', { balanced: false }), /Descuadre 12,50/);
+  });
+});
+
+describe('report-trial-balance — chart-tree Excel and CSV (ETP-6084)', () => {
+  it('Excel: numeric RAW cells, totals row, compare columns follow the same switches', () => {
+    const plain = renderChart('template-excel.hbs');
+    assert.match(plain, /<td>430<\/td>\s*<td>Clientes<\/td>\s*<td>S<\/td>\s*<td data-cell-type="number">0<\/td>/);
+    assert.doesNotMatch(plain, /Comparado/);
+    assert.equal((renderChart('template-excel.hbs', { mode: 'sly' }).match(/Comparado/g) || []).length, 1);
+    assert.equal((renderChart('template-excel.hbs', { mode: 'sly', movements: true }).match(/Comparado/g) || []).length, 3);
+    assert.match(plain, /<td>Total<\/td>/);
+  });
+
+  it('CSV: golden output through csvField, dimension row keeps its parent code, totals line last', () => {
+    assert.equal(renderChart('template-csv.hbs'), [
+      'Nº Cuenta,Nombre,Nivel,Saldo inicial,Debe,Haber,Saldo final',
+      '43,Deudores,C,0,10,5,5',
+      '430,Clientes,S,0,10,5,5',
+      '430,"Laura, M",DIM,0,10,5,5',
+      ',Total,,0,10,10,0', '',
+    ].join('\n'));
+  });
+
+  it('CSV: each compare header names its amount', () => {
+    const header = renderChart('template-csv.hbs', { mode: 'sly', movements: true }).split('\n')[0];
+    assert.match(header, /Debe comparado \(.*?\),Var\. debe,Var\. % debe,Haber,Haber comparado.*Var\. haber,Var\. % haber,Saldo final,Saldo final comparado.*,Var\. saldo final,Var\. % saldo final$/);
+  });
+
+  it('CSV: every line has the same field count with a comparison and movements on', () => {
+    const lines = renderChart('template-csv.hbs', { mode: 'sly', movements: true }).trim().split('\n');
+    const count = (l) => l.replace(/"[^"]*"/g, 'x').split(',').length;
+    assert.ok(lines.every((l) => count(l) === count(lines[0])), lines.map(count).join());
   });
 });

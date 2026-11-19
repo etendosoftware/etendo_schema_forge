@@ -1650,6 +1650,27 @@ describe('DynamicReportView — chart tree: Trial Balance (ETP-6084)', () => {
     expect(screen.queryByTestId('DynamicReportBalance__error')).toBeNull();
   });
 
+  it('the export sends the rows on screen as visibleNodeIds, and compareMovements; the P&L sends neither', async () => {
+    renderTb();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'S1']));
+    fireEvent.click(screen.getByTestId('DynamicReportView__export-pdf'));
+    await waitFor(() => expect(apiFetchMock.mock.calls.some(([u]) => u.endsWith('/render'))).toBe(true));
+    const body = (id) => JSON.parse(apiFetchMock.mock.calls.filter(([u]) => u === `/api/reports/${id}/render`).at(-1)[1].body).params;
+    expect(body('report-trial-balance')).toMatchObject({ visibleNodeIds: 'E1,S1', compareMovements: 'false' });
+    // Collapse all: only the roots are visible, and that is what prints.
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__collapseAll'));
+    fireEvent.click(screen.getByTestId('DynamicReportView__export-xlsx'));
+    await waitFor(() => expect(body('report-trial-balance').visibleNodeIds).toBe('E1'));
+    cleanup();
+    queryAnswer = (params) => json({ kind: 'tree', periods: TOTAL_PERIOD, rows: withVariation(TREE) });
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    fireEvent.click(screen.getByTestId('DynamicReportView__export-pdf'));
+    await waitFor(() => expect(apiFetchMock.mock.calls.some(([u]) => u === '/api/reports/profit-loss/render')).toBe(true));
+    expect(body('profit-loss')).not.toHaveProperty('visibleNodeIds');
+    expect(body('profit-loss')).not.toHaveProperty('compareMovements');
+  });
+
   it('a filter change is timed with the Trial Balance filter types', async () => {
     renderTb();
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'S1']));

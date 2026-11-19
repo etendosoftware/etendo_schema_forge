@@ -19,6 +19,48 @@
 </style>
 </head>
 <body>
+{{#if meta.chartTotals}}
+  <table>
+    <thead><tr>
+      <th>{{meta.labels.account_no}}</th>
+      <th>{{meta.labels.account_name}}</th>
+      <th>{{meta.labels.level}}</th>
+      <th>{{meta.labels.opening_balance}}</th>
+      <th>{{meta.labels.activity_debit}}</th>
+      {{#if (periodMode meta.params.compareMode)}}{{#if meta.compareMovements}}<th>{{meta.labels.activity_debit}} {{periodComparedHeader meta.labels.periodCompared meta.params.periods 0 (periodMode meta.params.compareMode) meta.params.columns meta.locale}}</th><th>{{meta.labels.activity_debit}} {{meta.labels.periodVarAmount}}</th><th>{{meta.labels.activity_debit}} {{meta.labels.periodVarPct}}</th>{{/if}}{{/if}}
+      <th>{{meta.labels.activity_credit}}</th>
+      {{#if (periodMode meta.params.compareMode)}}{{#if meta.compareMovements}}<th>{{meta.labels.activity_credit}} {{periodComparedHeader meta.labels.periodCompared meta.params.periods 0 (periodMode meta.params.compareMode) meta.params.columns meta.locale}}</th><th>{{meta.labels.activity_credit}} {{meta.labels.periodVarAmount}}</th><th>{{meta.labels.activity_credit}} {{meta.labels.periodVarPct}}</th>{{/if}}{{/if}}
+      <th>{{meta.labels.closing_balance}}</th>
+      {{#if (periodMode meta.params.compareMode)}}<th>{{meta.labels.closing_balance}} {{periodComparedHeader meta.labels.periodCompared meta.params.periods 0 (periodMode meta.params.compareMode) meta.params.columns meta.locale}}</th><th>{{meta.labels.closing_balance}} {{meta.labels.periodVarAmount}}</th><th>{{meta.labels.closing_balance}} {{meta.labels.periodVarPct}}</th>{{/if}}
+    </tr></thead>
+    <tbody>
+      {{#each rows}}
+      {{#with (lookup this.cells 0) as |cell|}}
+      <tr>
+        <td>{{../account_value}}</td>
+        <td>{{../name}}</td>
+        <td>{{../elementlevel}}</td>
+        <td data-cell-type="number">{{cell.opening.amount}}</td>
+        <td data-cell-type="number">{{cell.debit.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#if @root.meta.compareMovements}}{{#with (lookup cell.debit (periodMode meta.params.compareMode))}}<td data-cell-type="number">{{amount}}</td><td data-cell-type="number">{{variationAmount}}</td><td data-cell-type="number">{{variationPct}}</td>{{/with}}{{/if}}{{/if}}
+        <td data-cell-type="number">{{cell.credit.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#if @root.meta.compareMovements}}{{#with (lookup cell.credit (periodMode meta.params.compareMode))}}<td data-cell-type="number">{{amount}}</td><td data-cell-type="number">{{variationAmount}}</td><td data-cell-type="number">{{variationPct}}</td>{{/with}}{{/if}}{{/if}}
+        <td data-cell-type="number">{{cell.closing.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#with (lookup cell.closing (periodMode meta.params.compareMode))}}<td data-cell-type="number">{{amount}}</td><td data-cell-type="number">{{variationAmount}}</td><td data-cell-type="number">{{variationPct}}</td>{{/with}}{{/if}}
+      </tr>
+      {{/with}}
+      {{/each}}
+      {{#with (lookup meta.chartTotals 0) as |cell|}}
+      <tr>
+        <td></td>
+        <td>{{@root.meta.ui.total}}</td>
+        <td></td>
+        <td data-cell-type="number">{{cell.opening.amount}}</td>
+        <td data-cell-type="number">{{cell.debit.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#if @root.meta.compareMovements}}{{#with (lookup cell.debit (periodMode meta.params.compareMode))}}<td data-cell-type="number">{{amount}}</td><td data-cell-type="number">{{variationAmount}}</td><td data-cell-type="number">{{variationPct}}</td>{{/with}}{{/if}}{{/if}}
+        <td data-cell-type="number">{{cell.credit.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#if @root.meta.compareMovements}}{{#with (lookup cell.credit (periodMode meta.params.compareMode))}}<td data-cell-type="number">{{amount}}</td><td data-cell-type="number">{{variationAmount}}</td><td data-cell-type="number">{{variationPct}}</td>{{/with}}{{/if}}{{/if}}
+        <td data-cell-type="number">{{cell.closing.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#with (lookup cell.closing (periodMode meta.params.compareMode))}}<td data-cell-type="number">{{amount}}</td><td data-cell-type="number">{{variationAmount}}</td><td data-cell-type="number">{{variationPct}}</td>{{/with}}{{/if}}
+      </tr>
+      {{/with}}
+    </tbody>
+  </table>
+  {{else}}
   <table>
     <thead><tr>
       <th>{{meta.labels.account_no}}</th>
@@ -43,4 +85,5 @@
       {{/each}}
     </tbody>
   </table>
+  {{/if}}
 </body></html>

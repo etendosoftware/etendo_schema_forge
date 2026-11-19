@@ -155,3 +155,34 @@ describe('reportOffers / pickers of a chart-tree report (ETP-6084)', () => {
     expect(readReportUrlState('?columns=month', TB, { orgIds: ORGS })).toEqual({}); // not offered: ignored
   });
 });
+
+describe('chart-tree options in the URL (ETP-6084)', () => {
+  const TB = {
+    tree: 'chart',
+    amountColumns: [{ field: 'debit', compare: 'optional' }],
+    parameters: [
+      { name: 'dateFrom', type: 'date' }, { name: 'dateTo', type: 'date' },
+      { name: 'compareTo', type: 'toggle' },
+      { name: 'bPartnerId', type: 'search', selector: 'bpartner', groupByValue: 'bpartner' },
+      { name: 'groupBy', type: 'select' },
+      { name: 'openingEntryAmount', type: 'toggle', default: true },
+      { name: 'showOnlyAccountsWithValue', type: 'toggle', default: true },
+    ],
+  };
+  const state = { ...BASE, groupBy: 'bpartner', openingEntryAmount: false, showOnlyAccountsWithValue: true, compareMovements: true };
+
+  it('writes only what differs from the defaults and reads it back', () => {
+    const search = writeReportUrlState('', state, TB, DEFAULTS);
+    expect(Object.fromEntries(new URLSearchParams(search))).toEqual({ groupBy: 'bpartner', openingEntryAmount: 'false', compareMovements: 'true' });
+    expect(readReportUrlState(search, TB, { orgIds: ORGS })).toEqual({ groupBy: 'bpartner', openingEntryAmount: false, compareMovements: true });
+  });
+
+  it('ignores a grouping the report does not offer and a malformed toggle', () => {
+    expect(readReportUrlState('?groupBy=drop&openingEntryAmount=maybe', TB, { orgIds: ORGS })).toEqual({});
+  });
+
+  it('a non-chart report keeps its URL: none of these keys are owned or read', () => {
+    expect(writeReportUrlState('', state, PL, DEFAULTS)).toBe('');
+    expect(readReportUrlState('?groupBy=bpartner&openingEntryAmount=false&compareMovements=true', PL, { orgIds: ORGS })).toEqual({});
+  });
+});

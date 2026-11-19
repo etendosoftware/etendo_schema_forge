@@ -13,6 +13,8 @@ import { parseCalendarDate, todayCalendarISO } from '@/lib/dateOnly.js';
  *   - `compare`                  when it declares `compareTo`;
  *   - `splitBy`                  when it declares `splitBy`.
  *
+ * ETP-6084: a chart-tree report also persists `groupBy`, its option toggles and `compareMovements` (see `chartSpec`).
+ *
  * Only what differs from the default is written, so an untouched period stays out and tomorrow still
  * opens on "1 January to today". The URL is user input: every value is checked and an invalid one is
  * ignored (its default stays). Names of picked items are NOT in the URL (they would be unchecked text
@@ -40,6 +42,22 @@ export function reportOffers(report) {
   return { columns: has('columns'), compare: has('compareTo'), splitBy: has('splitBy') };
 }
 
+/**
+ * ETP-6084: what a chart-tree report adds to the URL: its option toggles (with their defaults), the grouping (the
+ * values it accepts) and "Comparar también movimientos". Empty for any other report, so the P&L's URL is unchanged.
+ */
+function chartSpec(report) {
+  const params = report?.parameters || [];
+  if (report?.tree !== 'chart') return { toggles: [], groupBy: null, movements: false };
+  const declared = params.find((p) => p.name === 'groupBy');
+  const values = declared && (declared.options ?? params.filter((p) => p.groupByValue).map((p) => ({ value: p.groupByValue }))).map((o) => o.value).filter(Boolean);
+  return {
+    toggles: params.filter((p) => p.type === 'toggle' && !p.hidden && p.name !== 'compareTo').map((p) => ({ name: p.name, default: p.default === true || p.default === 'true' })),
+    groupBy: values ?? null,
+    movements: (report.amountColumns || []).some((a) => a.compare === 'optional'),
+  };
+}
+
 /** What `report` persists, derived from its parameters. */
 export function urlStateSpec(report) {
   const params = report?.parameters || [];
@@ -50,13 +68,16 @@ export function urlStateSpec(report) {
     period: isDate('dateFrom') && isDate('dateTo'),
     pickers: params.filter((p) => p.type === 'search' && !p.hidden && PICKER_SELECTORS.includes(p.selector)).map((p) => ({ name: p.name, selector: p.selector })),
     controls: Object.entries(reportOffers(report)).filter(([, on]) => on).map(([key]) => key),
+    chart: chartSpec(report),
   };
 }
 
 /** Every query-string key `report` owns: what a write clears (and sets back when it differs from the default). */
 export function reportUrlKeys(report) {
   const spec = urlStateSpec(report);
+  const { toggles, groupBy, movements } = spec.chart;
   return [...(spec.org ? ['orgId'] : []), ...(spec.period ? ['dateFrom', 'dateTo'] : []), ...spec.controls, ...spec.pickers.map((p) => p.name),
+    ...(groupBy ? ['groupBy'] : []), ...toggles.map((t) => t.name), ...(movements ? ['compareMovements'] : []),
     // `_display_*` names are neither written nor read (see above); listing them only lets a write drop one an old link carried.
     ...spec.pickers.map((p) => `_display_${p.name}`)];
 }
@@ -96,6 +117,11 @@ export function readReportUrlState(search, report, { orgIds = [] } = {}) {
     const ids = [...new Set((q.get(name) || '').split(',').filter(Boolean))].slice(0, MAX_PICKER_IDS);
     if (ids.length && ids.every((id) => ID.test(id))) patch[name] = ids.join(',');
   }
+  const { toggles, groupBy, movements } = spec.chart;
+  const group = q.get('groupBy');
+  if (groupBy && group && groupBy.includes(group)) patch.groupBy = group;
+  for (const t of toggles) if (['true', 'false'].includes(q.get(t.name))) patch[t.name] = q.get(t.name) === 'true';
+  if (movements && q.get('compareMovements') === 'true') patch.compareMovements = true;
   return patch;
 }
 
@@ -116,6 +142,9 @@ export function writeReportUrlState(search, state, report, defaults = {}) {
   }
   for (const key of spec.controls) put(key, state[key], key === 'columns' ? 'total' : '');
   for (const { name } of spec.pickers) put(name, state[name]);
+  if (spec.chart.groupBy) put('groupBy', state.groupBy);
+  for (const t of spec.chart.toggles) if (t.name in state && Boolean(state[t.name]) !== t.default) q.set(t.name, String(Boolean(state[t.name])));
+  if (spec.chart.movements && state.compareMovements) q.set('compareMovements', 'true');
   const out = q.toString();
   return out ? `?${out}` : '';
 }

@@ -333,6 +333,8 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
           kpis: format === 'pdf' && kpis ? JSON.stringify(kpiCards(kpis, compare)) : undefined,
           accountLevel: state.level,
           expandedNodeIds: expandedNodeIdsParam(expandedSet),
+          // A chart tree prints exactly the rows on screen (level fold, expansion and mode included), by node id.
+          ...(chartTree && { visibleNodeIds: shown.length ? shown.map((r) => r.node_id).join(',') : undefined, compareMovements: String(Boolean(state.compareMovements)) }),
           // The exported header names the filters, not their ids (report-filters.js reads `_display_*`).
           _display_orgId: orgName,
           ...Object.fromEntries(pickers.map(({ name }) => [`_display_${name}`, state[`_display_${name}`]])),
