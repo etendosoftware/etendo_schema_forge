@@ -1,8 +1,8 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "generatedAt": "2026-07-01T17:11:14.893Z",
-  "updatedAt": "2026-11-05T16:58:12.865Z",
-  "checksum": "2ea583a6110ce4f6",
+  "updatedAt": "2026-11-17T12:12:20.338Z",
+  "checksum": "1dcb57c6f1ed2868",
   "frontendContract": {
     "window": {
       "id": "192",
@@ -55,6 +55,9 @@
             "validation": {
               "required": true,
               "maxLength": 40
+            },
+            "publicApi": {
+              "required": true
             }
           },
           {
@@ -75,6 +78,9 @@
             "validation": {
               "required": true,
               "maxLength": 60
+            },
+            "publicApi": {
+              "required": true
             }
           },
           {

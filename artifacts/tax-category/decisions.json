@@ -16,6 +16,7 @@
   },
   "entities": {
     "taxCategory": {
+      "publicApi": { "readOnly": true },
       "fields": {
         "name": {
           "grid": true,
