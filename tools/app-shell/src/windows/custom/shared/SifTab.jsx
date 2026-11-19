@@ -21,6 +21,8 @@ import { isSifFieldRequired } from '@/windows/custom/shared/sifRequiredFields.js
 // ETP-6284: purchase imports with DUA, behind the sii-import-dua flag (renders nothing when off).
 import SiiImportDuaSection from '@/windows/custom/shared/SiiImportDuaSection.jsx';
 import SiiImportTaxesSection from '@/windows/custom/shared/SiiImportTaxesSection.jsx';
+import SiiRecordsPreviewSection, { useSiiRecordsPreview, PREVIEW_TYPE_KEYS } from '@/windows/custom/shared/SiiRecordsPreviewSection.jsx';
+import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 function Field({ label, htmlFor, children, required = false }) {
@@ -343,6 +345,23 @@ export default function SifTab({
     siiTaxType,
   } = useSifFieldPatcher({ data, recordId, token, apiBaseUrl, onChange, locked: accessReadOnly });
   const apiFetch = useApiFetch(apiBaseUrl);
+
+  // ETP-6284: preview of the SII records (purchase invoice, flag, F5/LC). Shared by the preview
+  // card and the import-taxes card (deferredVat). Refetched after every import-tax write and every
+  // header save (the record's `updated` / totals change).
+  const importDuaEnabled = useFeatureFlag(SII_IMPORT_DUA) === true;
+  const [previewRefresh, setPreviewRefresh] = useState(0);
+  const savedRecordId = isNew ? null : (data?.id || recordId);
+  const previewState = useSiiRecordsPreview({
+    apiBaseUrl,
+    recordId: savedRecordId,
+    enabled: importDuaEnabled && isPurchaseInvoice && showSii && PREVIEW_TYPE_KEYS.has(getVal(siiTypeField)),
+    refreshKey: `${previewRefresh}|${data?.updated ?? ''}|${data?.grandTotalAmount ?? ''}|${data?.aeatsiiFechaRegCont ?? ''}`,
+  });
+  const handleImportTaxWrite = useCallback(() => {
+    setPreviewRefresh(n => n + 1);
+    onHeaderRefresh?.();
+  }, [onHeaderRefresh]);
 
   // ETP-4751 (Block B): exempt-tax signal served by the invoice-header NeoHandler
   // (AbstractInvoiceHeaderHandler#enrichHasExemptTaxes). Refreshed on every line
@@ -715,9 +734,19 @@ export default function SifTab({
                 apiBaseUrl={apiBaseUrl}
                 token={token}
                 readOnly={siiFieldReadOnly || !isDraft}
-                onHeaderRefresh={onHeaderRefresh}
+                onHeaderRefresh={handleImportTaxWrite}
+                deferredVat={previewState.preview?.deferredVat === true}
                 step={2}
                 data-testid="SiiImportTaxesSection__b99c8b" />
+            )}
+            {isPurchaseInvoice && importDuaEnabled && PREVIEW_TYPE_KEYS.has(getVal(siiTypeField)) && (
+              <SiiRecordsPreviewSection
+                ui={ui}
+                recordId={savedRecordId}
+                currency={data?.['currency$_identifier'] || ''}
+                previewState={previewState}
+                step={3}
+                data-testid="SiiRecordsPreviewSection__b99c8b" />
             )}
             <SifAttachmentsSection
               tableName="aeatsii_facturas"

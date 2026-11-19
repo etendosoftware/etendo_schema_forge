@@ -91,6 +91,87 @@ export function orderImportTaxesFirst(options) {
   return [...list.filter(o => isImportTaxName(o?.name)), ...list.filter(o => !isImportTaxName(o?.name))];
 }
 
+/** A compensatory import tax of deferred VAT: "import" in the name and a "=0%" suffix. */
+export function isCompensatoryTaxName(name) {
+  const normalized = normalizeTaxName(name);
+  return normalized.includes('import') && normalized.replace(/\s/g, '').includes('=0%');
+}
+
+function collapse(name) {
+  return normalizeTaxName(name).replace(/\s+/g, ' ').trim();
+}
+
+/** "Importaciones 21%=0%" → "importaciones 21%" (normalized, the "=0%" suffix removed). */
+export function compensatoryBaseName(name) {
+  return collapse(String(name ?? '').replace(/=\s*0\s*%/g, ''));
+}
+
+/** The rate in a compensatory name ("Importaciones 21%=0%" → 21), or null. */
+export function compensatoryNameRate(name) {
+  const match = normalizeTaxName(name).replace(/\s/g, '').match(/(\d+(?:[.,]\d+)?)%=0%/);
+  return match ? Number(match[1].replace(',', '.')) : null;
+}
+
+/**
+ * The compensatory tax for an import tax: the 0% import tax whose name without "=0%" equals the
+ * import tax name (case- and accent-insensitive); else one with the same rate in its name; else
+ * null.
+ *
+ * @param {string} importName the import tax name
+ * @param {number|null} importRate its rate
+ * @param {Array<{id: string, name: string}>} catalog the purchase taxes on offer
+ */
+export function findCompensatoryTax(importName, importRate, catalog) {
+  const compensatory = (catalog ?? []).filter(t => t?.id && isCompensatoryTaxName(t.name));
+  const target = collapse(importName);
+  return compensatory.find(t => compensatoryBaseName(t.name) === target)
+    ?? (importRate == null ? null
+      : compensatory.find(t => compensatoryNameRate(t.name) === Number(importRate)))
+    ?? null;
+}
+
+function round2(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+/**
+ * ETP-6284 (alcance 5) — the compensatory lines a deferred-VAT import invoice still needs: one per
+ * import tax (saved manual rows whose tax isImportTaxName with rate > 0), base = minus the sum of
+ * that tax's bases, tax amount 0, with the matching compensatory tax. A group that already has a
+ * compensatory row with exactly that base is skipped.
+ *
+ * @param {object[]} rows the card's rows ({ id, tax, taxLabel, taxableAmount, serverRate })
+ * @param {(row: object) => number|null} rateOf the rate of a row
+ * @param {Array<{id: string, name: string}>} catalog the purchase taxes on offer
+ * @returns {{ groups: number, toCreate: object[], missing: string[] }}
+ */
+export function planCompensatoryLines(rows, rateOf, catalog) {
+  const groups = new Map();
+  for (const row of rows ?? []) {
+    const rate = rateOf(row);
+    if (!row?.id || !row.tax || !isImportTaxName(row.taxLabel) || !(rate > 0)) continue;
+    const group = groups.get(row.tax) ?? { tax: row.tax, name: row.taxLabel, rate, base: 0 };
+    group.base += Number(row.taxableAmount) || 0;
+    groups.set(row.tax, group);
+  }
+  const toCreate = [];
+  const missing = [];
+  for (const group of groups.values()) {
+    const compensatory = findCompensatoryTax(group.name, group.rate, catalog);
+    if (!compensatory) {
+      missing.push(group.name);
+      continue;
+    }
+    const base = round2(-group.base);
+    const done = (rows ?? []).some(r => r?.id && r.tax === compensatory.id
+      && round2(r.taxableAmount) === base);
+    if (!done) {
+      toCreate.push({ tax: compensatory.id, taxLabel: compensatory.name, taxableAmount: base, taxAmount: 0 });
+    }
+  }
+  return { groups: groups.size, toCreate, missing };
+}
+
 /** Manual (import) tax lines only — the automatic ones belong to the invoice lines. */
 export function selectImportTaxRows(rows) {
   return (rows ?? []).filter(r => r && !isTrue(r.recalculate));
@@ -111,7 +192,8 @@ export function missingImportTaxFields(row, multiDua) {
   const missing = new Set();
   if (!row?.tax) missing.add('tax');
   if (row?.taxableAmount == null) missing.add('taxableAmount');
-  if (multiDua) {
+  // A compensatory (=0%) line of deferred import VAT carries no DUA of its own.
+  if (multiDua && !isCompensatoryTaxName(row?.taxLabel)) {
     if (!String(row?.aeatsiiDua ?? '').trim()) missing.add('aeatsiiDua');
     if (!row?.aeatsiiFechaDua) missing.add('aeatsiiFechaDua');
   }
@@ -140,11 +222,11 @@ export function isImportTaxRowDirty(row, persisted, multiDua) {
   return Object.keys(body).some(k => (body[k] ?? '') !== (stored[k] ?? ''));
 }
 
-/** Sums of the import-tax rows (`total` = base + tax amount). */
+/** Sums of the import-tax rows (`total` = base + tax amount); compensatory =0% lines excluded. */
 export function summarizeImportTaxes(rows) {
   let base = 0;
   let amount = 0;
-  for (const r of rows ?? []) {
+  for (const r of (rows ?? []).filter(row => !isCompensatoryTaxName(row?.taxLabel))) {
     base += toNumberOrNull(r?.taxableAmount) ?? 0;
     amount += toNumberOrNull(r?.taxAmount) ?? 0;
   }
@@ -427,31 +509,38 @@ function SummaryLine({ label, value, strong, testId }) {
 }
 
 function useTaxRateCatalog(apiFetch, selectorUrl, selectorContext) {
-  const [rateMap, setRateMap] = useState({});
+  const [catalogState, setCatalogState] = useState({ rateMap: {}, catalog: [] });
   const contextKey = JSON.stringify(selectorContext ?? {});
   useEffect(() => {
     if (!selectorUrl) return undefined;
     let cancelled = false;
     (async () => {
       const map = {};
+      const catalog = [];
       for (let page = 0; page < CATALOG_MAX_PAGES; page += 1) {
         const url = buildUrlWithParams(selectorUrl, { ...selectorContext, limit: CATALOG_PAGE, offset: page * CATALOG_PAGE });
         const res = await apiFetch(url, { baseUrl: '' });
         if (!res.ok) break;
         const body = await res.json();
         const items = body?.items ?? body?.response?.data ?? [];
-        for (const item of items) if (item?.id) map[item.id] = item.labelPrefix ?? null;
+        for (const item of items) {
+          if (!item?.id) continue;
+          map[item.id] = item.labelPrefix ?? null;
+          catalog.push({ id: item.id, name: item.label ?? item.name ?? '' });
+        }
         if (items.length < CATALOG_PAGE) break;
       }
-      if (!cancelled) setRateMap(map);
+      if (!cancelled) setCatalogState({ rateMap: map, catalog });
     })().catch(() => { /* the Tipo column falls back to the saved tax rate */ });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiFetch, selectorUrl, contextKey]);
-  return rateMap;
+  return catalogState;
 }
 
-function ImportTaxesBlock({ ui, multiDua, recordId, data, apiBaseUrl, token, readOnly, onHeaderRefresh, step }) {
+function ImportTaxesBlock({
+  ui, multiDua, recordId, data, apiBaseUrl, token, readOnly, onHeaderRefresh, step, deferredVat = false,
+}) {
   const apiFetch = useApiFetch(apiBaseUrl);
   const { locale } = useLocaleSwitch();
   const [allServerRows, setAllServerRows] = useState([]);
@@ -466,7 +555,8 @@ function ImportTaxesBlock({ ui, multiDua, recordId, data, apiBaseUrl, token, rea
   const editable = !readOnly && Boolean(recordId);
   const selectorUrl = apiBaseUrl ? `${apiBaseUrl}/lines/selectors/tax` : null;
   const selectorContext = buildLineSelectorContext({ windowCategory: WINDOW_CATEGORY, parentId: recordId, headerRecord: data });
-  const rateMap = useTaxRateCatalog(apiFetch, editable ? selectorUrl : null, selectorContext);
+  const { rateMap, catalog } = useTaxRateCatalog(apiFetch, editable ? selectorUrl : null, selectorContext);
+  const [compensating, setCompensating] = useState(false);
 
   const load = useCallback(async () => {
     if (!recordId || !apiBaseUrl) return;
@@ -601,6 +691,45 @@ function ImportTaxesBlock({ ui, multiDua, recordId, data, apiBaseUrl, token, rea
   }, [deleteTarget, apiFetch, load, onHeaderRefresh, ui]);
 
   const summary = summarizeImportTaxes(rows);
+  const compensation = planCompensatoryLines(rows,
+    row => parseRate(row.tax ? rateMap[row.tax] : null) ?? parseRate(row.serverRate), catalog);
+  let compensationHint = null;
+  if (compensation.missing.length > 0) {
+    compensationHint = ui('sifDataTabs.importTaxes.noCompensatoryTax', { taxes: compensation.missing.join(', ') });
+  } else if (compensation.groups === 0) {
+    compensationHint = ui('sifDataTabs.importTaxes.noImportTaxToCompensate');
+  } else if (compensation.toCreate.length === 0) {
+    compensationHint = ui('sifDataTabs.importTaxes.alreadyCompensated');
+  }
+
+  const addCompensatoryLines = async () => {
+    if (compensationHint || compensating) return;
+    setCompensating(true);
+    let lineNo = nextTaxLineNo(allServerRows);
+    try {
+      for (const line of compensation.toCreate) {
+        const res = await apiFetch('/tax', {
+          method: 'POST',
+          body: JSON.stringify({
+            tax: line.tax, taxableAmount: line.taxableAmount, taxAmount: 0,
+            parentId: recordId, lineNo, recalculate: false,
+          }),
+        });
+        if (!res.ok) {
+          toast.error(await translateBackendErrorResponse(res, ui));
+          break;
+        }
+        lineNo += 10;
+      }
+      toast.success(ui('sifDataTabs.importTaxes.compensatoryAdded'));
+    } catch (err) {
+      toast.error(err?.message || ui('networkError'));
+    } finally {
+      setCompensating(false);
+      await load();
+      onHeaderRefresh?.();
+    }
+  };
 
   return (
     <SiiPanelCard
@@ -662,6 +791,7 @@ function ImportTaxesBlock({ ui, multiDua, recordId, data, apiBaseUrl, token, rea
             </p>
           )}
           <div className="flex flex-wrap items-start justify-between gap-4" data-testid="SiiImportTaxesSection__footer">
+            <div className="flex flex-wrap items-center gap-2" data-testid="SiiImportTaxesSection__footerActions">
             {editable ? (
               <button
                 type="button"
@@ -672,6 +802,20 @@ function ImportTaxesBlock({ ui, multiDua, recordId, data, apiBaseUrl, token, rea
                 {ui('sifDataTabs.importTaxes.add')}
               </button>
             ) : <span data-testid="SiiImportTaxesSection__footerSpacer" />}
+            {editable && deferredVat && (
+              <span title={compensationHint ?? undefined} className="inline-flex" data-testid="SiiImportTaxesSection__compensateWrap">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addCompensatoryLines}
+                  disabled={Boolean(compensationHint) || compensating}
+                  data-testid="Button__siiImportTaxCompensate">
+                  {ui('sifDataTabs.importTaxes.addCompensatory')}
+                </Button>
+              </span>
+            )}
+            </div>
             <div className="min-w-56 space-y-1.5" data-testid="SiiImportTaxesSection__summary">
               <SummaryLine
                 label={ui('sifDataTabs.importTaxes.taxableAmount')}
@@ -708,6 +852,7 @@ function ImportTaxesBlock({ ui, multiDua, recordId, data, apiBaseUrl, token, rea
 
 export default function SiiImportTaxesSection({
   ui, siiTypeKey, multiDua, recordId, data, apiBaseUrl, token, readOnly, onHeaderRefresh, step,
+  deferredVat = false,
 }) {
   const enabled = useFeatureFlag(SII_IMPORT_DUA) === true;
   if (!enabled || !DUA_TYPE_KEYS.has(siiTypeKey)) return null;
@@ -722,6 +867,7 @@ export default function SiiImportTaxesSection({
       readOnly={readOnly}
       onHeaderRefresh={onHeaderRefresh}
       step={step}
+      deferredVat={deferredVat}
       data-testid="ImportTaxesBlock__siiImportTax" />
   );
 }
