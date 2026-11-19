@@ -237,7 +237,7 @@ describe('applyEnvironment (attach-only)', () => {
 describe('verifyEnvironment (read-only)', () => {
   it('lists missing path patterns and writes nothing', () => {
     const f = fakeAws({ policies: [storedPolicy()], dist: distConfig({ default: 'POL1' }) });
-    assert.deepEqual(verifyEnvironment({ aws: f.aws, distributionId: 'D1' }), { ok: false, missing: ['/etendo/*', '/mcp'], policyId: 'POL1' });
+    assert.deepEqual(verifyEnvironment({ aws: f.aws, distributionId: 'D1' }), { ok: false, drift: false, missing: ['/etendo/*', '/mcp'], policyId: 'POL1' });
     assert.equal(f.count(/create-|update-/), 0);
   });
   it('is not ok when the stored policy drifted from the repo JSON', () => {
