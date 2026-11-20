@@ -83,10 +83,8 @@ describe('invoice order import — one popup, two directions', () => {
         [`/b/${invoice}/header/inv1/action/availableOrders`, `/b/${invoice}/lines`, `/b/${invoice}/header/inv1`,
           `/b/${invoice}/header/inv1/action/availableOrderLines`]);
       assert.equal(lines[0]._maxQty, 1);
-      // Both directions ask `detail` on the list: the creationDate purchases sort by, and a
-      // pendingLines that leaves out the lines already on this invoice (so an order with nothing
-      // selectable is hidden at open, as before the lines loaded lazily). No `pendingBasis`: the
-      // server rule, drafts deducted, as the MCP gets it.
+      // Both directions ask `detail` on the list: the creationDate purchases sort by. No
+      // `pendingBasis`: the server rule, drafts deducted, as the MCP gets it.
       assert.deepEqual(bodies.find(([u]) => u.endsWith('/availableOrders'))[1],
         { limit: MAX_LISTED_ORDERS, includeCovered: true, detail: true });
       assert.deepEqual(bodies.find(([u]) => u.endsWith('/availableOrderLines'))[1],
@@ -448,6 +446,20 @@ describe('invoice order import (sales) — submitOrderImport (importOrderLines a
     assert.deepEqual(lines.map(l => [l.id, l._productName, l._maxQty, l._lineNetAmount, l._alreadyImported]),
       [['ol1', 'Agua', 2, 20, false], ['ol2', 'Pan', 0, 0, true]]);
   });
+
+  // QA UI-7 — a line already on THIS invoice is greyed only when nothing is left; with pending it
+  // stays selectable for the rest and carries how much is here (the note's quantity).
+  it('greys a line on this invoice only when its pending is 0', async () => {
+    globalThis.fetch = mock.fn(async () => mockRes(true, [
+      { id: 'ol1', pendingQuantity: 3 },
+      { id: 'ol2', pendingQuantity: 0 },
+    ]));
+    const lines = await fetchLines({
+      base: '/b', docId: 'o1', sharedContext: { invoiceId: 'inv1', alreadyImportedOrderLines: new Map([['ol1', 2], ['ol2', 5]]) },
+    });
+    assert.deepEqual(lines.map(l => [l.id, l._alreadyImported, l._alreadyInCurrent, l._quantityInCurrent]),
+      [['ol1', false, true, 2], ['ol2', true, true, 5]]);
+  });
 });
 
 // ETP-5828 (QA UI-4) — a line taken by OTHER draft invoices names them (`inDraftInvoices` of
@@ -490,6 +502,11 @@ describe('invoice order import — what a taken line says', () => {
       'partlyInDraftInvoiceMany:{"quantity":"#3","documentNos":"FC1, FC2"}'],
     ['held by no other draft', { _inDraftInvoices: [], _heldByDrafts: 0 }, null],
     ['older backend: no per-draft quantity', { _inDraftInvoices: ['FC1'], _heldByDrafts: 0 }, null],
+    // QA UI-7 — partly on THIS invoice; combined with other drafts, this invoice first.
+    ['partly on this invoice', { _quantityInCurrent: 2, _inDraftInvoices: [] },
+      'partlyInThisInvoice:{"quantity":"#2"}'],
+    ['partly on this invoice and on another draft', { _quantityInCurrent: 2, _inDraftInvoices: ['FC1'], _heldByDrafts: 1 },
+      'partlyInThisInvoice:{"quantity":"#2"} · partlyInDraftInvoiceOne:{"quantity":"#1","documentNo":"FC1"}'],
   ]) {
     it(`orderLineNote (selectable): ${name}`, () => {
       assert.equal(orderLineNote(line, { imported: false }, ui, fmtQty), expected);
@@ -502,14 +519,19 @@ describe('invoice order import (sales) — duplicate detection via the order lin
     mock.reset();
   });
 
-  it('builds the already-imported set from the spec API key on existing invoice lines', async () => {
+  // QA UI-7: per order line, the quantity this invoice holds (summed over its lines, magnitude).
+  it('maps each order line on the invoice (spec API key) to the quantity it holds', async () => {
     installFetch({
       orders: [],
-      invLines: [{ id: 'il1', [ORDER_LINE_FK]: 'ol1' }],
+      invLines: [
+        { id: 'il1', [ORDER_LINE_FK]: 'ol1', invoicedQuantity: 2 },
+        { id: 'il2', [ORDER_LINE_FK]: 'ol1', invoicedQuantity: 1.5 },
+        { id: 'il3', [ORDER_LINE_FK]: 'ol2', invoicedQuantity: -4 },
+      ],
       invoiceHeader: {},
     });
     const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
-    assert.ok(result.sharedContext.alreadyImportedOrderLines.has('ol1'));
+    assert.deepEqual([...result.sharedContext.alreadyImportedOrderLines], [['ol1', 3.5], ['ol2', 4]]);
   });
 
   it('ignores the legacy cOrderlineId key, which NEO never returns', async () => {
