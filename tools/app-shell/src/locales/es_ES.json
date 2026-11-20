@@ -18332,7 +18332,7 @@
     "sendModalSend": "Enviar",
     "sendModalSending": "Enviando...",
     "sendModalSentSuccess": "{documentType} enviado",
-    "sendModalDuplicate": "{documentType} ya fue enviado",
+    "sendModalDuplicate": "No se envió ningún email: ya se envió uno idéntico hace instantes. Puede volver a intentarlo en un minuto.",
     "sendModalThrottled": "Demasiados intentos de envío. Inténtalo de nuevo en {seconds}s",
     "sendModalUnauthorized": "No tienes autorización para enviar este documento",
     "sendModalValidationFailed": "El documento no se puede enviar",

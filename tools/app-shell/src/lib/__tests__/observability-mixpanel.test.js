@@ -4,7 +4,14 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildBrowserObservabilityConfig } from '../observability/browser.js';
-import { createMixpanelProvider } from '../observability/providers/mixpanel.js';
+import {
+  createMixpanelProvider,
+  isMixpanelHostAllowed,
+  MIXPANEL_ALLOWED_HOSTS,
+} from '../observability/providers/mixpanel.js';
+
+// ETP-5466 — Mixpanel only emits from a production host.
+const PROD_HOST = 'app.etendo.software';
 
 // Minimal localStorage-shaped fake, keyed only by the calls made against it —
 // deliberately does NOT hardcode the module-private flag key name, so these
@@ -62,6 +69,7 @@ describe('Mixpanel observability adapter', () => {
   it('stays disabled and does not load the SDK unless explicitly enabled', async () => {
     let loadCount = 0;
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: false,
       token: 'token-123',
       loader: async () => {
@@ -80,6 +88,7 @@ describe('Mixpanel observability adapter', () => {
   it('warns and remains disabled when enabled without token', async () => {
     const warnings = [];
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: '',
       logger: {
@@ -101,6 +110,7 @@ describe('Mixpanel observability adapter', () => {
   it('initializes and tracks through the lazy-loaded SDK when configured', async () => {
     const calls = [];
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       debug: 'true',
@@ -141,6 +151,7 @@ describe('Mixpanel observability adapter', () => {
     const calls = [];
     let capturedCallback;
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       loader: async () => ({
@@ -176,6 +187,7 @@ describe('Mixpanel observability adapter', () => {
 
   it('track is a no-op when the SDK has no track function', async () => {
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       loader: async () => ({ default: { init() {} } }),
@@ -187,6 +199,7 @@ describe('Mixpanel observability adapter', () => {
 
   it('track stays disabled (no SDK load) when provider is not enabled', async () => {
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: false,
       token: 'token-123',
       loader: async () => createFakeMixpanel([]),
@@ -199,6 +212,7 @@ describe('Mixpanel observability adapter', () => {
   it('group calls set_group with the group key and id', async () => {
     const calls = [];
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       loader: async () => ({ default: createFakeMixpanel(calls) }),
@@ -215,6 +229,7 @@ describe('Mixpanel observability adapter', () => {
 
   it('group is a no-op when the SDK lacks set_group', async () => {
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       loader: async () => ({ default: { init() {} } }),
@@ -226,6 +241,7 @@ describe('Mixpanel observability adapter', () => {
 
   it('group is a no-op when the provider is disabled (no client)', async () => {
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: false,
       token: 'token-123',
       loader: async () => createFakeMixpanel([]),
@@ -237,6 +253,7 @@ describe('Mixpanel observability adapter', () => {
   it('groupSet resolves the group and applies properties via group.set', async () => {
     const calls = [];
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       loader: async () => ({ default: createFakeMixpanel(calls) }),
@@ -251,6 +268,7 @@ describe('Mixpanel observability adapter', () => {
 
   it('groupSet is a no-op when the provider is disabled (no client)', async () => {
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: false,
       token: 'token-123',
       loader: async () => createFakeMixpanel([]),
@@ -261,6 +279,7 @@ describe('Mixpanel observability adapter', () => {
 
   it('groupSet is a no-op when the SDK has no get_group', async () => {
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       loader: async () => ({ default: { init() {} } }),
@@ -273,6 +292,7 @@ describe('Mixpanel observability adapter', () => {
   it('groupSet is a no-op when get_group returns an object without set', async () => {
     const calls = [];
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       loader: async () => ({
@@ -293,6 +313,7 @@ describe('Mixpanel observability adapter', () => {
 
   it('flush is a no-op when the SDK has no flush function', async () => {
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       loader: async () => ({ default: { init() {} } }),
@@ -305,6 +326,7 @@ describe('Mixpanel observability adapter', () => {
   it('identify sets the user id without traits when people.set is absent', async () => {
     const calls = [];
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       loader: async () => ({
@@ -329,6 +351,7 @@ describe('Mixpanel observability adapter', () => {
     const calls = [];
     const storage = createFakeStorage();
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       storage,
@@ -352,6 +375,7 @@ describe('Mixpanel observability adapter', () => {
 
   it('reset is a no-op when the SDK has no reset function', async () => {
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       loader: async () => ({ default: { init() {} } }),
@@ -364,6 +388,7 @@ describe('Mixpanel observability adapter', () => {
   it('reset is a no-op when the provider is disabled (no client, SDK never loaded)', async () => {
     let loadCount = 0;
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: false,
       token: 'token-123',
       loader: async () => {
@@ -387,7 +412,7 @@ describe('Mixpanel observability adapter', () => {
         VITE_MIXPANEL_ENABLED: 'true',
         VITE_MIXPANEL_TOKEN: 'token-123',
       },
-      location: { hostname: 'localhost' },
+      location: { hostname: PROD_HOST },
       logger: { warn() {} },
     });
 
@@ -396,10 +421,75 @@ describe('Mixpanel observability adapter', () => {
   });
 });
 
+// ETP-5466 — dev traffic (localhost, every Playwright context) dominated the Mixpanel project.
+describe('Mixpanel production host allowlist', () => {
+  const ENABLED_ENV = { VITE_MIXPANEL_ENABLED: 'true', VITE_MIXPANEL_TOKEN: 'token-123' };
+  const mixpanelEnabledOn = (hostname, env = ENABLED_ENV) => buildBrowserObservabilityConfig({
+    env,
+    location: { hostname },
+    logger: { warn() {} },
+  }).providers.find(provider => provider.name === 'mixpanel').enabled;
+
+  it('emits from the production hosts', () => {
+    assert.deepEqual([...MIXPANEL_ALLOWED_HOSTS], ['app.etendo.software', 'app.etendo.ai']);
+    assert.equal(mixpanelEnabledOn('app.etendo.software'), true);
+    assert.equal(mixpanelEnabledOn('app.etendo.ai'), true);
+    assert.equal(mixpanelEnabledOn('APP.Etendo.Software'), true);
+  });
+
+  it('stays disabled on localhost, 127.0.0.1 and any other host, even with a token', () => {
+    for (const hostname of [
+      'localhost', '127.0.0.1', '0.0.0.0', '[::1]', 'go.staging.etendo.cloud',
+      'dev.app.etendo.software', 'app.etendo.software.evil.com', '', undefined,
+    ]) {
+      assert.equal(mixpanelEnabledOn(hostname), false, String(hostname));
+    }
+  });
+
+  it('does not load the SDK on a non-production host', async () => {
+    let loadCount = 0;
+    const provider = createMixpanelProvider({
+      hostname: 'localhost',
+      enabled: 'true',
+      token: 'token-123',
+      loader: async () => {
+        loadCount += 1;
+        return { default: createFakeMixpanel([]) };
+      },
+    });
+
+    await provider.init();
+    await provider.track('event');
+
+    assert.equal(provider.enabled, false);
+    assert.equal(loadCount, 0);
+  });
+
+  it('VITE_MIXPANEL_ALLOW_LOCAL=true opts any host in, still needing the switch and the token', () => {
+    const allowLocal = { ...ENABLED_ENV, VITE_MIXPANEL_ALLOW_LOCAL: 'true' };
+    assert.equal(mixpanelEnabledOn('localhost', allowLocal), true);
+    assert.equal(mixpanelEnabledOn('127.0.0.1', allowLocal), true);
+    assert.equal(mixpanelEnabledOn('localhost', { VITE_MIXPANEL_ALLOW_LOCAL: 'true' }), false);
+    assert.equal(
+      mixpanelEnabledOn('localhost', { VITE_MIXPANEL_ALLOW_LOCAL: 'true', VITE_MIXPANEL_TOKEN: 'token-123' }),
+      false,
+    );
+  });
+
+  it('takes only the literal "true" as the local override', () => {
+    for (const value of ['1', 'yes', 'TRUE', ' true', 'false', '']) {
+      assert.equal(isMixpanelHostAllowed('localhost', value), false, value);
+      assert.equal(mixpanelEnabledOn('localhost', { ...ENABLED_ENV, VITE_MIXPANEL_ALLOW_LOCAL: value }), false, value);
+    }
+    assert.equal(isMixpanelHostAllowed('localhost', true), true);
+  });
+});
+
 describe('Mixpanel automatic one-time stale-identity reset (getClient() gate)', () => {
   it('runs after the SDK client.init() and before the client is handed to the first caller', async () => {
     const calls = [];
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       storage: createFakeStorage(),
@@ -435,6 +525,7 @@ describe('Mixpanel automatic one-time stale-identity reset (getClient() gate)', 
     const calls = [];
     let loadCount = 0;
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       storage: createFakeStorage(),
@@ -486,6 +577,7 @@ describe('Mixpanel automatic one-time stale-identity reset (getClient() gate)', 
 
     const firstCalls = [];
     const firstProvider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       storage,
@@ -501,6 +593,7 @@ describe('Mixpanel automatic one-time stale-identity reset (getClient() gate)', 
     // shares the same underlying browser storage.
     const secondCalls = [];
     const secondProvider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       storage,
@@ -519,6 +612,7 @@ describe('Mixpanel automatic one-time stale-identity reset (getClient() gate)', 
 
     const failingCalls = [];
     const failingProvider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       storage,
@@ -541,6 +635,7 @@ describe('Mixpanel automatic one-time stale-identity reset (getClient() gate)', 
 
     const retryCalls = [];
     const retryProvider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       storage,
@@ -557,6 +652,7 @@ describe('Mixpanel automatic one-time stale-identity reset (getClient() gate)', 
   it('is skipped when the SDK exposes no reset function: no error, no flag set', async () => {
     const storage = createFakeStorage();
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       storage,
@@ -578,6 +674,7 @@ describe('Mixpanel automatic one-time stale-identity reset (getClient() gate)', 
       },
     };
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       storage: throwingStorage,
@@ -611,6 +708,7 @@ describe('Mixpanel automatic one-time stale-identity reset (getClient() gate)', 
       },
     };
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       storage: throwingStorage,
@@ -636,6 +734,7 @@ describe('Mixpanel automatic one-time stale-identity reset (getClient() gate)', 
     const storage = createFakeStorage();
     let loadCount = 0;
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: false,
       token: 'token-123',
       storage,
