@@ -1,0 +1,17 @@
+{
+  "Comment": "Etendo Go edge headers v2 for content-hashed assets: immutable caching, no CSP (documents only, ADR-0002 D2/D6) (ETP-4574).",
+  "Name": "etendo-go-assets-headers-v2",
+  "SecurityHeadersConfig": {
+    "StrictTransportSecurity": { "Override": true, "IncludeSubdomains": true, "Preload": true, "AccessControlMaxAgeSec": 31536000 },
+    "ContentTypeOptions": { "Override": true },
+    "FrameOptions": { "Override": true, "FrameOption": "DENY" },
+    "ReferrerPolicy": { "Override": true, "ReferrerPolicy": "strict-origin-when-cross-origin" }
+  },
+  "CustomHeadersConfig": {
+    "Quantity": 2,
+    "Items": [
+      { "Header": "Cache-Control", "Value": "public, max-age=31536000, immutable", "Override": true },
+      { "Header": "Permissions-Policy", "Value": "camera=(), geolocation=(), microphone=()", "Override": true }
+    ]
+  }
+}

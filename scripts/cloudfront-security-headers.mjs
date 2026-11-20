@@ -14,11 +14,13 @@
 //
 // Usage:
 //   node scripts/cloudfront-security-headers.mjs policy   [--dry-run]
-//   node scripts/cloudfront-security-headers.mjs apply    --distribution <id> [--snapshot-dir dir] [--dry-run] [--replace-existing]
+//   node scripts/cloudfront-security-headers.mjs apply    --distribution <id> [--policy name] [--paths default,/assets/*] [--snapshot-dir dir] [--dry-run] [--replace-existing]
 //   node scripts/cloudfront-security-headers.mjs verify   --distribution <id>
 //   node scripts/cloudfront-security-headers.mjs rollback --distribution <id> (--snapshot <file> | --snapshot-dir <dir>)
 //
-// No CORS and no CSP here: CSP belongs to ETP-4572/ETP-4574. An ETag conflict fails the
+// --policy picks another policy file (default v1); --paths limits apply/verify to those behaviors
+// ('default' or path patterns). v2 policies (ETP-4574) enforce CSP; the connect-src origins come
+// from CSP_CONNECT_ORIGINS and fail closed. No CORS. An ETag conflict fails the
 // run (re-run to re-read); it is never retried blindly.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -48,6 +50,30 @@ const updateDistribution = (aws, id, etag, config) =>
 
 export function loadDesiredPolicy(file = POLICY_FILE) {
   return JSON.parse(readFileSync(file, 'utf8'));
+}
+
+const POLICY_DIR = dirname(POLICY_FILE);
+const POLICY_NAME_RE = /^[a-z0-9-]+$/;
+const CSP_PLACEHOLDER = '{{CSP_CONNECT_ORIGINS}}';
+const HTTPS_ORIGIN = /^https:\/\/[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:\d{1,5})?$/;
+
+// Deployment-specific connect-src origins (e.g. the Sentry/GlitchTip host). Fails closed: a
+// missing or non-https-origin value throws instead of producing a looser or broken CSP.
+export function connectOrigins(env = process.env) {
+  const origins = (env.CSP_CONNECT_ORIGINS ?? '').split(/[\s,]+/).filter(Boolean);
+  const bad = origins.find((o) => !HTTPS_ORIGIN.test(o));
+  if (origins.length === 0 || bad) {
+    throw new Error(`CSP_CONNECT_ORIGINS must list https origins${bad ? ` (invalid origin: ${bad})` : ''}`);
+  }
+  return origins;
+}
+
+// Loads infra/cloudfront-response-headers/<name>.json, rendering the CSP placeholder if present.
+export function loadPolicyByName(name, env = process.env) {
+  if (!POLICY_NAME_RE.test(name)) throw new Error(`invalid policy name: ${name}`);
+  let text = readFileSync(join(POLICY_DIR, `${name}.json`), 'utf8');
+  if (text.includes(CSP_PLACEHOLDER)) text = text.replaceAll(CSP_PLACEHOLDER, connectOrigins(env).join(' '));
+  return JSON.parse(text);
 }
 
 // Sorted keys; drops undefined/null and empty or defaulted sections (e.g. `{ Quantity: 0 }`,
@@ -105,12 +131,21 @@ const hasEdgeResponseHook = (b) =>
   [...(b.FunctionAssociations?.Items ?? []), ...(b.LambdaFunctionAssociations?.Items ?? [])]
     .some((a) => EDGE_RESPONSE_EVENTS.has(a.EventType));
 
-export function attachPolicy(config, policyId, { replaceExisting = false } = {}) {
+// `paths` limits the operation to those behaviors ('default' or a path pattern); unknown ones throw.
+const selectBehaviors = (config, paths) => {
+  const all = behaviors(config);
+  if (!paths?.length) return all;
+  const unknown = paths.filter((p) => !all.some(({ label }) => label === p));
+  if (unknown.length > 0) throw new Error(`not behaviors of this distribution: ${unknown.join(', ')}`);
+  return all.filter(({ label }) => paths.includes(label));
+};
+
+export function attachPolicy(config, policyId, { replaceExisting = false, paths } = {}) {
   const next = structuredClone(config);
   const attach = [];
   const conflicts = [];
   const edgeHooks = [];
-  for (const { label, behavior } of behaviors(next)) {
+  for (const { label, behavior } of selectBehaviors(next, paths)) {
     const current = behavior.ResponseHeadersPolicyId;
     if (hasEdgeResponseHook(behavior)) edgeHooks.push(label);
     if (current === policyId) continue;
@@ -124,8 +159,8 @@ export function attachPolicy(config, policyId, { replaceExisting = false } = {})
   return { config: next, changed: attach.length > 0, attach, conflicts, edgeHooks };
 }
 
-export function verifyDistribution(config, policyId) {
-  const missing = behaviors(config)
+export function verifyDistribution(config, policyId, { paths } = {}) {
+  const missing = selectBehaviors(config, paths)
     .filter(({ behavior }) => behavior.ResponseHeadersPolicyId !== policyId)
     .map(({ label }) => label);
   return { ok: missing.length === 0, missing };
@@ -137,10 +172,10 @@ function findPolicy(aws, desired) {
   return { plan, found: plan.action !== 'create' };
 }
 
-export function verifyEnvironment({ aws, distributionId, desired = loadDesiredPolicy() }) {
+export function verifyEnvironment({ aws, distributionId, desired = loadDesiredPolicy(), paths }) {
   const { plan, found } = findPolicy(aws, desired);
   if (!found) throw new Error(`policy ${desired.Name} not found`);
-  const v = verifyDistribution(getDistributionConfig(aws, distributionId).DistributionConfig, plan.id);
+  const v = verifyDistribution(getDistributionConfig(aws, distributionId).DistributionConfig, plan.id, { paths });
   const drift = plan.action === 'update';
   return { ...v, ok: v.ok && !drift, drift, policyId: plan.id };
 }
@@ -148,7 +183,7 @@ export function verifyEnvironment({ aws, distributionId, desired = loadDesiredPo
 const stamp = () => new Date().toISOString().replace(/[:.]/g, '-');
 
 export function applyEnvironment({
-  aws, distributionId, snapshotDir, desired = loadDesiredPolicy(), dryRun = false, replaceExisting = false,
+  aws, distributionId, snapshotDir, desired = loadDesiredPolicy(), dryRun = false, replaceExisting = false, paths,
 }) {
   const { plan: found, found: exists } = findPolicy(aws, desired);
   if (!exists && !dryRun) throw new Error(`policy ${desired.Name} not found: run the policy step first`);
@@ -159,7 +194,7 @@ export function applyEnvironment({
 
   const got = getDistributionConfig(aws, distributionId);
   const { config, changed, attach, conflicts, edgeHooks } =
-    attachPolicy(got.DistributionConfig, policy.id ?? PLACEHOLDER_ID, { replaceExisting });
+    attachPolicy(got.DistributionConfig, policy.id ?? PLACEHOLDER_ID, { replaceExisting, paths });
   const report = { attach, conflicts, edgeHooks };
 
   mkdirSync(snapshotDir, { recursive: true });
@@ -175,7 +210,7 @@ export function applyEnvironment({
   }
 
   updateDistribution(aws, distributionId, got.ETag, config);
-  const check = verifyDistribution(getDistributionConfig(aws, distributionId).DistributionConfig, policy.id);
+  const check = verifyDistribution(getDistributionConfig(aws, distributionId).DistributionConfig, policy.id, { paths });
   if (!check.ok) throw new Error(`policy missing on behaviors: ${check.missing.join(', ')}`);
   return { ...result, updated: true };
 }
@@ -236,24 +271,27 @@ export function cliAws(args, body) {
   }
 }
 
-const USAGE = 'usage: cloudfront-security-headers.mjs policy|apply|verify|rollback [--distribution <id>] [--snapshot-dir d] [--snapshot f] [--dry-run] [--replace-existing]';
+const USAGE = 'usage: cloudfront-security-headers.mjs policy|apply|verify|rollback [--distribution <id>] [--policy name] [--paths a,b] [--snapshot-dir d] [--snapshot f] [--dry-run] [--replace-existing]';
 
 function main(argv) {
   const [cmd, ...rest] = argv;
   const opt = (n) => { const i = rest.indexOf(`--${n}`); return i < 0 ? undefined : rest[i + 1]; };
   const distributionId = opt('distribution');
   const dryRun = rest.includes('--dry-run');
+  const policyName = opt('policy');
+  const desired = policyName ? loadPolicyByName(policyName) : loadDesiredPolicy();
+  const paths = opt('paths')?.split(',').filter(Boolean);
   if (!['policy', 'apply', 'verify', 'rollback'].includes(cmd) || (cmd !== 'policy' && !distributionId)) {
     console.error(USAGE);
     process.exit(2);
   }
   if (cmd === 'policy') {
-    console.log(JSON.stringify(policyEnvironment({ aws: cliAws, dryRun })));
+    console.log(JSON.stringify(policyEnvironment({ aws: cliAws, desired, dryRun })));
   } else if (cmd === 'apply') {
     const snapshotDir = resolve(opt('snapshot-dir') ?? 'cf-snapshots');
-    console.log(JSON.stringify(applyEnvironment({ aws: cliAws, distributionId, snapshotDir, dryRun, replaceExisting: rest.includes('--replace-existing') })));
+    console.log(JSON.stringify(applyEnvironment({ aws: cliAws, distributionId, snapshotDir, desired, paths, dryRun, replaceExisting: rest.includes('--replace-existing') })));
   } else if (cmd === 'verify') {
-    const v = verifyEnvironment({ aws: cliAws, distributionId });
+    const v = verifyEnvironment({ aws: cliAws, distributionId, desired, paths });
     console.log(JSON.stringify(v));
     if (!v.ok) process.exit(1);
   } else {

@@ -37,6 +37,16 @@ on:
         required: false
         default: false
         type: boolean
+      policy:
+        description: 'policy file name (default: etendo-go-security-headers-v1)'
+        required: false
+        default: 'etendo-go-security-headers-v1'
+        type: string
+      paths:
+        description: 'apply/verify: comma-separated behaviors (default or path patterns); empty = all'
+        required: false
+        default: ''
+        type: string
       snapshot_run_id:
         description: 'rollback only: run id of the apply run that uploaded cf-snapshot-<env>-<run_id>'
         required: false
@@ -73,8 +83,10 @@ jobs:
       - name: Create or update the policy
         env:
           DRY_RUN: ${{ inputs.dry_run }}
+          POLICY: ${{ inputs.policy }}
+          CSP_CONNECT_ORIGINS: ${{ vars.CSP_CONNECT_ORIGINS }}
         run: |
-          ARGS=()
+          ARGS=(--policy "$POLICY")
           if [[ "$DRY_RUN" == "true" ]]; then ARGS+=(--dry-run); fi
           node scripts/cloudfront-security-headers.mjs policy "${ARGS[@]}"
 
@@ -145,15 +157,20 @@ jobs:
           ACTION: ${{ inputs.action }}
           DRY_RUN: ${{ inputs.dry_run }}
           REPLACE_EXISTING: ${{ inputs.replace_existing }}
+          POLICY: ${{ inputs.policy }}
+          PATHS: ${{ inputs.paths }}
+          CSP_CONNECT_ORIGINS: ${{ vars.CSP_CONNECT_ORIGINS }}
         run: |
+          SEL=(--policy "$POLICY")
+          if [[ -n "$PATHS" ]]; then SEL+=(--paths "$PATHS"); fi
           case "$ACTION" in
             apply)
-              ARGS=(--snapshot-dir cf-snapshots)
+              ARGS=(--snapshot-dir cf-snapshots "${SEL[@]}")
               if [[ "$DRY_RUN" == "true" ]]; then ARGS+=(--dry-run); fi
               if [[ "$REPLACE_EXISTING" == "true" ]]; then ARGS+=(--replace-existing); fi
               node scripts/cloudfront-security-headers.mjs apply --distribution "$DIST" "${ARGS[@]}" ;;
             verify)
-              node scripts/cloudfront-security-headers.mjs verify --distribution "$DIST" ;;
+              node scripts/cloudfront-security-headers.mjs verify --distribution "$DIST" "${SEL[@]}" ;;
             rollback)
               node scripts/cloudfront-security-headers.mjs rollback --distribution "$DIST" --snapshot-dir cf-snapshot-in ;;
           esac
@@ -162,7 +179,13 @@ jobs:
         if: inputs.action == 'apply' && inputs.dry_run == false
         env:
           DIST: ${{ steps.target.outputs.id }}
-        run: node scripts/cloudfront-security-headers.mjs verify --distribution "$DIST"
+          POLICY: ${{ inputs.policy }}
+          PATHS: ${{ inputs.paths }}
+          CSP_CONNECT_ORIGINS: ${{ vars.CSP_CONNECT_ORIGINS }}
+        run: |
+          SEL=(--policy "$POLICY")
+          if [[ -n "$PATHS" ]]; then SEL+=(--paths "$PATHS"); fi
+          node scripts/cloudfront-security-headers.mjs verify --distribution "$DIST" "${SEL[@]}"
 
       - name: Upload pre-change snapshot
         if: always() && inputs.action == 'apply'
