@@ -306,7 +306,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   // ETP-6239: every request carries both compared ranges and the most periods any mode shows, so the comparison is a display choice, not a request.
   // ETP-6083: a report whose Desde is the ledger start asks for the balance at Hasta from the start of its fiscal year, whatever
   // Desde says (the amounts never depend on it): changing Desde sends no request, it only moves where the ledger drill starts.
-  const fmt = (d) => (d ? formatCalendarDate(d, locale.replace('_', '-')) : '');
+  const fmt = useCallback((d) => (d ? formatCalendarDate(d, locale.replace('_', '-')) : ''), [locale]);
   const atDate = useBalanceAtDate({ ledgerStart, endShortcuts, compareModes, years: defaults.years, state, today, fmt, ui });
   const { rules, queryFrom, withLedgerStart } = atDate;
   const range = useMemo(() => ({ dateFrom: queryFrom, dateTo: state.dateTo }), [queryFrom, state.dateTo]);
@@ -418,7 +418,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const [drill, setDrill] = useState(null); // { row, range, clicked }: the account whose ledger is open, the cell's range (null = the view's period) and the amount clicked
   const openLedger = useCallback((row, cellRange, clicked) => setDrill({ row: drillRowOf(row), range: cellRange, clicked }), []);
   // ETP-6083: the ledger of a balance reads from the ledger start (Desde, inside the fiscal year of the cell's date) to that date.
-  const drillRange = useMemo(() => atDate.drillRange(drill), [atDate, drill]);
+  const drillRange = useMemo(() => atDate.drillRange(drill), [atDate.drillRange, drill]);
   // ETP-6083: the income-summary row's explanation: { row, pos, which, range }.
   const [resultInfo, setResultInfo] = useState(null);
   const openResult = useCallback((row, cell) => {
