@@ -773,7 +773,8 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
 
   const grouped = {};
   for (const p of report.parameters || []) {
-    if (p.hidden || !isParamVisible(p, params)) continue;
+    // `dynamicOnly` (ETP-6084): a control only the interactive view acts on; here it would do nothing.
+    if (p.hidden || p.dynamicOnly || !isParamVisible(p, params)) continue;
     const sec = p.section || 'primary';
     if (!grouped[sec]) grouped[sec] = [];
     grouped[sec].push(p);
@@ -883,8 +884,9 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
     // No "None" row: the base/empty entry (value '') is dropped from the list entirely —
     // clearing a selection is done via the chip's "×" (CreatableSearchSelect's clearable
     // behavior), not via a pinned empty option.
+    // `dynamicOnly` options (ETP-6083, the Balance's Grupo / Epígrafe folds) only exist in the interactive view.
     const staticOpts = resolvedOptions
-      .filter(o => o.value !== '')
+      .filter(o => o.value !== '' && !o.dynamicOnly)
       .map(o => ({ id: o.value, name: resolveOptLabel(o) }));
     const selectedOpt = staticOpts.find(o => o.id === (params[p.name] || ''));
     return (
@@ -1042,7 +1044,8 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
       </div>
       <div className="flex-1 overflow-y-auto">
         {useAccordion ? (
-          report.sections.map(({ id, label, visibleIf }) => {
+          report.sections.map(({ id, label, visibleIf, dynamicOnly }) => {
+            if (dynamicOnly) return null;
             // A section carrying `visibleIf` (same {param, equals} shape as a
             // field's own, ETP-5128) disappears ENTIRELY while the condition
             // doesn't hold — e.g. Trial Balance's "Dimensions" section only
@@ -1111,12 +1114,13 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
 /**
  * The message of a failed render. The org and report access checks (ETP-6080) answer
  * `ORG_ACCESS_DENIED` / `REPORT_ACCESS_DENIED` with an
- * English text, so those codes are shown translated; anything else keeps the server's message.
+ * English text (and a query past the statement timeout, `REPORT_TIMEOUT`, ETP-6146), so those codes are shown translated; anything else keeps the server's message.
  */
 async function renderErrorMessage(res, ui) {
   const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
   if (data?.code === 'ORG_ACCESS_DENIED') return ui('reportErrorOrgAccess');
   if (data?.code === 'REPORT_ACCESS_DENIED') return ui('reportErrorReportAccess');
+  if (data?.code === 'REPORT_TIMEOUT') return ui('reportErrorTimeout');
   return data?.error || `Render failed: ${res.status}`;
 }
 
@@ -1251,6 +1255,17 @@ const TRIAL_BALANCE_DIMENSION_PARAM_NAMES = {
   costcenter: 'costCenterId',
 };
 
+/** A parameter's initial value from its contract default; the `__TODAY__`-style tokens resolve against now. */
+function contractDefaultOf(p) {
+  const now = new Date();
+  const isoDay = (d) => d.toISOString().split('T')[0];
+  if (p.default === '__TODAY__') return isoDay(now);
+  if (p.default === '__FIRST_OF_PREV_MONTH__') return isoDay(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  if (p.default === '__FIRST_OF_YEAR__') return isoDay(new Date(now.getFullYear(), 0, 1));
+  if (p.default !== undefined && p.default !== null && p.default !== false) return String(p.default);
+  return '';
+}
+
 function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, roleOrgIds, categoryFilter }) {
   const iframeRef = useRef(null);
   const [loading, setLoading] = useState(false);
@@ -1325,18 +1340,8 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
   const getDefaultParams = useCallback(() => {
     const defaults = {};
     for (const p of report.parameters || []) {
-      if (p.default === '__TODAY__') {
-        defaults[p.name] = new Date().toISOString().split('T')[0];
-      } else if (p.default === '__FIRST_OF_PREV_MONTH__') {
-        const now = new Date();
-        defaults[p.name] = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
-      } else if (p.default === '__FIRST_OF_YEAR__') {
-        defaults[p.name] = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
-      } else if (p.default !== undefined && p.default !== null && p.default !== false) {
-        defaults[p.name] = String(p.default);
-      } else {
-        defaults[p.name] = '';
-      }
+      if (p.dynamicOnly) continue; // not shown here, so never seeded (its default would print in the export header)
+      defaults[p.name] = contractDefaultOf(p);
       // A deep-link query-string value (e.g. the "open in new tab" drill-down
       // button, ETP-4898) overrides the contract default for that same
       // parameter name — this is what lets a new tab land pre-filled instead
@@ -1982,7 +1987,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 <ReportListRow
                   key={r.id}
                   report={r}
-                  interactive={opensDynamicView(r.id, dynamicReportsOn)}
+                  interactive={opensDynamicView(r.id, dynamicReportsOn, r)}
                   onRun={selectReport}
                   locale={locale}
                   data-testid="ReportListRow__3c998a" />
@@ -2007,7 +2012,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 <ReportCard
                   key={r.id}
                   report={r}
-                  interactive={opensDynamicView(r.id, dynamicReportsOn)}
+                  interactive={opensDynamicView(r.id, dynamicReportsOn, r)}
                   onRun={selectReport}
                   data-testid="ReportCard__3c998a" />
               ))}
@@ -2159,7 +2164,7 @@ export default function ReportViewerPage() {
     );
   }
 
-  if (selectedReport && opensDynamicView(selectedReport.id, dynamicReportsOn)) {
+  if (selectedReport && opensDynamicView(selectedReport.id, dynamicReportsOn, selectedReport)) {
     return (
       <Suspense
         fallback={<CircleNotchIcon

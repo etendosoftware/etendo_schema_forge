@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "generatedAt": "2026-06-16T16:35:15.726Z",
   "updatedAt": "2026-07-28T13:51:31.609Z",
-  "contractChecksum": "88c9f5b2db3ccb9c",
+  "contractChecksum": "c3b75a63764c933e",
   "apiPrediction": {
     "specName": "transaction-type",
     "baseUrl": "/sws/neo/transaction-type",

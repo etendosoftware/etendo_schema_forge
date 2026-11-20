@@ -1,3 +1,5 @@
+import { DOC_STATUS } from '../../../lib/docStatus.js';
+
 /**
  * ETP-4717 — several custom windows (sales-order, purchase-order via
  * useOrderWindow, sales-invoice/purchase-invoice via useInvoiceWindow,
@@ -10,5 +12,5 @@
  * expression — a single literal here means no risk of a typo drifting
  * between call sites.
  */
-export const SEND_VISIBLE_WHEN_CONFIRMED = "@DocumentStatus@='CO'";
-export const SEND_VISIBLE_WHEN_NOT_DRAFT = "@DocumentStatus@!='DR'";
+export const SEND_VISIBLE_WHEN_CONFIRMED = `@DocumentStatus@='${DOC_STATUS.COMPLETED}'`;
+export const SEND_VISIBLE_WHEN_NOT_DRAFT = `@DocumentStatus@!='${DOC_STATUS.DRAFT}'`;

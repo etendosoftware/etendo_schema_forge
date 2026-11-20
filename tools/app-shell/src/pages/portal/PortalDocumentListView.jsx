@@ -16,6 +16,7 @@ import {
   PORTAL_KIND_GROUPS, PORTAL_KIND_META, documentLabelKey, initialPortalRange, quotationValidity,
   toCalendarParam,
 } from './portalPresentation.js';
+import { isCompletedStatus } from '../../lib/docStatus.js';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -311,7 +312,7 @@ function MobileCard({ document, kind, onOpen }) {
         {/* An invoice shows its payment state; its document status too when it is not the plain
             "completed" every listed invoice shares (closed, voided), like the table. */}
         <span className="flex flex-wrap items-center justify-end gap-1">
-          {isInvoice && document.documentStatus !== 'CO'
+          {isInvoice && !isCompletedStatus(document.documentStatus)
             ? <PortalDocumentStatus
             status={document.documentStatus}
             className="text-[13px] leading-[18px]"

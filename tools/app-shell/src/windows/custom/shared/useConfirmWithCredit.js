@@ -5,6 +5,7 @@ import { useUI } from '@/i18n';
 import { buildHeaders } from '@/auth/api.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { translateQuotaRefusalBody } from '@/lib/backendErrors.js';
+import { isVoidedStatus } from '../../../lib/docStatus.js';
 export function useConfirmWithCredit({
   data,
   recordId,
@@ -35,7 +36,7 @@ export function useConfirmWithCredit({
   const hasReturnInvoice = typeof data?.hasReturnInvoice === 'boolean'
     ? data.hasReturnInvoice
     : Array.isArray(data?.returnInvoices)
-      && data.returnInvoices.some(inv => inv.documentStatus !== 'VO');
+      && data.returnInvoices.some(inv => !isVoidedStatus(inv.documentStatus));
 
   const headers = useMemo(() => (buildHeaders(token)), [token]);
   const apiFetch = useApiFetch(apiBaseUrl);

@@ -1,4 +1,5 @@
 import { listAll, listLines } from './importActionClient.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 /**
  * The data side of the four «Importar desde…» popups of a goods shipment / goods receipt
@@ -78,7 +79,7 @@ async function excludedOnlyByCurrency({ apiFetch, base, spec, entity, targetId, 
     if (!currency) return false;
     const isCandidate = probe.isCandidate || (() => true);
     const candidates = (await rowsOf(sourceRes)).filter(d =>
-      d.documentStatus === 'CO' && d.businessPartner === bpId && isCandidate(d));
+      isCompletedStatus(d.documentStatus) && d.businessPartner === bpId && isCandidate(d));
     return candidates.length > 0 && !candidates.some(d => d.currency === currency);
   } catch {
     return false;

@@ -18,11 +18,41 @@ export const ENTRY_REQUIRED_PARAMS = Object.freeze(['orgId', 'acctSchemaId', 'fa
  * schema = one chart) and kept so the request still means the same to a General Ledger without `accountId`.
  * `range` (`{from, to}`, ETP-6239) replaces the view's period: the bucket of the cell clicked, or the range it was compared with.
  */
-export function ledgerParams(queryParams, row, range = null) {
-  const { acctSchemaId, orgId, bPartnerId, productId } = queryParams;
+export function ledgerParams(queryParams, row, range = null, { atDate = false } = {}) {
+  const { acctSchemaId, orgId, bPartnerId, productId, projectId, costCenterId, groupBy, openingEntryAmount } = queryParams;
   const dateFrom = range?.from ?? queryParams.dateFrom;
   const dateTo = range?.to ?? queryParams.dateTo;
-  return { acctSchemaId, orgId, dateFrom, dateTo, bPartnerId, productId, accountId: row.node_id, fromAccountId: row.value, toAccountId: row.value };
+  const params = { acctSchemaId, orgId, dateFrom, dateTo, bPartnerId, productId, projectId, costCenterId, accountId: row.node_id, fromAccountId: row.value, toAccountId: row.value };
+  // ETP-6084: the Trial Balance's opening-entry toggle travels, so the ledger's opening matches the clicked cell.
+  if (openingEntryAmount !== undefined) params.openingEntryAmount = openingEntryAmount;
+  // ETP-6083: the ledger of a balance AT A DATE counts the opening entry too, so its closing is the amount clicked.
+  if (atDate) params.openingEntryAmount = 'true';
+  // A dimension row narrows the ledger to its own contact / product / project / cost centre.
+  const dimensionParam = DIMENSION_PARAMS[groupBy];
+  if (row.isDimension && row.dimension_id && dimensionParam) params[dimensionParam] = row.dimension_id;
+  // ETP-6083: a folded row reads its hidden accounts as a code range (no single account id).
+  if (row.foldedRange) Object.assign(params, { accountId: '', fromAccountId: row.foldedRange.from, toAccountId: row.foldedRange.to });
+  return params;
+}
+
+/** The report's `groupBy` value → the General Ledger parameter that filters by that dimension. */
+export const DIMENSION_PARAMS = Object.freeze({ bpartner: 'bPartnerId', product: 'productId', project: 'projectId', costcenter: 'costCenterId' });
+
+/**
+ * ETP-6084: the row a drill-down opens, as the ledger reads it. A chart-tree row carries the posting account
+ * as `account_id` / `account_value` (a dimension row's own `node_id` is synthetic, never an account); the P&L's
+ * rows have neither, so they pass through unchanged.
+ */
+export function drillRowOf(row) {
+  if (row.account_id == null && row.account_value == null) return row;
+  return { ...row, node_id: row.account_id ?? row.node_id, value: row.account_value ?? row.value };
+}
+
+/** A row whose ledger can open: an account with no sub-accounts (dimension children don't count) or a folded row (its hidden accounts' range), or a dimension row that has a value. */
+export function canDrill(row) {
+  if (row.isFormula || !(row.account_value ?? row.value)) return false;
+  if (row.isDimension) return Boolean(row.dimension_id);
+  return !row.hasChildren || Boolean(row.hasDimensionChildren) || Boolean(row.foldedRange);
 }
 
 /**
@@ -54,14 +84,17 @@ const num = (v) => Number(v) || 0;
 /**
  * Opening / debit / credit / closing of the ledger, in debit − credit terms, plus `movement`: the
  * period's debit − credit with the report row's sign (`C` flips it), so it equals the amount the
- * user clicked on. The closing never does: it carries every earlier period too.
+ * user clicked on. The closing never does: it carries every earlier period too. `openingSigned` / `closingSigned`
+ * carry the row's sign as well (ETP-6083): for a balance AT A DATE the closing IS the amount clicked.
  */
 export function ledgerSummary(rows = [], openingRows = [], sign = 'D') {
   const opening = (openingRows || []).reduce((sum, r) => sum + num(r.openingtotal), 0);
   const debit = rows.reduce((sum, r) => sum + num(r.amtacctdr), 0);
   const credit = rows.reduce((sum, r) => sum + num(r.amtacctcr), 0);
-  const movement = (debit - credit) * (sign === 'C' ? -1 : 1);
-  return { opening, debit, credit, closing: opening + debit - credit, movement: movement || 0 };
+  const flip = sign === 'C' ? -1 : 1;
+  const movement = (debit - credit) * flip;
+  const closing = opening + debit - credit;
+  return { opening, debit, credit, closing, movement: movement || 0, openingSigned: opening * flip || 0, closingSigned: closing * flip || 0 };
 }
 
 const SEARCHED_FIELDS = ['groupbyname', 'bpname', 'productname', 'projectname', 'costcentername'];
@@ -80,4 +113,19 @@ export function entryDocument(rows = []) {
   return row
     ? { docWindow: row.doc_window, recordId: row.doc_record_id, docQueryKey: row.doc_query_key, docQueryValue: row.doc_query_value }
     : null;
+}
+
+/** Cents: the report rounds to two decimals, the ledger sums raw lines. */
+export const sameAmount = (a, b) => Math.abs(num(a) - num(b)) < 0.005;
+
+/**
+ * ETP-6083: the Profit & Loss behind an income-summary result — the report's period opened from the start of the fiscal
+ * year of `to` (the on-the-fly result is that year's), with the view's org and contact / product filters (ETP-6239 URL keys).
+ * `basePath` is the app's (`/etendogoclean`), as the viewer's own new-tab link builds it.
+ */
+export const RESULT_REPORT_ID = 'profit-loss';
+export function resultReportUrl({ basePath, from, to, orgId, bPartnerId, productId }) {
+  const q = new URLSearchParams({ report: RESULT_REPORT_ID, category: 'finance', dateFrom: from, dateTo: to });
+  for (const [key, value] of Object.entries({ orgId, bPartnerId, productId })) if (value) q.set(key, value);
+  return `${basePath}/report-viewer?${q.toString()}`;
 }

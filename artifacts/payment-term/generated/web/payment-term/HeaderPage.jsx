@@ -51,7 +51,8 @@ const listModalConfig = {
   "hideSearch": true,
   "newButtonVariant": "primary",
   "rowClickEdit": true,
-  "listVariant": "compact"
+  "listVariant": "compact",
+  "viewTitleKey": "paymentTermViewTitle"
 };
 
 export const api = {

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/pages/ReportViewerPage.jsx
 // Coverage-recovery suite (ETP-4346 batch 2, part 2): targets the remaining
 // reachable ReportSidebar interaction branches (select onChange, boolean
 // checkbox toggle via row click + direct checkbox click, date field onChange)
@@ -214,6 +215,42 @@ describe('ReportViewerPage — ReportSidebar select / boolean / date interaction
     const chip = await screen.findByTestId('field-groupBy-chip');
     expect(chip).toHaveTextContent('Category');
     expect(screen.queryByTestId('field-groupBy')).toBeNull();
+  });
+
+  // ETP-6083: the Balance's Grupo / Epígrafe folds (`dynamicOnly`) only exist in the interactive view.
+  it('hides a dynamicOnly option from the old viewer and keeps the legacy-only and shared ones', async () => {
+    const LEVEL_REPORT = {
+      id: 'report-level',
+      title: { en_US: 'Level Report' },
+      type: 'listing',
+      outputs: ['pdf'],
+      parameters: [
+        {
+          name: 'accountLevel', type: 'select', label: { en_US: 'Account Level' }, section: 'primary', default: 'C',
+          options: [
+            { value: 'G', maxIndent: 0, dynamicOnly: true, label: { en_US: 'Group' } },
+            { value: 'P', maxIndent: 1, dynamicOnly: true, label: { en_US: 'Heading (dynamic)' } },
+            { value: 'E', legacyOnly: true, label: { en_US: 'Heading' } },
+            { value: 'C', label: { en_US: 'Account' } },
+            { value: 'D', legacyOnly: true, label: { en_US: 'Breakdown' } },
+            { value: 'S', label: { en_US: 'Subaccount' } },
+          ],
+        },
+      ],
+    };
+    mockSearchParams = new URLSearchParams({ report: 'report-level' });
+    const user = userEvent.setup();
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse([LEVEL_REPORT]));
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
+    });
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('Account Level')).toBeInTheDocument());
+    await user.click(screen.queryByTestId('field-accountLevel-chip') || screen.getByTestId('field-accountLevel'));
+
+    for (const kept of ['E', 'C', 'D', 'S']) expect(await screen.findByTestId(`option-accountLevel-${kept}`)).toBeInTheDocument();
+    for (const hidden of ['G', 'P']) expect(screen.queryByTestId(`option-accountLevel-${hidden}`)).toBeNull();
   });
 
   it('toggles a boolean parameter by clicking the row container', async () => {

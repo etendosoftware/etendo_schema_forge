@@ -16,20 +16,3 @@
 function periodCaption(label, caption) {
   return label + ' ' + caption;
 }
-
-// ETP-6080 — round2 / numCellType, copied from inventory-stock-report/helpers.js (not canonical
-// helpers, so each report keeps its own copy). The variation cells of the Excel/CSV export are
-// nullable (variationPct is null when the reference is 0) and carry long decimals.
-// round2 caps a value at 2 decimals and returns '' for null (a blank cell, never 0).
-function round2(value) {
-  if (value == null || value === '') return '';
-  var num = Number(value);
-  if (isNaN(num)) return 0;
-  return Math.round(num * 100) / 100;
-}
-
-// numCellType — html-to-xlsx writes a data-cell-type="number" cell holding no number as the
-// literal NaN (invalid XML), so a null value must be a genuinely empty "string" cell.
-function numCellType(value) {
-  return value == null || value === '' ? 'string' : 'number';
-}
