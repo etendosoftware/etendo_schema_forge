@@ -1189,7 +1189,7 @@ ETENDO_GO_MODULE ?= $(abspath ../modules/com.etendoerp.go)
 
 .PHONY: flag-debt-rollup
 flag-debt-rollup: ## Score flag debt across this repo + schema_forge_core + com.etendoerp.go (SCHEMA_FORGE_CORE=, ETENDO_GO_MODULE=, FLAG=<key>, JSON=1, HTML=1)
-	@$(SF) sf-flag-debt --rollup ./flags-registry.json $(SCHEMA_FORGE_CORE)/flags-registry.json $(ETENDO_GO_MODULE)/flags-registry.json $(if $(FLAG),--flag $(FLAG)) $(if $(JSON),--json) $(if $(HTML),--html)
+	@$(SF) sf-flag-debt --rollup ./flags-registry.json '$(SCHEMA_FORGE_CORE)/flags-registry.json' '$(ETENDO_GO_MODULE)/flags-registry.json' $(if $(FLAG),--flag $(FLAG)) $(if $(JSON),--json) $(if $(HTML),--html)
 
 # --- XML Regeneration Check ---
 

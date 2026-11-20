@@ -226,7 +226,7 @@ header lives elsewhere:
 
 ```jsonc
 {
-  "id": "paid-second-tenant",     // the header's id — this is the join key
+  "id": "my-feature",             // the header's id — this is the join key
   "flagKey": "my-flag",           // the live flag; dropped at retirement (then add "contribution": true)
   "symbols": ["MyFlagService"],   // optional: terms that exist only in this repo
   "paths": ["src/com/etendoerp/go/payment/"],
@@ -269,7 +269,7 @@ The rollup reports, and never hides:
 | **orphan contribution** | A contribution whose id has no header in any registry. Reported, not scored. |
 | **duplicate header** | The same id declared as a header twice. The first is used. |
 | **flag key mismatch** | A contribution names a different `flagKey` than its header. |
-| **unverifiable** | A registry path that does not exist — an absent checkout. Its contributions are not in the score, and the specs of a merged feature that sit in an absent checkout are listed as *unverifiable* and **not charged**, so the score never depends on which checkouts happen to be on a machine. |
+| **unverifiable** | A registry path that does not exist — an absent checkout. Its contributions are not in the score, and the specs of a merged feature that sit in an absent checkout are listed as *unverifiable* and add **0 points**. Specs in checkouts that are present are still charged, so two machines get the same score only when the same checkouts are present — the unverifiable list says exactly what is missing. |
 
 ### Key-sync tests
 

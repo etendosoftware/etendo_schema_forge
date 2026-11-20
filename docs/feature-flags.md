@@ -218,8 +218,9 @@ are documented in [paid tenant infrastructure](paid-tenant-infrastructure.md).
 A flag evaluated only in `com.etendoerp.go` (backend framework `featureflags/`, see
 *Architecture: flag code layout* above) has **no key in `flag-keys.js`, and none must be added**:
 the SPA reacts to what the backend answers, never to the flag itself — a browser key would be a
-second evaluator on a different control plane. Its owned paths, symbols and TTL are registered in
-[`flags-registry.json`](../flags-registry.json) under root `backend`, like every other flag, and
+second evaluator on a different control plane. Its header (description, TTL, `defaultValue`) is registered in
+[`flags-registry.json`](../flags-registry.json) with `"scope": "backend"`, and its owned paths and specs are a
+contribution in `com.etendoerp.go`'s own `flags-registry.json`, and
 its behaviour is documented in its topic doc and in `com.etendoerp.go`
 `docs/feature-flags-and-tenant-upgrade.md`. This page keeps only the list:
 

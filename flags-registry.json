@@ -154,8 +154,20 @@
       "jira": "ETP-4686",
       "created": "2026-07-28",
       "paths": [],
-      "$pathsComment": "Deliberately empty: the scorer's owned code (cli/src/flag-debt.js and cli/test/flag-debt.test.js) lives in schema_forge_core. Declaring it takes a contribution in that repo's flags-registry.json, which ETP-4697 made possible but which stays empty by design (it builds the capability, not a backfill) — add the contribution when core gets its first flag or when the scorer's paths and testSpecs are worth scoring.",
-      "$deferredItemsComment": "CLOSED by ETP-4697 — `multi-repo-registry-split` (kind: precondition) is retired, not deleted quietly. The registry is now one v3 registry per repo (this one holds the headers; com.etendoerp.go and schema_forge_core hold contributions), `sonarProject` is declared per registry instead of hardcoded, the checkout-dependent backend search in resolveRoots is gone, and `sf-flag-debt --rollup` merges by feature id and then scores, so a flat spec penalty is charged once and an absent checkout is reported as unverifiable instead of silently counted as pending. The two key-sync checks landed with it: flag-keys.sync.vitest.js here (FLAG_DEFAULTS ↔ registry) and GoFeatureFlagsRegistrySyncTest in com.etendoerp.go (FLAG_* constants ↔ registry ↔ etendo.go.flags.* properties, plus the isEnabled( literal backstop). This entry is the scorer scoring itself: a shipped feature with no flag object."
+      "$pathsComment": "Deliberately empty: the scorer's owned code lives in schema_forge_core. See the `core-contribution-for-scorer` deferred item, which is what makes the gap scored instead of invisible.",
+      "$deferredItemsComment": "CLOSED by ETP-4697 — `multi-repo-registry-split` (kind: precondition) is retired, not deleted quietly. The registry is now one v3 registry per repo (this one holds the headers; com.etendoerp.go and schema_forge_core hold contributions), `sonarProject` is declared per registry instead of hardcoded, the checkout-dependent backend search in resolveRoots is gone, and `sf-flag-debt --rollup` merges by feature id and then scores, so a flat spec penalty is charged once and an absent checkout is reported as unverifiable instead of silently counted as pending. The two key-sync checks landed with it: flag-keys.sync.vitest.js here (FLAG_DEFAULTS ↔ registry) and GoFeatureFlagsRegistrySyncTest in com.etendoerp.go (FLAG_* constants ↔ registry ↔ etendo.go.flags.* properties, plus the isEnabled( literal backstop). This entry is the scorer scoring itself: a shipped feature with no flag object.",
+      "deferredItems": [
+        {
+          "id": "core-contribution-for-scorer",
+          "kind": "open",
+          "note": "The scorer's own code (cli/src/flag-debt.js, cli/test/flag-debt.test.js) lives in schema_forge_core, so this entry still declares no paths and no testSpecs and reads as debt-free for the code it is about. Therefore its tests, coverage and touch points are unmeasured until schema_forge_core's flags-registry.json carries a contribution for this id. Left out of ETP-4697 on purpose: core's registry starts empty, building the capability rather than a backfill.",
+          "refs": [
+            "schema_forge_core flags-registry.json",
+            "schema_forge_core cli/src/flag-debt.js",
+            "ETP-4697"
+          ]
+        }
+      ]
     },
     {
       "id": "product-import-category-resolution",
@@ -166,7 +178,7 @@
       "paths": [
         "tools/app-shell/src/windows/custom/product/productImportDescriptor.js"
       ],
-      "$pathsComment": "The current usable slice owns the Product import descriptor. Core and NEO are separate repositories; their debt is recorded below because this registry currently scores from the Schema Forge checkout.",
+      "$pathsComment": "The current usable slice owns the Product import descriptor. Core and NEO are separate repositories; a registry has one root (this repo), so core's side is recorded as a deferred item below instead of a path outside the root.",
       "$knownGapComment": "USABLE SLICE WITH EXPLICIT DEBT: category resolution and client-side auto-creation are available for Product imports, but the category POST is separate from the Product + Price batch. The current implementation therefore does not provide one transaction boundary across category, product, and price, and the resolution cache is keyed by token rather than a unique import-run identifier. These gaps are intentionally deferred for the next stack layer.",
       "deferredItems": [
         {
@@ -204,17 +216,20 @@
             "ETP-4697 — Split flags-registry into per-repo registries with rollup scoring",
             "docs/flag-debt.md — multi-repository registry limitation"
           ]
+        },
+        {
+          "id": "core-contribution-for-resolve-dependent-entity",
+          "kind": "open",
+          "note": "The unit spec for the shared resolution logic, packages/app-shell-core/src/lib/import/__tests__/resolveDependentEntity.test.js, lives in schema_forge_core and used to be declared here as a ../ path that scored present or pending depending on a sibling checkout being on disk. A v3 registry cannot reach it, so it is no longer declared here. Therefore that test is unscored until schema_forge_core's flags-registry.json carries a contribution for this feature id.",
+          "refs": [
+            "schema_forge_core packages/app-shell-core/src/lib/import/__tests__/resolveDependentEntity.test.js"
+          ]
         }
       ],
       "testSpecs": {
         "unit": [
           {
             "path": "tools/app-shell/src/windows/custom/product/__tests__/productImportDescriptor.vitest.js"
-          },
-          {
-            "path": "../schema_forge_core/packages/app-shell-core/src/lib/import/__tests__/resolveDependentEntity.test.js",
-            "expected": true,
-            "note": "Cross-repository Core test; the current registry root cannot resolve this path reliably."
           }
         ],
         "e2e": [
@@ -1026,7 +1041,7 @@
         "tools/app-shell/src/windows/custom/contacts/contactsImportDescriptor.js",
         "tools/app-shell/src/lib/importCapabilities.js"
       ],
-      "$pathsComment": "GoFeatureFlags.java is excluded: it is frameworkPaths (com/etendoerp/go/featureflags/), shared infrastructure for every flag, never owned code for one. NOT covered by this registry's `roots` (frontend=schema_forge root, backend=etendo_core/modules/com.etendoerp.go): the gated UI in the SIBLING `schema_forge_core` repo, consumed here as the published/linked @etendosoftware/etendo-go-core and @etendosoftware/app-shell-core packages -- packages/etendo-go-core/src/onboarding/steps/CompanyStep.jsx, packages/etendo-go-core/src/onboarding/OnboardingFlow.jsx (threads `capabilities` from the session response into every onboarding step), packages/etendo-go-core/src/onboarding/components/AddressCell.jsx, packages/app-shell-core/src/lib/locationAddress.js. Bump the consumed package version here once schema_forge_core publishes, per docs/repo-topology.md.",
+      "$pathsComment": "GoFeatureFlags.java is excluded: it is frameworkPaths (com/etendoerp/go/featureflags/), shared infrastructure for every flag, never owned code for one. NOT covered by this registry (a v3 registry has one root, this repo; the backend half is a contribution in com.etendoerp.go's registry): the gated UI in the SIBLING `schema_forge_core` repo, consumed here as the published/linked @etendosoftware/etendo-go-core and @etendosoftware/app-shell-core packages -- packages/etendo-go-core/src/onboarding/steps/CompanyStep.jsx, packages/etendo-go-core/src/onboarding/OnboardingFlow.jsx (threads `capabilities` from the session response into every onboarding step), packages/etendo-go-core/src/onboarding/components/AddressCell.jsx, packages/app-shell-core/src/lib/locationAddress.js. Bump the consumed package version here once schema_forge_core publishes, per docs/repo-topology.md.",
       "testSpecs": {
         "unit": [
           {
@@ -2199,6 +2214,7 @@
     {
       "id": "onboarding-tenant-pool",
       "description": "Pre-provisioned tenant pool for onboarding: POST /sws/go/onboarding claims a READY tenant from ETGO_TENANT_POOL and a filler process keeps the pool topped up. Environment level and backend-only — the browser never reads it.",
+      "owner": "sebastianbarrozo",
       "jira": "ETP-5389",
       "created": "2026-09-24",
       "flag": {
@@ -2220,6 +2236,7 @@
     {
       "id": "webmcp-agent-chat",
       "description": "Enables the AI SDK Copilot agent integration; native browser WebMCP is deferred.",
+      "owner": "sebastianbarrozo",
       "jira": "ETP-5064",
       "created": "2026-08-27",
       "flag": {
@@ -2240,6 +2257,7 @@
     {
       "id": "page-help-suggestions",
       "description": "Enables proactive DOM-based page-help suggestions next to the Copilot.",
+      "owner": "sebastianbarrozo",
       "jira": "ETP-5064",
       "created": "2026-08-27",
       "flag": {

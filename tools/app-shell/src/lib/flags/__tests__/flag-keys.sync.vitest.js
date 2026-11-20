@@ -1,9 +1,9 @@
 // @covers tools/app-shell/src/lib/flags/flag-keys.js
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { FLAG_DEFAULTS, NO_EXPOSURE_FLAGS } from '../flag-keys.js';
+// Resolved relative to this file by the bundler, so it works from any working directory.
+import registryRaw from '../../../../../../flags-registry.json?raw';
 
 /**
  * FLAG_DEFAULTS ↔ flags-registry.json, in both directions (ETP-4697).
@@ -14,10 +14,7 @@ import { FLAG_DEFAULTS, NO_EXPOSURE_FLAGS } from '../flag-keys.js';
  * with `flag.scope: "backend"` is read only by com.etendoerp.go and must NOT be in FLAG_DEFAULTS.
  * The operational telemetry kill switches (NO_EXPOSURE_FLAGS) are not features and have no header.
  */
-// Vitest runs from tools/app-shell (make test, npm run test:vitest); the registry is two levels up.
-const registry = JSON.parse(
-  readFileSync(resolve(process.cwd(), '..', '..', 'flags-registry.json'), 'utf8'),
-);
+const registry = JSON.parse(registryRaw);
 
 const headerFlags = registry.features
   .filter((feature) => feature.flag && !feature.contribution && feature.flagKey === undefined)
@@ -50,6 +47,11 @@ describe('FLAG_DEFAULTS and flags-registry.json agree', () => {
       .filter((flag) => flag.key in FLAG_DEFAULTS && FLAG_DEFAULTS[flag.key] !== flag.defaultValue)
       .map((flag) => `${flag.key}: registry ${flag.defaultValue} vs FLAG_DEFAULTS ${FLAG_DEFAULTS[flag.key]}`);
     expect(mismatched).toEqual([]);
+  });
+
+  it('uses only the scope "backend" (or none) on a flag', () => {
+    const odd = headerFlags.filter((flag) => flag.scope !== undefined && flag.scope !== 'backend');
+    expect(odd.map((flag) => `${flag.key}: ${flag.scope}`)).toEqual([]);
   });
 
   it('never registers a flag key twice', () => {
