@@ -231,62 +231,201 @@ export function normalizeProductName(value) {
     .replaceAll('\u0001', 'ñ');
 }
 
-/** Minimum similarity (0-100, inclusive) at which a catalog product is taken automatically. */
-export const PRODUCT_AUTO_MATCH_MIN_SIMILARITY = 90;
+/**
+ * Whole-string similarity (0-100, inclusive) at which a catalog product is taken automatically
+ * (ETP-5895). It is `text_similarity_percent`, not the endpoint score: the score counts a name that
+ * merely CONTAINS the description as 100 ("Mantenimiento Web" inside "Servicio de desarrollo y
+ * mantenimiento web"), while the whole-string similarity stays high only for near-identical names
+ * ("Agua sin Gas 1" vs "Agua sin Gas 1L": 82-88 for a missing letter or unit).
+ */
+export const PRODUCT_AUTO_MATCH_MIN_SIMILARITY = 85;
+/** Lead, in whole-string similarity points, the best candidate needs over the runner-up. */
+export const PRODUCT_AUTO_MATCH_MIN_GAP = 10;
+/** Score threshold kept for a backend that does not send `text_similarity_percent` yet. */
+export const PRODUCT_AUTO_MATCH_LEGACY_MIN_SCORE = 90;
 
 // Defensive parse: simSearch hands the percentage over as a string (trailing '%' stripped), and
 // anything missing or non-numeric ('', undefined, '96.7%') must never count as a match.
-function parseSimilarity(candidate) {
-  const raw = candidate?.similarityPercent;
+function parsePercent(raw) {
   if (raw == null || (typeof raw === 'string' && raw.trim() === '')) return NaN;
   const value = Number(raw);
   return Number.isFinite(value) ? value : NaN;
 }
 
-// The candidate to take by similarity, or null when it is not safe: the highest valid similarity
-// must reach the threshold and be held by exactly ONE candidate (strict equality on the parsed
-// numbers). A tie at the top is ambiguous, so the user decides; a tie lower down does not matter.
-function pickBySimilarity(candidates) {
+// How the backend says a candidate relates to the description: 2 equal ignoring case and spaces,
+// 1 equal once accents are ignored too, 0 otherwise. The backend compares every identifier column
+// (a product's search key too), so it can find what the name-only step 1 cannot.
+function backendMatchRank(candidate) {
+  if (candidate?.matchType === 'exact' || (candidate?.matchType == null && candidate?.exactMatch === true)) return 2;
+  return candidate?.matchType === 'normalized' ? 1 : 0;
+}
+
+// The candidate to take by similarity, or null when it is not safe: the highest valid value must
+// reach the threshold and be held by exactly ONE candidate (strict equality on the parsed numbers),
+// leading the runner-up by `minGap`. A tie at the top is ambiguous, so the user decides.
+function pickBy(candidates, valueOf, minValue, minGap) {
   const scored = candidates
-    .map((c) => ({ c, sim: parseSimilarity(c) }))
-    .filter((x) => !Number.isNaN(x.sim));
-  if (scored.length === 0) return null;
-  const top = Math.max(...scored.map((x) => x.sim));
-  if (top < PRODUCT_AUTO_MATCH_MIN_SIMILARITY) return null;
-  const holders = scored.filter((x) => x.sim === top);
-  return holders.length === 1 ? holders[0].c : null;
+    .map((c) => ({ c, value: parsePercent(valueOf(c)) }))
+    .filter((x) => !Number.isNaN(x.value))
+    .sort((a, b) => b.value - a.value);
+  if (scored.length === 0 || scored[0].value < minValue) return null;
+  const runnerUp = scored.length > 1 ? scored[1].value : -Infinity;
+  if (runnerUp === scored[0].value || scored[0].value - runnerUp < minGap) return null;
+  return scored[0].c;
+}
+
+function pickBySimilarity(candidates) {
+  const hasTextSimilarity = candidates.some((c) => c.textSimilarityPercent != null);
+  return hasTextSimilarity
+    ? pickBy(candidates, (c) => c.textSimilarityPercent, PRODUCT_AUTO_MATCH_MIN_SIMILARITY, PRODUCT_AUTO_MATCH_MIN_GAP)
+    : pickBy(candidates, (c) => c.similarityPercent, PRODUCT_AUTO_MATCH_LEGACY_MIN_SCORE, 0);
+}
+
+/** Shortest normalized description the typo rule applies to: in "ano" one edit is "año". */
+export const PRODUCT_EDIT_MIN_LENGTH = 5;
+/** Edit distance allowed for a description of at most this many characters (normalized). */
+export const PRODUCT_EDIT_SHORT_MAX_LENGTH = 8;
+/** Edits allowed for a short description: in "Kilos" one edit already makes "Kilts". */
+export const PRODUCT_EDIT_SHORT_MAX_DISTANCE = 1;
+/** Edits allowed for a longer description. */
+export const PRODUCT_EDIT_LONG_MAX_DISTANCE = 2;
+
+const NUMBER_PATTERN = /\d+(?:[.,]\d+)?/g;
+const TOKEN_SEPARATOR = /[^\p{L}\p{N}]+/u;
+const SINGLE_LETTER = /^\p{L}$/u;
+
+/**
+ * Optimal string alignment distance: insertions, deletions, substitutions and swaps of two
+ * adjacent characters, each costing 1 ("Teelfonia" is one edit from "Telefonia"). Exported for
+ * testing; mirrored by OcrProductMatch.osaDistance.
+ */
+export function osaDistance(a, b) {
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  const d = Array.from({ length: rows }, (_, i) => {
+    const row = new Array(cols).fill(0);
+    row[0] = i;
+    return row;
+  });
+  for (let j = 0; j < cols; j += 1) d[0][j] = j;
+  for (let i = 1; i < rows; i += 1) {
+    for (let j = 1; j < cols; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+      }
+    }
+  }
+  return d[rows - 1][cols - 1];
+}
+
+const numbersOf = (text) => text.match(NUMBER_PATTERN) ?? [];
+const singleLettersOf = (text) => text.split(TOKEN_SEPARATOR).filter((t) => SINGLE_LETTER.test(t));
+const sameList = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+const enyesOf = (text) => [...text].filter((c) => c === 'ñ').length;
+
+/**
+ * Whether a catalog name is a typo away from the description (both normalized): at least
+ * PRODUCT_EDIT_MIN_LENGTH long, within the edit budget, AND with the same numbers, the same
+ * one-letter tokens and as many "ñ", because a different number, size letter or ñ is a different
+ * product, not a typo ("0,33L" vs "0,5L", "M8" vs "M9", "talla L" vs "talla M", "año" vs "ano").
+ * Exported for testing.
+ */
+export function isTypoAway(wanted, name) {
+  if (!wanted || !name || wanted === name || wanted.length < PRODUCT_EDIT_MIN_LENGTH) return false;
+  const budget = wanted.length <= PRODUCT_EDIT_SHORT_MAX_LENGTH
+    ? PRODUCT_EDIT_SHORT_MAX_DISTANCE
+    : PRODUCT_EDIT_LONG_MAX_DISTANCE;
+  if (Math.abs(wanted.length - name.length) > budget) return false;
+  return osaDistance(wanted, name) <= budget
+    && sameList(numbersOf(wanted), numbersOf(name))
+    && sameList(singleLettersOf(wanted), singleLettersOf(name))
+    && enyesOf(wanted) === enyesOf(name);
 }
 
 /**
- * Decide what to do with the simSearch result of one line description, in this order:
- *  1. exactly one candidate whose name equals the description (trim, case- and accent-
+ * Decide what to do with one line description, in this order (ETP-6364):
+ *  1. vendor history (`history`, products this vendor's completed purchase invoices booked lines
+ *     with the same description to, most frequent first): exactly one product → `{ id }`; two or
+ *     more → suggestion of the most frequent; none → next step;
+ *  2. exactly one candidate whose name equals the description (trim, case- and accent-
  *     insensitive via `normalizeProductName`; ñ stays distinct) → `{ id }`; two or more exact
  *     names (also "Arnés X" + "Arnes X" for "Arnés X") are ambiguous → suggestion;
- *  2. the HIGHEST valid similarityPercent, when it is >= PRODUCT_AUTO_MATCH_MIN_SIMILARITY
- *     (90, inclusive) and held by exactly one candidate → `{ id }` (ETP-5654), even if a
- *     runner-up is also >= 90. A tie at the top (two or more with the same value) is ambiguous
- *     → suggestion (the first candidate); a tie lower down does not block. A missing or
- *     non-numeric similarity never qualifies;
- *  3. otherwise, when there is any candidate (>= minSimPercent) → `{ suggestion }` with the
+ *  3. exactly one candidate the backend marks as equal (`matchType` 'exact', or 'normalized' when
+ *     only accents differ; the search key counts too) → `{ id }`; two or more → suggestion;
+ *  4. the candidate with the HIGHEST whole-string similarity (`textSimilarityPercent`), when it is
+ *     >= PRODUCT_AUTO_MATCH_MIN_SIMILARITY and leads the runner-up by PRODUCT_AUTO_MATCH_MIN_GAP
+ *     → `{ id }`. A backend without that field falls back to the endpoint score
+ *     >= PRODUCT_AUTO_MATCH_LEGACY_MIN_SCORE held by one candidate (ETP-5654). A missing or
+ *     non-numeric value never qualifies;
+ *  5. exactly one candidate a typo away (`isTypoAway`: a letter wrong, missing, extra or swapped,
+ *     with the same numbers and one-letter tokens) → `{ id }`;
+ *  6. otherwise, when there is any candidate (>= minSimPercent) → `{ suggestion }` with the
  *     first one: the user must confirm it in the popup (a partial name such as "Mantenimiento
  *     Web" vs "Servicio de desarrollo y mantenimiento web" is a different product);
- *  4. no candidates → `{}`.
- * Exported for testing.
+ *  7. nothing → `{}`.
+ * Mirrors OcrProductMatch in com.etendoerp.go; keep both identical. Exported for testing.
  */
-export function classifyProductMatch(description, match) {
+export function classifyProductMatch(description, match, history = []) {
+  const learned = (Array.isArray(history) ? history : []).filter((p) => p?.id);
+  if (learned.length === 1) return { id: learned[0].id };
+  if (learned.length > 1) {
+    return { suggestion: { id: learned[0].id, name: String(learned[0].name ?? learned[0].id) } };
+  }
   const candidates = (Array.isArray(match?.candidates) && match.candidates.length > 0
     ? match.candidates
     : [match]).filter((c) => c?.id);
   if (candidates.length === 0) return {};
+  const best = candidates[0];
+  const suggestion = { suggestion: { id: best.id, name: String(best.name ?? best.id) } };
   const wanted = normalizeProductName(description);
   const exact = wanted ? candidates.filter((c) => normalizeProductName(c.name) === wanted) : [];
   if (exact.length === 1) return { id: exact[0].id };
-  if (exact.length === 0) {
-    const bySimilarity = pickBySimilarity(candidates);
-    if (bySimilarity) return { id: bySimilarity.id };
+  if (exact.length > 1) return suggestion;
+  const bestRank = Math.max(...candidates.map(backendMatchRank));
+  if (bestRank > 0) {
+    const equal = candidates.filter((c) => backendMatchRank(c) === bestRank);
+    return equal.length === 1 ? { id: equal[0].id } : suggestion;
   }
-  const best = candidates[0];
-  return { suggestion: { id: best.id, name: String(best.name ?? best.id) } };
+  const bySimilarity = pickBySimilarity(candidates);
+  if (bySimilarity) return { id: bySimilarity.id };
+  const typoAway = candidates.filter((c) => isTypoAway(wanted, normalizeProductName(c.name)));
+  return typoAway.length === 1 ? { id: typoAway[0].id } : suggestion;
+}
+
+/**
+ * Products this vendor's completed purchase invoices booked lines with the same description to
+ * (ETP-6364), one list per description, most frequent first: `[[{ id, name, count }], ...]`. Read
+ * from the backend `productHistory` action of the invoice lines. Every failure (no vendor yet, a
+ * vendor being created, non-OK answer, network error) yields empty lists: history only ever adds a
+ * match, so its absence falls back to the similarity rules. Exported for testing.
+ */
+export async function findProductHistory({ token, apiBaseUrl, bpId, descriptions }) {
+  const none = descriptions.map(() => []);
+  const wanted = descriptions.map((d) => String(d ?? '').trim());
+  if (!apiBaseUrl || !bpId || wanted.every((d) => d === '')) return none;
+  const url = `${deriveSpecBase(apiBaseUrl, 'purchase-invoice')}/lines/new/action/productHistory`;
+  try {
+    const res = await apiFetch(url, {
+      baseUrl: '',
+      token,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vendorId: bpId, descriptions: wanted.map((d) => d || ' ') }),
+    });
+    if (!res.ok) {
+      console.warn('[OCR][findProductHistory] non-OK', res.status, url);
+      return none;
+    }
+    const json = await res.json().catch(() => null);
+    const items = json?.response?.data?.items;
+    if (!Array.isArray(items)) return none;
+    return wanted.map((d, idx) => (d && Array.isArray(items[idx]?.products) ? items[idx].products : []));
+  } catch (e) {
+    console.warn('[OCR][findProductHistory] fetch failed', e);
+    return none;
+  }
 }
 
 /**
@@ -409,13 +548,13 @@ function buildHeaderBody(safe, bpId, partnerAddress, extras = {}) {
 }
 
 // Splits the lines into those already matched to a product (`productByIdx`) and those the user
-// must pick one for (`needsUserPick`).
-function partitionLinesByProductMatch(lines, productMatches) {
+// must pick one for (`needsUserPick`). `histories[idx]` is the vendor history of line idx.
+function partitionLinesByProductMatch(lines, productMatches, histories = []) {
   const productByIdx = {};
   const needsUserPick = [];
   lines.forEach((line, idx) => {
     const description = String(line?.description ?? `line ${idx + 1}`).trim();
-    const { id, suggestion } = classifyProductMatch(line?.description, productMatches[idx]);
+    const { id, suggestion } = classifyProductMatch(line?.description, productMatches[idx], histories[idx]);
     if (id) {
       productByIdx[idx] = id;
       return;
@@ -439,8 +578,8 @@ function partitionLinesByProductMatch(lines, productMatches) {
  * simSearch leaves a line unmatched. Returns `{ cancelled: true }` when the
  * user dismisses the popup.
  */
-async function resolveProductsForLines({ lines, productMatches, askUserForProducts, apiBaseUrl }) {
-  const { productByIdx, needsUserPick } = partitionLinesByProductMatch(lines, productMatches);
+async function resolveProductsForLines({ lines, productMatches, histories, askUserForProducts, apiBaseUrl }) {
+  const { productByIdx, needsUserPick } = partitionLinesByProductMatch(lines, productMatches, histories);
   if (needsUserPick.length === 0 || typeof askUserForProducts !== 'function') {
     return { productByIdx };
   }
@@ -548,9 +687,18 @@ export async function buildPurchaseInvoiceBatch(extracted, ctx) {
 
   const partnerAddress = await resolvePartnerAddress({ token, apiBaseUrl, bpId, locationCreate });
 
+  // Vendor history needs the vendor: an existing one only (a vendor being created has none).
+  const histories = await findProductHistory({
+    token,
+    apiBaseUrl,
+    bpId,
+    descriptions: lines.map((line) => line?.description),
+  });
+
   const productResolution = await resolveProductsForLines({
     lines,
     productMatches,
+    histories,
     askUserForProducts,
     apiBaseUrl,
   });

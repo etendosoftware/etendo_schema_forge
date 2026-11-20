@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/components/copilot/ocr/ingest/purchaseInvoiceDescriptor.js
 import { BACK } from '../../ocrFlowSignals';
-import { classifyProductMatch, normalizeProductName, PRODUCT_AUTO_MATCH_MIN_SIMILARITY, nonBlank, toIsoDate, buildLineOps, findBp, findBpLocation, findDefaultTax, checkBpHasLocation, findDuplicatePurchaseInvoices } from '../purchaseInvoiceDescriptor';
+import { classifyProductMatch, normalizeProductName, PRODUCT_AUTO_MATCH_MIN_SIMILARITY, nonBlank, toIsoDate, buildLineOps, findBp, findBpLocation, findDefaultTax, checkBpHasLocation, findDuplicatePurchaseInvoices, findProductHistory, isTypoAway, osaDistance } from '../purchaseInvoiceDescriptor';
 
 // Mock simSearch to test findBp without network
 vi.mock('@etendosoftware/app-shell-core/lib/simSearch.js', () => ({
@@ -267,6 +267,54 @@ describe('purchaseInvoiceDescriptor', () => {
     });
   });
 
+  describe('findProductHistory (ETP-6364)', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn();
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('asks the lines action once with the vendor and every description, aligned by index', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ response: { data: { items: [
+          { products: [{ id: 'p9', name: 'Tornillo M6x20', count: 3 }] },
+          { products: [] },
+          { products: [] },
+        ] } } }),
+      });
+
+      const result = await findProductHistory({
+        token: 'tk', apiBaseUrl: 'http://test/neo/purchase-invoice', bpId: 'bp-1',
+        descriptions: ['TORN M6X20', 'Otro', null],
+      });
+
+      expect(result).toEqual([[{ id: 'p9', name: 'Tornillo M6x20', count: 3 }], [], []]);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      const [url, init] = globalThis.fetch.mock.calls[0];
+      expect(url).toContain('/purchase-invoice/lines/new/action/productHistory');
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body)).toEqual({ vendorId: 'bp-1', descriptions: ['TORN M6X20', 'Otro', ' '] });
+    });
+
+    it('does not ask without an existing vendor', async () => {
+      expect(await findProductHistory({ token: 'tk', apiBaseUrl: 'http://test/neo/purchase-invoice', bpId: null, descriptions: ['A'] }))
+        .toEqual([[]]);
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it('falls back to empty lists when the action fails', async () => {
+      globalThis.fetch.mockResolvedValue({ ok: false, status: 500 });
+      expect(await findProductHistory({ token: 'tk', apiBaseUrl: 'http://test/neo/purchase-invoice', bpId: 'bp-1', descriptions: ['A', 'B'] }))
+        .toEqual([[], []]);
+      globalThis.fetch.mockRejectedValue(new Error('offline'));
+      expect(await findProductHistory({ token: 'tk', apiBaseUrl: 'http://test/neo/purchase-invoice', bpId: 'bp-1', descriptions: ['A'] }))
+        .toEqual([[]]);
+    });
+  });
+
   describe('buildLineOps — quantity without unit_price and vice versa', () => {
     it('sets quantity but not price when unit_price is missing', () => {
       const lines = [{ description: 'Item A', quantity: 5 }];
@@ -366,6 +414,25 @@ describe('purchaseInvoiceDescriptor', () => {
       const line = result.ops.find(o => o.entity === 'Lines');
       expect(line).toBeTruthy();
       expect(line.body.product).toBe('prod-1');
+    });
+
+    it('assigns the product this vendor booked the description to, with no similarity match', async () => {
+      globalThis.fetch.mockImplementation(async (url) => {
+        if (url.includes('/selectors/C_BPartner_Location_ID')) return selectorItems([{ id: 'loc-1', label: 'c123' }]);
+        if (url.includes('/selectors/C_BPartner_ID')) return selectorItems([{ id: 'bp-1', label: 'Acme' }]);
+        if (url.includes('/action/productHistory')) {
+          return { ok: true, json: async () => ({ response: { data: { items: [{ products: [{ id: 'p9', name: 'Tornillo M6x20', count: 2 }] }] } } }) };
+        }
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+      simSearchMock.mockResolvedValue([null]);
+
+      const result = await buildPurchaseInvoiceBatch(
+        { vendor_name: 'Acme', line_items: [{ description: 'TORN M6X20', quantity: 1, unit_price: 3 }] },
+        { token: 'tok', apiBaseUrl: 'http://test/neo/purchase-invoice' },
+      );
+
+      expect(result.ops.find(o => o.entity === 'Lines').body.product).toBe('p9');
     });
 
     it('returns cancelled when user dismisses BP popup', async () => {
@@ -746,9 +813,144 @@ describe('purchaseInvoiceDescriptor', () => {
           });
         });
 
-        it('exposes the threshold constant', () => {
-          expect(PRODUCT_AUTO_MATCH_MIN_SIMILARITY).toBe(90);
+        describe('whole-string similarity and backend match type (ETP-5895)', () => {
+          // What the endpoint sends today: score = greatest(similarity, word_similarity), plus the
+          // whole-string similarity and, from ETP-5895, the match type.
+          const row = (id, name, score, text, matchType = 'fuzzy') => ({
+            id, name, similarityPercent: String(score), textSimilarityPercent: String(text), matchType,
+          });
+
+          it('takes a near-identical name (missing unit) that clearly leads the rest', () => {
+            expect(classify('Bebida Energética 0,5',
+              row('p1', 'Bebida Energética 0,5L', 95.5, 87.5), row('p2', 'Bebida Isotónica 0,5L', 70, 60)))
+              .toEqual({ id: 'p1' });
+          });
+
+          it('suggests a name that only CONTAINS the description, even at a score of 100', () => {
+            expect(classify('Mantenimiento Web',
+              row('p1', 'Servicio de desarrollo y mantenimiento web', 100, 43.9)))
+              .toEqual({ suggestion: { id: 'p1', name: 'Servicio de desarrollo y mantenimiento web' } });
+          });
+
+          it('suggests when the runner-up is within the gap and no name is a typo away', () => {
+            expect(classify('Cerveza Ale', row('p1', 'Cerveza Ale 0,5L', 94, 88), row('p2', 'Cerveza Ale 0,33L', 90, 80)))
+              .toEqual({ suggestion: { id: 'p1', name: 'Cerveza Ale 0,5L' } });
+          });
+
+          it('takes the one name a missing unit away when the runner-up is too close for the similarity rule', () => {
+            expect(classify('Cerveza Ale 0,5', row('p1', 'Cerveza Ale 0,5L', 94, 88), row('p2', 'Cerveza Ale 0,33L', 90, 80)))
+              .toEqual({ id: 'p1' });
+          });
+
+          it('treats exactly the threshold as auto and just below it as a suggestion', () => {
+            const at = PRODUCT_AUTO_MATCH_MIN_SIMILARITY;
+            expect(classify('Widget A', row('p1', 'Widget AB', 95, at))).toEqual({ id: 'p1' });
+            expect(classify('Widget A', row('p1', 'Widget AB', 95, at - 0.1)))
+              .toEqual({ suggestion: { id: 'p1', name: 'Widget AB' } });
+          });
+
+          it('no longer takes a different variant that legacy scored at 96.7 ("M8" vs "M9")', () => {
+            expect(classify('Tornillo M8', row('p1', 'Tornillo M9', 96.7, 69.2)))
+              .toEqual({ suggestion: { id: 'p1', name: 'Tornillo M9' } });
+          });
+
+          it('takes the one candidate the backend marks exact, e.g. by its search key', () => {
+            expect(classify('MTR-001', row('p1', 'Cubic Meter', 100, 30), row('p2', 'Meter', 100, 25, 'exact')))
+              .toEqual({ id: 'p2' });
+          });
+
+          it('takes the one candidate the backend marks normalized when none is exact', () => {
+            expect(classify('Camion grua', row('p1', 'Camión grúa', 70, 70, 'normalized'), row('p2', 'Camion', 100, 60)))
+              .toEqual({ id: 'p1' });
+          });
+
+          it('suggests when two candidates are marked exact by the backend', () => {
+            expect(classify('MTR-001', row('p1', 'Meter', 100, 25, 'exact'), row('p2', 'Metre', 100, 25, 'exact')))
+              .toEqual({ suggestion: { id: 'p1', name: 'Meter' } });
+          });
+
+          it('reads exactMatch when the backend predates match_type', () => {
+            const old = { id: 'p2', name: 'Meter', similarityPercent: '100', textSimilarityPercent: '25', exactMatch: true };
+            expect(classify('MTR-001', row('p1', 'Cubic Meter', 100, 30), old)).toEqual({ id: 'p2' });
+          });
         });
+
+        describe('vendor history (ETP-6364)', () => {
+          const row = (id, name, score, text) => ({
+            id, name, similarityPercent: String(score), textSimilarityPercent: String(text), matchType: 'fuzzy',
+          });
+          const classifyWith = (desc, history, ...cs) => classifyProductMatch(desc, { ...cs[0], candidates: cs }, history);
+
+          it('takes the one product this vendor booked the description to, whatever the search says', () => {
+            expect(classifyWith('TORN M6X20 INOX', [{ id: 'p9', name: 'Tornillo hexagonal M6x20 inox', count: 3 }],
+              row('p1', 'Tornillo M6x30', 60, 40))).toEqual({ id: 'p9' });
+          });
+
+          it('takes it even with no search candidate at all', () => {
+            expect(classifyProductMatch('TORN M6X20 INOX', null, [{ id: 'p9', name: 'Tornillo M6x20', count: 1 }]))
+              .toEqual({ id: 'p9' });
+          });
+
+          it('beats a different product with the very same name', () => {
+            expect(classifyWith('Widget', [{ id: 'p9', name: 'Widget Pro', count: 2 }], row('p1', 'Widget', 100, 100)))
+              .toEqual({ id: 'p9' });
+          });
+
+          it('only suggests the most frequent when the vendor booked it to several products', () => {
+            expect(classifyWith('Widget', [{ id: 'p9', name: 'Widget Pro', count: 5 }, { id: 'p8', name: 'Widget Lite', count: 1 }],
+              row('p1', 'Widget', 100, 100))).toEqual({ suggestion: { id: 'p9', name: 'Widget Pro' } });
+          });
+
+          it('falls back to the search rules when there is no history', () => {
+            expect(classifyWith('Widget', [], row('p1', 'Widget', 100, 100))).toEqual({ id: 'p1' });
+            expect(classifyWith('Widget', undefined, row('p1', 'Widget', 100, 100))).toEqual({ id: 'p1' });
+          });
+        });
+
+        describe('typo away (ETP-6364)', () => {
+          const row = (id, name) => ({ id, name, similarityPercent: '60', textSimilarityPercent: '60', matchType: 'fuzzy' });
+          const classifyTypo = (desc, ...cs) => classifyProductMatch(desc, { ...cs[0], candidates: cs });
+
+          it('measures substitutions, insertions, deletions and adjacent swaps as one edit each', () => {
+            expect(osaDistance('telefonia', 'telefonia')).toBe(0);
+            expect(osaDistance('telefonia', 'telefomia')).toBe(1);
+            expect(osaDistance('telefonia', 'teelfonia')).toBe(1);
+            expect(osaDistance('telefonia', 'telefoni')).toBe(1);
+            expect(osaDistance('ca', 'abc')).toBe(3);
+          });
+
+          it('takes the one candidate a letter away: wrong, swapped or missing', () => {
+            expect(classifyTypo('Bebida Enegrética 0,5L', row('p1', 'Bebida Energética 0,5L'), row('p2', 'Bebida Isotónica 0,5L')))
+              .toEqual({ id: 'p1' });
+            expect(classifyTypo('Electricidda', row('p1', 'Electricidad'))).toEqual({ id: 'p1' });
+            expect(classifyTypo('Telefnia', row('p1', 'Telefonia'))).toEqual({ id: 'p1' });
+          });
+
+          it('allows one edit for a short description and two for a longer one', () => {
+            expect(isTypoAway('kilogr', 'kilogra')).toBe(true);
+            expect(isTypoAway('kilogr', 'kilogram')).toBe(false);
+            expect(isTypoAway('electricid', 'electricidad')).toBe(true);
+          });
+
+          it('never treats another number, size letter or ñ as a typo', () => {
+            expect(isTypoAway('cerveza 0,33l', 'cerveza 0,5l')).toBe(false);
+            expect(isTypoAway('tornillo m8', 'tornillo m9')).toBe(false);
+            expect(isTypoAway('arnes talla l', 'arnes talla m')).toBe(false);
+            expect(isTypoAway('campaña', 'campana')).toBe(false);
+          });
+
+          it('ignores descriptions shorter than five characters', () => {
+            expect(classifyTypo('Kilo', row('p1', 'Kilt'))).toEqual({ suggestion: { id: 'p1', name: 'Kilt' } });
+          });
+
+          it('suggests when two candidates are a typo away', () => {
+            expect(classifyTypo('Widgett', row('p1', 'Widgets'), row('p2', 'Widget')))
+              .toEqual({ suggestion: { id: 'p1', name: 'Widgets' } });
+          });
+        });
+
+        // The cases below send no textSimilarityPercent: an older backend, where the endpoint
+        // score >= PRODUCT_AUTO_MATCH_LEGACY_MIN_SCORE held by one candidate still decides.
 
         it('auto-assigns a single 96.7% candidate (one-char difference)', () => {
           expect(classify('Tornillo M8', cand('p1', 'Tornillo M9', '96.7'))).toEqual({ id: 'p1' });
