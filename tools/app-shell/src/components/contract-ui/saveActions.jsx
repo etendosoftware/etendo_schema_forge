@@ -257,8 +257,10 @@ function GateTooltip({ title, children }) {
 function DraftModeConfirmButton({ confirmParams, hook, ui, draftMode, saveBtnCls, saveGate, blockCompleteForBalance, calculating = false }) {
   const [customConfirmBusy, setCustomConfirmBusy] = useState(false);
   const busy = hook.isSaving || customConfirmBusy || calculating;
+  // Opt-in `draftMode.disabledEmptyTitleKey`: why «Confirmar» is disabled while the document has no lines.
+  const emptyTitle = draftMode.disabledEmptyTitleKey && draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0 ? ui(draftMode.disabledEmptyTitleKey) : null;
   return (
-    <GateTooltip data-testid="GateTooltip__3b2291" title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || customConfirmBusy || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0) || saveGate.blocked} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title} onClick={() => runDraftModeConfirm({ ...confirmParams, setCustomConfirmBusy })}>
+    <GateTooltip data-testid="GateTooltip__3b2291" title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : (saveGate.title || emptyTitle)}><Button data-missing-required={saveGate.missingAttr} size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || customConfirmBusy || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0) || saveGate.blocked} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : (saveGate.title || emptyTitle)} onClick={() => runDraftModeConfirm({ ...confirmParams, setCustomConfirmBusy })}>
       {busy ? <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <CheckIcon className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
       {ui(draftMode.label) || draftMode.label || ui('process')}
     </Button></GateTooltip>
