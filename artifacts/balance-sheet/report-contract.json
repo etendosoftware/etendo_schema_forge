@@ -29,7 +29,7 @@
     { "name": "acctSchemaId", "label": { "en_US": "General Ledger", "es_ES": "Libro Mayor" }, "type": "search", "selector": "acctschema", "inputStyle": "popup-single", "required": true, "hidden": true, "autoDefault": true, "section": "periodo" },
     { "name": "orgId", "label": { "en_US": "Organization", "es_ES": "Organización" }, "type": "search", "selector": "org", "inputStyle": "popup-single", "required": true, "hidden": true },
     { "name": "yearId", "label": { "en_US": "Year", "es_ES": "Año" }, "type": "search", "selector": "year", "inputStyle": "popup-single", "required": true, "dependsOn": "orgId", "section": "periodo" },
-    { "name": "dateFrom", "label": { "en_US": "Starting Date", "es_ES": "Fecha de Inicio" }, "type": "date", "role": "ledgerStart", "section": "periodo" },
+    { "name": "dateFrom", "label": { "en_US": "Starting Date", "es_ES": "Fecha de Inicio" }, "type": "date", "role": "ledgerStart", "excludeFromSummary": true, "section": "periodo" },
     { "name": "dateTo", "label": { "en_US": "Ending Date", "es_ES": "Fecha de Fin" }, "type": "date", "shortcuts": ["today", "lastMonthEnd", "lastQuarterEnd", "lastFiscalYearEnd"], "section": "periodo" },
     { "name": "accountLevel", "label": { "en_US": "Account Level", "es_ES": "Nivel de cuenta" }, "type": "select", "required": true, "default": "C", "section": "agrupacion", "options": [
       { "value": "G", "maxIndent": 0, "dynamicOnly": true, "label": { "en_US": "Group", "es_ES": "Grupo" } },
