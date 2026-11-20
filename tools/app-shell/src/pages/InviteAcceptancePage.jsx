@@ -38,6 +38,8 @@ import { getApiBase } from '@/hooks/useNeoResource.js';
  * 3. Idempotent accepted confirmation.
  * 4. Safe non-enumerating error states for expired/revoked/invalid tokens.
  */
+const TERMINAL_ACCEPT_CODES = new Set(['INVALID_TOKEN', 'EXPIRED_TOKEN']);
+
 /**
  * ETP-5202 — states of the "someone else is signed in" guard.
  *
@@ -429,6 +431,14 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         if (res.status === 401 || data.code === 'AUTHENTICATION_REQUIRED') {
           setExistingAuthenticated(false);
           setActionError(null);
+          setSubmitting(false);
+          return;
+        }
+        // ETP-5385: an invitation the server now calls invalid or expired is a terminal outcome.
+        // Showing it as an inline alert left it next to the "continue to join this company"
+        // prompt, two contradictory messages on one screen; it takes over the page instead.
+        if (TERMINAL_ACCEPT_CODES.has(data.code)) {
+          setErrorState(data.code);
           setSubmitting(false);
           return;
         }

@@ -234,6 +234,42 @@ describe('InviteAcceptancePage', () => {
     });
   });
 
+  it('shows only the error screen when accepting fails with an invalid or expired invitation (ETP-5385)', async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          status: 'SENT',
+          clientName: 'Acme Corp',
+          email: 'existing.user@example.com',
+          branch: 'existing_account',
+          accountExists: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ token: 'existing-session-token', account: { email: 'existing.user@example.com' } }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: true, code: 'EXPIRED_TOKEN', message: 'expired' }),
+      });
+
+    const { container } = renderPage('/invite?token=valid-token-123');
+    await waitFor(() => expect(screen.getByTestId('action-login-submit')).toBeInTheDocument());
+    fireEvent.change(container.querySelector('#login-password'), { target: { value: 'pw' } });
+    fireEvent.click(screen.getByTestId('action-login-submit'));
+    await waitFor(() => expect(screen.getByTestId('invite-authenticated-step')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('action-accept-invitation'));
+
+    await waitFor(() => expect(screen.getByTestId('invite-error-state')).toBeInTheDocument());
+    expect(screen.queryByTestId('invite-authenticated-step')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('action-accept-invitation')).not.toBeInTheDocument();
+  });
+
   it('resolves registration_required branch and creates account then accepts', async () => {
     // Answered by URL, not by call order: the register screen also loads the terms and
     // conditions when it opens (ETP-6081), and that request would take another one's answer.
