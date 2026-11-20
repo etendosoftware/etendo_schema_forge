@@ -15,25 +15,25 @@ import { invoicePaymentState, quotationValidity } from './portalPresentation.js'
 export const ETENDO_PRICING_URL = 'https://etendo.ai';
 
 /**
- * Etendo's mark as the Figma draws it on the "Creado con Etendo" link: a 32px lime (#B8FA50)
- * circle with the black glyph centred at about 16px. It reuses `/logo-etendo-ai.png` (a lime tile
- * of the same #B8FA50 whose glyph spans about half of it), scaled to 34px and clipped by the
- * circle, so the tile's own lime blends into the circle with no seam.
+ * Etendo's mark as the Figma draws it on the "Creado con Etendo" link: a 32×32 lime (#B8FA50)
+ * circle with the black glyph centred at 15.38×12.8. It reuses `/logo-etendo-ai.png`, a 160px lime
+ * tile of the same #B8FA50 whose glyph spans 77×64 (the same 1.2 ratio): drawn at 32px, the glyph
+ * lands at the Figma's size, and the circle clips the tile's corners with no seam.
  */
 function EtendoMark() {
   return (
     <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#B8FA50]">
-      <img src="/logo-etendo-ai.png" alt="" className="h-[34px] w-[34px] max-w-none" />
+      <img src="/logo-etendo-ai.png" alt="" className="h-8 w-8 max-w-none" />
     </span>
   );
 }
 
 /**
- * The top bar's "Creado con Etendo / Conoce más" pill (Figma, 2026-11-20): a 40px near-black
- * (#1B1A1F) fully rounded link with a 4px inset; Etendo's lime circle on the left, the two text
- * lines 8px after it, and a slightly lighter round arrow with a grey chevron on the right. It opens
- * the pricing page ({@link ETENDO_PRICING_URL}) in a new tab. The arrow is part of the link, not a
- * button.
+ * The top bar's "Creado con Etendo / Conoce más" pill, with the Figma's exact values (2026-11-20):
+ * 216×44, padding 4px, gap 8px, #1B1A1F, radius 200px; Etendo's 32px lime circle, a 128px text
+ * block (12/16 500 white title, 11/16 60%-white subtitle) and a 32px 10%-white round arrow with a
+ * 50%-white CaretRight. It opens the pricing page ({@link ETENDO_PRICING_URL}) in a new tab; the
+ * arrow is part of the link, not a button.
  */
 export function PortalCreatedWithPill({ className }) {
   const ui = useUI();
@@ -44,19 +44,23 @@ export function PortalCreatedWithPill({ className }) {
       rel="noopener noreferrer"
       aria-label={ui('portalCreatedWithLinkLabel')}
       className={cn(
-        'flex h-10 min-w-0 max-w-full items-center gap-2 rounded-full bg-[#1B1A1F] p-1 text-left',
+        'flex h-11 w-[216px] min-w-0 max-w-full items-center gap-2 rounded-[200px] bg-[#1B1A1F] p-1 text-left',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         className,
       )}
       data-testid="portal-created-with"
     >
       <EtendoMark data-testid="EtendoMark__7a317e" />
-      <span className="flex min-w-0 flex-1 flex-col pr-2">
-        <span className="truncate text-xs font-medium leading-4 text-white">{ui('portalCreatedWith')}</span>
-        <span className="truncate text-[11px] leading-[13px] text-[#9CA3AF]">{ui('portalLearnMore')}</span>
+      <span className="flex w-[128px] min-w-0 shrink flex-col items-start justify-center pr-1">
+        <span className="-my-[3px] max-w-full truncate text-xs font-medium leading-4 tracking-[-0.005em] text-white">
+          {ui('portalCreatedWith')}
+        </span>
+        <span className="max-w-full truncate text-[11px] font-normal leading-4 tracking-[-0.005em] text-white/60">
+          {ui('portalLearnMore')}
+        </span>
       </span>
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#2C2C31] text-[#9CA3AF]" aria-hidden="true">
-        <CaretRightIcon size={16} data-testid="CaretRight__7a317e" />
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[360px] bg-white/10 text-white/50" aria-hidden="true">
+        <CaretRightIcon size={20} data-testid="CaretRight__7a317e" />
       </span>
     </a>
   );
@@ -439,9 +443,12 @@ export function PortalDesktopHeader({ title, count, breadcrumb, search, size }) 
       </div>
       {search ?? <div />}
       {/* Right column: the "Creado con Etendo" pill, from lg up (below, the 1fr column is too
-          narrow beside the search); `pr-2` keeps it off the window's right edge. */}
-      <div className="hidden min-w-0 justify-end pr-2 lg:flex">
-        <PortalCreatedWithPill data-testid="PortalCreatedWithPill__7a317e" />
+          narrow beside the search). The Figma's 224×44 wrapper: the 216px pill plus an 8px right
+          padding, the only spacing that keeps it off the window's edge. */}
+      <div className="hidden min-w-0 justify-end lg:flex">
+        <div className="flex h-11 w-[224px] min-w-0 max-w-full items-center pr-2">
+          <PortalCreatedWithPill data-testid="PortalCreatedWithPill__7a317e" />
+        </div>
       </div>
     </header>
   );
