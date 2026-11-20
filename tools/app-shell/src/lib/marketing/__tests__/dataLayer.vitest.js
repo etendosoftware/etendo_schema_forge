@@ -143,7 +143,7 @@ describe('first key action', () => {
     expect(pushFirstKeyAction(ACCOUNT_ID, RECENT, { win, storage, now: NOW })).toBe(true);
     expect(pushFirstKeyAction(ACCOUNT_ID, { action: 'invoice', at: RECENT.at }, { win, storage, now: NOW })).toBe(false);
 
-    expect(win.dataLayer).toEqual([{ event: 'first_key_action', action: 'product' }]);
+    expect(win.dataLayer).toEqual([{ event: 'first_key_action', action_name: 'product' }]);
   });
 
   it('reports nothing without a known milestone, a date, an account or GTM', () => {

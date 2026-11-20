@@ -890,7 +890,7 @@ once its action is confirmed, never with an email, a name or a phone:
 | `onboarding_step` | the profile and company steps (`onboarding_setup_step_completed`), once each | `step_number` (1, 2), `step_name` (`profile`, `company`: the onboarding's step ids, shared with Mixpanel; they must not change) |
 | `onboarding_complete` | the environment was created (`onboarding_run_succeeded`) | — |
 | `purchase` | the backend confirmed the payment (the checkout status is `paid` after Stripe's webhook), once per purchase id (remembered in `localStorage`) | `ecommerce`: `transaction_id` (the checkout request id), `value` and `currency` (the plan's price), `items` (the plan key and name) |
-| `first_key_action` | the account's first qualification milestone, as `GET /sws/go/me` reports it (`firstKeyAction`), once per account (remembered in `localStorage`); not when it was reached more than 30 days before | `action`: `import`, `business_partner`, `product`, `order`, `invoice`, `invoice_completed` or `invoice_posted` |
+| `first_key_action` | the account's first qualification milestone, as `GET /sws/go/me` reports it (`firstKeyAction`), once per account (remembered in `localStorage`); not when it was reached more than 30 days before | `action_name`: `import`, `business_partner`, `product`, `order`, `invoice`, `invoice_completed` or `invoice_posted` |
 | `logout` | the user logs out | `user_id: null` |
 
 `first_key_action` comes late on purpose. The milestones are detected by the backend's HubSpot sync

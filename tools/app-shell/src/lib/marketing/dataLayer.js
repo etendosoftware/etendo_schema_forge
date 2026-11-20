@@ -134,7 +134,7 @@ export function pushPurchase(purchase, { win = globalThis.window, storage = glob
 
 /**
  * The qualification milestones the backend detects (com.etendoerp.go `HubSpotOutboxStore`), the
- * values `first_key_action` carries as `action`.
+ * values `first_key_action` carries as `action_name`.
  */
 export const KEY_ACTIONS = Object.freeze([
   'import', 'business_partner', 'product', 'order', 'invoice', 'invoice_completed', 'invoice_posted',
@@ -158,7 +158,7 @@ function rememberedList(storage, key) {
 
 /**
  * `first_key_action`, once per account: the first qualification milestone the backend detected in
- * the demo, as `/sws/go/me` tells it (`firstKeyAction`). The backend detects it within a minute,
+ * the demo, as `/sws/go/me` tells it (`firstKeyAction`), sent as `action_name`. The backend detects it within a minute,
  * so it is reported on a later load of the app, not on the action itself.
  *
  * @param {string} accountId the account's internal id
@@ -178,7 +178,7 @@ export function pushFirstKeyAction(accountId, firstKeyAction, {
   if (now - at > FIRST_KEY_ACTION_MAX_AGE_MS || !dataLayerOf(win)) return false;
   const remembered = rememberedList(storage, FIRST_KEY_ACTION_KEY);
   if (remembered.includes(id)) return false;
-  pushDataLayer({ event: 'first_key_action', action }, win);
+  pushDataLayer({ event: 'first_key_action', action_name: action }, win);
   try {
     storage?.setItem(FIRST_KEY_ACTION_KEY, JSON.stringify([...remembered, id].slice(-MAX_REMEMBERED)));
   } catch {

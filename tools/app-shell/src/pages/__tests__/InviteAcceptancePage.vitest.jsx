@@ -219,7 +219,8 @@ describe('InviteAcceptancePage', () => {
         expect.stringContaining('/sws/go/session/sso/google'),
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ credential: 'google-jwt' }),
+          // ETP-6363: the body also carries the lead-attribution context (hubspotContext).
+          body: expect.stringContaining('"credential":"google-jwt"'),
         })
       );
       expect(fetchMock).toHaveBeenCalledWith(
