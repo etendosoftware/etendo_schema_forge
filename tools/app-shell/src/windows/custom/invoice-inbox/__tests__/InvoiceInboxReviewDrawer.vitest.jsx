@@ -355,6 +355,43 @@ describe('review drawer — lines and products', () => {
     expect(tid('invoice-inbox-review-line-0-product')).not.toHaveTextContent('Coincidencia exacta');
   });
 
+  const suggestedProduct = (similarity) => ({
+    state: 'linked', id: 'p0', matchedBy: 'suggested', details: { name: 'Prod 0', searchKey: 'K0' },
+    candidates: [
+      { id: 'p0', name: 'Prod 0', searchKey: 'K0', category: 'Cat', uom: 'Ud', ...(similarity === undefined ? {} : { similarity }) },
+      { id: 'p1', name: 'Prod 1', searchKey: 'K1', category: 'Cat', uom: 'Ud', similarity: '70' },
+    ],
+  });
+
+  it('ETP-6051: chosen by OCR shows the name, key and the similarity tag, closed by default and not pending', async () => {
+    await renderLoaded(withProduct(suggestedProduct('72')));
+    const chip = tid('invoice-inbox-review-line-0-product');
+    expect(chip).toHaveAttribute('data-state', 'ok');
+    expect(chip).toHaveAttribute('aria-expanded', 'false');
+    expect(tid('invoice-inbox-review-line-0-product-name')).toHaveTextContent('Prod 0');
+    expect(chip).toHaveTextContent('K0');
+    expect(tid('invoice-inbox-review-line-0-product-suggested')).toHaveTextContent('Elegido por OCR · 72 %');
+    expect(chip).not.toHaveTextContent('Elige uno');
+    expect(maybe('invoice-inbox-review-line-0-panel')).toBeNull();
+  });
+
+  it('ETP-6051: chosen by OCR with a text similarity ("96.7%") rounds it, and without one shows only the label', async () => {
+    const { unmount } = await renderLoaded(withProduct(suggestedProduct('96.7%')));
+    expect(tid('invoice-inbox-review-line-0-product-suggested')).toHaveTextContent('Elegido por OCR · 97 %');
+    unmount();
+    await renderLoaded(withProduct(suggestedProduct()));
+    expect(tid('invoice-inbox-review-line-0-product-suggested')).toHaveTextContent(/^Elegido por OCR$/);
+  });
+
+  it('ETP-6051: opening a chosen-by-OCR line lists the candidates with the chosen one checked and "Más probable" on the first', async () => {
+    await renderLoaded(withProduct(suggestedProduct('72')));
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    expect(tid('invoice-inbox-review-line-0-candidate-p0')).toHaveAttribute('aria-checked', 'true');
+    expect(tid('invoice-inbox-review-line-0-candidate-p1')).toHaveAttribute('aria-checked', 'false');
+    expect(tid('invoice-inbox-review-line-0-likely')).toHaveTextContent('Más probable');
+    expect(tid('invoice-inbox-review-line-0-panel')).toHaveTextContent('Cambiar por otro producto');
+  });
+
   it('clicking the chip toggles its panel (with the "change product" prompt for a linked one)', async () => {
     await renderLoaded(withProduct({ state: 'linked', matchedBy: 'exact', details: { name: 'Widget A' } }));
     fireEvent.click(tid('invoice-inbox-review-line-0-product'));

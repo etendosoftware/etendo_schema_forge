@@ -5,7 +5,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   computeTotals, documentTotal, totalMismatch, missingSet, lineKey, unresolvedProductCount, hasMissingTax,
-  pendingCount, vendorView, productView, joinMeta, extractedCountry, isReviewReadOnly, isOpenableRow,
+  pendingCount, vendorView, productView, linkedProductSimilarity, joinMeta, extractedCountry, isReviewReadOnly, isOpenableRow,
   isSettledStatus, reviewBanners, reviewNeighbors, reviewErrorKey, lineAmount, lineRate,
   initialZoom, stepZoom, PAPER_WIDTH, ZOOM_MIN, ZOOM_MAX, ZOOM_STEP,
   lineUnit6, toScaled, divRoundHalfAway, normalizeNumber, sameNumber, buildOp, applyOperationLocally,
@@ -151,6 +151,20 @@ describe('vendorView / productView / text helpers', () => {
     assert.equal(productView({ product: { state: 'zzz' } }), 'none');
     assert.equal(productView({}), 'none');
     assert.equal(productView(null), 'none');
+  });
+  it('linkedProductSimilarity reads the similarity of the linked candidate (ETP-6051)', () => {
+    const product = (id, candidates) => ({ state: 'linked', id, matchedBy: 'suggested', candidates });
+    assert.equal(linkedProductSimilarity(product('P1', [{ id: 'P1', similarity: '72' }, { id: 'P2', similarity: '90' }])), 72);
+    assert.equal(linkedProductSimilarity(product('P2', [{ id: 'P1', similarity: '72' }, { id: 'P2', similarity: '96.7%' }])), 96.7);
+    assert.equal(linkedProductSimilarity(product('P1', [{ id: 'P1', similarity: '88,5' }])), 88.5);
+  });
+  it('linkedProductSimilarity is null when there is no usable number (ETP-6051)', () => {
+    assert.equal(linkedProductSimilarity({ id: 'P1', candidates: [{ id: 'P1' }] }), null);
+    assert.equal(linkedProductSimilarity({ id: 'P1', candidates: [{ id: 'P1', similarity: ' ' }] }), null);
+    assert.equal(linkedProductSimilarity({ id: 'P1', candidates: [{ id: 'P1', similarity: 'n/a' }] }), null);
+    assert.equal(linkedProductSimilarity({ id: 'P1', candidates: [{ id: 'P2', similarity: '80' }] }), null);
+    assert.equal(linkedProductSimilarity({ id: 'P1' }), null);
+    assert.equal(linkedProductSimilarity(null), null);
   });
   it('joinMeta skips empty parts and trims', () => {
     assert.equal(joinMeta(['B1', ' ', null, ' Madrid ', undefined]), 'B1 · Madrid');

@@ -16712,6 +16712,8 @@
     "invoiceInboxSaveErrorAccess": "Your role cannot edit inbox documents.",
     "invoiceInboxSaveErrorGeneric": "The change could not be saved. The previous value was restored.",
     "invoiceInboxReviewProductMatchManual": "Chosen by you",
+    "invoiceInboxReviewProductMatchSuggested": "Chosen by OCR",
+    "invoiceInboxReviewProductMatchSuggestedSimilarity": "Chosen by OCR · {similarity}%",
     "invoiceInboxReviewVendorLinkedManual": "Chosen by you",
     "invoiceInboxReviewProductCategory": "Category",
     "invoiceInboxReviewProductUom": "Unit of measure",

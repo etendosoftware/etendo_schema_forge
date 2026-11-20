@@ -683,6 +683,37 @@ describe('editing — product resolution', () => {
     expect(tid('invoice-inbox-review-line-0-product')).toHaveAttribute('data-state', 'ok');
   });
 
+  const suggestedLine = () => makeReview({}, {
+    lines: [line({
+      description: 'Tornillo',
+      product: {
+        state: 'linked', id: 'p0', matchedBy: 'suggested', details: { name: 'Tornillo A', searchKey: 'T-A' },
+        candidates: [
+          { id: 'p0', name: 'Tornillo A', searchKey: 'T-A', category: 'Cat', uom: 'Ud', similarity: '72' },
+          { id: 'p1', name: 'Tornillo B', searchKey: 'T-B', category: 'Cat', uom: 'Ud', similarity: '70' },
+        ],
+      },
+    })],
+  });
+
+  it('ETP-6051: chosen by OCR: choosing the same candidate sends nothing and keeps "Elegido por OCR"', async () => {
+    await mountLoaded(suggestedLine());
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    fireEvent.click(tid('invoice-inbox-review-line-0-candidate-p0'));
+    expect(editOps()).toEqual([]);
+    expect(tid('invoice-inbox-review-line-0-product-suggested')).toHaveTextContent('Elegido por OCR');
+  });
+
+  it('ETP-6051: chosen by OCR: choosing another candidate sends selectProduct and the line becomes chosen by the user', async () => {
+    await mountLoaded(suggestedLine());
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    fireEvent.click(tid('invoice-inbox-review-line-0-candidate-p1'));
+    await waitFor(() => expect(editOps()).toEqual([{ op: 'selectProduct', index: 0, id: 'p1' }]));
+    expect(tid('invoice-inbox-review-line-0-product')).toHaveAttribute('data-state', 'ok');
+    expect(maybe('invoice-inbox-review-line-0-product-suggested')).toBeNull();
+    expect(tid('invoice-inbox-review-line-0-product')).toHaveTextContent('Elegido por ti');
+  });
+
   it('ambiguous: "Ninguno · crear producto nuevo" sends newProduct and opens the new-product form with the description as name', async () => {
     await mountLoaded(ambiguousLine());
     fireEvent.click(tid('invoice-inbox-review-line-0-none-option'));
