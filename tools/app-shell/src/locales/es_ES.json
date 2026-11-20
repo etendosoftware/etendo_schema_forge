@@ -22816,6 +22816,7 @@
     "invitePageLoading": "Verificando invitación...",
     "invitePageInvalidTitle": "Enlace inválido o caducado",
     "invitePageInvalidDescription": "Este enlace de invitación no es válido, ha caducado o ya ha sido utilizado.",
+    "invitePageAcceptFailed": "No hemos podido aceptar la invitación. Inténtalo de nuevo.",
     "invitePageExistingTitle": "Aceptar invitación a la empresa",
     "invitePageExistingDescription": "Has sido invitado a unirte a {companyName}.",
     "invitePageExistingAccountNotice": "Ya tienes una cuenta de Etendo ({email}). Inicia sesión primero y después acepta la invitación.",
