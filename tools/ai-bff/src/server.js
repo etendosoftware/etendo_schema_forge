@@ -368,16 +368,13 @@ export async function handleChat(req, res) {
       },
       onError: ({ error }) => {
         console.error('[ai-bff] model stream error:', error instanceof Error ? error.stack : error);
-        // An AI_APICallError carries the provider's own reply, and that is the
-        // only place the real cause is written: the wrapped message is always
-        // the generic "Provider returned error". Without this, a 400 from the
-        // upstream model is indistinguishable from a bad tool schema, an
-        // oversized context, or a malformed message.
+        // An AI_APICallError wraps the upstream status in a generic "Provider
+        // returned error". Log only the URL and status code: the response body
+        // can echo conversation content, so it is deliberately never written.
         if (error && typeof error === 'object' && 'responseBody' in error) {
           console.error('[ai-bff] provider response:', {
             url: error.url,
             statusCode: error.statusCode,
-            responseBody: error.responseBody,
           });
         }
         usage.fail();
