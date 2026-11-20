@@ -1178,8 +1178,18 @@ mcp-ui: ## Launch the optional Streamlit panel for the MCP harness (§9)
 # --- Feature Flag Debt ---
 
 .PHONY: flag-debt
-flag-debt: ## Score per-flag technical debt from flags-registry.json (FLAG=<key>, JSON=1, HTML=1)
+flag-debt: ## Score per-flag technical debt from this repo's flags-registry.json only (FLAG=<key>, JSON=1, HTML=1)
 	@$(SF) sf-flag-debt $(if $(FLAG),--flag $(FLAG)) $(if $(JSON),--json) $(if $(HTML),--html)
+
+# Sibling checkouts for the rollup. Override either variable when a checkout lives
+# elsewhere; a path that does not exist is reported as an unverifiable checkout,
+# never guessed, so the score never silently depends on what is on disk.
+SCHEMA_FORGE_CORE ?= $(abspath ../schema_forge_core)
+ETENDO_GO_MODULE ?= $(abspath ../modules/com.etendoerp.go)
+
+.PHONY: flag-debt-rollup
+flag-debt-rollup: ## Score flag debt across this repo + schema_forge_core + com.etendoerp.go (SCHEMA_FORGE_CORE=, ETENDO_GO_MODULE=, FLAG=<key>, JSON=1, HTML=1)
+	@$(SF) sf-flag-debt --rollup ./flags-registry.json $(SCHEMA_FORGE_CORE)/flags-registry.json $(ETENDO_GO_MODULE)/flags-registry.json $(if $(FLAG),--flag $(FLAG)) $(if $(JSON),--json) $(if $(HTML),--html)
 
 # --- XML Regeneration Check ---
 

@@ -244,7 +244,7 @@ to the rule above: `psd2-statement-import-settings` (ETP-6151, TTL placeholder 2
 
 | Key | Web key | Registry entry | What it gates |
 |---|---|---|---|
-| `psd2-statement-import-settings` | `PSD2_STATEMENT_IMPORT_SETTINGS` in `tools/app-shell/src/lib/flags/flag-keys.js` (default `false`), read only through `hooks/usePsd2ImportSettingsFlag.js` | `psd2-statement-import-settings` (roots `frontend` and `backend`) | Required "Importar desde" and statement grouping when linking a PSD2 bank account (connect modal and Edit-account panel), the `import-settings` / financial-account update validation, `maxFetchInterval` on `accounts`, and deleting statements of bank-connected accounts. Off (the default, and what an absent key means) reproduces the behaviour before ETP-6151 |
+| `psd2-statement-import-settings` | `PSD2_STATEMENT_IMPORT_SETTINGS` in `tools/app-shell/src/lib/flags/flag-keys.js` (default `false`), read only through `hooks/usePsd2ImportSettingsFlag.js` | `psd2-statement-import-settings` (header here, contribution in `com.etendoerp.go`'s `flags-registry.json`) | Required "Importar desde" and statement grouping when linking a PSD2 bank account (connect modal and Edit-account panel), the `import-settings` / financial-account update validation, `maxFetchInterval` on `accounts`, and deleting statements of bank-connected accounts. Off (the default, and what an absent key means) reproduces the behaviour before ETP-6151 |
 
 The browser key is **visual gating only**: the backend (`Psd2ImportSettingsFlag`) evaluates the same
 key per account (targeting key = the account email, lowercase `email` attribute) and enforces the

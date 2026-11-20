@@ -7,7 +7,9 @@ spread. This scorecard measures that interest **per flag**, so the cost is a
 number someone can act on instead of a feeling.
 
 `make flag-debt` reads flag metadata from [`flags-registry.json`](../flags-registry.json)
-and derives a score from the working tree. Higher is worse.
+and derives a score from the working tree. Higher is worse. Each repo owns its own
+registry; `make flag-debt-rollup` scores a feature across all of them
+(see [Per-repo registries and the rollup](#per-repo-registries-and-the-rollup)).
 
 **v0 is report only.** The command always exits 0. Thresholds, trend lines and
 CI gating are deliberately out of scope — first make the number visible, then
@@ -25,7 +27,7 @@ Every reference to the flag that lives **outside** the flag's own files. These
 are what a person has to find and delete when the flag is retired, so their
 count is the removal cost.
 
-The scorer greps each flag's `symbols` across both repos and buckets every
+The scorer greps each flag's `symbols` across every repo it covers and buckets every
 matching file:
 
 | Bucket | What it is | Scored? |
@@ -185,6 +187,7 @@ make flag-debt JSON=1               # also write flag-debt.json
 make flag-debt HTML=1               # also write flag-debt.html (the per-flag panel)
 npx sf-flag-debt --help             # full flag list
 make flag-debt LOCAL_CORE=1         # run the core CLI from sibling source
+make flag-debt-rollup               # this repo + schema_forge_core + com.etendoerp.go, merged by feature id
 ```
 
 The scorer is **code owned by `schema_forge_core`** and published in
@@ -199,13 +202,84 @@ Environment:
 | Variable | Effect |
 |----------|--------|
 | `SONAR_TOKEN`, `SONAR_HOST_URL` | Enable the coverage dimension. Unset ⇒ coverage reported as unavailable, 0 pts. |
-| `ETENDO_GO_MODULE` | Path to the `com.etendoerp.go` checkout. |
+| `SCHEMA_FORGE_CORE` | `make flag-debt-rollup` only: the `schema_forge_core` checkout (default `../schema_forge_core`). |
+| `ETENDO_GO_MODULE` | `make flag-debt-rollup` only: the `com.etendoerp.go` checkout (default `../modules/com.etendoerp.go`). |
 
-The backend module is a separate, git-ignored checkout, so it is **absent from a
-worktree**. The scorer looks for it under the repo root, then under the main
-checkout (a worktree lives at `<main>/.worktrees/<name>`), then at
-`ETENDO_GO_MODULE`. If none exists it prints a warning and scores the frontend
-alone rather than failing.
+---
+
+## Per-repo registries and the rollup
+
+Registry **format v3**: a registry has exactly one implicit root — the directory it sits
+in. There is no `roots` block, `paths` is a flat list, and a spec carries no `root:`.
+Three repos, three registries:
+
+| Registry | Holds | `sonarProject` |
+|----------|-------|----------------|
+| `etendo_schema_forge/flags-registry.json` | **Headers**, plus this repo's own paths and specs | `schema-forge` |
+| `com.etendoerp.go/flags-registry.json` | **Contributions** (backend paths, backend specs) | `etendo-go` |
+| `schema_forge_core/flags-registry.json` | **Contributions** — empty today, none of core's packages carry a flag | `schema-forge-core` |
+
+A **header** is the entry as described in *Registering a new feature*: `id`, `description`,
+`owner`, `jira`, `created`, the `flag` object (`ttl`, `defaultValue`, `symbols`) and any
+`deferredItems` that span repos. A **contribution** is a repo's own slice of a feature whose
+header lives elsewhere:
+
+```jsonc
+{
+  "id": "paid-second-tenant",     // the header's id — this is the join key
+  "flagKey": "my-flag",           // the live flag; dropped at retirement (then add "contribution": true)
+  "symbols": ["MyFlagService"],   // optional: terms that exist only in this repo
+  "paths": ["src/com/etendoerp/go/payment/"],
+  "testSpecs": { "unit": [{ "path": "src-test/…/TenantPaywallServiceTest.java" }], "e2e": [] },
+  "deferredItems": []
+}
+```
+
+`ttl`, `ttlNote`, `defaultValue` and a `flag` object are **forbidden** in a contribution; the
+local validator rejects the file. TTL and staleness belong to the header, and a
+contribution-only registry renders them as *"TTL governed by the header"*. On retirement a
+contribution drops `flagKey` the same way a header drops its `flag` object — the entry always
+survives.
+
+`sonarProject` replaces the old hardcoded table: it names the Sonar project the registry's
+owned files are measured against, and must be a name `cli/sonar-coverage.sh` knows (it builds
+that roster from each repo's `sonar-project.properties`). A registry that declares none gets no
+coverage score, and the report says why.
+
+A `flag` with `"scope": "backend"` is read only by `com.etendoerp.go` and must not be in
+`FLAG_DEFAULTS`; everything else must be (see *Key-sync tests* below).
+
+### `--rollup`: merge, then score
+
+```bash
+sf-flag-debt --rollup flags-registry.json ../schema_forge_core/flags-registry.json ../modules/com.etendoerp.go/flags-registry.json
+```
+
+The rollup merges entries **by feature id** — one header plus its contributions — and only then
+scores the merged feature. It never sums per-repo scores: the flat spec penalties
+(`+5` unit, `+8` e2e) belong to the feature, so a feature with pending specs in two repos pays
+once, not twice. Touch points are scanned in every repo with the union of the symbols, owned
+paths applying per repo; lifecycle comes from the header; open items are the header's plus every
+contribution's.
+
+The rollup reports, and never hides:
+
+| Finding | Meaning |
+|---------|---------|
+| **orphan contribution** | A contribution whose id has no header in any registry. Reported, not scored. |
+| **duplicate header** | The same id declared as a header twice. The first is used. |
+| **flag key mismatch** | A contribution names a different `flagKey` than its header. |
+| **unverifiable** | A registry path that does not exist — an absent checkout. Its contributions are not in the score, and the specs of a merged feature that sit in an absent checkout are listed as *unverifiable* and **not charged**, so the score never depends on which checkouts happen to be on a machine. |
+
+### Key-sync tests
+
+Two hand-edited lists must agree with the registries, in both directions:
+
+- `tools/app-shell/src/lib/flags/__tests__/flag-keys.sync.vitest.js` — `FLAG_DEFAULTS` ↔ the
+  headers (the telemetry kill switches in `NO_EXPOSURE_FLAGS` are not features and are exempt).
+- `GoFeatureFlagsRegistrySyncTest` in `com.etendoerp.go` — `GoFeatureFlags.FLAG_*` ↔ its
+  contributions' `flagKey` ↔ the documented `etendo.go.flags.*` / `ETGO_FLAG_*` names, plus a
+  literal-regex backstop that fails on any `isEnabled("…")` call that bypasses a constant.
 
 ---
 
@@ -217,10 +291,9 @@ alone rather than failing.
 | The score | **no** | Always derived, on demand, from the current tree. A stored score is a stale score. |
 | `flag-debt.json`, `flag-debt.html` | **no** — git-ignored | Generated output. |
 
-The registry lives at the **repo root**, next to `package.json` and the
-`Makefile`, because it spans both repos: it names frontend paths in this repo
-and backend paths in `com.etendoerp.go`. Filing it under `cli/` or `docs/`
-would imply it belongs to one tool or is documentation; it is neither.
+Each registry lives at its **repo root** (next to `package.json` and the `Makefile`
+here, at the module root in `com.etendoerp.go`) and describes only that repo. Filing it under
+`cli/` or `docs/` would imply it belongs to one tool or is documentation; it is neither.
 
 ---
 
@@ -242,24 +315,22 @@ Add an entry to `flags-registry.json`:
   "created": "2026-07-27",                // ISO date
   "flag": {                               // temporary — delete this object at retirement
     "key": "my-flag",                     // matches the frontend constant and the backend property suffix
+    "scope": "backend",                   // only when the browser never reads it (absent from FLAG_DEFAULTS)
     "defaultValue": false,
     "ttl": "2026-10-25",                  // ISO date — when this flag should be gone
     "symbols": ["my-flag", "MY_FLAG"]     // grep terms that find every reference
   },
-  "paths": {
-    "frontend": ["tools/app-shell/src/lib/my-feature/"],
-    "backend":  ["src/com/etendoerp/go/myfeature/"]
-  },
+  "paths": ["tools/app-shell/src/lib/my-feature/"],   // this repo only — flat, relative to the registry
   "testSpecs": {
-    "unit": [
-      { "root": "frontend", "path": "…/__tests__/my-feature.test.js", "expected": true },
-      { "root": "backend",  "path": "…/SomeServiceTest.java",
-        "acceptedDebt": true, "note": "why the team chose to carry this" }
-    ],
-    "e2e":  [{ "root": "frontend", "path": "e2e/tests/flows/my-flag.mocked.spec.js", "expected": true }]
+    "unit": [{ "path": "…/__tests__/my-feature.test.js", "expected": true }],
+    "e2e":  [{ "path": "e2e/tests/flows/my-flag.mocked.spec.js", "expected": true }]
   }
 }
 ```
+
+The backend half goes in `com.etendoerp.go/flags-registry.json` as a contribution with the same
+`id` (see *Per-repo registries and the rollup*): its `paths`, its `testSpecs`
+(`"acceptedDebt": true, "note": "why the team chose to carry this"` works there too).
 
 A feature with no `flag` object is a **shipped** feature: touch points and lifecycle
 stop applying (there is nothing to retire and no expiry to miss), while tests,
@@ -282,7 +353,7 @@ Three things are worth getting right:
 
 `frameworkPaths` under `conventions` are shared across all flags and normally
 need no change — they are matched as path fragments, which is why the backend
-entry has no `src/` prefix (it also covers `src-test/`).
+entry (in `com.etendoerp.go`'s registry) has no `src/` prefix (it also covers `src-test/`).
 
 ---
 
