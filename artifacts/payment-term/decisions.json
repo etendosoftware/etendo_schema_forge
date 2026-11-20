@@ -9,6 +9,7 @@
     "templateConfig": {
       "titleKey": "paymentTermNewTitle",
       "editTitleKey": "paymentTermEditTitle",
+      "viewTitleKey": "paymentTermViewTitle",
       "newLabelKey": "paymentTermNew",
       "modalVariant": "compact",
       "hideBackButton": true,
