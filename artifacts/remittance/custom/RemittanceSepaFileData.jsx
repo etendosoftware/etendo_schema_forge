@@ -299,9 +299,9 @@ function SepaDataForRecord({ data, apiBaseUrl, onChange, registerFields, fieldEr
   // not required there. Nothing to gate on a processed remittance.
   useEffect(() => {
     if (!registerFields || !accountId || processed) return undefined;
-    registerFields(ibanValid ? [] : [{ key: 'sepaFileIban', column: 'IBAN', type: 'text', label: 'IBAN', required: true, section: 'principal' }], IBAN_FIELD_ID);
+    registerFields(ibanValid ? [] : [{ key: 'sepaFileIban', column: 'IBAN', type: 'text', label: ui('remittanceSepaIban'), required: true, section: 'principal' }], IBAN_FIELD_ID);
     return () => registerFields(null, IBAN_FIELD_ID);
-  }, [registerFields, accountId, processed, ibanValid]);
+  }, [registerFields, accountId, processed, ibanValid, ui]);
 
   // The creditor identifier works like the IBAN: a valid typed value goes to the form field `creditorIdentifier`;
   // an invalid one blocks the header's save (a required field that is never filled) instead of being dropped.

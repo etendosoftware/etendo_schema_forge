@@ -35,6 +35,8 @@ export const REMITTANCE_WINDOW_ID = 'FF8080812E71F7C7012E71FD0499001B';
  * this event). «Confirmar» is always there while the remittance is pending (new or saved) and disabled while it has
  * no lines (`disableWhenEmpty`, with `disabledEmptyTitleKey` as its tooltip); a pending edit is saved first.
  */
+// `label` is a genericLabels KEY, not display text: saveActions renders it through `ui(draftMode.label)`.
+// i18n-allowlist: ["confirm"]
 export const REMITTANCE_DRAFT_MODE = {
   enabled: true,
   label: 'confirm',

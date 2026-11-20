@@ -834,6 +834,10 @@ backend does not send it, the block degrades to `sepaFileData.collection === tru
 - Both travel in the header's create/update (`onChange('directDebitScheme' | 'financed', …)`, saved by «Guardar»),
   like the IBAN. They are `editable`, `form: false` in `decisions.json`. Untouched, nothing is sent (the server
   defaults to Core / off).
+- `financed` stays `required` in the contract, as the AD says (`ISFINANCED` is NOT NULL, default N): the quality
+  gate's `notNullRequiresRequired` invariant forbids overriding it to `false`. Being `form: false`, it is not in the
+  generated form's field list, so it never enters DetailView's save gate: «Guardar» stays enabled on a new
+  remittance with the switch untouched, and the column default N applies.
 - Editable only before processing; afterwards read-only as the same disabled grey input the other read-only header fields use, holding «Core» / «B2B (interempresas)», and «Remesa financiada» as the same switch, disabled (422 `ETGO_RemittanceProcessedNotEditable`).
 - 422 `ETGO_RemittanceSchemeInvalid` and `ETGO_RemittanceOptionsCollectionOnly` map to
   `backendError.remittanceSchemeInvalid` / `backendError.remittanceOptionsCollectionOnly`.

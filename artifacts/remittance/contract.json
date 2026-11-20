@@ -1,8 +1,8 @@
 {
-  "version": "0.34.0",
+  "version": "0.35.0",
   "generatedAt": "2026-11-05T18:53:39.346Z",
-  "updatedAt": "2026-11-20T14:33:53.778Z",
-  "checksum": "2fec8101e5fbb436",
+  "updatedAt": "2026-11-20T15:38:53.482Z",
+  "checksum": "53c97ec8ec0b3806",
   "frontendContract": {
     "window": {
       "id": "FF8080812E71F7C7012E71FD0499001B",
@@ -567,7 +567,7 @@
             "type": "boolean",
             "tsType": "boolean",
             "visibility": "editable",
-            "required": false,
+            "required": true,
             "grid": false,
             "form": false,
             "sourceRequired": true,
@@ -577,6 +577,7 @@
             },
             "defaultValue": "N",
             "validation": {
+              "required": true,
               "maxLength": 1
             },
             "readOnlyLogic": {
@@ -1474,7 +1475,7 @@
             "column": "IsFinanced",
             "type": "boolean",
             "visibility": "editable",
-            "required": false
+            "required": true
           },
           {
             "name": "iBAN",

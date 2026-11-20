@@ -39,6 +39,17 @@ describe('RemittanceAdvancedOptions', () => {
     expect(screen.queryByTestId('remittance-advanced-toggle')).toBeNull();
   });
 
+  // `financed` is required in the contract (REM_REMITTANCE.ISFINANCED is NOT NULL, default N). On a new remittance
+  // an untouched switch hands nothing to the header form: the column default N applies, and nothing here could hold
+  // «Guardar» back.
+  it('on a new remittance the untouched switch is off and hands nothing to the header form', () => {
+    const { onChange, onTouched } = renderOptions({ info: null });
+    expect(screen.getByTestId('remittance-financed-switch')).not.toBeChecked();
+    expect(screen.getByTestId('remittance-financed-switch')).toBeEnabled();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onTouched).not.toHaveBeenCalled();
+  });
+
   it('shows the server values', () => {
     renderOptions({ info: info({ directDebitScheme: 'B2B', financed: true }) });
     expect(screen.getByTestId('remittance-scheme-trigger')).toHaveTextContent('remittanceSchemeB2b');

@@ -320,8 +320,7 @@
           "visibility": "editable",
           "grid": false,
           "form": false,
-          "required": false,
-          "reason": "ETP-6247 — REM_REMITTANCE.ISFINANCED (default N): «Remesa financiada», only for collection remittances. Writable while not processed; the SEPA file's GrpHdr/MsgId carries the financed prefix. form:false: the custom «Opciones avanzadas» block owns it."
+          "reason": "ETP-6247 — REM_REMITTANCE.ISFINANCED (NOT NULL, default N): «Remesa financiada», only for collection remittances. Writable while not processed; the SEPA file's GrpHdr/MsgId carries the financed prefix. form:false: the custom «Opciones avanzadas» block owns it. Stays required as the AD says (quality-gate invariant): with form:false it is not in the header form's save gate, and an untouched switch leaves it to the column default N."
         },
         "iBAN": {
           "visibility": "editable",

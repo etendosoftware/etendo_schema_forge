@@ -52,20 +52,21 @@ export function confirmSummary(readiness, linesTotal, record) {
   };
 }
 
-// What each grouping option means, shown under its card (ActionChoiceModal needs a description).
+// What each grouping option means, shown under its card (ActionChoiceModal needs a description), and the
+// label key a card falls back to when its option carries none (the single «Sin agrupar» card without a param).
 const GROUPING_CARD = {
-  P: { descriptionKey: 'remittanceGroupingNoneDescription', icon: FileTextIcon },
+  [GROUPING_NONE]: { labelKey: 'remittanceGroupingNone', descriptionKey: 'remittanceGroupingNoneDescription', icon: FileTextIcon },
   GGPD: { descriptionKey: 'remittanceGroupingByBpAndDueDateDescription', icon: UsersIcon },
 };
 
 /** The choice cards: the grouping param's options, or the single «Sin agrupar» card without a param. */
 function groupingOptions(param, ui) {
-  const options = param?.options?.length ? param.options : [{ value: GROUPING_NONE, label: 'remittanceGroupingNone' }];
+  const options = param?.options?.length ? param.options : [{ value: GROUPING_NONE }];
   return options.map((option) => {
     const card = GROUPING_CARD[option.value] ?? {};
     return {
       id: option.value,
-      label: ui(option.label),
+      label: ui(option.label ?? card.labelKey),
       description: card.descriptionKey ? ui(card.descriptionKey) : '',
       icon: card.icon,
       testId: `remittance-confirm-grouping-${option.value}`,
