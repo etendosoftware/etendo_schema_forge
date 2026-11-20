@@ -444,9 +444,11 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
     // If this fails the order is still in DR, so the rest of the flow makes no sense.
     if (!orderConfirmed) {
       try {
+        // ETP-5424 — synchronous document process: opt out of the default timeout, a cut-off
+        // completion that still commits server-side invites a double submit.
         const processRes = await apiFetch(
           `${orderUrl}/${orderId}/action/documentAction`,
-          { method: 'POST', body: JSON.stringify({ docAction: 'CO' }) },
+          { method: 'POST', body: JSON.stringify({ docAction: 'CO' }), timeout: 0 },
         );
         if (!processRes.ok) {
           const e = await processRes.json().catch(() => null);
@@ -501,7 +503,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
     if (createInvoice && !invoiceResult) {
       try {
         const res = await apiFetch(`${orderUrl}/${orderId}/action/createPurchaseInvoice`,
-          { method: 'POST', body: JSON.stringify(withSifFields({}, sif)) });
+          { method: 'POST', body: JSON.stringify(withSifFields({}, sif)), timeout: 0 });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           // ETP-5381: mirrors the sales twin — this was the only branch here not translating the
