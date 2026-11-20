@@ -91,6 +91,13 @@ export const DOC_TEMPLATE_SELECTION = 'doc-template-selection';
 export const DYNAMIC_REPORTS = 'dynamic-reports';
 
 /**
+ * ETP-6083 — interactive Balance Sheet and Trial Balance (Sumas y Saldos), rolled out apart from the
+ * Profit & Loss (`dynamic-reports`). On: those two open the dynamic view. Off: today's viewer. Visual
+ * gating only, like `dynamic-reports`.
+ */
+export const DYNAMIC_BALANCE_REPORTS = 'dynamic-balance-reports';
+
+/**
  * ETP-6151 — PSD2 statement import settings. On: connecting a bank account asks for "Importar
  * desde" and the statement grouping (both required, sent with the link), the edit panel enforces
  * them with help text, and statements of a bank-connected account can be deleted (processed ones
@@ -134,6 +141,7 @@ export const FLAG_DEFAULTS = Object.freeze({
   [CONTACT_CATEGORY_TYPE]: false,
   [DOC_TEMPLATE_SELECTION]: false,
   [DYNAMIC_REPORTS]: false,
+  [DYNAMIC_BALANCE_REPORTS]: false,
   [PSD2_STATEMENT_IMPORT_SETTINGS]: false,
   [TELEMETRY_KILL_ALL]: false,
   ...Object.fromEntries(Object.values(TELEMETRY_KILL_PROVIDER_FLAGS).map((key) => [key, false])),

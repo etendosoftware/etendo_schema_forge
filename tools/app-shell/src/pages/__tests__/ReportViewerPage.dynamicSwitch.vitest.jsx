@@ -48,7 +48,7 @@ vi.mock('@/lib/rolesApi.js', () => ({
 let mockFlagOn = false;
 vi.mock('@/lib/flags', async (importOriginal) => ({
   ...(await importOriginal()),
-  useFeatureFlag: (key) => (key === 'dynamic-reports' ? mockFlagOn : false),
+  useFeatureFlag: (key) => (key === 'dynamic-reports' || key === 'dynamic-balance-reports' ? mockFlagOn : false),
 }));
 
 import ReportViewerPage from '../ReportViewerPage.jsx';
@@ -206,12 +206,24 @@ describe('ReportViewerPage — URL selections do not leak between reports (ETP-6
 describe('opensDynamicView', () => {
   it('needs both the flag and a listed report', () => {
     expect([...DYNAMIC_REPORT_IDS]).toEqual(['profit-loss', 'report-trial-balance', 'balance-sheet']);
-    expect(opensDynamicView('report-trial-balance', true)).toBe(false); // needs tree: 'chart'
-    expect(opensDynamicView('report-trial-balance', true, { tree: 'chart' })).toBe(true);
-    expect(opensDynamicView('report-trial-balance', false, { tree: 'chart' })).toBe(false);
-    expect(opensDynamicView('profit-loss', true)).toBe(true);
-    expect(opensDynamicView('profit-loss', false)).toBe(false);
-    expect(opensDynamicView('sales-report', true)).toBe(false);
-    expect(opensDynamicView(null, true)).toBe(false);
+    const ALL = { 'dynamic-reports': true, 'dynamic-balance-reports': true };
+    expect(opensDynamicView('report-trial-balance', ALL)).toBe(false); // needs tree: 'chart'
+    expect(opensDynamicView('report-trial-balance', ALL, { tree: 'chart' })).toBe(true);
+    expect(opensDynamicView('report-trial-balance', {}, { tree: 'chart' })).toBe(false);
+    expect(opensDynamicView('profit-loss', ALL)).toBe(true);
+    expect(opensDynamicView('profit-loss', {})).toBe(false);
+    expect(opensDynamicView('sales-report', ALL)).toBe(false);
+    expect(opensDynamicView(null, ALL)).toBe(false);
+  });
+
+  it('the P&L follows dynamic-reports, the Balance Sheet and the Trial Balance follow dynamic-balance-reports (ETP-6083)', () => {
+    const pnlOnly = { 'dynamic-reports': true };
+    const balancesOnly = { 'dynamic-balance-reports': true };
+    expect(opensDynamicView('profit-loss', pnlOnly)).toBe(true);
+    expect(opensDynamicView('profit-loss', balancesOnly)).toBe(false);
+    expect(opensDynamicView('balance-sheet', pnlOnly)).toBe(false);
+    expect(opensDynamicView('balance-sheet', balancesOnly)).toBe(true);
+    expect(opensDynamicView('report-trial-balance', pnlOnly, { tree: 'chart' })).toBe(false);
+    expect(opensDynamicView('report-trial-balance', balancesOnly, { tree: 'chart' })).toBe(true);
   });
 });

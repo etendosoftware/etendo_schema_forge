@@ -1,14 +1,14 @@
 # Trial Balance
 
 ## Intent
-One row per account with opening balance, period debit, period credit and closing balance, so accountants can check that the books balance and inspect activity before issuing financial statements. Since ETP-6084 the report also runs on the dynamic report engine (flag `dynamic-reports`), where the user explores it without re-running: level, folding, grouping by dimension, comparison and drill-down.
+One row per account with opening balance, period debit, period credit and closing balance, so accountants can check that the books balance and inspect activity before issuing financial statements. Since ETP-6084 the report also runs on the dynamic report engine (flag `dynamic-balance-reports` since ETP-6083, shared with the Balance Sheet; it was `dynamic-reports` until then), where the user explores it without re-running: level, folding, grouping by dimension, comparison and drill-down.
 
 ## What this report should allow
 - Browse it from Finance / Reports as **Balance de Sumas y Saldos** (es) / **Trial Balance** (en).
 - Download PDF, XLSX or CSV from either viewer.
 - Two viewers, same contract (`artifacts/report-trial-balance/report-contract.json`):
 
-| | Old viewer (flag `dynamic-reports` off) | Dynamic view (flag on, `DYNAMIC_REPORT_IDS`) |
+| | Old viewer (flag `dynamic-balance-reports` off) | Dynamic view (flag on, `DYNAMIC_REPORT_IDS`) |
 |---|---|---|
 | Route | `/report-viewer?report=report-trial-balance` | same route; `ReportViewerPage` switches on the flag |
 | Run | press **Run Report** | renders on open, re-queries on every change |

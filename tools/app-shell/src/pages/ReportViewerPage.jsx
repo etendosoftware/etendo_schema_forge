@@ -27,7 +27,7 @@ import { useFavorites } from '@/components/layout/FavoritesContext';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { fetchMyReportAccess } from '@/lib/rolesApi.js';
-import { useFeatureFlag, DYNAMIC_REPORTS } from '@/lib/flags';
+import { useFeatureFlag, DYNAMIC_REPORTS, DYNAMIC_BALANCE_REPORTS } from '@/lib/flags';
 import { opensDynamicView } from '@/components/reports/dynamic/dynamicReports.js';
 import { cn } from '@/lib/utils';
 import DynamicReportBadge, { DYNAMIC_REPORT_CARD_CLASS } from '@/components/reports/dynamic/DynamicReportBadge.jsx';
@@ -239,7 +239,14 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
   );
 }
 
-// ETP-6080: loaded only when the `dynamic-reports` flag opens it.
+// ETP-6083: the flags that open the interactive reports (P&L and the two balances apart), keyed by flag.
+function useDynamicReportFlags() {
+  const pnl = useFeatureFlag(DYNAMIC_REPORTS);
+  const balances = useFeatureFlag(DYNAMIC_BALANCE_REPORTS);
+  return useMemo(() => ({ [DYNAMIC_REPORTS]: pnl, [DYNAMIC_BALANCE_REPORTS]: balances }), [pnl, balances]);
+}
+
+// ETP-6080: loaded only when its flag opens it.
 const DynamicReportView = lazy(() => import('@/components/reports/dynamic/DynamicReportView.jsx'));
 
 // Dropdown / search-as-you-type selector.
@@ -1909,7 +1916,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
   const tMenu = useMenuLabel();
   const ui = useUI();
   const { toggleFavorite, isFavorite } = useFavorites();
-  const dynamicReportsOn = useFeatureFlag(DYNAMIC_REPORTS);
+  const dynamicFlags = useDynamicReportFlags();
   const favKey = categoryFilter ? `report-viewer?category=${categoryFilter}` : 'report-viewer';
   const favActive = isFavorite(favKey);
   // Same list/gallery switch as the Product window (ListView.jsx's ViewToggle,
@@ -1986,7 +1993,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 <ReportListRow
                   key={r.id}
                   report={r}
-                  interactive={opensDynamicView(r.id, dynamicReportsOn, r)}
+                  interactive={opensDynamicView(r.id, dynamicFlags, r)}
                   onRun={selectReport}
                   locale={locale}
                   data-testid="ReportListRow__3c998a" />
@@ -2011,7 +2018,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 <ReportCard
                   key={r.id}
                   report={r}
-                  interactive={opensDynamicView(r.id, dynamicReportsOn, r)}
+                  interactive={opensDynamicView(r.id, dynamicFlags, r)}
                   onRun={selectReport}
                   data-testid="ReportCard__3c998a" />
               ))}
@@ -2049,7 +2056,7 @@ export default function ReportViewerPage() {
   const localeLangKey = locale === 'es_ES' ? 'es' : 'en';
   const categoryFilter = searchParams.get('category');
   const reportId = searchParams.get('report');
-  const dynamicReportsOn = useFeatureFlag(DYNAMIC_REPORTS);
+  const dynamicFlags = useDynamicReportFlags();
 
   // ETP-5402 QA follow-up — the caller's own per-report tiers (id -> 'full'|'read-only', a
   // missing key means no access), fetched once on mount. `null` means "not resolved yet" —
@@ -2163,7 +2170,7 @@ export default function ReportViewerPage() {
     );
   }
 
-  if (selectedReport && opensDynamicView(selectedReport.id, dynamicReportsOn, selectedReport)) {
+  if (selectedReport && opensDynamicView(selectedReport.id, dynamicFlags, selectedReport)) {
     return (
       <Suspense
         fallback={<CircleNotchIcon
