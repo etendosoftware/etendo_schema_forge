@@ -48,6 +48,7 @@ const REPORT = {
     { name: 'dateFrom', type: 'date', label: { es_ES: 'Fecha de Inicio' } },
     { name: 'dateTo', type: 'date', label: { es_ES: 'Fecha de Fin' } },
     { name: 'compareTo', type: 'toggle' },
+    { name: 'columns', type: 'string', hidden: true },
     { name: 'bPartnerId', type: 'search', selector: 'bpartner', label: { es_ES: 'Contacto' } },
     { name: 'productId', type: 'search', selector: 'product-all', label: { es_ES: 'Producto' } },
     { name: 'splitBy', type: 'string', hidden: true },
@@ -1454,7 +1455,7 @@ describe('DynamicReportView — selections in the URL (ETP-6239)', () => {
   });
 
   it('the panel offers Columnas/Comparar/Dividir only when the contract declares them, like the URL', async () => {
-    const bare = { ...REPORT, parameters: REPORT.parameters.filter((p) => !['compareTo', 'splitBy'].includes(p.name)) };
+    const bare = { ...REPORT, parameters: REPORT.parameters.filter((p) => !['compareTo', 'splitBy', 'columns'].includes(p.name)) };
     link('columns=month&compare=previous&splitBy=org');
     renderView({ report: bare });
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
@@ -1533,5 +1534,147 @@ describe('DynamicReportView — Organización split and chip (ETP-6080)', () => 
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
     expect(screen.getByTestId('DynamicReportPanel__splitBy')).toHaveValue('');
     expect(screen.queryByTestId('DynamicReportView__chip-split')).toBeNull();
+  });
+});
+
+// ETP-6084 — the Trial Balance: a chart tree with the contract's own amount columns, filters, grouping and totals.
+describe('DynamicReportView — chart tree: Trial Balance (ETP-6084)', () => {
+  const TB = {
+    id: 'report-trial-balance',
+    category: 'finance',
+    title: { es_ES: 'Balance de Sumas y Saldos' },
+    tree: 'chart',
+    amountColumns: [
+      { field: 'opening', labelKey: 'dynamicReportOpening', compare: 'never' },
+      { field: 'debit', labelKey: 'dynamicReportDebit', compare: 'optional' },
+      { field: 'credit', labelKey: 'dynamicReportCredit', compare: 'optional' },
+      { field: 'closing', labelKey: 'dynamicReportClosing', compare: 'always' },
+    ],
+    sections: [{ id: 'periodo', label: { es_ES: 'Periodo' } }, { id: 'opciones', label: { es_ES: 'Opciones' } }],
+    parameters: [
+      { name: 'orgId', type: 'search', selector: 'org', hidden: true },
+      { name: 'dateFrom', type: 'date', label: { es_ES: 'Desde' } },
+      { name: 'dateTo', type: 'date', label: { es_ES: 'Hasta' } },
+      { name: 'compareTo', type: 'toggle' },
+      { name: 'fromAccountId', type: 'search', selector: 'account', label: { es_ES: 'Desde la cuenta' } },
+      { name: 'bPartnerId', type: 'search', selector: 'bpartner', label: { es_ES: 'Contacto' }, groupByValue: 'bpartner' },
+      { name: 'projectId', type: 'search', selector: 'project', label: { es_ES: 'Proyecto' } },
+      { name: 'groupBy', type: 'select', label: { es_ES: 'Agrupar por' } },
+      { name: 'openingEntryAmount', type: 'toggle', default: true, label: { es_ES: 'Asiento de apertura' } },
+      { name: 'showOnlyAccountsWithValue', type: 'toggle', default: true, label: { es_ES: 'Solo con valor' } },
+      { name: 'accountLevel', default: 'S', options: [{ value: 'E', label: { es_ES: 'Epígrafe' } }, { value: 'S', label: { es_ES: 'Subcuenta' } }] },
+    ],
+  };
+  const cell = (amount, ref = 0) => ({ amount, sly: { amount: ref, variationAmount: amount - ref, variationPct: 10, trend: null }, prev: { amount: ref, variationAmount: amount - ref, variationPct: 10, trend: null } });
+  const cells = (o, d, c, cl) => [{ opening: cell(o), debit: cell(d), credit: cell(c), closing: cell(cl, 1) }];
+  const TB_ROWS = [
+    { node_id: 'E1', parentId: null, elementlevel: 'E', value: '4', name: 'Acreedores', account_id: 'E1', cells: cells(0, 100, 100, 0) },
+    { node_id: 'S1', parentId: 'E1', elementlevel: 'S', value: '430', name: 'Clientes', account_id: 'S1', account_value: '430', cells: cells(0, 100, 100, 0) },
+  ];
+  const DIMENSION_ROWS = [
+    { node_id: 'S1|B1', parentId: 'S1', elementlevel: 'S', value: '430', name: 'Acme', isDimension: true, account_id: 'S1', account_value: '430', dimension_id: 'B1', dimension_name: 'Acme', cells: cells(0, 60, 60, 0) },
+    { node_id: 'S1|', parentId: 'S1', elementlevel: 'S', value: '430', name: '', isDimension: true, account_id: 'S1', account_value: '430', dimension_id: '', dimension_name: '', cells: cells(0, 40, 40, 0) },
+  ];
+  const TOTALS = cells(0, 100, 100, 0);
+  const tbAnswer = ({ balanced = true, balance } = {}) => (params) => json({
+    kind: 'tree',
+    periods: TOTAL_PERIOD,
+    rows: params.groupBy ? [...TB_ROWS, ...DIMENSION_ROWS] : TB_ROWS,
+    totals: TOTALS,
+    balance: balance ?? { balanced, debitCreditDiff: balanced ? 0 : 12.5, closingDiff: 0 },
+  });
+  const renderTb = (props = {}) => renderView({ report: TB, reportAccess: { ...FULL_ACCESS, 'report-trial-balance': 'full' }, ...props });
+  const tbQueries = () => queriesTo('report-trial-balance');
+  const headers = () => screen.getAllByTestId('DynamicReportTable__amount').map((h) => h.textContent);
+
+  beforeEach(() => { queryAnswer = tbAnswer(); });
+
+  it('one column group per contract amount, the TOTALES row and the balance check; no KPI strip, no bars', async () => {
+    renderTb();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'S1']));
+    expect(headers()).toEqual(['dynamicReportOpening', 'dynamicReportDebit', 'dynamicReportCredit', 'dynamicReportClosing']);
+    expect(screen.getByTestId('DynamicReportTable__totals')).toHaveTextContent('dynamicReportTotalRow');
+    expect(screen.getByTestId('DynamicReportBalance__ok')).toBeInTheDocument();
+    expect(screen.queryByTestId('DynamicReportKpis')).toBeNull();
+    expect(screen.queryByTestId('DynamicReportTable__bar')).toBeNull();
+  });
+
+  it('panel: the filters and toggles come from the contract; the toggles reach the query and none is forced', async () => {
+    renderTb();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'S1']));
+    expect(tbQueries()[0]).toMatchObject({ openingEntryAmount: 'true', showOnlyAccountsWithValue: 'true', groupBy: '', projectId: '', fromAccountId: '' });
+    expect(screen.getByTestId('DynamicReportPanel__projectId')).toBeInTheDocument();
+    expect(screen.getByTestId('DynamicReportPanel__fromAccountId')).toBeInTheDocument();
+    expect(screen.queryByTestId('DynamicReportPanel__columns')).toBeNull(); // no period columns marker
+    expect(screen.queryByTestId('DynamicReportPanel__productId')).toBeNull(); // not declared
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__toggle-showOnlyAccountsWithValue'));
+    await waitFor(() => expect(tbQueries().at(-1).showOnlyAccountsWithValue).toBe('false'));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__toggle-openingEntryAmount'));
+    await waitFor(() => expect(tbQueries().at(-1)).toMatchObject({ openingEntryAmount: 'false', showOnlyAccountsWithValue: 'false' }));
+  });
+
+  it('comparison: closing compares, debit/credit only with "Comparar también movimientos", and that sends no request', async () => {
+    renderTb();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'S1']));
+    expect(screen.queryByTestId('DynamicReportPanel__compareMovements')).toBeNull(); // only with a comparison
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'same-last-year' } });
+    await waitFor(() => expect(screen.getAllByText('dynamicReportCompared')).toHaveLength(1));
+    const sent = tbQueries().length;
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__compareMovements'));
+    await waitFor(() => expect(screen.getAllByText('dynamicReportCompared')).toHaveLength(3));
+    expect(tbQueries()).toHaveLength(sent);
+    // A TB variation is neutral: it has no trend, so no tone class
+    expect(screen.getAllByTestId('DynamicReportTable__variation')[0].className).not.toMatch(/destructive|success/);
+  });
+
+  it('grouping: dimension rows open under the account; a contact row drills with its id, an empty one does not', async () => {
+    renderTb();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'S1']));
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__groupBy'), { target: { value: 'bpartner' } });
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'S1', 'S1|B1', 'S1|'])); // the account starts open
+    expect(tbQueries().at(-1).groupBy).toBe('bpartner');
+    expect(screen.getByTestId('DynamicReportView__chip-groupBy')).toBeInTheDocument();
+    // S1 (leaf account) and the contact row are drillable; the empty-dimension one is not.
+    expect(screen.getAllByTestId('DynamicReportTable__ledger')).toHaveLength(2);
+    fireEvent.click(screen.getAllByTestId('DynamicReportTable__ledger')[1]);
+    await waitFor(() => expect(queriesTo('report-general-ledger')).toHaveLength(1));
+    expect(queriesTo('report-general-ledger')[0]).toMatchObject({ accountId: 'S1', fromAccountId: '430', toAccountId: '430', bPartnerId: 'B1', openingEntryAmount: 'true' });
+  });
+
+  it('balance: out of balance is an alert; with a dimension filter or account range it is only a note', async () => {
+    queryAnswer = tbAnswer({ balanced: false });
+    renderTb();
+    await waitFor(() => expect(screen.getByTestId('DynamicReportBalance__error')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__projectId')); // the stub commits one item
+    await waitFor(() => expect(screen.getByTestId('DynamicReportBalance__partial')).toBeInTheDocument());
+    expect(screen.queryByTestId('DynamicReportBalance__error')).toBeNull();
+  });
+
+  it('the export sends the rows on screen as visibleNodeIds, and compareMovements; the P&L sends neither', async () => {
+    renderTb();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'S1']));
+    fireEvent.click(screen.getByTestId('DynamicReportView__export-pdf'));
+    await waitFor(() => expect(apiFetchMock.mock.calls.some(([u]) => u.endsWith('/render'))).toBe(true));
+    const body = (id) => JSON.parse(apiFetchMock.mock.calls.filter(([u]) => u === `/api/reports/${id}/render`).at(-1)[1].body).params;
+    expect(body('report-trial-balance')).toMatchObject({ visibleNodeIds: 'E1,S1', compareMovements: 'false' });
+    // Collapse all: only the roots are visible, and that is what prints.
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__collapseAll'));
+    fireEvent.click(screen.getByTestId('DynamicReportView__export-xlsx'));
+    await waitFor(() => expect(body('report-trial-balance').visibleNodeIds).toBe('E1'));
+    cleanup();
+    queryAnswer = (params) => json({ kind: 'tree', periods: TOTAL_PERIOD, rows: withVariation(TREE) });
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    fireEvent.click(screen.getByTestId('DynamicReportView__export-pdf'));
+    await waitFor(() => expect(apiFetchMock.mock.calls.some(([u]) => u === '/api/reports/profit-loss/render')).toBe(true));
+    expect(body('profit-loss')).not.toHaveProperty('visibleNodeIds');
+    expect(body('profit-loss')).not.toHaveProperty('compareMovements');
+  });
+
+  it('a filter change is timed with the Trial Balance filter types', async () => {
+    renderTb();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'S1']));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__projectId'));
+    await waitFor(() => expect(trackMock.mock.calls.filter(([e]) => e === 'report_filter_applied').map(([, p]) => p.type)).toContain('project'));
   });
 });

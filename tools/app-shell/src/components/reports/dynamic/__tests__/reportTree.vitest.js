@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/components/reports/dynamic/reportTree.js
-import { canSplit, expandAll, expandedNodeIdsParam, expansionForLevel, foldExpansion, parentIds, visibleRows } from '../reportTree.js';
+import { canSplit, expandAll, expandedNodeIdsParam, expansionForLevel, foldExpansion, levelHiddenIds, parentIds, visibleRows } from '../reportTree.js';
 
 // A heading with an account, which has a breakdown with a subaccount; a formula total at the top.
 const ROWS = [
@@ -62,5 +62,48 @@ describe('reportTree', () => {
     const fold = { base: 'level', flipped: new Set(['C1']) };
     const more = [...ROWS, { node_id: 'E2', parentId: null, elementlevel: 'E' }, { node_id: 'C3', parentId: 'E2', elementlevel: 'C' }];
     expect(ids(visibleRows(more, foldExpansion(more, fold, 'C')))).toEqual(['E1', 'C1', 'D1', 'C2', 'T', 'E2', 'C3']);
+  });
+});
+
+// ETP-6084 D6/D4: mixed-level charts and dimension rows.
+describe('reportTree — mixed levels and dimension rows (ETP-6084)', () => {
+  // A heading inside a heading, with an account of its own; an account inside an account; an account with no heading above it.
+  const MIXED = [
+    { node_id: 'E1', parentId: null, elementlevel: 'E' },
+    { node_id: 'E2', parentId: 'E1', elementlevel: 'E' },
+    { node_id: 'C1', parentId: 'E1', elementlevel: 'C' },
+    { node_id: 'C9', parentId: null, elementlevel: 'C' },
+    { node_id: 'C10', parentId: 'C9', elementlevel: 'C' },
+    { node_id: 'S1', parentId: 'C10', elementlevel: 'S' },
+  ];
+
+  it('without `nested` a heading in a heading stays folded at the Heading level (the P&L rule)', () => {
+    expect(ids(visibleRows(MIXED, expansionForLevel(MIXED, 'E')))).toEqual(['E1', 'C9']);
+  });
+
+  it('with `nested` the level shows same-level nodes and folds the deeper children of their parent', () => {
+    const open = expansionForLevel(MIXED, 'E', { nested: true });
+    expect(ids(visibleRows(MIXED, open, levelHiddenIds(MIXED, 'E')))).toEqual(['E1', 'E2', 'C9']);
+    // At Account: the heading is above the level (open), the nested account is shown, its subaccount folded.
+    const openC = expansionForLevel(MIXED, 'C', { nested: true });
+    expect(ids(visibleRows(MIXED, openC, levelHiddenIds(MIXED, 'C')))).toEqual(['E1', 'E2', 'C1', 'C9', 'C10']);
+  });
+
+  it('a leaf with no ancestor at the level still shows, and Expand all ignores the level fold', () => {
+    const rows = [{ node_id: 'E1', parentId: null, elementlevel: 'E' }, { node_id: 'S5', parentId: 'E1', elementlevel: 'S' }];
+    expect(ids(visibleRows(rows, expansionForLevel(rows, 'D', { nested: true })))).toEqual(['E1', 'S5']);
+    expect(ids(visibleRows(MIXED, foldExpansion(MIXED, { base: 'all', flipped: new Set() }, 'E', { nested: true })))).toEqual(ids(MIXED));
+  });
+
+  it('an account with dimension rows starts open at any level and reports hasDimensionChildren', () => {
+    const rows = [
+      { node_id: 'E1', parentId: null, elementlevel: 'E' },
+      { node_id: 'S1', parentId: 'E1', elementlevel: 'S' },
+      { node_id: 'S1|B1', parentId: 'S1', elementlevel: 'S', isDimension: true },
+    ];
+    const shown = visibleRows(rows, expansionForLevel(rows, 'S'));
+    expect(ids(shown)).toEqual(['E1', 'S1', 'S1|B1']);
+    expect(shown[1]).toMatchObject({ hasChildren: true, hasDimensionChildren: true });
+    expect(ids(visibleRows(rows, foldExpansion(rows, { base: 'none', flipped: new Set() }, 'S')))).toEqual(['E1']);
   });
 });

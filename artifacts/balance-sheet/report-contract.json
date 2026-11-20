@@ -36,7 +36,8 @@
     { "name": "compareTo", "label": { "en_US": "Compare To", "es_ES": "Comparar con" }, "type": "toggle", "default": false, "section": "comparacion" },
     { "name": "referenceYearId", "label": { "en_US": "Year (Comparison)", "es_ES": "Año (comparación)" }, "type": "search", "selector": "year", "inputStyle": "popup-single", "dependsOn": "orgId", "requiredIf": { "param": "compareTo", "equals": "true" }, "visibleIf": { "param": "compareTo", "equals": "true" }, "section": "comparacion" },
     { "name": "fromReferenceDate", "label": { "en_US": "Starting Date (Comparison)", "es_ES": "Fecha de Inicio (comparación)" }, "type": "date", "visibleIf": { "param": "compareTo", "equals": "true" }, "section": "comparacion" },
-    { "name": "toReferenceDate", "label": { "en_US": "Ending Date (Comparison)", "es_ES": "Fecha de Fin (comparación)" }, "type": "date", "visibleIf": { "param": "compareTo", "equals": "true" }, "section": "comparacion" }
+    { "name": "toReferenceDate", "label": { "en_US": "Ending Date (Comparison)", "es_ES": "Fecha de Fin (comparación)" }, "type": "date", "visibleIf": { "param": "compareTo", "equals": "true" }, "section": "comparacion" },
+    { "name": "columns", "label": { "en_US": "Columns", "es_ES": "Columnas" }, "type": "string", "hidden": true }
   ],
   "outputs": ["pdf", "xlsx", "csv", "html"],
   "summary": { "totalRows": true },

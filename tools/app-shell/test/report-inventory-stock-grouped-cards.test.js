@@ -25,7 +25,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Handlebars from 'handlebars';
-import { registerReportHelpers } from '../../../templates/reports/helpers/report-html-helpers.js';
+import { registerReportHelpers, createReportHelpers } from '../../../templates/reports/helpers/report-html-helpers.js';
 import { expandBrandingPartial } from './reportBrandingPartialHelper.js';
 
 const ARTIFACT_DIR = resolve(import.meta.dirname, '../../../artifacts/inventory-stock-report');
@@ -137,7 +137,9 @@ describe('inventory-stock-report — flat (ungrouped) layout is untouched (ETP-5
 // ---------------------------------------------------------------------------
 function loadHelperFns() {
   const code = readFileSync(resolve(ARTIFACT_DIR, 'helpers.js'), 'utf8');
-  return new Function(`${code}; return { round2, numCellType, dashIfBlank };`)();
+  // round2 / numCellType are canonical (ETP-6084); only dashIfBlank is this report's own.
+  const { round2, numCellType } = createReportHelpers();
+  return { round2, numCellType, ...new Function(`${code}; return { dashIfBlank };`)() };
 }
 
 function renderTemplate(file, rows) {
@@ -174,8 +176,8 @@ describe('inventory-stock-report helpers — round2 / numCellType with missing c
     assert.equal(round2(1.2), 1.2);
   });
 
-  it('round2 returns 0 for a non-numeric string', () => {
-    assert.equal(round2('abc'), 0);
+  it('round2 returns an empty cell for a non-numeric string (canonical)', () => {
+    assert.equal(round2('abc'), '');
   });
 
   it('numCellType is string for null, undefined and empty string', () => {
@@ -187,7 +189,7 @@ describe('inventory-stock-report helpers — round2 / numCellType with missing c
   it('numCellType is number for a value, including a real zero', () => {
     assert.equal(numCellType(0), 'number');
     assert.equal(numCellType(9.56), 'number');
-    assert.equal(numCellType('abc'), 'number');
+    assert.equal(numCellType('abc'), 'string');
   });
 });
 
@@ -301,7 +303,8 @@ describe('inventory-stock-report — template.hbs uses only canonical helpers (b
   const reportHelperNames = [...helpersSrc.matchAll(/^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]);
 
   it('helpers.js declares the per-report helpers this guard checks', () => {
-    for (const n of ['round2', 'numCellType', 'dashIfBlank']) assert.ok(reportHelperNames.includes(n), n);
+    assert.ok(reportHelperNames.includes('dashIfBlank'));
+    for (const n of ['round2', 'numCellType']) assert.ok(!reportHelperNames.includes(n), `${n} is canonical`);
   });
 
   it('template.hbs does not call any helper defined in the report helpers.js', () => {

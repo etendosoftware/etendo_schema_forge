@@ -27166,7 +27166,16 @@
     "dynamicReportExportTooLong": "Excel y CSV admiten hasta 24 meses u 8 trimestres. Acorta el período para exportarlos.",
     "dynamicReportHidePanel": "Ocultar panel de filtros",
     "dynamicReportShowPanel": "Mostrar panel de filtros",
-    "dynamicReportActiveFilters": "{count} filtros activos"
+    "dynamicReportActiveFilters": "{count} filtros activos",
+    "dynamicReportTotalRow": "TOTALES",
+    "dynamicReportBalanced": "Cuadra: el total del Debe es igual al total del Haber y los saldos finales suman cero.",
+    "dynamicReportUnbalanced": "No cuadra.",
+    "dynamicReportBalancePartial": "Con filtros parciales (cuentas o dimensiones) el balance puede no cuadrar.",
+    "dynamicReportBalanceDiff": "Debe − Haber = {debitCredit}; suma de saldos finales = {closing}.",
+    "dynamicReportCompareMovements": "Comparar también movimientos",
+    "dynamicReportNoGrouping": "Sin agrupar",
+    "dynamicReportOptions": "Opciones",
+    "dynamicReportComparison": "Comparación"
   },
   "menus": {
     "Invoice Inbox": {
