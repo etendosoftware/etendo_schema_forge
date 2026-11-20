@@ -389,8 +389,12 @@ fix it or leave it out.
 
 ### 4.1 Registration — day one
 
-Add the entry to `flags-registry.json`. The full field reference is in
-[`flag-debt.md`](flag-debt.md) → *Registering a new flag*; three fields decide
+Add the entry to `flags-registry.json` — the **header**, here. A flag the backend also
+reads gets a **contribution** (same `id`, `flagKey`, its own `paths` and `testSpecs`) in
+`com.etendoerp.go`'s registry; `ttl`, `ttlNote` and `defaultValue` stay on the header only.
+The full field reference is in
+[`flag-debt.md`](flag-debt.md) → *Registering a new flag* and *Per-repo registries and the
+rollup*; three fields decide
 whether the score means anything:
 
 - **`paths`** — owned code only. Files that exist *because* the flag exists and
@@ -509,7 +513,12 @@ make flag-debt                      # every registered flag, console report
 make flag-debt FLAG=tenant-upgrade  # one flag
 make flag-debt JSON=1               # also write flag-debt.json  (git-ignored)
 make flag-debt HTML=1               # also write flag-debt.html  (git-ignored)
+make flag-debt-rollup               # headers + contributions from all three repos, merged then scored
 ```
+
+`make flag-debt` scores this repo's registry alone; the rollup merges by feature id and then
+scores, so a spec penalty is charged once per feature rather than once per repo, and a
+checkout that is not on the machine is reported as unverifiable instead of being guessed.
 
 `SONAR_TOKEN` / `SONAR_HOST_URL` enable the coverage dimension; unset, coverage
 reports `unavailable` and adds 0 points. Missing infrastructure must never look

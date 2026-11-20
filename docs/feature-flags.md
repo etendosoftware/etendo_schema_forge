@@ -218,9 +218,10 @@ are documented in [paid tenant infrastructure](paid-tenant-infrastructure.md).
 A flag evaluated only in `com.etendoerp.go` (backend framework `featureflags/`, see
 *Architecture: flag code layout* above) has **no key in `flag-keys.js`, and none must be added**:
 the SPA reacts to what the backend answers, never to the flag itself — a browser key would be a
-second evaluator on a different control plane. Its owned paths, symbols and TTL are registered in
-[`flags-registry.json`](../flags-registry.json) under root `backend`, like every other flag, and
-its behaviour is documented in its topic doc and in `com.etendoerp.go`
+second evaluator on a different control plane. Its header (description, TTL, `defaultValue`) is registered in
+[`flags-registry.json`](../flags-registry.json) with `"scope": "backend"`. Its owned paths and specs are a
+contribution in `com.etendoerp.go`'s own `flags-registry.json`.
+Its behaviour is documented in its topic doc and in `com.etendoerp.go`
 `docs/feature-flags-and-tenant-upgrade.md`. This page keeps only the list:
 
 | Key | Registry entry | Topic doc |
@@ -244,7 +245,7 @@ to the rule above: `psd2-statement-import-settings` (ETP-6151, TTL placeholder 2
 
 | Key | Web key | Registry entry | What it gates |
 |---|---|---|---|
-| `psd2-statement-import-settings` | `PSD2_STATEMENT_IMPORT_SETTINGS` in `tools/app-shell/src/lib/flags/flag-keys.js` (default `false`), read only through `hooks/usePsd2ImportSettingsFlag.js` | `psd2-statement-import-settings` (roots `frontend` and `backend`) | Required "Importar desde" and statement grouping when linking a PSD2 bank account (connect modal and Edit-account panel), the `import-settings` / financial-account update validation, `maxFetchInterval` on `accounts`, and deleting statements of bank-connected accounts. Off (the default, and what an absent key means) reproduces the behaviour before ETP-6151 |
+| `psd2-statement-import-settings` | `PSD2_STATEMENT_IMPORT_SETTINGS` in `tools/app-shell/src/lib/flags/flag-keys.js` (default `false`), read only through `hooks/usePsd2ImportSettingsFlag.js` | `psd2-statement-import-settings` (header here, contribution in `com.etendoerp.go`'s `flags-registry.json`) | Required "Importar desde" and statement grouping when linking a PSD2 bank account (connect modal and Edit-account panel), the `import-settings` / financial-account update validation, `maxFetchInterval` on `accounts`, and deleting statements of bank-connected accounts. Off (the default, and what an absent key means) reproduces the behaviour before ETP-6151 |
 
 The browser key is **visual gating only**: the backend (`Psd2ImportSettingsFlag`) evaluates the same
 key per account (targeting key = the account email, lowercase `email` attribute) and enforces the

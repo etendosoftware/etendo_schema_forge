@@ -18,7 +18,10 @@ description: >
 
 Depth, rationale and worked examples: **[`docs/technical-debt-playbook.md`](../../../docs/technical-debt-playbook.md)**.
 Scorer reference: `docs/flag-debt.md`. Flag system: `docs/feature-flags.md`.
-Canonical facts: **`flags-registry.json`** at the repo root.
+Canonical facts: **`flags-registry.json`** at the repo root — the **header** of every feature.
+A flag the backend also reads gets a **contribution** (same `id`, `flagKey`, its own `paths` /
+`testSpecs`) in `com.etendoerp.go`'s `flags-registry.json`; `ttl`, `ttlNote` and `defaultValue`
+are forbidden there. `paths` are flat and relative to the registry's own repo; a spec has no `root:`.
 
 **The model in one line:** debt belongs to the feature; the flag is how it is counted,
 because the flag already carries the boundary (`paths`), the clock (`ttl`) and the removal
@@ -125,7 +128,12 @@ An agent that can accept its own debt can zero the scorecard without touching th
 make flag-debt                      # all flags
 make flag-debt FLAG=<key>           # one flag
 make flag-debt HTML=1               # per-flag panel (git-ignored)
+make flag-debt-rollup               # headers + contributions from all three repos, merged then scored
 ```
+
+A flag you added must also be in `FLAG_DEFAULTS` (or carry `"scope": "backend"`) and, on the
+backend, have a `GoFeatureFlags.FLAG_*` constant plus a contribution with its `flagKey` — the
+key-sync tests fail otherwise.
 
 Report only — it never fails a build. Read the output and ask the governing question:
 **would each entry survive thirty seconds of a reviewer checking it?** If not, fix the
@@ -140,8 +148,8 @@ committing to one of two branches — decide which first, with the human:
 1. Grep the flag's `symbols`; unwrap every toggle point — the code inside the
    conditional becomes plain code, the conditional goes.
 2. Delete the flag constant, its config entries, and its control-plane setting.
-3. Delete the **`flag` object** from the feature's registry entry — **never the
-   entry itself**. The feature keeps its paths, specs and open items, and keeps
+3. Delete the **`flag` object** from the feature's registry entry — and the `flagKey` from
+   its contribution — **never the entry itself**. The feature keeps its paths, specs and open items, and keeps
    scoring as `shipped`; deleting the entry would delete the *evidence*, not the
    debt.
 4. Re-grep `symbols` to confirm zero remaining matches.
