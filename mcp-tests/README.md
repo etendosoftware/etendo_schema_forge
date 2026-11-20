@@ -30,11 +30,16 @@ Every command below is a `make` target run from the **repository root**.
    The file holds values, never secrets: for every credential it stores only the **name** of the
    environment variable that holds it. It wins over the environment; the only overrides are the
    visible flags `MODEL=` and `--max-steps`.
+
+   **Model:** keep `gemini/gemini-3.8-flash`, the example's value. It is the model of every OKR
+   measurement (KR2.1, KR2.2); a run with another model is not comparable, and etendo-kpis'
+   `kr21:load` refuses it. Pilot with it too. `openai/gpt-5.2` cannot run Holded (the gateway
+   refuses more than 128 tools; Holded exposes ~388).
 3. **Tokens, through environment variables:**
 
    | Variable (as named in `config.example.toml`) | For |
    |---|---|
-   | `OPENAI_API_KEY` (`[provider] api_key_env`) | The LLM gateway. Without it nothing runs (exit 2). |
+   | `ETENDO_PROXY_API_KEY` (`[provider] api_key_env`) | The LLM gateway (`llm.etendo.software`). Without it nothing runs (exit 2). |
 
    Every target uses `auth = "oauth"`, Holded included: the first run opens a browser, and the
    token is cached in `mcp-tests/.auth/<target>.json` (0600, gitignored). `make mcp-login TARGET=<t>`

@@ -1,4 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/financial-account/EditAccountModal.jsx
+// @covers tools/app-shell/src/windows/custom/financial-account/useAccountCreditorId.js
+// @covers tools/app-shell/src/windows/custom/financial-account/SepaCreditorIdSection.jsx
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -41,6 +43,17 @@ vi.mock('sonner', () => ({
     warning: (...a) => toastWarning(...a),
     info: (...a) => toastInfo(...a),
   },
+}));
+
+// ETP-6247: the creditor identifier of the account is read/saved through the remittance actions.
+// Rejecting by default = «not eligible», which keeps the «Remesas» section hidden for every suite
+// that is not about it.
+const fetchCreditorIdInfo = vi.fn();
+const saveCreditorId = vi.fn();
+vi.mock('@/lib/sepaCreditorIdApi.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  fetchCreditorIdInfo: (...a) => fetchCreditorIdInfo(...a),
+  saveCreditorId: (...a) => saveCreditorId(...a),
 }));
 
 const updateAccount = vi.fn();
@@ -269,6 +282,9 @@ describe('EditAccountModal', () => {
     // Reset the capability gate back to its "visible" default before every test.
     hasCapability.mockReset();
     hasCapability.mockReturnValue(true);
+    fetchCreditorIdInfo.mockReset();
+    fetchCreditorIdInfo.mockRejectedValue(Object.assign(new Error('not eligible'), { status: 422 }));
+    saveCreditorId.mockReset();
   });
 
   it('returns null (renders nothing) when no account is given', () => {
@@ -1939,6 +1955,164 @@ describe('EditAccountModal', () => {
   // ETP-6148 — there is no per-account «Admite remesas» switch any more: Bank accounts get the SEPA
   // remittance payment methods when they are created. The modal shows no remittance setting and
   // never sends the flag, whatever the capability says and whatever the stored row carries.
+  // ETP-6247 — the SEPA creditor identifier is one more field of the form: it reads only what the
+  // account stores, has no button of its own, and is saved by «Guardar cambios».
+  describe('SEPA creditor identifier on the account (ETP-6247)', () => {
+    const VALID = 'ES82000B87654323';
+    const OTHER_VALID = 'ES97000B12345678';
+    const REM_BANK = { ...BANK_ACCOUNT, id: 'acc-cid', name: 'Santander', swiftCode: '' };
+    const info = (extra = {}) => ({
+      accountCreditorId: null, storedCreditorId: null, suggestedCreditorId: 'ES86000A39200019', creditorIdSource: 'suggested', ...extra,
+    });
+    const field = () => screen.getByTestId('edit-account-sepa-creditor-input');
+    const save = () => screen.getByTestId('edit-account-save');
+
+    async function openWith(extra, account = REM_BANK) {
+      fetchCreditorIdInfo.mockResolvedValue(info(extra));
+      renderModal({ account });
+      return screen.findByTestId('sepa-remittances-section');
+    }
+
+    it('starts empty when the account stores none: no proposal, no origin caption, no own buttons', async () => {
+      await openWith({ accountCreditorId: null, suggestedCreditorId: 'ES86000A39200019', creditorId: 'ES86000A39200019' });
+      expect(field()).toHaveValue('');
+      expect(field()).toHaveAttribute('placeholder', 'sepaCreditorIdPlaceholder');
+      expect(screen.queryByTestId('edit-account-sepa-creditor-source')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('edit-account-sepa-creditor-use-suggested')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('edit-account-sepa-creditor-save')).not.toBeInTheDocument();
+      expect(screen.getByTestId('edit-account-sepa-creditor-info')).toBeInTheDocument();
+      expect(save()).toBeDisabled();
+    });
+
+    it('reads the value stored on the account, not the proposed one', async () => {
+      await openWith({ accountCreditorId: VALID, storedCreditorId: VALID, creditorId: VALID, creditorIdSource: 'stored' });
+      expect(field()).toHaveValue(VALID);
+      expect(fetchCreditorIdInfo).toHaveBeenCalledWith(expect.any(Function), '/sws/neo/remittance/remittance', { recordId: 'new', accountId: 'acc-cid' });
+      expect(save()).toBeDisabled();
+    });
+
+    it('is hidden for a Cash account, without the capability, and when the account is not eligible', async () => {
+      fetchCreditorIdInfo.mockResolvedValue(info());
+      const { unmount } = renderModal({ account: { id: 'acc-cash', name: 'Caja', type: 'C', currencyId: '102', bankConnected: false } });
+      await waitFor(() => expect(screen.getByTestId('edit-account-modal')).toBeInTheDocument());
+      expect(screen.queryByTestId('sepa-remittances-section')).not.toBeInTheDocument();
+      expect(fetchCreditorIdInfo).not.toHaveBeenCalled();
+      unmount();
+      fetchCreditorIdInfo.mockClear();
+      hasCapability.mockImplementation((key) => key !== 'sepaRemittances');
+      const second = renderModal({ account: REM_BANK });
+      await waitFor(() => expect(screen.getByTestId('edit-account-modal')).toBeInTheDocument());
+      expect(fetchCreditorIdInfo).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('sepa-remittances-section')).not.toBeInTheDocument();
+      second.unmount();
+      hasCapability.mockReturnValue(true);
+      fetchCreditorIdInfo.mockRejectedValue(Object.assign(new Error('no methods'), { status: 422 }));
+      renderModal({ account: REM_BANK });
+      await waitFor(() => expect(fetchCreditorIdInfo).toHaveBeenCalled());
+      expect(screen.queryByTestId('sepa-remittances-section')).not.toBeInTheDocument();
+    });
+
+    it('typing a valid value enables «Guardar cambios» and saves it on the account with the other fields', async () => {
+      const user = userEvent.setup();
+      saveCreditorId.mockResolvedValue({ accountCreditorId: VALID });
+      await openWith({});
+      const nameInput = screen.getByTestId('edit-account-name');
+      await user.clear(nameInput);
+      await user.type(nameInput, 'Santander 2');
+      await user.type(field(), 'es82 000 b87654323');
+      expect(screen.queryByTestId('edit-account-sepa-creditor-error')).not.toBeInTheDocument();
+      await user.click(save());
+      await waitFor(() => expect(saveCreditorId).toHaveBeenCalledTimes(1));
+      expect(saveCreditorId.mock.calls[0][1]).toBe('/sws/neo/remittance/remittance');
+      expect(saveCreditorId.mock.calls[0][2]).toEqual({ recordId: 'new', accountId: 'acc-cid', creditorId: VALID, saveToAccount: true });
+      expect(updateAccount).toHaveBeenCalledWith('acc-cid', expect.objectContaining({ name: 'Santander 2' }));
+      expect(updateAccount.mock.calls[0][1]).not.toHaveProperty('creditorId');
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsEditSuccess'));
+    });
+
+    it('saves a changed identifier on its own, replacing the stored one', async () => {
+      const user = userEvent.setup();
+      saveCreditorId.mockResolvedValue({ accountCreditorId: OTHER_VALID });
+      await openWith({ accountCreditorId: VALID, storedCreditorId: VALID, creditorIdSource: 'stored' });
+      await user.clear(field());
+      await user.type(field(), OTHER_VALID);
+      await user.click(save());
+      await waitFor(() => expect(saveCreditorId).toHaveBeenCalledTimes(1));
+      expect(saveCreditorId.mock.calls[0][2].creditorId).toBe(OTHER_VALID);
+      expect(updateAccount).not.toHaveBeenCalled();
+    });
+
+    it('does not call the endpoint when the identifier is untouched or only re-typed in another case', async () => {
+      const user = userEvent.setup();
+      await openWith({ accountCreditorId: VALID, storedCreditorId: VALID, creditorIdSource: 'stored' });
+      await user.clear(field());
+      await user.type(field(), VALID.toLowerCase());
+      expect(save()).toBeDisabled();
+      const nameInput = screen.getByTestId('edit-account-name');
+      await user.clear(nameInput);
+      await user.type(nameInput, 'Renamed');
+      await user.click(save());
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      expect(saveCreditorId).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['xx', 'sepaCreditorIdInvalidFormat'],
+      ['ES83000B87654323', 'sepaCreditorIdInvalidCheckDigits'],
+    ])('shows an inline error for %s and keeps «Guardar cambios» disabled', async (typed, key) => {
+      const user = userEvent.setup();
+      await openWith({});
+      await user.type(field(), typed);
+      expect(screen.getByTestId('edit-account-sepa-creditor-error')).toHaveTextContent(key);
+      expect(field()).toHaveAttribute('aria-invalid', 'true');
+      expect(save()).toBeDisabled();
+      // Another change does not unblock it: an invalid identifier makes the whole form unsavable.
+      const nameInput = screen.getByTestId('edit-account-name');
+      await user.type(nameInput, ' x');
+      expect(save()).toBeDisabled();
+      expect(saveCreditorId).not.toHaveBeenCalled();
+    });
+
+    it('emptying a saved identifier shows the hint and blocks the save (the backend cannot delete it)', async () => {
+      const user = userEvent.setup();
+      await openWith({ accountCreditorId: VALID, storedCreditorId: VALID, creditorIdSource: 'stored' });
+      await user.clear(field());
+      expect(screen.getByTestId('edit-account-sepa-creditor-error')).toHaveTextContent('sepaCreditorIdCannotClear');
+      expect(save()).toBeDisabled();
+      await user.type(field(), VALID);
+      expect(screen.queryByTestId('edit-account-sepa-creditor-error')).not.toBeInTheDocument();
+    });
+
+    it('an account that never had one may stay empty and still save its other fields', async () => {
+      const user = userEvent.setup();
+      await openWith({});
+      const nameInput = screen.getByTestId('edit-account-name');
+      await user.type(nameInput, ' b');
+      await user.click(save());
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      expect(saveCreditorId).not.toHaveBeenCalled();
+    });
+
+    it('shows the server refusal (translated, with the expected check digits) and keeps the modal open', async () => {
+      const user = userEvent.setup();
+      uiMock.mockImplementation((key, params) => (params ? `${key}:${params.digits}` : key));
+      saveCreditorId.mockRejectedValue(Object.assign(new Error('bad'), {
+        status: 422,
+        body: { error: { status: 422, message: 'bad', messageKeys: ['ETGO_SepaCreditorIdInvalidCheckDigits'], expectedCheckDigits: '82' } },
+      }));
+      const onClose = vi.fn();
+      fetchCreditorIdInfo.mockResolvedValue(info());
+      renderModal({ account: REM_BANK, onClose });
+      await screen.findByTestId('sepa-remittances-section');
+      await user.type(field(), VALID);
+      await user.click(save());
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith('sepaCreditorIdInvalidCheckDigitsExpected:82'));
+      expect(toastError).toHaveBeenCalledTimes(1);
+      expect(toastSuccess).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+  });
+
   describe('SEPA remittances: no account setting (ETP-6148)', () => {
     const REMITTANCE_BANK = {
       id: 'acc-rem',
@@ -1964,7 +2138,7 @@ describe('EditAccountModal', () => {
       return updateAccount.mock.calls[0][1];
     }
 
-    it('shows no remittance section on a Bank account, even with the sepaRemittances capability', () => {
+    it('shows no remittance setting (and no section while the account is not eligible) on a Bank account', () => {
       hasCapability.mockReturnValue(true);
       renderModal({ account: REMITTANCE_BANK });
       expect(screen.getByTestId('edit-account-name')).toBeInTheDocument();

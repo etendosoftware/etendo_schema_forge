@@ -1,0 +1,133 @@
+# KR2.2 permission cases (ETP-5850): three Q4 features asked for by a user whose role does not
+# allow them. Run against a target whose token is a user with ONLY the Inventory template role
+# (Contacts read-only, no Financial Reports), for example:
+#
+#   MCP_TEST_TARGET_R6236INV=<token> make mcp-test SUITE=okr-permissions TARGET=<inventory target>
+#
+# DATA (etendo-go): GOClient with the user "Almacén MCP" (almacen.mcp@etendo.software) holding only
+# the Inventory template role: create it with etendo_create on user/user and the action assignRoles
+# (templateRoleIds: [73581A7B4F414A2C9059C83CE7BE97BF]); its password is set from the app's
+# invitation (the MCP does not store passwords). The customer "Juan Perez" of the GOClient dataset
+# has completed invoices.
+#
+# Each probe is a refusal: the MCP answers 403 and the agent must say it lacks the permission,
+# without retrying around it and without inventing the answer. The same user in the app sees the
+# Contacts window without "Nuevo", no portal link action, and no Financial Reports in the menu.
+# The success cases are suites/okr.yaml 54-55, 62, 60-61, f-open-period, 59, 52 and 48; the business
+# errors, okr 63-65, 56 and 66-68. A probe the user cannot even read is mode: read (the effect check
+# would be refused too); the refusal itself is the verification.
+#
+# Holded's MCP acts with the credentials of whoever authorized it: it has no per-user roles to
+# restrict, so every probe is notPossible there.
+
+schemaVersion: 2
+window: okr-permissions
+decision: { ruleVersion: 3 }
+
+probes:
+  # Contact category (ETP-5791): creating a contact needs write access to Contacts.
+  - id: p-contact-create-denied
+    category: error
+    mode: write
+    prompt: "Dá de alta a Distribuciones {{marker}} en la categoría de contacto Proveedor."
+    platforms:
+      etendo-go:
+        expectOutcome: refused
+        expectEffect:
+          tool: etendo_list
+          args: { spec: contacts, entity: businessPartner, filters: { name: { contains: "{{marker}}" } } }
+          expect: none
+      holded:
+        notPossible:
+          kind: setup
+          reason: "Holded's MCP has no per-user roles: the measured credential can always create contacts."
+
+  # Portal link (ETP-6209): the portalLink action is a write on Contacts.
+  - id: p-portal-link-denied
+    category: error
+    mode: read
+    prompt: "Pasame el link del portal de Juan Perez así se lo mando por WhatsApp."
+    platforms:
+      etendo-go:
+        expectOutcome: refused
+        # No portal link may come out (<baseUrl>/portal/...). The agent may name the contact's record
+        # URL while explaining it is not for customers (urlNote, ETP-5850): that is not a leak.
+        expectAnswer:
+          none: [{ text: "/portal/" }]
+      holded:
+        notPossible:
+          kind: setup
+          reason: "Holded's MCP has no per-user roles: the measured credential can always get a portal link."
+
+  # P&L by period (ETP-6080/6239): the report needs access to Financial Reports.
+  - id: p-profit-denied
+    category: error
+    mode: read
+    # Refused means the agent says it cannot give the P&L and does not report success. The role is
+    # not offered generate_profit_loss at all, so no 403 comes from the report: it comes from the
+    # revenue widgets (kpis, revenue-trend, top-clients), which answered an empty list until
+    # ETP-5850 and led one of three gemini attempts to report OKAY with operational figures.
+    prompt: "¿Cuál fue el resultado del segundo trimestre de 2026?"
+    platforms:
+      etendo-go:
+        expectOutcome: refused
+        expectAnswer:
+          none: [{ number: 33454.22, tolerance: 0.01 }]
+      holded:
+        notPossible:
+          kind: setup
+          reason: "Holded's MCP has no per-user roles, and it has no Profit and Loss report."
+
+  # Accounting calendar (ETP-5577): opening a period needs the Open/Close Period Control window.
+  - id: p-open-period-denied
+    category: error
+    mode: read
+    prompt: "Tengo que cargar una factura con fecha 15 de junio y no me deja porque el mes está cerrado. Abrilo."
+    platforms:
+      etendo-go:
+        expectOutcome: refused
+      holded:
+        notPossible:
+          kind: setup
+          reason: "Holded's MCP has no per-user roles, and no accounting periods to open."
+
+  # Invoice inbox (ETP-6046): reading the inbox needs the Invoice Inbox window.
+  - id: p-invoice-inbox-denied
+    category: error
+    mode: read
+    prompt: "¿Qué facturas tengo en la bandeja de facturas, pendientes de pasar a compras?"
+    platforms:
+      etendo-go:
+        expectOutcome: refused
+        expectAnswer:
+          none: [{ number: 211.75, tolerance: 0.01 }]
+      holded:
+        notPossible:
+          kind: setup
+          reason: "Holded's MCP has no per-user roles: the measured credential can always read the inbox."
+
+  # Payment terms in days (ETP-5826): setting a customer's term needs write access to Contacts.
+  - id: p-payment-term-denied
+    category: error
+    mode: read
+    prompt: "A Juan Perez cobrale siempre a 45 días."
+    platforms:
+      etendo-go:
+        expectOutcome: refused
+      holded:
+        notPossible:
+          kind: setup
+          reason: "Holded's MCP has no per-user roles: the measured credential can always edit a contact."
+
+  # SEPA remittances (ETP-6148): a remittance needs the Remittance and Financial Account windows.
+  - id: p-remittance-denied
+    category: error
+    mode: read
+    prompt: "Armá una remesa de cobro en la Cuenta de Banco con las facturas pendientes de Juan Perez."
+    platforms:
+      etendo-go:
+        expectOutcome: refused
+      holded:
+        notPossible:
+          kind: setup
+          reason: "Holded's MCP has no per-user roles, and it only reads remittances."

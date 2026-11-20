@@ -17,6 +17,31 @@ const mockUi = (key, params) => {
 };
 vi.mock('@/i18n', () => ({ useUI: () => mockUi }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
+// ETP-6247 — «Confirmar» is routed to its own dialog; stubbed here to observe the routing and the
+// props it receives (the dialog itself has its own suite, RemittanceConfirmDialog.vitest.jsx).
+vi.mock('@generated/remittance/custom/RemittanceConfirmDialog.jsx', () => ({
+  default: (props) => (
+    <div data-testid="confirm-dialog-stub" data-record={props.record?.id} data-api={props.apiBaseUrl} data-process={props.process?.name}>
+      <button type="button" data-testid="confirm-dialog-stub-close" onClick={() => props.onClose()}>close</button>
+      <button type="button" data-testid="confirm-dialog-stub-refresh" onClick={() => props.onRefresh()}>refresh</button>
+    </div>
+  ),
+}));
+
+vi.mock('@generated/remittance/custom/RemittanceSentDialog.jsx', () => ({
+  default: (props) => <div data-testid="sent-dialog-stub" data-record={props.record?.id} />,
+}));
+vi.mock('@generated/remittance/custom/RemittanceCollectDialog.jsx', () => ({
+  default: (props) => <div data-testid="collect-dialog-stub" data-record={props.record?.id} data-api={props.apiBaseUrl} />,
+}));
+vi.mock('@generated/remittance/custom/RemittanceReturnDialog.jsx', () => ({
+  default: (props) => (
+    <div data-testid="return-dialog-stub" data-record={props.record?.id} data-api={props.apiBaseUrl}>
+      <button type="button" data-testid="return-dialog-stub-refresh" onClick={() => props.onRefresh()}>refresh</button>
+      <button type="button" data-testid="return-dialog-stub-close" onClick={() => props.onClose()}>close</button>
+    </div>
+  ),
+}));
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { toast } from 'sonner';
@@ -44,6 +69,16 @@ describe('RemittanceProcessConfirmModal', () => {
     expect(screen.getByText('remittanceReactivateConfirmBody')).toBeInTheDocument();
     expect(confirmButton('reactivate')).toBeInTheDocument();
     expect(confirmButton('cancel')).toBeInTheDocument();
+  });
+
+  it('warns that the bank already has the file ONLY when the remittance is Enviada al banco (SB), keeping the base text', () => {
+    const { unmount } = render(<RemittanceProcessConfirmModal process={REACTIVATE} record={{ id: 'rem-1', remittanceStatus: 'SB' }} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByTestId('remittance-reactivate-sent-warning')).toHaveTextContent('remittanceReactivateSentWarning');
+    expect(screen.getByText('remittanceReactivateConfirmBody')).toBeInTheDocument();
+    unmount();
+    render(<RemittanceProcessConfirmModal process={REACTIVATE} record={{ id: 'rem-1', remittanceStatus: 'PR' }} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.queryByTestId('remittance-reactivate-sent-warning')).toBeNull();
+    expect(screen.getByText('remittanceReactivateConfirmBody')).toBeInTheDocument();
   });
 
   it('recognises the reactivation by its columnName too', () => {
@@ -172,5 +207,88 @@ describe('RemittanceProcessConfirmModal — a rejected onConfirm', () => {
   it('does not toast when onConfirm succeeds', async () => {
     await confirmAndSettle(vi.fn().mockResolvedValue(undefined));
     expect(toast.error).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-6247 — `processOverrides.confirm` declares `confirmModal`, so DetailView routes «Confirmar»
+// here too; it gets its own dialog, and «Reactivar» keeps its confirmation.
+describe('RemittanceProcessConfirmModal — routing', () => {
+  const CONFIRM = { name: 'confirm', label: 'confirm', confirmModal: true };
+
+  it('routes `confirm` to RemittanceConfirmDialog with the record, the API base and the callbacks', () => {
+    const onClose = vi.fn();
+    const onRefresh = vi.fn();
+    const onConfirm = vi.fn();
+    render(
+      <RemittanceProcessConfirmModal process={CONFIRM} record={{ id: 'rem-1' }} apiBaseUrl="/sws/neo/remittance"
+        onConfirm={onConfirm} onClose={onClose} onRefresh={onRefresh} />,
+    );
+    const stub = screen.getByTestId('confirm-dialog-stub');
+    expect(stub).toHaveAttribute('data-record', 'rem-1');
+    expect(stub).toHaveAttribute('data-api', '/sws/neo/remittance');
+    expect(stub).toHaveAttribute('data-process', 'confirm');
+    // Not the generic confirmation.
+    expect(screen.queryByText('remittanceReactivateConfirmTitle')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'confirm' })).toBeNull();
+    fireEvent.click(screen.getByTestId('confirm-dialog-stub-refresh'));
+    fireEvent.click(screen.getByTestId('confirm-dialog-stub-close'));
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    // The dialog runs the action itself: DetailView's handleProcess is not used.
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('keeps the reactivate confirmation (no confirm dialog)', () => {
+    render(<RemittanceProcessConfirmModal process={REACTIVATE} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.queryByTestId('confirm-dialog-stub')).toBeNull();
+    expect(screen.getByText('remittanceReactivateConfirmTitle')).toBeInTheDocument();
+  });
+
+  it('routes «Devolver» (returnLines) to its own dialog, which posts the action itself', () => {
+    const onRefresh = vi.fn();
+    const onConfirm = vi.fn();
+    render(
+      <RemittanceProcessConfirmModal process={{ name: 'returnLines', confirmModal: true }} record={{ id: 'rem-1' }} apiBaseUrl="/sws/neo/remittance"
+        onConfirm={onConfirm} onClose={vi.fn()} onRefresh={onRefresh} />,
+    );
+    expect(screen.getByTestId('return-dialog-stub')).toHaveAttribute('data-record', 'rem-1');
+    expect(screen.queryByTestId('confirm-dialog-stub')).toBeNull();
+    fireEvent.click(screen.getByTestId('return-dialog-stub-refresh'));
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('«Devolver» forwards onClose, and neither «Confirmar» nor the generic confirmation shows with it', () => {
+    const onClose = vi.fn();
+    render(
+      <RemittanceProcessConfirmModal process={{ name: 'returnLines', confirmModal: true }} record={{ id: 'rem-1' }} apiBaseUrl="/api"
+        onConfirm={vi.fn()} onClose={onClose} onRefresh={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByTestId('return-dialog-stub-close'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('confirm-dialog-stub')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'confirm' })).toBeNull();
+  });
+
+  it('an unknown process name falls to the generic confirmation, never to the return or confirm dialogs', () => {
+    render(<RemittanceProcessConfirmModal process={{ name: 'somethingElse' }} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.queryByTestId('return-dialog-stub')).toBeNull();
+    expect(screen.queryByTestId('confirm-dialog-stub')).toBeNull();
+    expect(screen.getByRole('button', { name: 'confirm' })).toBeInTheDocument();
+  });
+
+  it('routes «Marcar como cobrada» (markCollected) to its own dialog, which posts the action itself', () => {
+    const onConfirm = vi.fn();
+    render(<RemittanceProcessConfirmModal process={{ name: 'markCollected', confirmModal: true }} record={{ id: 'rem-1' }} apiBaseUrl="/sws/neo/remittance" onConfirm={onConfirm} onClose={vi.fn()} onRefresh={vi.fn()} />);
+    expect(screen.getByTestId('collect-dialog-stub')).toHaveAttribute('data-record', 'rem-1');
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('routes «Pasar a Enviada al banco» (markSent) to its own dialog, which posts the action itself', () => {
+    const onConfirm = vi.fn();
+    render(<RemittanceProcessConfirmModal process={{ name: 'markSent', confirmModal: true }} record={{ id: 'rem-1' }} onConfirm={onConfirm} onClose={vi.fn()} onRefresh={vi.fn()} />);
+    expect(screen.getByTestId('sent-dialog-stub')).toHaveAttribute('data-record', 'rem-1');
+    expect(screen.queryByText('remittanceReactivateConfirmTitle')).toBeNull();
+    expect(onConfirm).not.toHaveBeenCalled();
   });
 });

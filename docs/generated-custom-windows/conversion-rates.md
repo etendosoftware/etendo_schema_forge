@@ -5,13 +5,21 @@ Maintain the general currency conversion rates the system uses when a document c
 
 Rates can originate from historical manual maintenance or from the conversion-rate downloader job (`com.smf.currency.conversionrate`). Auto-downloaded rates are flagged **Synced**. The audit trail for downloader runs lives in the companion window — see `conversion-rate-downloader-log.md`.
 
-## What this window allows
-The window is view-only. ETP-4474 added `window.readOnly: true`; ETP-4254 applies that existing declaration consistently to the API as well as the React UI:
+## What this window should allow
+The window is view-only. Users should be able to:
 
-- users can review Currency, To Currency, validity dates, multiply/divide factors and Synced
-- Create/Delete are hidden, and DetailView blocks edit/save
-- `ETGO_SF_ENTITY` exposes only `ISGET=Y` + `ISGETBYID=Y`; POST/PUT/PATCH/DELETE are `N`
-- rejected CRUD writes return `405 "<METHOD> not enabled for conversionRate"` to both the React app and MCP agents
+- list the conversion rates of each currency pair (Currency, To Currency) with their validity dates
+- review the multiply rate and the divide rate of a pair for a validity window
+
+The window also shows whether a rate was downloaded automatically (**Synced**); the public API does
+not publish that flag.
+
+ETP-4474 added `window.readOnly: true`; ETP-4254 applies that existing declaration consistently to
+the API as well as the React UI. Create and Delete are hidden, and DetailView blocks edit and save.
+`ETGO_SF_ENTITY` exposes only `ISGET=Y` + `ISGETBYID=Y` (POST/PUT/PATCH/DELETE are `N`), and a
+rejected CRUD write returns `405 "<METHOD> not enabled for conversionRate"` to both the React app
+and MCP agents. These implementation facts are prose, not bullets, on purpose: the public API
+manifest publishes the bullets of this section as the `conversion-rates` capabilities.
 
 The generated fields still carry the older `readOnlyLogic: "@sMFCRSynced@='Y'"` cascade, but the window-wide lock supersedes it. If manual maintenance becomes a requirement again, remove `window.readOnly` in `decisions.json` and re-evaluate the per-record lock; never hand-edit the contract. See [`../agentic-validation/agentic-write-exposure-criteria.md`](../agentic-validation/agentic-write-exposure-criteria.md).
 
@@ -47,6 +55,29 @@ The generated fields still carry the older `readOnlyLogic: "@sMFCRSynced@='Y'"` 
 - `tools/app-shell/src/menu.json` places the window in the Finance group with `windowId: "116"`.
 - Backend: `com.etendoerp.go` `InvoiceExchangeRateValidator` consumes these rates at completion; `com.smf.currency.conversionrate` owns the downloader that writes `Synced` records and the `conversion-rate-downloader-log` audit rows.
 
+## Public API — read-only `conversion-rates` — ETP-6174
+
+The public API publishes the window as `GET`/`LIST` only (`/api/v1/conversion-rates`), declared with
+`publicApi.readOnly: true` on `entities.header` in `decisions.json` (the entry renamed to the
+contract entity `conversionRate`; the manifest generator finds it by that name). The window's
+category (`finance`) is excluded by default; the window is published because it is listed in the
+generator's V1 allowlist. Every field is read-only (`out`); a write answers `404`, as NEO itself
+refuses one with `405`.
+
+The entity is curated (`publicApi.exposed: true`) on `currency`, `toCurrency`, `validFromDate`,
+`validToDate`, `multipleRateBy` and `divideRateBy`, so the downloader's `sMFCRSynced` flag stays out
+of the public API while the window keeps showing it (and keeps using it in `readOnlyLogic`).
+
+`multipleRateBy` and `divideRateBy` declare `"type": "number"` in `decisions.json`, and the public
+API publishes them as `number`/`double`, the type NEO answers (the default CRUD serializes the
+`BigDecimal` as is). The override was added while AD reference 800019 (Rate) was not mapped by the
+core extractor, which extracted the fields as `string`. Core 0.3.110 now maps that reference to
+`decimal` (see the ETP-6342 section below), which the manifest generator also maps to
+`number`/`double`, so the override is redundant. Removing it is a follow-up, together with the
+generator test that pins it. Same override as `sales-invoice` `exchangeRates.rate`. Regenerated
+with `make regen-check FROM_CACHE=1` (contract `0.7.0`).
+Contract: `docs/public-api.md` §3.
+
 ## Rate and cost fields are numeric — ETP-6342
 
-Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. **Multiple Rate By** (`multipleRateBy`, `MultiplyRate`) and **Divide Rate By** (`divideRateBy`, `DivideRate`) are now `decimal` in the contract (`tsType: number`): the form renders them as number inputs and the list as numeric columns, without the former 22-character `maxLength`.
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. **Multiple Rate By** (`multipleRateBy`, `MultiplyRate`) and **Divide Rate By** (`divideRateBy`, `DivideRate`) are now `decimal` in the contract (`tsType: number`): the form renders them as number inputs and the list as numeric columns, without the former 22-character `maxLength`. While the ETP-6174 `"type": "number"` override on both fields is in place (see the section above), the contract keeps them as `number` with `validation.maxLength: 22`; the public API type is `number`/`double` either way.

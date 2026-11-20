@@ -396,7 +396,9 @@ describe('confirmInboxDocument', () => {
     const dup = vi.fn(async () => json({ error: { code: 'duplicate_invoice', invoice: { id: 'I9', documentNo: 'FC9' } } }, { ok: false, status: 409 }));
     expect(await confirmInboxDocument(dup, 'D1')).toMatchObject({ status: 'failed', code: 'duplicate_invoice', httpStatus: 409, invoice: { documentNo: 'FC9' }, detail: null });
     const failed = vi.fn(async () => json({ error: { code: 'confirm_failed', detail: 'No hay período abierto', updated: 'u2' } }, { ok: false, status: 500 }));
-    expect(await confirmInboxDocument(failed, 'D1')).toMatchObject({ code: 'confirm_failed', detail: 'No hay período abierto', updated: 'u2', invoice: null });
+    expect(await confirmInboxDocument(failed, 'D1')).toMatchObject({ code: 'confirm_failed', detail: 'No hay período abierto', detailInfo: null, updated: 'u2', invoice: null });
+    const coded = vi.fn(async () => json({ error: { code: 'confirm_failed', detail: 'line 2: x', detailCode: 'step_failed', detailParams: { step: 'line', n: 2 } } }, { ok: false, status: 422 }));
+    expect(await confirmInboxDocument(coded, 'D1')).toMatchObject({ code: 'confirm_failed', detailInfo: { code: 'step_failed', params: { step: 'line', n: 2 } } });
     const invalid = vi.fn(async () => json({ error: { code: 'not_valid', missing: ['exchangeRate'] } }, { ok: false, status: 422 }));
     expect(await confirmInboxDocument(invalid, 'D1')).toMatchObject({ code: 'not_valid', missing: ['exchangeRate'] });
   });

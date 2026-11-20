@@ -10,6 +10,7 @@ import { buildMenuActionExecutedHandler } from './buildDocumentRowQuickActions.j
 // Plain (hook-free) module, never the `@/auth/api.js` barrel — see
 // makeInvoiceReactivateRowFilter's doc for why this file cannot use `useApiFetch`.
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
+import { isCompletedStatus, isDraftStatus } from '../../../lib/docStatus.js';
 
 export function getInvoiceDraftMode(ui, options = {}) {
   const { showVerifactuProcessingModal = false, keepSaveWhenCompletedFields = [], editableLineFieldsWhenCompleted = [], afterProcess } = options;
@@ -110,8 +111,8 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
     menuActions: ({ row }) => {
       const isPosted = isRowPosted(row);
       const isProcessed = row?.processed === 'Y' || row?.processed === true;
-      const isCompleted = row?.documentStatus === 'CO';
-      const isDraft = row?.documentStatus === 'DR';
+      const isCompleted = isCompletedStatus(row?.documentStatus);
+      const isDraft = isDraftStatus(row?.documentStatus);
       return [
         // ETP-5378 — Confirmar from the grid, at parity with Pedido de Venta/Compra.
         // Unlike the albarán windows there is no popup to reuse: an invoice's form-view
@@ -173,7 +174,7 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
 // composed from unpostRowFilter because BulkDocumentAction.jsx cannot be loaded by plain
 // `node --test` (see the relative-import note at the top of this file).
 const invoiceStatusOf = (row) => row?.documentStatus || row?.docStatus;
-const isInvoiceUnpostable = (row) => invoiceStatusOf(row) === 'CO' && isRowPosted(row);
+const isInvoiceUnpostable = (row) => isCompletedStatus(invoiceStatusOf(row)) && isRowPosted(row);
 
 export const buildInvoiceUnpostActions = (rows) =>
   (rows.some(isInvoiceUnpostable) ? [{ value: 'unpost', labelKey: 'unpost' }] : []);
@@ -181,7 +182,7 @@ export const buildInvoiceUnpostActions = (rows) =>
 export const invoiceUnpostRowFilter = (row, action, ui) => {
   if (action !== 'unpost') return true;
   if (!isRowPosted(row)) return ui('bulkRowNotPosted');
-  if (invoiceStatusOf(row) !== 'CO') return ui('bulkRowNotCompleted');
+  if (!isCompletedStatus(invoiceStatusOf(row))) return ui('bulkRowNotCompleted');
   return true;
 };
 

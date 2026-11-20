@@ -523,7 +523,7 @@ column. The inbox follows it (inbox `unitPrice` = the price BEFORE discount = `l
   worker behaviour change, cents at most) and `invoiceInboxReviewModel.js` (`lineAmount`, `computeTotals`,
   `documentTotal`, `totalMismatch`). The shared fixture
   `tools/app-shell/__tests__/fixtures/invoice-inbox-totals.json` (SPA repo; read by the Vitest and by the JUnit test, which skips when
-  the SPA is not beside the module, the `OcrConfigTest` precedent) must contain: no discount; a plain 10 %; two rates;
+  the SPA is not beside the module, the `OcrConfigTest` precedent; superseded 2026-11-18: the Java test now reads its own copy, `invoice-inbox-totals-cases.json`, from its classpath, and the two case files are independent copies that nothing keeps in sync automatically, so a rounding change must update both) must contain: no discount; a plain 10 %; two rates;
   a half-cent line (HALF_UP away from zero) and its negative twin; discount absent vs 0; and the ORDER cases: quantity
   48324, price 0.2771, discount 77.1721 -> real rule 3056.78, exact product 3056.79 (a regression to the one-rounding
   formula fails it); quantity 88782, price 0.5049, discount 26.3805 -> 33000.71 (exact 33000.70); quantity 80422,
@@ -704,8 +704,13 @@ Decided by the product owner: the leftovers of ETP-6050 are fixed inside ETP-605
   pinned by a fixture case; the backend mirrors it.
 - SPA fixture in CI: `ETGO_REQUIRE_SPA_FIXTURE=true` is still to be set in the CI job that checks out the SPA repo
   (the totals parity must not skip silently). Open, owned by CI.
+  Superseded 2026-11-18: dropped. The JUnit test no longer reads the SPA fixture and the flag no longer exists; closed as dropped.
 - W6 (single-invoice "Extraer y completar" and MCP OCR show discounted lines at the gross price): open, a
   separate small follow-up (map `discount_percent` / `discount_amount` in those flows).
 - Lines without product, the global two-decimal `formatCurrency` / `round2` assumption, the `Rendered more hooks`
   console error seen once, and the stored language of `new.category`: open, unchanged.
 - New in ETP-6051: the printed-total warning rule is aligned (`totalMismatch`, see `ETP-6051-invoice-inbox-confirm.md`).
+
+Superseded 2026-11-18 (S2-D3 and 9.5, "the totals card shows the printed total as the document's"): the big Total of the review panel is now ALWAYS the total computed from the lines, so it matches the invoice that will be created; the printed total only feeds the non-blocking mismatch banner. For a CONFIRMED row the Total (panel and list) is the grand total of the created invoice. See `docs/generated-custom-windows/invoice-inbox.md` and `neo-headless.md` 4.6b.
+
+> Superseded 2026-11-18: the list column Total of a PENDING row is the LINES total (owner decision "the lines always win"), no longer the header/printed total mentioned in 9.5 and the `totalSource = printed` notes above for the list. The panel and the banner rules are unchanged.

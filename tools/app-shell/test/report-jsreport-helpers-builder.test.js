@@ -481,6 +481,10 @@ describe('buildJsreportHelpersString — behavioural parity between the emitted 
     periodPages: [
       [[[0, 1], [2, 3], [4]]], [[[0, 1, 2, 3, 4, 5, 6]]], [[[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]], 13], [[[0, 1, 2, 3, 4, 5, 6, 7, 8]], 9], [[[0, 1, 2, 3, 4, 5, 6, 7, 8]], 2], [[[0]]], [[]], [null], [undefined],
     ],
+    // ETP-6084: the export-cell helpers (null / NaN / Infinity -> empty, half away from zero, never -0).
+    round2: [[null], [undefined], [''], ['abc'], [NaN], [Infinity], [-Infinity], [0], [-0], [1.005], [-1.005], [2.5], [-2.5], [1.81898940354586e-12], [-1e-12], [-21.0469783271705], ['12.345'], [1e21]],
+    numCellType: [[null], [undefined], [''], ['abc'], [NaN], [Infinity], [0], [9.56], ['3']],
+    fixed2: [[null], [undefined], [''], ['abc'], [NaN], [0], [-0], [1.5], [-1e-12], [10], [-21.0469783271705], [1.005]],
     periodMode: [['sly'], ['prev'], ['none'], [''], [null], [undefined], ['bogus']],
     periodSpan: [[2, 'sly'], [2, 'prev'], [7, 'none'], [1, undefined], [0, 'sly']],
     // ETP-6239: what Comparado is compared against (month / quarter label, or the dates for the

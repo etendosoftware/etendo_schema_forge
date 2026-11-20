@@ -1795,6 +1795,8 @@ I want row quick actions on my window
 - **Document lines (`InlineLinesPanel`, `linesLayout="inlineEditable"`, Figma "Fila Producto" / "Fila Editable" / "Fila Desplegable dimensiones").** Its rows are flex `<div>`s, not `DataTable` rows, but they take the same values from `components/contract-ui/rowVisuals.js`, shared with `DataTable`: rest `bg-card` (white); hover keeps white and adds Shadows/lg (`ROW_LIFT_SHADOW`), instant (`transition-none`), no border change, raised with `hover:relative hover:z-20`; a line being edited keeps the same Shadows/lg (`ROW_LIFT_SHADOW_STATIC`). A checked line uses `ROW_CHECKED_BG` (`#F5F7F9`, `--field-hover`) — Figma has no Selected variant for lines, so it takes the list's, and hover keeps it (it was `bg-primary/5` before ETP-5600). The open-line highlight (`selectedRowId`) keeps `bg-muted/40` + `ring-1 ring-focus-ring`. Unlike list rows, which drop **both** separators on hover (`ROW_LIFT_HOVER_NO_BORDERS`: their own `border-b` and the previous row's), document lines **keep theirs**: a flex row never overlaps the row above, so its top separator (the previous line's `border-b`) and its own stay visible under the lift. **Full-width rows (ETP-5600 QA pass 2).** Each line's `minWidth` is its whole flex track (`computeLineTrackWidthPx`: chevron + checkbox + every column's flex basis + the action slot + the 48px right spacer, which equals the scroll box's `scrollWidth` when the cells overflow), so its background, `border-b` and hover/edit Shadows/lg span the overflowing columns too. Before, the row was only as wide as the scroll box: scrolled to the right the lift stopped mid-row and the trailing columns and the action strip had none. Without overflow the row still fills the box and the grow columns share the surplus exactly as the header does. The balance-footer row and the dimensions sub-row keep the scroll-box width. Lines of a read-only (completed) document do not lift — Figma shows no hover there. **Last-line shadow.** The lines' body box is an `overflow-x-auto` scroll box (so it also clips vertically) and shows the native horizontal scrollbar. When the lines can lift and nothing else follows the last line inside that box (no open add-row, no balance footer), `computeBodyScrollClassName` adds `pb-4` (16px, enough for the visible ~14px Shadows/lg tail) so the last — often only — line's shadow is not cut. Without horizontal overflow (measured on resize, column-set and row-count changes) the box takes the room back with `-mb-4`, as `DataTable` does, so no gap shows and the add-line bar starts right under the last line; the padding is click-through (`pointer-events-none`, `auto` again on its children), and the bar, `sticky z-10`, still wins clicks on the overlap while the hovered line (`z-20`) paints its shadow over it. With horizontal overflow there is no negative margin (the bar would cover the scrollbar, and click-through would disable it): the scrollbar simply sits 16px lower.
 - Pass `rowHoverStyle="tint"` only where a raised white row reads wrong — a grid sitting on a grey panel. No current consumer needs it. Hand-built tables that do not use `DataTable` (`fiscal-models` `.fm-table`) mirror the same hover in their own CSS: Shadows/lg and no lines (the hovered row's and the previous row's `border-bottom` turn transparent via `tr:has(+ tr:hover)`).
 
+**Kebab submenu (ETP-6247).** A `menuActions` entry (the row kebab's own list, static or the `({row}) =>` function form) may carry `submenu: [{ key, label | labelKey, content?, disabled?, onClick }]`. It then renders as a row with a chevron that opens a side panel to its left on hover or click, instead of running anything itself: `content` is an optional node drawn in place of the text (a status chip, for instance), a `disabled` item stays listed but dimmed and not clickable, and a click closes the kebab and calls `item.onClick({ row, windowName, apiBaseUrl, token })` (a host-owned dialog, as the invoice windows do). The parent entry's `visibleWhen` and `show` still apply. Entries without `submenu` are unchanged. First user: the Remittance row menu's «Cambiar estado» (`docs/generated-custom-windows/remittance.md`, List).
+
 **Custom action content in hand-built tables.** A hand-built window that needs domain-specific row actions can reuse `DataTable`'s same reserved column, hover-sticky positioning, background mask and horizontal-scroll behavior instead of appending a synthetic actions column. Pass `rowQuickActions.render(row)` for the custom content and `rowQuickActions.buttonCount` for the maximum number of 32px buttons it renders. If the content does not follow the canonical button geometry, pass `rowQuickActions.reservedWidthPx` instead; it takes priority over `buttonCount`. These are direct `DataTable` props for custom React tables, not `decisions.json` keys. Without `render`, the standard `RowQuickActions` behavior is unchanged.
 
 **Visibility is inherited from the edit view.** When an action does not apply to a record (AD permission, document state, `documentPreview` absent, delete gate), it is **hidden** — never rendered as a disabled, greyed-out button. Disabled state is reserved exclusively for the in-flight case (see below). The Delete visibility gate (`hideDeleteWhenComplete` + status check) lives in the shared utility `tools/app-shell/src/utils/recordActions.js`, which is the single source of truth used by both `DetailView` and `RowQuickActions`. Custom `visibleWhen` predicates are AND-chained with that base visibility — they refine, never force-show.
@@ -3492,17 +3494,18 @@ with the shared round `RowExpandToggle` (ETP-5593, sized 24 × 24 through `class
 adornment slot and the amount; an expanded document shows a bordered lines table with a master
 checkbox and a −/+ quantity stepper (`NumberStepperInput`, bounded by the line's available
 quantity, typed values still validated on blur); the footer has the selection hint and the
-«Cancelar» / primary pills. The hint reads «N Seleccionados» (`selected`) and the primary button
-counts the selected lines; with `countLinesInFooter` the hint counts LINES with singular/plural
-wording instead (see the prop table).
+«Cancelar» / primary pills. The hint counts the selected LINES with singular/plural wording («1 línea
+seleccionada» / «N líneas seleccionadas», ETP-5651, in every import popup) and the primary button
+counts them too. Per Figma (ETP-5651) «Cancelar» is a borderless text pill and the import button is
+black (`bg-foreground text-background`) while enabled and grey (`bg-muted`) while nothing is
+selected; it does not use the theme's `primary` colour.
 
 **Optional props added by ETP-5828** (all default to the previous behaviour):
 
 | Prop | Effect |
 |---|---|
 | `renderSelectionPanel(selection)` | Renders the fixed-height notice area under the list (`ImportLinesModal__selectionPanelSlot`). Return an `<ImportNotice tone="neutral"\|"warning" title body control? />` (exported from the same file); `null` shows the neutral «Información de importación» notice. Without the prop there is no notice area. |
-| `countLinesInFooter` | Default `false` («N Seleccionados»). `true`: the footer reads «**1 línea** seleccionada» / «**N líneas** seleccionadas» (keys `importLinesSelectedCountOne/Many`, `importLinesSelectedSuffixOne/Many`). Opted in only by the invoices' «Importar desde pedido» (`InvoiceOrderImportModal`, ETP-5828 QA UI-6), which until then counted ORDERS through the removed `selectedDocumentsKey` prop («1 pedido(s)» with two lines). |
-| `describeLine(line, { imported })` | The note under a line's product. On a greyed-out line return a string (e.g. the order import's «en factura borrador FV1000002», from the line's `inDraftInvoices`, ETP-5828 QA UI-4) or `null` to keep the default («ya importado», or «en albarán: …» from `_inDraftShipments`) — `ImportLinesModal__importedNote`. On a selectable line a string adds a note (e.g. «1 en factura borrador FC1000020» for a line another draft holds part of, QA OBS-2), `null` shows none — `ImportLinesModal__lineNote`. Every note (the default one too) wraps onto at most 2 lines inside the fixed product column, so the 64 px row never grows, with its full text as a tooltip (`title`) — QA BUG-1: a single truncated line cut the draft number. |
+| `describeLine(line, { imported })` | The note under a line's product. On a greyed-out line return a string (e.g. the order import's «en factura borrador FV1000002», from the line's `inDraftInvoices`, ETP-5828 QA UI-4) or `null` to keep the default («ya importado», or «en albarán: …» from `_inDraftShipments`) — `ImportLinesModal__importedNote`. On a selectable line a string adds a note (e.g. «1 en factura borrador FC1000020» for a line another draft holds part of, QA OBS-2, or «2 ya en esta factura» for a line partly on THIS invoice, QA UI-7 — both joined with « · » when both apply), `null` shows none — `ImportLinesModal__lineNote`. Every note (the default one too) wraps onto at most 2 lines inside the fixed product column, so the 64 px row never grows, with its full text as a tooltip (`title`) — QA BUG-1: a single truncated line cut the draft number. |
 | `importButtonKey` | i18n key of the primary button (default `importSelected`; `{count}` receives `" (N)"` or `""`). |
 
 **The notice box (Figma «Alert»).** The slot is 92 px: a 12 px gap and an 80 px alert (padding 16,
@@ -3878,28 +3881,30 @@ designer's Save button. Any other truthy value behaves as `true`. Product passes
 With `'primary'` the active secondary tab paints its text, icon and 2 px underline with `--primary`
 instead of the foreground colour. Opt-in per window; Product sets it in `windows/custom/product/index.jsx`.
 
-### A control that straddles a scrolling sidebar's border (portal from an anchor span)
+### A control that straddles a scrolling sidebar's border (CSS anchor on a `relative` column)
 
 A control centred on the border between the form and a side panel (the Product collapse/expand
-circle, `windows/custom/product/ProductSidebarDividerToggle.jsx`) cannot live inside the panel: the
-panel column is `overflow-y-auto`, which clips any child that overhangs its box (and forces
-`overflow-x` to clip too). The pattern:
+circle, `windows/custom/product/ProductSidebarDividerToggle.jsx`) must not be clipped by the panel:
+a column that is `overflow-y-auto` clips any child that overhangs its box (and forces `overflow-x`
+to clip too). The pattern (no JS measurement, no portal):
 
-1. Render a hidden anchor `<span hidden>` inside the panel as the DOM handle.
-2. From the anchor find the column: the closest ancestor with BOTH `border-l` and `overflow-y-auto`
-   (a bare `border-l` also matches other panels). If none matches, fall back to the parent and
-   `console.warn` once in dev. Its parent is the row that holds the form and the panel.
-3. Make the row the positioning context (`position: relative` if it is `static`, and restore the
-   inline style on unmount) and `createPortal`
-   the button into the row, `absolute`, at `left = column.offsetLeft - size/2` and a fixed `top`
-   offset from `column.offsetTop`.
-4. Re-measure with a `ResizeObserver` on the column and the row (and when the collapsed state
-   changes), so the control follows width changes.
+1. The column (`sidebarClassName` in `decisions.json`) is `relative` and has NO overflow of its own;
+   it only carries the width, the `border-l` and, if wanted, the width transition.
+2. Inside it, put two layers (`ProductSidebarFrame.jsx`): a clip layer (`overflow-hidden`) and, inside
+   that, the scroll layer (`overflow-y-auto`) with a fixed width per state, so the content does not
+   reflow while the column width animates.
+3. Render the button as a plain child of the column, outside the clip layer, `absolute`, with
+   `left-[-0.5px] top-6 -translate-x-1/2` (centred on the 1 px border, fixed offset from the top).
+   Being anchored by CSS to the column, it follows the divider on every frame of a width transition;
+   the earlier approach (a hidden anchor span, `createPortal` into the parent row, `offsetLeft`
+   measurement with a `ResizeObserver`, an inline `position` patch on the row) lagged behind the
+   animation (32 px of drift at the worst frame) and was removed.
 
-Do not add `overflow: visible` to the scrolling column to avoid the portal: the column must keep
-its own scroll. The button stays mounted across states, so it keeps keyboard focus. Give it a stable
-`aria-label` with `aria-expanded` and `aria-controls` (never a label that flips with the state); only
-the `title` tooltip changes.
+Render both states of the panel inside the same frame component so the button is not remounted when
+the state flips: it keeps keyboard focus. Give it a stable `aria-label` with `aria-expanded` and
+`aria-controls` (never a label that flips with the state); only the `title` tooltip changes. For the
+collapse animation use `transition-[width] duration-200 ease-in-out` (the system menu's duration and
+curve) with `motion-reduce:transition-none`.
 
 ### Bottom tab-strip icons — `components/contract-ui/tabIcons.js`
 

@@ -90,15 +90,31 @@ function toBoolean(v) {
   return v === true || v === 'Y' || v === 'true';
 }
 
-// Resolve the modal's title / subtitle / submit label for create vs edit. Kept as a
-// helper so its ternaries don't inflate ListModalWindow's cognitive complexity.
-function resolveModalLabels(editingRow, config, ui) {
-  const title = editingRow
+// Modal title for create, edit, or the read-only view a read-only role gets (`viewTitleKey`,
+// falling back to the generic "View").
+function resolveModalTitle(editingRow, config, ui, readOnly) {
+  if (readOnly) return labelOrFallback(ui, config?.viewTitleKey, 'view');
+  return editingRow
     ? labelOrFallback(ui, config?.editTitleKey, 'edit')
     : labelOrFallback(ui, config?.titleKey, 'createRecord');
-  const subtitleKey = editingRow
+}
+
+// Modal subtitle key for create or edit. The read-only view has none: the create / edit
+// subtitles describe configuring the record (match-rule: "Configura una regla…"), which that
+// role cannot do.
+function resolveModalSubtitleKey(editingRow, config, readOnly) {
+  if (readOnly) return null;
+  return editingRow
     ? (config?.editSubtitleKey ?? config?.subtitleKey)
     : config?.subtitleKey;
+}
+
+// Resolve the modal's title / subtitle / submit label for create vs edit vs view. Kept as a
+// helper so its ternaries don't inflate ListModalWindow's cognitive complexity. The view mode
+// has no subtitle, and its submit label is never rendered.
+function resolveModalLabels(editingRow, config, ui, readOnly = false) {
+  const title = resolveModalTitle(editingRow, config, ui, readOnly);
+  const subtitleKey = resolveModalSubtitleKey(editingRow, config, readOnly);
   // The compact popup's primary pill reads "Save" in both modes (Figma), unless a key says otherwise.
   const createSubmitFallback = config?.modalVariant === 'compact' ? 'save' : 'createRecord';
   const submitLabel = editingRow
@@ -246,8 +262,10 @@ function resolveListModalView({ config, filters, readOnly, sections, fields, ope
     // and the Filtros button's 12px / 16px side padding with an 8px icon gap.
     toolbarButtonClass: options.compactList ? COMPACT_TOOLBAR_BUTTON : '',
     filterButtonClass: options.compactList ? `${COMPACT_TOOLBAR_BUTTON} gap-2 pl-3 pr-4 text-foreground` : '',
-    // Row click opens the edit modal (opt-in). Never for a read-only role: it has no edit.
-    onRowClick: options.rowClickEdit && !readOnly ? openEdit : undefined,
+    // Row click opens the record: the edit modal where the window opts in (`rowClickEdit`), and
+    // always for a read-only role, whose only way into a record is the read-only view (it has no
+    // hover pencil). The modal itself switches to view mode for that role.
+    onRowClick: options.rowClickEdit || readOnly ? openEdit : undefined,
     // Fields shown in the compact popup, in section order (it has no section headings).
     modalFields: options.compact
       ? sections.flatMap((sec) => fields.filter((f) => (f.section || 'general') === sec.key))
@@ -306,16 +324,16 @@ export function gridHeaderLabel(col, { ui, tLabel, tMenu, locale }) {
 }
 
 /**
- * Deep link: `/<window>/:recordId` renders the list with that record's edit modal open.
+ * Deep link: `/<window>/:recordId` renders the list with that record's modal open.
  *
  * The record is looked up in the loaded list first (no extra request); a record the list does
  * not carry is read by id (`GET {entity}/{id}`, unwrapped with the shared `extractSingleRow`).
  * One the server does not return is reported with a toast and the URL drops back to the list.
- * Each `recordId` is handled once, so closing the modal does not reopen it. Disabled for a
- * read-only role (`enabled: false`): the modal is an editor, and that role has no edit — the
- * list is shown as for a plain `/<window>` URL.
+ * Each `recordId` is handled once, so closing the modal does not reopen it. Active for every
+ * role: a read-only role gets the same modal in view mode (fields disabled, no save), so a
+ * shared link opens the record for it too.
  */
-function useDeepLinkedRecord({ recordId, enabled, rows, loading, openEdit, apiFetch, entity, ui, onMissing }) {
+function useDeepLinkedRecord({ recordId, rows, loading, openEdit, apiFetch, entity, ui, onMissing }) {
   const handledRef = useRef(null);
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -330,7 +348,7 @@ function useDeepLinkedRecord({ recordId, enabled, rows, loading, openEdit, apiFe
       handledRef.current = null;
       return;
     }
-    if (!enabled || loading || handledRef.current === recordId) return;
+    if (loading || handledRef.current === recordId) return;
     handledRef.current = recordId;
     const row = rows.find((r) => String(r?.id) === String(recordId));
     if (row) {
@@ -350,7 +368,7 @@ function useDeepLinkedRecord({ recordId, enabled, rows, loading, openEdit, apiFe
         else openEdit(record);
       })
       .catch(fail);
-  }, [enabled, recordId, rows, loading, openEdit, apiFetch, entity, ui, onMissing]);
+  }, [recordId, rows, loading, openEdit, apiFetch, entity, ui, onMissing]);
 }
 
 /**
@@ -388,7 +406,7 @@ function useDeepLinkedRecord({ recordId, enabled, rows, loading, openEdit, apiFe
  *   Accounting Schema; a section left with no visible field is dropped along with its heading.
  * @param {Array}    props.sections       ordered [{ key, label? }] for modal grouping
  * @param {string[]} props.filters        column keys used by the local search box
- * @param {object}   props.config         { titleKey, editTitleKey, subtitleKey,
+ * @param {object}   props.config         { titleKey, editTitleKey, viewTitleKey, subtitleKey,
  *                                          editSubtitleKey, submitLabelKey,
  *                                          editSubmitLabelKey, bannerKey,
  *                                          searchPlaceholderKey, newLabelKey,
@@ -400,6 +418,9 @@ function useDeepLinkedRecord({ recordId, enabled, rows, loading, openEdit, apiFe
  *   - sectionGrid       {object}  per-section column count for the body grid, keyed by
  *                                  section key (e.g. `{ general: 3, dimensions: 4 }`).
  *                                  Defaults to 3 columns for every section.
+ *   - viewTitleKey      {string}  modal title for a read-only role, which opens a record in view
+ *                                  mode (fields disabled, no subtitle, only a Close button) by row
+ *                                  click or deep link. Falls back to the generic `view` label.
  * @param {object}   props.api            apiPrediction block (carries baseUrl + selectors)
  */
 export function ListModalWindow({
@@ -633,13 +654,16 @@ export function ListModalWindow({
   }, [leaveRecordUrl]);
 
   useDeepLinkedRecord({
-    recordId, enabled: !readOnly, rows: allRows, loading, openEdit, apiFetch, entity, ui, onMissing: leaveRecordUrl,
+    recordId, rows: allRows, loading, openEdit, apiFetch, entity, ui, onMissing: leaveRecordUrl,
   });
 
+  // A read-only role sees the modal in view mode: its fields are disabled, so neither a change
+  // nor a save can come from the UI. Both handlers still refuse it (defence in depth).
   const handleFieldChange = useCallback((key, value) => {
+    if (readOnly) return;
     setFormData(prev => ({ ...prev, [key]: value }));
     if (formError) setFormError(null);
-  }, [formError]);
+  }, [formError, readOnly]);
 
   const missingRequired = useMemo(
     () => requiredKeys.filter(k => formData[k] == null || formData[k] === ''),
@@ -647,6 +671,7 @@ export function ListModalWindow({
   );
 
   const handleSave = useCallback(async () => {
+    if (readOnly) return;
     if (missingRequired.length > 0) {
       setFormError(ui('requiredFieldsMissing'));
       return;
@@ -681,10 +706,12 @@ export function ListModalWindow({
     } finally {
       setSaving(false);
     }
-  }, [missingRequired, fields, editingRow, entity, formData, apiFetch, ui, closeModal, reload, errorMessage]);
+  }, [readOnly, missingRequired, fields, editingRow, entity, formData, apiFetch, ui, closeModal, reload, errorMessage]);
 
-  // Inline toggle: PATCH {entity}/{id} with optimistic UI handled by reload.
+  // Inline toggle: PATCH {entity}/{id} with optimistic UI handled by reload. A read-only role
+  // sees the toggle cell disabled; the handler still refuses it (defence in depth).
   const handleToggle = useCallback(async (row, col, nextChecked) => {
+    if (readOnly) return;
     const key = `${row.id}:${col.key}`;
     setSavingToggles(prev => ({ ...prev, [key]: true }));
     try {
@@ -706,10 +733,12 @@ export function ListModalWindow({
         return next;
       });
     }
-  }, [entity, apiFetch, errorMessage, reload, ui]);
+  }, [readOnly, entity, apiFetch, errorMessage, reload, ui]);
 
-  // Delete confirmed from the dialog: DELETE {entity}/{id}, then reload.
+  // Delete confirmed from the dialog: DELETE {entity}/{id}, then reload. A read-only role gets no
+  // delete row action, so the dialog never opens; the handler still refuses it (defence in depth).
   const handleDeleteConfirmed = useCallback(async () => {
+    if (readOnly) return;
     if (!deletingRow) return;
     setDeleting(true);
     try {
@@ -727,7 +756,7 @@ export function ListModalWindow({
     } finally {
       setDeleting(false);
     }
-  }, [deletingRow, entity, apiFetch, errorMessage, reload, ui]);
+  }, [readOnly, deletingRow, entity, apiFetch, errorMessage, reload, ui]);
 
   // Bulk delete of the checked rows. Reuses the shared hook every other grid uses, so the confirm
   // dialog, the parallel DELETEs and the three-outcome toast (all / partial / none) behave
@@ -752,8 +781,8 @@ export function ListModalWindow({
   }, [config, navigate]);
 
   // Modal title / subtitle / submit label (Figma). Resolved in a helper so the
-  // create-vs-edit ternaries stay out of the component's cognitive complexity.
-  const { title, subtitle, submitLabel } = resolveModalLabels(editingRow, config, ui);
+  // create-vs-edit-vs-view ternaries stay out of the component's cognitive complexity.
+  const { title, subtitle, submitLabel } = resolveModalLabels(editingRow, config, ui, readOnly);
 
   // The optional footer toggle (a boolean field promoted out of the body grid into
   // the footer, beside the submit button — e.g. "Crear transacción automáticamente").
@@ -944,6 +973,7 @@ export function ListModalWindow({
         submitDisabled={saving || missingRequired.length > 0}
         submitting={saving}
         submitLabel={submitLabel}
+        readOnly={readOnly}
         ui={ui}
         data-testid="ListModalCompactDialog__19eda5" />
       <Dialog
@@ -994,6 +1024,7 @@ export function ListModalWindow({
                     apiBaseUrl={apiBaseUrl}
                     labelOverrides={api?.labelOverrides}
                     cols={colsFor(sec.key)}
+                    readOnly={readOnly}
                     data-testid="EntityForm__19eda5" />
                 </div>
               );
@@ -1018,6 +1049,8 @@ export function ListModalWindow({
             submitDisabled={saving || missingRequired.length > 0}
             submitting={saving}
             submitLabel={submitLabel}
+            readOnly={readOnly}
+            onClose={closeModal}
             ui={ui}
             data-testid="ModalFooter__19eda5" />
         </DialogContent>
@@ -1036,10 +1069,12 @@ export function ListModalWindow({
 }
 
 /**
- * Modal footer: optional toggle + helper (left) and the pill submit button (right).
- * Extracted so its conditionals live here instead of inflating ListModalWindow.
+ * Modal footer: optional toggle + helper (left) and the pill submit button (right). In view mode
+ * (`readOnly`, a read-only role) the toggle is shown disabled and the submit pill is replaced by
+ * an outline Close pill. Extracted so its conditionals live here instead of inflating
+ * ListModalWindow.
  */
-function ModalFooter({ toggleField, toggleKey, toggleLabel, toggleChecked, onToggleChange, onSubmit, submitDisabled, submitting, submitLabel, ui }) {
+function ModalFooter({ toggleField, toggleKey, toggleLabel, toggleChecked, onToggleChange, onSubmit, submitDisabled, submitting, submitLabel, readOnly = false, onClose, ui }) {
   return (
     <div className="flex items-center justify-between gap-4 border-t border-[hsl(var(--border-subtle))] px-5 py-3">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -1049,6 +1084,7 @@ function ModalFooter({ toggleField, toggleKey, toggleLabel, toggleChecked, onTog
               <PillToggle
                 checked={toggleChecked}
                 onCheckedChange={onToggleChange}
+                disabled={readOnly}
                 aria-label={toggleLabel}
                 data-testid={`list-modal-footer-toggle-${toggleKey}`}
               />
@@ -1062,16 +1098,46 @@ function ModalFooter({ toggleField, toggleKey, toggleLabel, toggleChecked, onTog
           <span />
         )}
       </div>
+      <ModalFooterAction
+        readOnly={readOnly}
+        onClose={onClose}
+        onSubmit={onSubmit}
+        submitDisabled={submitDisabled}
+        submitting={submitting}
+        submitLabel={submitLabel}
+        ui={ui}
+        data-testid="ModalFooterAction__19eda5" />
+    </div>
+  );
+}
+
+/**
+ * The footer's right-hand pill: Save for create / edit, an outline Close for the read-only view
+ * (that role has nothing to save).
+ */
+function ModalFooterAction({ readOnly, onClose, onSubmit, submitDisabled, submitting, submitLabel, ui }) {
+  if (readOnly) {
+    return (
       <button
         type="button"
-        onClick={onSubmit}
-        disabled={submitDisabled}
-        data-testid="list-modal-submit"
-        className="inline-flex h-10 shrink-0 items-center justify-center rounded-full px-3 py-2 text-sm font-medium leading-6 text-primary-foreground transition-colors disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground enabled:bg-[hsl(var(--foreground))] enabled:hover:bg-[hsl(var(--accent-highlight))] enabled:hover:text-[hsl(var(--accent-highlight-foreground))]"
+        onClick={onClose}
+        data-testid="list-modal-close-view"
+        className="inline-flex h-10 shrink-0 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card px-3 py-2 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground)/0.05)] transition-colors hover:bg-[hsl(var(--muted))]"
       >
-        {submitting ? ui('saving') : submitLabel}
+        {ui('close')}
       </button>
-    </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onSubmit}
+      disabled={submitDisabled}
+      data-testid="list-modal-submit"
+      className="inline-flex h-10 shrink-0 items-center justify-center rounded-full px-3 py-2 text-sm font-medium leading-6 text-primary-foreground transition-colors disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground enabled:bg-[hsl(var(--foreground))] enabled:hover:bg-[hsl(var(--accent-highlight))] enabled:hover:text-[hsl(var(--accent-highlight-foreground))]"
+    >
+      {submitting ? ui('saving') : submitLabel}
+    </button>
   );
 }
 
@@ -1119,9 +1185,10 @@ function DeleteConfirmDialog({ open, busy, onCancel, onConfirm, ui }) {
 }
 
 /**
- * Row props for `rowClickEdit`: click opens the edit modal, and the row is focusable so Enter /
- * Space open it from the keyboard. Only when the row ITSELF has focus — a key pressed on the
- * selection checkbox, a toggle or a hover action belongs to that control.
+ * Row props for `rowClickEdit` (and for a read-only role): click opens the record's modal, and the
+ * row is focusable so Enter / Space open it from the keyboard. Only when the row ITSELF has
+ * focus — a key pressed on the selection checkbox, a toggle or a hover action belongs to that
+ * control.
  */
 function rowOpenProps(onRowClick, row) {
   if (!onRowClick) return {};

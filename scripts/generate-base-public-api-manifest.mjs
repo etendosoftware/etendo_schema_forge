@@ -11,8 +11,28 @@ export const publicApiV1Entities = Object.freeze({
   'purchase-order': ['header', 'lines'],
   'sales-order': ['header', 'lines'],
   'sales-quotation': ['quotation', 'quotationLine'],
+  tax: ['tax'],
+  'tax-category': ['taxCategory'],
+  'conversion-rates': ['conversionRate'],
+  'business-partner-category': ['businessPartnerCategory'],
 });
 
+// Public resource name of a window whose artifact (and NEO spec) name is not the
+// name an integrator should see. The manifest key, the routes and every link to
+// the resource use the public name; `specName` keeps the NEO spec, which is what
+// the gateway calls.
+export const publicResourceNames = Object.freeze({
+  'business-partner-category': 'contact-category',
+});
+
+export function publicResourceOf(specName) {
+  return publicResourceNames[specName] ?? specName;
+}
+
+// Categories outside the public API scope. Listing a window in
+// `publicApiV1Entities` is its scope decision, so an allowlisted window is
+// published whatever its category: the allowlist is the per-window opt-in.
+// Every window that is not allowlisted stays out, these categories included.
 const excludedCategories = new Set([
   // These modules are not part of the public API scope.
   'accounting',
@@ -33,7 +53,6 @@ const excludedWindows = new Set([
   // business-partner window shares the same primary entity and is not exposed
   // as a second public resource.
   'business-partner',
-  'business-partner-category',
   'bp-location',
   'bom-production',
   'commission-payment',
@@ -153,7 +172,25 @@ export function isPublicField(field, { curated }) {
 }
 
 function publicName(specName, entityName, primaryEntity) {
-  return entityName === primaryEntity ? specName : `${specName}-${entityName}`;
+  const resource = publicResourceOf(specName);
+  return entityName === primaryEntity ? resource : `${resource}-${entityName}`;
+}
+
+// Whether a window reaches the public API: it must be in the allowlist and not
+// excluded by name. Its category is not consulted: the allowlist overrides
+// `excludedCategories`, and a window outside the allowlist is never published,
+// whatever its category.
+export function isPublishedWindow(specName) {
+  return Object.hasOwn(publicApiV1Entities, specName) && !excludedWindows.has(specName);
+}
+
+// The decisions.json entry of a contract entity. It is keyed by the contract
+// name, or, when decisions renames the entity (`entities.header.name:
+// "conversionRate"`), by its original key with the contract name in `name`.
+export function decisionsEntityOf(decisions, entityName) {
+  const entities = decisions?.entities ?? {};
+  if (Object.hasOwn(entities, entityName)) return entities[entityName];
+  return Object.values(entities).find((entity) => entity?.name === entityName);
 }
 
 function pathSegment(entityName) {
@@ -177,6 +214,7 @@ const publicFieldOverrides = {
   etgoEmail: 'email',
   etgoPhone: 'phone',
   etgoIsperson: 'is_person',
+  etgoIscustomer: 'is_customer',
   name2: 'secondary_name',
   uRL: 'url',
   referenceNo: 'reference_number',
@@ -296,7 +334,7 @@ function buildProcesses({ source, entityName, actions }) {
 // `writable: false` makes it read-only (`out`): a value the handler adds on read, never sent.
 // A resource with no write endpoint publishes only the read-only ones.
 export function inputFieldsOf(decisions, entityName) {
-  const list = decisions?.entities?.[entityName]?.publicApi?.inputFields;
+  const list = decisionsEntityOf(decisions, entityName)?.publicApi?.inputFields;
   return Array.isArray(list) ? list : [];
 }
 
@@ -345,7 +383,7 @@ export function lookupOf(field, where) {
 // Field names are the internal (contract) names. Platform guardrails
 // (`neverExposedFields`) are applied by the generator and win over this.
 export function exposurePolicyOf(decisions, entityName) {
-  const entity = decisions?.entities?.[entityName];
+  const entity = decisionsEntityOf(decisions, entityName);
   const actions = decisions?.window?.publicApi?.actions;
   const listed = entity?.publicApi?.readOnlyFields;
   const readOnlyFields = new Set(Array.isArray(listed) ? listed : []);
@@ -562,7 +600,7 @@ export async function generateManifest({
 } = {}) {
   const entities = {};
   for (const entry of await readdir(artifactsRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !Object.hasOwn(publicApiV1Entities, entry.name) || excludedWindows.has(entry.name)) continue;
+    if (!entry.isDirectory() || !isPublishedWindow(entry.name)) continue;
     const contractPath = join(artifactsRoot, entry.name, 'contract.json');
     let contract;
     try {
@@ -570,8 +608,6 @@ export async function generateManifest({
     } catch {
       continue;
     }
-    const category = contract.frontendContract?.window?.category;
-    if (excludedCategories.has(category)) continue;
     let rawContract;
     try {
       rawContract = JSON.parse(await readFile(join(artifactsRoot, entry.name, 'schema-raw.json'), 'utf8'));
@@ -617,7 +653,7 @@ export async function generateManifest({
           field.reference?.keyColumn === primaryIdField.columnName,
         );
         if (parentField) {
-          parent = { resource: entry.name, entityName: primaryEntityName, foreignKey: parentField.name };
+          parent = { resource: publicResourceOf(entry.name), entityName: primaryEntityName, foreignKey: parentField.name };
         }
       }
       // Custom window decisions are the source of truth for which child tabs are
@@ -682,6 +718,9 @@ export async function generateManifest({
           cardinality: 'one',
           foreignKey: publicFieldName,
         };
+        // A lookup lists ids an integrator then sends as this relationship, so
+        // its values carry the JSON:API type of the related resource.
+        if (field.lookup) field.lookup.type = resource;
       }
     }
   }
@@ -692,6 +731,9 @@ export async function generateManifest({
     policy: {
       entitySelection: 'explicit-v1-resources-with-schema-linked-children',
       allowedResources: publicApiV1Entities,
+      // An allowlisted window is published whatever its category.
+      windowSelection: 'allowlist-overrides-excluded-categories',
+      publicResourceNames,
       fieldSelection: 'curated-publicApi-else-form-plus-readonly-list',
       excludedCategories: [...excludedCategories],
       excludedWindows: [...excludedWindows],

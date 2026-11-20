@@ -7,6 +7,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { extractErrorMessage, readMessageKeys, PROCESS_FAILURE_TOAST_DURATION_MS } from '@/hooks/useEntity.js';
 import { documentPeriodDate, periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { buildDocumentRowQuickActionsPostMenu } from '../shared/buildDocumentRowQuickActions.js';
+import { isDraftStatus } from '../../../lib/docStatus.js';
 
 // ETP-5445 — the form's draftMode "Confirmar" is not a DocAction: it POSTs the
 // `processNow` AD button with the mandatory M_Internal_Consumption_Post `action`
@@ -21,7 +22,7 @@ const CONFIRM_BODY = JSON.stringify(CONFIRM_PARAMS);
 // Same gate the form applies (the Confirm button hides once processed): only drafts.
 export function isConfirmableRow(row) {
   const processed = row?.processed === 'Y' || row?.processed === true;
-  return row?.status === 'DR' && !processed;
+  return isDraftStatus(row?.status) && !processed;
 }
 
 // ETP-5445 — bulk "Confirmar": the same processNow call as the form and the row kebab,

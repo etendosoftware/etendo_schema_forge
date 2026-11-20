@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { resolveBackendSort, buildBackendFilter } from '@/lib/gridQuery.js';
-import { translateBackendError, extractBackendMessageKeys, extractBackendMessageParams, extractBackendErrorCode } from '@/lib/backendErrors.js';
+import { translateBackendError, translateMappedImportRefusal, extractBackendMessageKeys, extractBackendMessageParams, extractBackendErrorCode } from '@/lib/backendErrors.js';
 import { extractQuotaExceeded, isQuotaCheckFailed } from '@/lib/planQuotas.js';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
@@ -283,6 +283,11 @@ export async function extractErrorMessage(res, ui) {
         // `{error:{code, message}}`) is a discriminator for the caller, not text for the user:
         // it is skipped while a readable message exists and only shown as the last resort.
         const errorCode = extractBackendErrorCode(data);
+
+        // ETP-6002 CP-30 — a line saved above what its source line has pending: the server's text
+        // is English, the code and its details render the sentence in the active locale.
+        const importRefusal = translateMappedImportRefusal(data, ui);
+        if (importRefusal) return importRefusal;
 
         // NEO Headless top-level error: { error: { message, status } }
         const neoError = pickReadableError(data?.error, errorCode);
@@ -768,6 +773,23 @@ export function getContactsTaxIdViolation(windowName, fields, editing, changedKe
         if (err) return { key: f.key, errorKey: err.key, errorParams: err.params };
     }
     return null;
+}
+
+// ETP-6233: lifecycle of the mutually-exclusive in-flight work (save POST vs header process POST).
+const INFLIGHT_STATUS = Object.freeze({ IDLE: 'idle', SAVING: 'saving', PROCESS: 'process' });
+const IDLE_INFLIGHT = Object.freeze({ status: INFLIGHT_STATUS.IDLE, processId: null });
+const SAVING_INFLIGHT = Object.freeze({ status: INFLIGHT_STATUS.SAVING, processId: null });
+
+// Saving starts only from idle and finishing clears only a `saving` status, so it can never
+// overwrite or clear a running `process`. Exported for tests.
+export function nextInflightForSaving(prev, saving) {
+    if (saving) return prev.status === INFLIGHT_STATUS.IDLE ? SAVING_INFLIGHT : prev;
+    return prev.status === INFLIGHT_STATUS.SAVING ? IDLE_INFLIGHT : prev;
+}
+
+// A finished process clears only its own `process` status. Exported for tests.
+export function nextInflightAfterProcess(prev, processId) {
+    return prev.status === INFLIGHT_STATUS.PROCESS && prev.processId === processId ? IDLE_INFLIGHT : prev;
 }
 
 // Block the save on a format-invalid field (email, website, …) and surface a
@@ -1404,11 +1426,28 @@ export function useEntity(entity, childEntity, {
     // until we actually know whether the value is coming.
     const [defaultsPending, setDefaultsPending] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
-    // ETP-4542: identifier of the header process currently running (POST in flight),
-    // or null when idle. A per-process id (not a global boolean) gives per-button
-    // granularity so only the button that was clicked reflects the loading state.
-    const [runningProcess, setRunningProcess] = useState(null);
+    // ETP-6233: the mutually-exclusive in-flight work (save POST vs header process POST)
+    // lives in one status so `saving` and `process` can never be reported together.
+    // ETP-4542: the process status carries the id of the running header process; a
+    // per-process id (not a global boolean) gives per-button granularity so only the
+    // button that was clicked reflects the loading state.
+    const [inflight, setInflight] = useState(IDLE_INFLIGHT);
+    // Mirror of `inflight`, updated synchronously so two starts in the same tick cannot both see idle.
+    const inflightRef = useRef(IDLE_INFLIGHT);
+    // Resolves when the running header process settles; a save waits on it instead of overwriting it.
+    const processPromiseRef = useRef(null);
+    const transitionInflight = useCallback((fn) => {
+        const next = fn(inflightRef.current);
+        if (next !== inflightRef.current) {
+            inflightRef.current = next;
+            setInflight(next);
+        }
+    }, []);
+    const isSaving = inflight.status === INFLIGHT_STATUS.SAVING;
+    const runningProcess = inflight.status === INFLIGHT_STATUS.PROCESS ? inflight.processId : null;
+    const setIsSaving = useCallback((saving) => {
+        transitionInflight((prev) => nextInflightForSaving(prev, saving));
+    }, [transitionInflight]);
     const [hasMore, setHasMore] = useState(true);
     const [saveError, setSaveError] = useState(null);
     // ETP-3894: per-field error map. Set when handleSave fails because mandatory fields
@@ -2434,6 +2473,21 @@ export function useEntity(entity, childEntity, {
             setIsSaving(false);
         }
     }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, ui, fetchChildren, apiFetch, discardChangesAndReload, invalidateEntityCache]);
+    const performSaveRef = useRef(performSave);
+    performSaveRef.current = performSave;
+    // ETP-6233: a save requested while a header process runs waits for it, so it never overwrites
+    // the `process` status. The process may have refreshed the record (`updated`, status), so the
+    // save restarts from the latest render's `editing` instead of the stale closure.
+    const performSaveWhenIdle = useCallback(async (opts) => {
+        while (processPromiseRef.current) {
+            await processPromiseRef.current;
+            await new Promise((resolve) => { setTimeout(resolve, 0); });
+        }
+        return performSaveRef.current(opts);
+    }, []);
+    const runSave = useCallback((opts) => (
+        processPromiseRef.current ? performSaveWhenIdle(opts) : performSave(opts)
+    ), [performSave, performSaveWhenIdle]);
 
     /**
      * ETP-5081: one create in flight at a time.
@@ -2470,7 +2524,7 @@ export function useEntity(entity, childEntity, {
         const creating = !editing?.id;
         if (creating) {
             if (saveInFlightRef.current) return saveInFlightRef.current;
-            const promise = performSave(opts);
+            const promise = runSave(opts);
             saveInFlightRef.current = promise;
             promise.finally(() => {
                 if (saveInFlightRef.current === promise) saveInFlightRef.current = null;
@@ -2480,7 +2534,7 @@ export function useEntity(entity, childEntity, {
         const previous = updateChainRef.current;
         // No save in flight: run immediately, so the common single-save case keeps issuing its
         // request in the same tick it always did.
-        const next = previous ? previous.then(() => performSave(opts)) : performSave(opts);
+        const next = previous ? previous.then(() => runSave(opts)) : runSave(opts);
         // The tail must never reject or the chain would stay poisoned for every later save;
         // `performSave` already reports its own failures and resolves to null.
         const tail = next.catch(() => null);
@@ -2491,7 +2545,7 @@ export function useEntity(entity, childEntity, {
             if (updateChainRef.current === tail) updateChainRef.current = null;
         });
         return next;
-    }, [performSave, editing?.id]);
+    }, [runSave, editing?.id]);
 
     // Returns true on success, false on failure — callers (e.g. DetailView's
     // confirmHeaderDelete) MUST check this before navigating away, otherwise a
@@ -2837,7 +2891,13 @@ export function useEntity(entity, childEntity, {
         // to render (columnName ?? name). Cleared in the finally block below on both
         // success and error, so the button always returns to its normal state.
         const processId = process.columnName ?? process.name;
-        setRunningProcess(processId);
+        // ETP-6233: only start from idle; a process requested while saving (or while another
+        // runs) is rejected without a POST. DetailView disables the buttons, this is the backstop.
+        if (inflightRef.current.status !== INFLIGHT_STATUS.IDLE) return false;
+        transitionInflight(() => ({ status: INFLIGHT_STATUS.PROCESS, processId }));
+        let release;
+        const settled = new Promise((resolve) => { release = resolve; });
+        processPromiseRef.current = settled;
         // Build field values: start with hidden params from process definition, then merge user-supplied values
         const fieldValues = {};
         for (const p of (process.params ?? [])) {
@@ -2859,9 +2919,11 @@ export function useEntity(entity, childEntity, {
         } catch (err) {
             toast.error(err?.message || ui('networkErrorRetry'));
         } finally {
-            setRunningProcess(null);
+            transitionInflight((prev) => nextInflightAfterProcess(prev, processId));
+            if (processPromiseRef.current === settled) processPromiseRef.current = null;
+            release();
         }
-    }, [selected, entity, apiFetch, handleProcessSuccess, handleProcessFailure, ui]);
+    }, [selected, entity, apiFetch, handleProcessSuccess, handleProcessFailure, ui, transitionInflight]);
 
     // Prime the hook state with a freshly-saved record so consumers (DetailView) can
     // navigate /new → /:id without triggering a redundant GET /<entity>/:id. The POST

@@ -991,7 +991,7 @@ describe('ImportLinesModal', () => {
 
       const lineRow = screen.getByText('Widget A').closest('[data-testid="ImportLinesModal__lineRow"]');
       fireEvent.click(lineRow);
-      expect(screen.getByText('selected:{\"count\":1}')).toBeInTheDocument();
+      expect(screen.getByTestId('ImportLinesModal__selectionHint')).toHaveTextContent('importLinesSelectedCountOne:{"count":1}');
 
       fireEvent.click(lineRow);
       expect(screen.getByText('selectLinesToImport')).toBeInTheDocument();
@@ -1108,6 +1108,71 @@ describe('ImportLinesModal', () => {
       expect(call.invoiceId).toBe('inv-1');
       expect(toast.success).toHaveBeenCalledWith('importSuccess:{"count":1}');
       expect(toast.warning).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    describe('a line the server refuses', () => {
+      const accepted = () => ({ ok: true, status: 200, json: () => Promise.resolve({}) });
+      const refused = (body) => ({ ok: false, status: 422, json: () => Promise.resolve(body) });
+      const exceeds = (product, requested, pending) => refused({
+        error: {
+          status: 422,
+          code: 'importQuantityExceedsPending',
+          message: `Cannot import ${requested} of ${product}`,
+          product,
+          requested,
+          pending,
+        },
+      });
+      const sentence = (product, requested, pending) => 'backendError.importQuantityExceedsPending:'
+        + JSON.stringify({ product, requested, pending });
+
+      async function importBothLines(responses, overrides = {}) {
+        const queue = [...responses];
+        globalThis.fetch = vi.fn(() => Promise.resolve(queue.shift()));
+        const { props } = await renderExpandedAndSelectFirstLine(overrides);
+        fireEvent.click(screen.getByText('Widget B').closest('[data-testid="ImportLinesModal__lineRow"]'));
+        fireEvent.click(screen.getByText(/importSelected/).closest('button'));
+        await waitFor(() => expect(props.onSuccess).toHaveBeenCalledTimes(1));
+        expect(globalThis.fetch).toHaveBeenCalledTimes(responses.length);
+        return props;
+      }
+
+      it('shows the reason once and keeps the partial-success flow for the line that was imported', async () => {
+        const afterImport = vi.fn().mockResolvedValue();
+        const getSuccessToast = vi.fn(() => ({ message: 'partial-notice', variant: 'warning' }));
+
+        await importBothLines([accepted(), exceeds('Widget B', 3, 1)], { afterImport, getSuccessToast });
+
+        expect(toast.error).toHaveBeenCalledTimes(1);
+        expect(toast.error).toHaveBeenCalledWith(sentence('Widget B', 3, 1));
+        expect(toast.warning).toHaveBeenCalledWith('importedLinesWithErrors:{"count":1,"errors":1}');
+        expect(toast.warning).toHaveBeenCalledWith('partial-notice');
+        expect(toast.success).not.toHaveBeenCalled();
+        expect([...afterImport.mock.calls[0][0].importedDocIds]).toEqual(['doc-1']);
+        expect(getSuccessToast).toHaveBeenCalledWith(expect.objectContaining({ count: 1, partial: true }));
+      });
+
+      it.each([
+        ['two refusals show only the first reason',
+          () => [exceeds('Widget A', 5, 2), exceeds('Widget B', 3, 1)],
+          '{"count":0,"errors":2}', sentence('Widget A', 5, 2)],
+        ['a failure without a reason does not hide the refusal after it',
+          () => [refused({ error: { message: 'Server text' } }), exceeds('Widget B', 3, 1)],
+          '{"count":0,"errors":2}', sentence('Widget B', 3, 1)],
+        ['another refusal code adds no error toast',
+          () => [refused({ error: { code: 'business_rule', message: 'Server text' } }), accepted()],
+          '{"count":1,"errors":1}', null],
+        ['a body that is not JSON adds no error toast',
+          () => [{ ok: false, status: 500, json: () => Promise.reject(new SyntaxError('Unexpected token <')) }, accepted()],
+          '{"count":1,"errors":1}', null],
+      ])('%s', async (_label, responses, counts, reason) => {
+        await importBothLines(responses());
+
+        expect(toast.warning).toHaveBeenCalledWith(`importedLinesWithErrors:${counts}`);
+        expect(toast.error).toHaveBeenCalledTimes(reason ? 1 : 0);
+        if (reason) expect(toast.error).toHaveBeenCalledWith(reason);
+      });
     });
 
     it('reports a warning toast but still calls onSuccess when the import POST fails', async () => {
@@ -1268,7 +1333,7 @@ describe('ImportLinesModal', () => {
 
       await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
       // Both lines auto-selected -> footer shows the count.
-      await waitFor(() => expect(screen.getByText('selected:{\"count\":2}')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId('ImportLinesModal__selectionHint')).toHaveTextContent('importLinesSelectedCountMany:{"count":2}'));
     });
 
     it('does NOT auto-select lines on expand when false (default)', async () => {
@@ -1417,7 +1482,7 @@ describe('ImportLinesModal', () => {
       expect(toggle).toHaveTextContent('selectAll');
       fireEvent.click(toggle);
       expect(toggle).toHaveTextContent('deselectAll');
-      expect(screen.getByText('selected:{\"count\":2}')).toBeInTheDocument();
+      expect(screen.getByTestId('ImportLinesModal__selectionHint')).toHaveTextContent('importLinesSelectedCountMany:{"count":2}');
 
       fireEvent.click(screen.getByTestId('ImportLinesModal__import'));
       await waitFor(() => expect(submitImport).toHaveBeenCalled());
@@ -1433,7 +1498,7 @@ describe('ImportLinesModal', () => {
       await renderSettled();
       fireEvent.change(screen.getByPlaceholderText('searchOrders'), { target: { value: 'INV-002' } });
       fireEvent.click(screen.getByTestId('ImportLinesModal__selectAll'));
-      expect(screen.getByText('selected:{\"count\":2}')).toBeInTheDocument();
+      expect(screen.getByTestId('ImportLinesModal__selectionHint')).toHaveTextContent('importLinesSelectedCountMany:{"count":2}');
     });
 
     it('loads and selects the lines of documents not loaded yet (eagerLoadLines off)', async () => {
@@ -1443,40 +1508,37 @@ describe('ImportLinesModal', () => {
       expect(defaultProps.fetchLines).not.toHaveBeenCalled();
 
       fireEvent.click(screen.getByTestId('ImportLinesModal__selectAll'));
-      await waitFor(() => expect(screen.getByText('selected:{\"count\":4}')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId('ImportLinesModal__selectionHint')).toHaveTextContent('importLinesSelectedCountMany:{"count":4}'));
       expect(defaultProps.fetchLines).toHaveBeenCalledTimes(2);
     });
 
-    // ETP-5828 (QA UI-6): opt-in `countLinesInFooter` (the order popups) counts the selected
-    // LINES with singular/plural wording; without it the generic «N Seleccionados» stays.
-    it('countLinesInFooter: counts the selected LINES in the footer, singular and plural', async () => {
+    // ETP-5651: every import popup counts the selected LINES with singular/plural wording.
+    it('counts the selected LINES in the footer, singular and plural', async () => {
       defaultProps.fetchLines.mockImplementation(linesPerDoc);
-      await renderSettled({ countLinesInFooter: true });
+      await renderSettled();
 
       fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
       await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
       const hint = screen.getByTestId('ImportLinesModal__selectionHint');
+      expect(screen.getByTestId('ImportLinesModal__import')).toBeDisabled();
+      // Figma: the import button is black while enabled and grey while disabled.
+      const importClasses = screen.getByTestId('ImportLinesModal__import').className;
+      expect(importClasses).toContain('bg-foreground');
+      expect(importClasses).toContain('disabled:bg-muted');
+      expect(importClasses).not.toContain('bg-primary');
 
       fireEvent.click(screen.getByText('Widget A').closest('[data-testid="ImportLinesModal__lineRow"]'));
       expect(hint).toHaveTextContent('importLinesSelectedCountOne:{"count":1}');
       expect(hint).toHaveTextContent('importLinesSelectedSuffixOne');
+      // The generic «N Seleccionados» footer is gone.
+      expect(hint).not.toHaveTextContent('selected:');
+      expect(screen.getByTestId('ImportLinesModal__import')).not.toBeDisabled();
 
       // Two lines of ONE document: «2 líneas seleccionadas», «Importar seleccionadas (2)».
       fireEvent.click(screen.getByText('Widget B').closest('[data-testid="ImportLinesModal__lineRow"]'));
       expect(hint).toHaveTextContent('importLinesSelectedCountMany:{"count":2}');
       expect(hint).toHaveTextContent('importLinesSelectedSuffixMany');
       expect(screen.getByTestId('ImportLinesModal__import')).toHaveTextContent('importSelected:{"count":" (2)"}');
-    });
-
-    it('without countLinesInFooter the footer keeps the generic «N Seleccionados»', async () => {
-      defaultProps.fetchLines.mockImplementation(linesPerDoc);
-      await renderSettled();
-      fireEvent.click(screen.getByText('INV-001').closest('[data-testid="ImportLinesModal__docRow"]'));
-      await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
-      fireEvent.click(screen.getByText('Widget A').closest('[data-testid="ImportLinesModal__lineRow"]'));
-      const hint = screen.getByTestId('ImportLinesModal__selectionHint');
-      expect(hint).toHaveTextContent('selected:{"count":1}');
-      expect(hint).not.toHaveTextContent('importLinesSelected');
     });
 
     it('describeLine replaces the note under a greyed-out line (null keeps «ya importado») and adds one to a selectable line', async () => {

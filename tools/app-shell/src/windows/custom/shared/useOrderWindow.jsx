@@ -10,6 +10,7 @@ import { useRowEmailModal } from './useRowEmailModal.jsx';
 import OrderPreview from './OrderPreview.jsx';
 import { SEND_VISIBLE_WHEN_CONFIRMED } from './sendActionVisibility.js';
 import { readOrderPendingDocs } from './orderPendingDocs.js';
+import { isCompletedStatus, isDraftStatus } from '../../../lib/docStatus.js';
 
 export function useOrderWindow({
   windowName,
@@ -125,8 +126,8 @@ export function useOrderWindow({
       // derives the answer from the shipments/invoices/lines it fetches itself and therefore
       // never depends on the annotation being present.
       const { needsPrimaryDoc, needsInvoiceDoc } = readOrderPendingDocs(row);
-      const needsPrimary = status === 'CO' && needsPrimaryDoc === true;
-      const needsInvoice = status === 'CO' && needsInvoiceDoc === true;
+      const needsPrimary = isCompletedStatus(status) && needsPrimaryDoc === true;
+      const needsInvoice = isCompletedStatus(status) && needsInvoiceDoc === true;
       let manageLabelKey = null;
       if      (needsPrimary && needsInvoice) manageLabelKey = manageLabelKeys.both;
       else if (needsPrimary)                 manageLabelKey = manageLabelKeys.primary;
@@ -135,7 +136,7 @@ export function useOrderWindow({
         {
           key: 'confirm',
           label: ui(confirmLabelKey),
-          visible: status === 'DR',
+          visible: isDraftStatus(status),
           // ETP-5840 — no client-side exchange-rate pre-check. It used to query
           // validate-exchange-rate on the order date and ignored a manual eTGOCurrencyRate,
           // so it blocked documents that did carry a rate. The document's own rate is now the
@@ -155,7 +156,7 @@ export function useOrderWindow({
           labelKey: 'reactivate',
           successKey: 'reactivated',
           documentAction: 'RE',
-          visible: status === 'CO' && !row?.hasLinkedDocuments,
+          visible: isCompletedStatus(status) && !row?.hasLinkedDocuments,
         }] : []),
       ];
     },

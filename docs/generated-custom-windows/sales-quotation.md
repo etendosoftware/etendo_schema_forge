@@ -605,8 +605,8 @@ kebab. Repeat on another quotation with «Facturar directamente» and verify «F
 
 **Automated evidence.** `tools/app-shell/src/windows/custom/sales-quotation/__tests__/QuotationConfirmModal.goToDoc.vitest.jsx`,
 `tools/app-shell/src/windows/custom/sales-quotation/__tests__/QuotationActionModals.etp5398.vitest.jsx`,
-`e2e/tests/flows/sales/sales-quotation-happy-path.integration.spec.js`,
-`e2e/tests/flows/sales/sales-quotation-full-flow.integration.spec.js`.
+`e2e/tests/flows/before-financial-accounts/sales-quotation-happy-path.integration.spec.js`,
+`e2e/tests/flows/before-financial-accounts/sales-quotation-full-flow.integration.spec.js`.
 
 ## Unit column in the lines grid (ETP-5696)
 
@@ -643,6 +643,14 @@ configuration (`quotation` entity) withholds them with a reason, and `etendo_sch
 
 How the step itself works — the backend `sifDefaults` preview, when it appears, the
 `sifFields` it sends and the fail-open rule — is described once in [sales-order.md → Fiscal data step before the invoice is created](sales-order.md#fiscal-data-step-before-the-invoice-is-created--etp-6179).
+
+## Public API — exchange rate and line currency — ETP-6177
+
+The `sales-quotation` window exposes `header.eTGOCurrencyRate` as numeric `currency_rate`
+through `entities.header.publicApi.inputFields` in `decisions.json` (`form: false`). The quotation date maps to `orderDate`.
+
+See [Document currency, exchange rate and line prices](../public-api.md#412-document-currency-exchange-rate-and-line-prices)
+for the shared rate rules, completed-document lock, line conversion and pricing exceptions.
 
 ## Rate and cost fields are numeric — ETP-6342
 

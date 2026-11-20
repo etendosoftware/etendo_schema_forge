@@ -1,8 +1,8 @@
 {
   "version": "0.13.0",
   "generatedAt": "2026-04-29T18:12:11.134Z",
-  "updatedAt": "2026-11-18T15:10:51.450Z",
-  "checksum": "0253d359318f0899",
+  "updatedAt": "2026-11-19T14:38:10.412Z",
+  "checksum": "94ca6acf4837089d",
   "frontendContract": {
     "window": {
       "id": "146",
@@ -11,6 +11,7 @@
       "category": "settings",
       "hidePrint": true,
       "hideMoreMenu": true,
+      "breadcrumb": "Inventory / Price List",
       "summaryFields": [],
       "labelOverrides": {
         "es_ES": {
@@ -544,6 +545,7 @@
       "category": "settings",
       "hidePrint": true,
       "hideMoreMenu": true,
+      "breadcrumb": "Inventory / Price List",
       "summaryFields": [],
       "labelOverrides": {
         "es_ES": {
