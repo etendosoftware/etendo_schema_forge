@@ -113,12 +113,13 @@ export function inspectInteractiveDom(root = document, registry = new Map()) {
   const seen = new Set();
   const candidates = [];
   const interactive = [...root.querySelectorAll(DOM_INTERACTIVE_SELECTOR)];
+  const interactiveSet = new Set(interactive);
   for (const element of [...interactive, ...root.querySelectorAll(DOM_FIELD_SELECTOR)]) {
     if (seen.has(element) || !isVisibleElement(element)) continue;
     // Only the field pass is filtered: dropping an interactive element would shift
     // every later dom-N. Fields that are, or wrap, a password input stay unlisted,
     // as DOM_INTERACTIVE_SELECTOR already does for password inputs themselves.
-    if (!interactive.includes(element) && isOrContainsPassword(element)) continue;
+    if (!interactiveSet.has(element) && isOrContainsPassword(element)) continue;
     seen.add(element);
     candidates.push(element);
   }
