@@ -151,6 +151,13 @@ jobs:
           github-token: ${{ github.token }}
           path: cf-snapshot-in
 
+      - name: Refuse v2 policies on experimental (HSTS gate)
+        if: inputs.environment == 'experimental' && inputs.action == 'apply' && inputs.dry_run == false && endsWith(inputs.policy, '-v2')
+        run: |
+          echo "v2 policies would introduce includeSubDomains; preload on experimental, which serves no HSTS today." >&2
+          echo "Attach the HTTPS inventory to ETP-4574 and lift this gate first (docs/ops/cloudfront-security-headers.md)." >&2
+          exit 1
+
       - name: Run
         env:
           DIST: ${{ steps.target.outputs.id }}
@@ -175,7 +182,7 @@ jobs:
               node scripts/cloudfront-security-headers.mjs rollback --distribution "$DIST" --snapshot-dir cf-snapshot-in ;;
           esac
 
-      - name: Verify every behavior
+      - name: Verify the selected behaviors
         if: inputs.action == 'apply' && inputs.dry_run == false
         env:
           DIST: ${{ steps.target.outputs.id }}

@@ -273,6 +273,8 @@ export function cliAws(args, body) {
 
 const USAGE = 'usage: cloudfront-security-headers.mjs policy|apply|verify|rollback [--distribution <id>] [--policy name] [--paths a,b] [--snapshot-dir d] [--snapshot f] [--dry-run] [--replace-existing]';
 
+const loadSelected = (name) => (name ? loadPolicyByName(name) : loadDesiredPolicy());
+
 function main(argv) {
   const [cmd, ...rest] = argv;
   const opt = (n) => { const i = rest.indexOf(`--${n}`); return i < 0 ? undefined : rest[i + 1]; };
@@ -285,7 +287,7 @@ function main(argv) {
   }
   // Loaded only for the commands that use it, after validation (a v2 policy needs CSP_CONNECT_ORIGINS).
   const policyName = opt('policy');
-  const desired = cmd === 'rollback' ? undefined : policyName ? loadPolicyByName(policyName) : loadDesiredPolicy();
+  const desired = cmd === 'rollback' ? undefined : loadSelected(policyName);
   if (cmd === 'policy') {
     console.log(JSON.stringify(policyEnvironment({ aws: cliAws, desired, dryRun })));
   } else if (cmd === 'apply') {

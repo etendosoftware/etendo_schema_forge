@@ -103,7 +103,8 @@ Production and staging already serve `max-age=31536000; includeSubDomains; prelo
 serves no HSTS today**: attaching v2 would introduce `includeSubDomains; preload` there for the first time. Do not attach v2
 to experimental (and `verify-security-headers.mjs` skips it unless `--env experimental` is passed) until the HTTPS
 inventory of `*.etendo.cloud` is attached to the ticket, or experimental gets an HSTS-scoped policy variant and the
-approved scope is recorded. Whether `etendo.cloud` is on the HSTS preload list is an open question.
+approved scope is recorded. The workflow enforces this: a non-dry-run `apply` of a `-v2` policy on
+`experimental` fails until the "Refuse v2 policies on experimental" step is removed. Whether `etendo.cloud` is on the HSTS preload list is an open question.
 
 ### Rollout order (staging → production; experimental only after the HSTS gate)
 
