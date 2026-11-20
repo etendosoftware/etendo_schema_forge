@@ -217,6 +217,16 @@ class WhereTest(unittest.TestCase):
         self.assertIn("1 of 50", str(ctx.exception))
         self.assertEqual(mcp_client.count_matching({"data": [{"a": 1}], "totalRows": 1}, {"a": 1}), 1)
 
+    def test_a_single_record_read_is_one_row(self):
+        # ETP-5850: Holded's get_contact answers the record itself and etendo_get `{"data": {...}}`;
+        # a `where` checks that record instead of failing as "cannot read rows".
+        contact = {"id": "6aff1a760a5bddcd85020fe5", "defaults": {"due_days": 45}}
+        self.assertEqual(mcp_client.count_matching(contact, {"defaults.due_days": 45}), 1)
+        self.assertEqual(mcp_client.count_matching(contact, {"defaults.due_days": 30}), 0)
+        self.assertEqual(mcp_client.count_matching({"data": {"id": "X", "a": 1}}, {"a": 1}), 1)
+        with self.assertRaises(mcp_client.VerificationError):
+            mcp_client.extract_rows({"status": "ok"})
+
     def test_a_cursor_page_that_says_more_follow_is_partial(self):
         # Holded's lists are cursor-paginated: `has_more: true` means this page is not the answer.
         for payload in ({"data": [{"a": 1}], "has_more": True}, {"items": [], "hasMore": True}):
