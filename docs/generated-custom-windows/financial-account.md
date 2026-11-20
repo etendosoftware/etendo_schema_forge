@@ -3824,8 +3824,10 @@ The slot therefore calls `useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D')` �
 `read-only` or `full` and hidden when it is `none` (`useWindowAccess` fails closed, so an unloaded
 access map hides it too) — being read-only on Financial Account is not a reason to hide a link to a
 different window. Under `read-only` on Match Rule, `ListModalWindow` (ETP-4950) offers no New, no
-row actions, no selection and disables the inline toggles; rows have no click handler, so no
-editable modal is reachable.
+row actions, no selection and disables the inline toggles. Since ETP-6221 a row click (or Enter /
+Space on a focused row) and the `/match-rule/<recordId>` deep link open the record in **view
+mode** — every field disabled, no Save, only a Close button — so the rule is readable but still
+no editable modal is reachable.
 
 The prop is **`windowReadOnly` everywhere, never `readOnly`**: in `ReconciliationSplitPanel.jsx`,
 `readOnly` already means "the selected line is already reconciled", and the two are unrelated.

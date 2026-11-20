@@ -14,7 +14,7 @@ Because `match-rule`'s contract carries a real `window.id`, `generate-frontend.j
 
 ## Interaction model
 
-- Route: `/match-rule` — a single list screen. There is **no drill-in detail route**. Since ETP-5978 `/match-rule/<recordId>` (the generic `:windowName/:recordId` route) opens the list with that rule's edit modal already open; closing it returns the URL to `/match-rule` (shared `list-modal` behaviour, see `docs/window-templates.md` → *Deep link*). A read-only role gets the plain list.
+- Route: `/match-rule` — a single list screen. There is **no drill-in detail route**. Since ETP-5978 `/match-rule/<recordId>` (the generic `:windowName/:recordId` route) opens the list with that rule's edit modal already open; closing it returns the URL to `/match-rule` (shared `list-modal` behaviour, see `docs/window-templates.md` → *Deep link*). A read-only role gets the modal in view mode (ETP-6221, see below).
 - Layout: `layoutType: "list-modal"` — a grid (list) plus a create/edit **modal**, rendered by the generic `ListModalWindow` component (`tools/app-shell/src/components/contract-ui/ListModalWindow.jsx`).
 - Visibility: intended for the Finance menu, label "Reglas de matcheo" (`Matching Rules` in `en_US`).
 - Window shape: header-only (`detailEntity: null`). The single entity is `etgoMatchRuleHeader`, backed by table `ETGO_Match_Rule`.
@@ -191,6 +191,16 @@ With `window.readOnly` true the component now hides the create button, drops the
 cell, disables the inline toggle (`ListModalCell` -> `ToggleCell` -> `PillToggle disabled`) and
 offers no selection column or bulk bar at all — there is no action a read-only role could take
 with one.
+
+### Read-only role can open a rule (ETP-6221)
+
+ETP-4950 also disabled the deep link for a read-only role, and the window has no `rowClickEdit`
+(even a full-access role opens a rule through the hover pencil), so a read-only role could not see
+a rule's detail at all. Now a row click (or Enter / Space on a focused row) and
+`/match-rule/<recordId>` open the wide modal in **view mode**: every field disabled, no submit
+pill, a single **Cerrar**
+pill (`list-modal-close-view`), title **Regla de matcheo** (`templateConfig.viewTitleKey` →
+`matchRuleViewTitle`) and no subtitle (the create subtitle "Configura una regla…" is not shown). Full-access roles keep the hover pencil and no row click.
 
 ## Gap assessment
 

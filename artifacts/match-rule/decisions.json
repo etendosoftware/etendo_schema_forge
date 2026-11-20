@@ -10,6 +10,7 @@
     "templateConfig": {
       "titleKey": "matchRuleNewTitle",
       "editTitleKey": "matchRuleEditTitle",
+      "viewTitleKey": "matchRuleViewTitle",
       "subtitleKey": "matchRuleNewSubtitle",
       "submitLabelKey": "matchRuleSubmitCreate",
       "editSubmitLabelKey": "matchRuleSubmitSave",
