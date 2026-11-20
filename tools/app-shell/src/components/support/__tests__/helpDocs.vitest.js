@@ -184,3 +184,26 @@ describe('helpDocs', () => {
     });
   });
 });
+
+describe('helpDocs searchHelpDocs — hostile doc text (ETP-4561)', () => {
+  const docs = [{ location: 'a/', title: 'A', text: '<img src=x onerror="window.__xss=1">hello <b>world</b>' }];
+
+  it('returns the text content without markup', () => {
+    const results = searchHelpDocs(docs, 'hello world');
+    expect(results).toHaveLength(1);
+    expect(results[0].snippet).toBe('hello world');
+  });
+
+  // jsdom does not load <img>, so the old `div.innerHTML = html` code also returned the same
+  // text. What distinguishes the fix is that doc text is no longer assigned to a live
+  // element's innerHTML (which in browsers fetches <img src> and fires onerror).
+  it('never assigns doc text to an element innerHTML', () => {
+    const setter = vi.spyOn(Element.prototype, 'innerHTML', 'set');
+    try {
+      searchHelpDocs(docs, 'hello');
+      expect(setter).not.toHaveBeenCalled();
+    } finally {
+      setter.mockRestore();
+    }
+  });
+});

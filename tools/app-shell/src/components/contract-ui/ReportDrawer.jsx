@@ -9,6 +9,7 @@ import {
   EyeIcon,
 } from '@phosphor-icons/react';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
+import { escapeHtml } from '@/lib/escapeHtml.js';
 import { statusLabel } from '@/lib/statusBadge.js';
 import { useAnimatedOpen } from '@/lib/useAnimatedOpen.js';
 import { useUI } from '@/i18n';
@@ -437,15 +438,17 @@ export default function ReportDrawer({
           // Sonar S4624 — built as a separate string first (not inlined into
           // the `filtersHtml` template below) so it isn't a template literal
           // nested inside another template literal.
+          // ETP-4561 — every record/filter/label value is untrusted text written into a
+          // same-origin document (and the print window): encode it for the HTML text context.
           const filtersText = activeFilters?.length
-            ? activeFilters.map(f => `${f.label}: ${f.value}`).join(' | ')
+            ? activeFilters.map(f => `${escapeHtml(f.label)}: ${escapeHtml(f.value)}`).join(' | ')
             : '';
           const filtersHtml = activeFilters?.length
-            ? `<div class="report-filters"><strong>${reportLabels.filtersLabel}:</strong> ${filtersText}</div>`
+            ? `<div class="report-filters"><strong>${escapeHtml(reportLabels.filtersLabel)}:</strong> ${filtersText}</div>`
             : '';
-          const headerCells = cols.map(c => `<th>${c.label || c.key}</th>`).join('');
-          const bodyRows = reportRows.map(r => `<tr>${cols.map(c => `<td>${r[c.key] ?? ''}</td>`).join('')}</tr>`).join('');
-          const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${resolveListingCss(listingConfig, REPORT_CSS)}</style></head><body><div class="report-container"><div class="report-header"><div><div class="report-title">${title || ui('report')}</div></div><div class="report-meta"><div>${now}</div><div>${reportRows.length} ${reportLabels.recordsLabel}</div></div></div>${filtersHtml}<table class="report-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table><div class="report-footer"><div class="report-summary">${reportLabels.totalLabel}: ${reportRows.length} ${reportLabels.recordsLabel}</div><div>${reportLabels.generatedByLabel}</div></div></div></body></html>`;
+          const headerCells = cols.map(c => `<th>${escapeHtml(c.label || c.key)}</th>`).join('');
+          const bodyRows = reportRows.map(r => `<tr>${cols.map(c => `<td>${escapeHtml(r[c.key])}</td>`).join('')}</tr>`).join('');
+          const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${resolveListingCss(listingConfig, REPORT_CSS)}</style></head><body><div class="report-container"><div class="report-header"><div><div class="report-title">${escapeHtml(title || ui('report'))}</div></div><div class="report-meta"><div>${now}</div><div>${reportRows.length} ${escapeHtml(reportLabels.recordsLabel)}</div></div></div>${filtersHtml}<table class="report-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table><div class="report-footer"><div class="report-summary">${escapeHtml(reportLabels.totalLabel)}: ${reportRows.length} ${escapeHtml(reportLabels.recordsLabel)}</div><div>${escapeHtml(reportLabels.generatedByLabel)}</div></div></div></body></html>`;
           writeToIframe(html);
         }
       } catch (err) {
