@@ -22580,6 +22580,7 @@
     "invitePageLoading": "Verifying invitation...",
     "invitePageInvalidTitle": "Invalid or expired link",
     "invitePageInvalidDescription": "This invitation link is invalid, expired, or has already been used.",
+    "invitePageAcceptFailed": "We could not accept the invitation. Please try again.",
     "invitePageExistingTitle": "Accept company invitation",
     "invitePageExistingDescription": "You have been invited to join {companyName}.",
     "invitePageExistingAccountNotice": "You already have an Etendo account ({email}). Sign in first, then accept the invitation.",

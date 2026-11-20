@@ -54,6 +54,10 @@ const SESSION_GUARD = {
 
 const ACTIONABLE_BRANCHES = new Set(['existing_account', 'registration_required']);
 
+// ETP-5385: accept failures after which the link is dead; they replace the whole page instead of
+// showing an inline alert next to the "continue to join" prompt.
+const TERMINAL_ACCEPT_CODES = new Set(['INVALID_TOKEN', 'EXPIRED_TOKEN']);
+
 function readStoredValue(key) {
   try {
     return globalThis.localStorage?.getItem(key) || '';
@@ -432,7 +436,15 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
           setSubmitting(false);
           return;
         }
-        setActionError(data.message || ui('invitePageInvalidDescription'));
+        // ETP-5385: an invitation the server now calls invalid or expired is a terminal outcome.
+        // Showing it as an inline alert left it next to the "continue to join this company"
+        // prompt, two contradictory messages on one screen; it takes over the page instead.
+        if (TERMINAL_ACCEPT_CODES.has(data.code)) {
+          setErrorState(data.code);
+          setSubmitting(false);
+          return;
+        }
+        setActionError(data.message || ui('invitePageAcceptFailed'));
         setSubmitting(false);
         return;
       }
@@ -441,7 +453,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       setSuccessData({ clientName: data.clientName || invitationData?.clientName });
       setSubmitting(false);
     } catch {
-      setActionError(ui('invitePageInvalidDescription'));
+      setActionError(ui('invitePageAcceptFailed'));
       setSubmitting(false);
     }
   };
@@ -739,10 +751,10 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
           <Button
             variant="outline"
             className="mt-6 h-12 w-full rounded-lg text-base font-medium"
-            onClick={() => navigate('/login')}
+            onClick={() => navigate(existingAuthenticated ? '/' : '/login')}
             data-testid="action-error-sign-in"
           >
-            {ui('invitePageSignIn')}
+            {ui(existingAuthenticated ? 'invitePageGoToApp' : 'invitePageSignIn')}
           </Button>
         </div>
       </AuthShell>
@@ -851,9 +863,11 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
               {actionError}
             </div>
           )}
-          <p className="mb-3 text-base text-muted-foreground sm:text-xl">
-            {ui('invitePageAuthenticatedNotice')}
-          </p>
+          {!actionError && (
+            <p className="mb-3 text-base text-muted-foreground sm:text-xl">
+              {ui('invitePageAuthenticatedNotice')}
+            </p>
+          )}
           <Button
             className="h-12 w-full gap-2 rounded-lg bg-primary text-base font-medium text-primary-foreground hover:bg-accent-highlight hover:text-accent-highlight-foreground"
             onClick={handleAcceptExisting}
@@ -1003,7 +1017,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
 
             {existingAuthenticated ? (
               <div className="space-y-3" data-testid="invite-authenticated-step">
-                <p className="text-sm text-muted-foreground">{ui('invitePageAuthenticatedNotice')}</p>
+                {!actionError && <p className="text-sm text-muted-foreground">{ui('invitePageAuthenticatedNotice')}</p>}
                 <Button className="w-full gap-2" onClick={handleAcceptExisting} disabled={submitting} data-testid="action-accept-invitation">
                   {submitting ? <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__fa3cd9" /> : <><span>{ui('invitePageAcceptButton')}</span><ArrowRightIcon className="h-4 w-4" data-testid="ArrowRight__fa3cd9" /></>}
                 </Button>

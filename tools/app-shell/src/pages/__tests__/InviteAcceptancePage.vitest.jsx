@@ -236,6 +236,74 @@ describe('InviteAcceptancePage', () => {
     });
   });
 
+  // ETP-5385 — a signed-in invitee whose accept fails must see ONE outcome: the dead-link error
+  // screen for a terminal failure, or the error alone (never next to the "continue to join this
+  // company" prompt) for anything else.
+  async function signInAndAccept(acceptOutcome) {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          status: 'SENT',
+          clientName: 'Acme Corp',
+          email: 'existing.user@example.com',
+          branch: 'existing_account',
+          accountExists: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ token: 'existing-session-token', account: { email: 'existing.user@example.com' } }),
+      });
+    if (acceptOutcome instanceof Error) fetchMock.mockRejectedValueOnce(acceptOutcome);
+    else fetchMock.mockResolvedValueOnce(acceptOutcome);
+    globalThis.fetch = fetchMock;
+
+    const { container } = renderPage('/invite?token=second-company-token');
+    await waitFor(() => expect(screen.getByTestId('action-login-submit')).toBeInTheDocument());
+    fireEvent.change(container.querySelector('#login-password'), { target: { value: 'pw' } });
+    fireEvent.click(screen.getByTestId('action-login-submit'));
+    await waitFor(() => expect(screen.getByTestId('invite-authenticated-step')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('action-accept-invitation'));
+  }
+
+  it.each(['EXPIRED_TOKEN', 'INVALID_TOKEN'])(
+    'shows only the error screen when accept fails with %s (ETP-5385)',
+    async (code) => {
+      await signInAndAccept({ ok: false, status: 400, json: async () => ({ error: true, code, message: 'nope' }) });
+
+      await waitFor(() => expect(screen.getByTestId('invite-error-state')).toBeInTheDocument());
+      expect(screen.queryByTestId('invite-authenticated-step')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('action-accept-invitation')).not.toBeInTheDocument();
+      // Already signed in: offering "sign in" would be wrong, so the page offers the app.
+      expect(screen.getByTestId('action-error-sign-in')).toHaveTextContent('invitePageGoToApp');
+    }
+  );
+
+  it('shows the mismatch error without the join prompt (ETP-5385)', async () => {
+    await signInAndAccept({
+      ok: false,
+      status: 403,
+      json: async () => ({ error: true, code: 'INVITATION_ACCOUNT_MISMATCH', message: 'Wrong account for this invitation' }),
+    });
+
+    await waitFor(() => expect(screen.getByTestId('invite-action-error')).toHaveTextContent('Wrong account for this invitation'));
+    expect(screen.queryByText('invitePageAuthenticatedNotice')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('invite-error-state')).not.toBeInTheDocument();
+    // The accept button stays as the retry.
+    expect(screen.getByTestId('action-accept-invitation')).toBeInTheDocument();
+  });
+
+  it('does not call the link invalid when the accept request fails on the network (ETP-5385)', async () => {
+    await signInAndAccept(new Error('network down'));
+
+    await waitFor(() => expect(screen.getByTestId('invite-action-error')).toBeInTheDocument());
+    expect(screen.getByTestId('invite-action-error')).not.toHaveTextContent('invitePageInvalidDescription');
+    expect(screen.queryByText('invitePageAuthenticatedNotice')).not.toBeInTheDocument();
+    expect(screen.getByTestId('action-accept-invitation')).toBeInTheDocument();
+  });
+
   it('resolves registration_required branch and creates account then accepts', async () => {
     // Answered by URL, not by call order: the register screen also loads the terms and
     // conditions when it opens (ETP-6081), and that request would take another one's answer.
