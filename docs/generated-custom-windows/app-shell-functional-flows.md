@@ -607,8 +607,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
     row is a one-line CSS grid (`minmax(0,max-content)` per ancestor, `max-content` for `⋯`,
     `minmax(4rem,1fr)` for the current page), not a flex row: in a flex row every level takes a
     share of the shortage, and even a sub-pixel share makes the ellipsis eat a short ancestor. So
-    `Configuración / Tarifa / Tarifa de venta princ…` instead of
-    `Configurac… / Tar… / Tarifa de venta princ…`. The full trail is always in the tooltip. A
+    `Inventario / Tarifa / Tarifa de venta princ…` instead of
+    `Inventar… / Tar… / Tarifa de venta princ…`. The full trail is always in the tooltip. A
     plain ≤3-level string breadcrumb with no navigable level stays one line that elides at the end.
   - Producers: `DetailView` publishes an array via `getBreadcrumbItems` (menu path + record
     title, with the window level linking back to `/<window>`). Every other producer still
@@ -642,7 +642,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
      the back button): the search stays at the exact horizontal center of the visible top bar.
   3. Open a record whose menu path is deeper than two folders: the breadcrumb shows first level /
      `⋯` / record, and `⋯` lists the hidden levels.
-  4. Open Tarifa de venta principal (Configuración / Tarifa) or a contact with a long name at
+  4. Open Tarifa de venta principal (Inventario / Tarifa) or a contact with a long name at
      1280px: the ancestor levels stay readable and only the current page elides; the gap between
      the breadcrumb and the search is 20px.
   5. Open a report from Finanzas / Informes: clicking Informes in the breadcrumb returns to the

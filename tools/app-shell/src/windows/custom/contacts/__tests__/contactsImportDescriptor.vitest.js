@@ -5,7 +5,6 @@
 import { describe, it, vi, afterEach, beforeEach } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { STREET_NAME_MAX_LENGTH } from '@etendosoftware/app-shell-core/lib/locationAddress.js';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -770,8 +769,8 @@ describe('contacts import descriptor — structured address capability ON', () =
     assert.deepEqual(errors.map((e) => e.target), ['city']);
   });
 
-  // Mirrors ContactsLocationAddressHandler: street required (number never is) and the 60 (core
-  // STREET_NAME_MAX_LENGTH, not the 70 DB column) / 16 max lengths of street / BldgNb. Each limit is pinned on both sides of the boundary.
+  // Mirrors ContactsLocationAddressHandler: street required (number never is) and the 60 / 16
+  // max lengths of EM_OBSEPA_StrtNm / BldgNb. Each limit is pinned on both sides of the boundary.
   // The translator interpolates `{max}` like useUI does, so the too-long rows also prove the
   // limit reaches the TRANSLATED message (the other keys echo back and fall to English).
   const translate = (key, params) => (key === 'importErrorAddressFieldTooLong'
@@ -781,8 +780,8 @@ describe('contacts import descriptor — structured address capability ON', () =
     ['street blank, address given by the city', { streetName: '' }, ['streetName']],
     ['Número without Calle: one error, on Calle', { streetName: '', buildingNumber: '12' }, ['streetName']],
     ['only the country missing', { country: '' }, ['country']],
-    ['street at the cap', { streetName: 'S'.repeat(STREET_NAME_MAX_LENGTH) }, []],
-    ['street over the cap', { streetName: 'S'.repeat(STREET_NAME_MAX_LENGTH + 1) }, ['streetName'], [`Máximo ${STREET_NAME_MAX_LENGTH} caracteres.`]],
+    ['street at 60 characters', { streetName: 'S'.repeat(60) }, []],
+    ['street over 60 characters', { streetName: 'S'.repeat(61) }, ['streetName'], ['Máximo 60 caracteres.']],
     ['number at 16 characters', { buildingNumber: '1'.repeat(16) }, []],
     ['number over 16 characters', { buildingNumber: '1'.repeat(17) }, ['buildingNumber'], ['Máximo 16 caracteres.']],
   ])('%s', (_label, cells, targets, messages) => {

@@ -88,6 +88,7 @@ describe('trackDocumentCreated', () => {
 
     expect(track).toHaveBeenCalledWith('document_created', expect.objectContaining({
       account_id: 'client-42',
+      ad_client_id: 'client-42',
     }));
   });
 
@@ -99,6 +100,7 @@ describe('trackDocumentCreated', () => {
 
     const [, props] = track.mock.calls[0];
     expect(props).not.toHaveProperty('account_id');
+    expect(props).not.toHaveProperty('ad_client_id');
   });
 
   it('does NOT pass user_email in the payload', () => {
@@ -178,6 +180,7 @@ describe('resilience to environment errors', () => {
     const [, props] = track.mock.calls[0];
     expect(props.document_type).toBe('sales_invoice');
     expect(props).not.toHaveProperty('account_id');
+    expect(props).not.toHaveProperty('ad_client_id');
     getItem.mockRestore();
   });
 
@@ -261,6 +264,7 @@ describe('trackTransactionPosted', () => {
 
     expect(track).toHaveBeenCalledWith('transaction_posted', expect.objectContaining({
       account_id: 'tenant-99',
+      ad_client_id: 'tenant-99',
     }));
   });
 
@@ -308,7 +312,7 @@ describe('session telemetry preserves an already resolved flag context', () => {
     await trackSessionStarted({ username: 'erp-admin', clientId: 'company-a' });
 
     expect(onContextChange).not.toHaveBeenCalled();
-    expect(track).toHaveBeenCalledWith('session_started', { account_id: 'company-a' });
+    expect(track).toHaveBeenCalledWith('session_started', { account_id: 'company-a', ad_client_id: 'company-a' });
   });
 
   it('does not trigger a second reconciliation for repeated session events with the same identity', async () => {
@@ -328,20 +332,20 @@ describe('session telemetry preserves an already resolved flag context', () => {
 });
 
 describe('trackSessionStarted', () => {
-  it('calls group("account_id", clientId) when clientId is provided', async () => {
+  it('registers the group under ad_client_id and the transitional account_id when clientId is provided', async () => {
     await trackSessionStarted({ username: 'alice', clientId: 'client-123' });
 
-    expect(group).toHaveBeenCalledOnce();
-    expect(group).toHaveBeenCalledWith('account_id', 'client-123');
+    expect(group.mock.calls).toEqual([['ad_client_id', 'client-123'], ['account_id', 'client-123']]);
   });
 
-  it('calls track("session_started") with account_id only (no username — GDPR remediation)', async () => {
+  it('calls track("session_started") with the client ids only (no username — GDPR remediation)', async () => {
     await trackSessionStarted({ username: 'alice', clientId: 'client-123' });
 
     expect(track).toHaveBeenCalledWith('session_started', {
       account_id: 'client-123',
+      ad_client_id: 'client-123',
     });
-    const [, props] = track.mock.calls[0];
+    const props = track.mock.calls.find(([name]) => name === 'session_started')[1];
     expect(props).not.toHaveProperty('username');
   });
 
@@ -381,6 +385,7 @@ describe('trackSessionStarted', () => {
     await expect(trackSessionStarted()).resolves.toBeUndefined();
     expect(track).toHaveBeenCalledWith('session_started', {
       account_id: undefined,
+      ad_client_id: undefined,
     });
   });
 
@@ -415,8 +420,10 @@ describe('trackSessionStarted', () => {
   it('calls groupSet with $name when clientName is provided', async () => {
     await trackSessionStarted({ username: 'alice', clientId: 'client-123', clientName: 'Acme Corp' });
 
-    expect(groupSet).toHaveBeenCalledOnce();
-    expect(groupSet).toHaveBeenCalledWith('account_id', 'client-123', { $name: 'Acme Corp' });
+    expect(groupSet.mock.calls).toEqual([
+      ['ad_client_id', 'client-123', { $name: 'Acme Corp' }],
+      ['account_id', 'client-123', { $name: 'Acme Corp' }],
+    ]);
   });
 
   // ETP-5455: the fallback name comes from the session identity (was the legacy
@@ -426,8 +433,8 @@ describe('trackSessionStarted', () => {
 
     await trackSessionStarted({ username: 'alice', clientId: 'client-123' });
 
-    expect(groupSet).toHaveBeenCalledOnce();
-    expect(groupSet).toHaveBeenCalledWith('account_id', 'client-123', { $name: 'Stored Corp' });
+    expect(groupSet).toHaveBeenCalledTimes(2);
+    expect(groupSet).toHaveBeenCalledWith('ad_client_id', 'client-123', { $name: 'Stored Corp' });
   });
 
   it('does NOT call groupSet when clientName is absent and localStorage is empty', async () => {
@@ -451,7 +458,7 @@ describe('trackSessionStarted and the session identity (ETP-5455)', () => {
 
     await trackSessionStarted({ username: 'ana', clientId: 'client-1' });
 
-    expect(groupSet).toHaveBeenCalledWith('account_id', 'client-1', { $name: 'Acme' });
+    expect(groupSet).toHaveBeenCalledWith('ad_client_id', 'client-1', { $name: 'Acme' });
   });
 
   it('never falls back to the legacy sf_auth_client_name key', async () => {
@@ -459,7 +466,7 @@ describe('trackSessionStarted and the session identity (ETP-5455)', () => {
 
     await trackSessionStarted({ username: 'ana', clientId: 'client-9' });
 
-    expect(groupSet).not.toHaveBeenCalledWith('account_id', 'client-9', { $name: 'Stale Tenant' });
+    expect(groupSet).not.toHaveBeenCalledWith('ad_client_id', 'client-9', { $name: 'Stale Tenant' });
   });
 });
 
@@ -493,6 +500,22 @@ describe('session-start telemetry across asynchronous identity changes', () => {
     await OpenFeature.clearContexts();
   });
 
+  it('emits no session start when the session ends while the group calls yield', async () => {
+    let release;
+    group.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    const pending = trackSessionStarted({ username: 'admin', clientId: 'company-a', clientName: 'Acme' });
+    await vi.waitFor(() => expect(group).toHaveBeenCalled());
+    await clearAccountIdentity();
+    release();
+    await pending;
+
+    expect(starts()).toEqual([]);
+    expect(flush).not.toHaveBeenCalled();
+    // The pair started together; nothing runs for the old tenant after the logout.
+    expect(group).toHaveBeenCalledTimes(2);
+    expect(groupSet).not.toHaveBeenCalled();
+  });
+
   it('does not restore grouping or emit a session start after logout during flag resolution', async () => {
     const { started, response } = await delayCompanyA();
     const pending = trackSessionStarted({ username: 'admin', clientId: 'company-a', clientName: 'Old Company' });
@@ -515,9 +538,12 @@ describe('session-start telemetry across asynchronous identity changes', () => {
     response.resolve();
     await pending;
 
-    expect(group.mock.calls).toEqual([['account_id', 'company-b']]);
-    expect(groupSet.mock.calls).toEqual([['account_id', 'company-b', { $name: 'Current Company' }]]);
-    expect(starts()).toEqual([['session_started', { account_id: 'company-b' }]]);
+    expect(group.mock.calls).toEqual([['ad_client_id', 'company-b'], ['account_id', 'company-b']]);
+    expect(groupSet.mock.calls).toEqual([
+      ['ad_client_id', 'company-b', { $name: 'Current Company' }],
+      ['account_id', 'company-b', { $name: 'Current Company' }],
+    ]);
+    expect(starts()).toEqual([['session_started', { account_id: 'company-b', ad_client_id: 'company-b' }]]);
     expect(flush).toHaveBeenCalledTimes(1);
   });
 
@@ -530,9 +556,9 @@ describe('session-start telemetry across asynchronous identity changes', () => {
     response.resolve();
     await Promise.all([oldStart, newStart]);
 
-    expect(group).toHaveBeenCalledTimes(1);
-    expect(groupSet).toHaveBeenCalledWith('account_id', 'company-a', { $name: 'Current Name' });
-    expect(groupSet).toHaveBeenCalledTimes(1);
+    expect(group).toHaveBeenCalledTimes(2);
+    expect(groupSet).toHaveBeenCalledWith('ad_client_id', 'company-a', { $name: 'Current Name' });
+    expect(groupSet).toHaveBeenCalledTimes(2);
     expect(starts()).toHaveLength(1);
     expect(flush).toHaveBeenCalledTimes(1);
   });
@@ -557,8 +583,8 @@ describe('session-start telemetry across asynchronous identity changes', () => {
     await OpenFeature.setProviderAndWait(provider);
     await trackSessionStarted({ username: 'admin', clientId: 'company-a' });
 
-    expect(group).toHaveBeenCalledWith('account_id', 'company-a');
-    expect(starts()).toEqual([['session_started', { account_id: 'company-a' }]]);
+    expect(group).toHaveBeenCalledWith('ad_client_id', 'company-a');
+    expect(starts()).toEqual([['session_started', { account_id: 'company-a', ad_client_id: 'company-a' }]]);
     expect(flush).toHaveBeenCalledTimes(1);
   });
 
