@@ -884,8 +884,9 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
     // No "None" row: the base/empty entry (value '') is dropped from the list entirely —
     // clearing a selection is done via the chip's "×" (CreatableSearchSelect's clearable
     // behavior), not via a pinned empty option.
+    // `dynamicOnly` options (ETP-6083, the Balance's Grupo / Epígrafe folds) only exist in the interactive view.
     const staticOpts = resolvedOptions
-      .filter(o => o.value !== '')
+      .filter(o => o.value !== '' && !o.dynamicOnly)
       .map(o => ({ id: o.value, name: resolveOptLabel(o) }));
     const selectedOpt = staticOpts.find(o => o.id === (params[p.name] || ''));
     return (
