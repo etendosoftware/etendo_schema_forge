@@ -793,7 +793,7 @@ describe('LocationEditorModal', () => {
 
   it('caps Street/Number/Building name inputs at their DB column lengths', () => {
     renderModal();
-    expect(streetNameInput()).toHaveAttribute('maxLength', '70');
+    expect(streetNameInput()).toHaveAttribute('maxLength', '60');
     expect(buildingNumberInput()).toHaveAttribute('maxLength', '16');
     expect(buildingNameInput()).toHaveAttribute('maxLength', '35');
   });
