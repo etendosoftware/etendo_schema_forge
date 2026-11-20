@@ -3,7 +3,7 @@
 //
 // A Response Headers Policy is account-global: changing its contents changes every
 // distribution that uses it at once. So the lifecycle is split in two:
-//   policy   creates/updates etendo-go-security-headers-v1 from
+//   policy   creates/updates the policy named by --policy (default etendo-go-security-headers-v1) from
 //            infra/cloudfront-response-headers/<name>.json. Refuses to run unless
 //            GITHUB_ENVIRONMENT=production-cloudfront (reviewed environment).
 //   apply    attach-only, per distribution: sets the policy id on the default behavior
@@ -13,9 +13,9 @@
 //   rollback restores only ResponseHeadersPolicyId per behavior from a snapshot.
 //
 // Usage:
-//   node scripts/cloudfront-security-headers.mjs policy   [--dry-run]
+//   node scripts/cloudfront-security-headers.mjs policy   [--policy name] [--dry-run]
 //   node scripts/cloudfront-security-headers.mjs apply    --distribution <id> [--policy name] [--paths default,/assets/*] [--snapshot-dir dir] [--dry-run] [--replace-existing]
-//   node scripts/cloudfront-security-headers.mjs verify   --distribution <id>
+//   node scripts/cloudfront-security-headers.mjs verify   --distribution <id> [--policy name] [--paths a,b]
 //   node scripts/cloudfront-security-headers.mjs rollback --distribution <id> (--snapshot <file> | --snapshot-dir <dir>)
 //
 // --policy picks another policy file (default v1); --paths limits apply/verify to those behaviors
@@ -278,13 +278,14 @@ function main(argv) {
   const opt = (n) => { const i = rest.indexOf(`--${n}`); return i < 0 ? undefined : rest[i + 1]; };
   const distributionId = opt('distribution');
   const dryRun = rest.includes('--dry-run');
-  const policyName = opt('policy');
-  const desired = policyName ? loadPolicyByName(policyName) : loadDesiredPolicy();
   const paths = opt('paths')?.split(',').filter(Boolean);
   if (!['policy', 'apply', 'verify', 'rollback'].includes(cmd) || (cmd !== 'policy' && !distributionId)) {
     console.error(USAGE);
     process.exit(2);
   }
+  // Loaded only for the commands that use it, after validation (a v2 policy needs CSP_CONNECT_ORIGINS).
+  const policyName = opt('policy');
+  const desired = cmd === 'rollback' ? undefined : policyName ? loadPolicyByName(policyName) : loadDesiredPolicy();
   if (cmd === 'policy') {
     console.log(JSON.stringify(policyEnvironment({ aws: cliAws, desired, dryRun })));
   } else if (cmd === 'apply') {

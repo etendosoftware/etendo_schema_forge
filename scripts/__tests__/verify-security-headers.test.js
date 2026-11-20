@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   HOSTS,
+  DEFAULT_ENVS,
   expectedHeaders,
   checkHeaders,
   verifyHost,
@@ -13,6 +14,7 @@ import {
   loadPolicyByName,
   attachPolicy,
   verifyDistribution,
+  rollbackEnvironment,
 } from '../cloudfront-security-headers.mjs';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -104,9 +106,22 @@ describe('exact header assertions', () => {
     delete h['x-content-type-options'];
     h['strict-transport-security'] = 'max-age=300';
     const fails = checkHeaders(expectedHeaders('html', ENV), h).join('\n');
-    for (const name of ['content-security-policy', 'x-frame-options', 'x-content-type-options', 'strict-transport-security']) {
-      assert.match(fails, new RegExp(name));
+    assert.match(fails, /^content-security-policy: expected/m);
+    assert.match(fails, /content-security-policy-report-only: must not be present/);
+    for (const name of ['x-frame-options', 'x-content-type-options', 'strict-transport-security']) {
+      assert.match(fails, new RegExp(`^${name}: `, 'm'));
     }
+  });
+  it('flags a header that arrives twice (Headers joins duplicates)', () => {
+    const h = new Headers(goodHtml());
+    h.append('x-frame-options', 'DENY');
+    assert.match(checkHeaders(expectedHeaders('html', ENV), h).join('\n'), /^x-frame-options: expected "DENY", got "DENY, DENY"/m);
+  });
+  it('rejects immutable caching on a missing asset', () => {
+    const e = expectedHeaders('missing-asset', ENV);
+    assert.deepEqual(checkHeaders(e, { ...goodHtml(), 'cache-control': 'no-cache, no-store, must-revalidate' }), []);
+    assert.match(checkHeaders(e, { ...goodHtml(), 'cache-control': 'public, max-age=31536000, immutable' }).join(), /cache-control: must not match/);
+    assert.match(checkHeaders(e, { ...goodHtml(), 'cache-control': 'max-age=31536000' }).join(), /cache-control: must not match/);
   });
   it('requires immutable caching on assets and no CSP requirement', () => {
     const h = { ...goodHtml(), 'cache-control': 'public, max-age=31536000, immutable' };
@@ -123,7 +138,7 @@ describe('verifyHost', () => {
     const r = map[path] ?? map['*'];
     return { status: r.status, headers: new Headers(r.headers) };
   };
-  it('checks the document, a hashed asset and an SPA error response on one host', async () => {
+  it('checks the document, a hashed asset, a missing asset and an SPA error response on one host', async () => {
     const seen = [];
     const html = goodHtml();
     const asset = { ...html, 'cache-control': 'public, max-age=31536000, immutable' };
@@ -138,8 +153,8 @@ describe('verifyHost', () => {
     };
     const res = await verifyHost({ host: 'go.example.com', assetPath: '/assets/index-abc123.js', env: ENV, fetchFn });
     assert.deepEqual(res.failures, []);
-    assert.equal(seen.length, 3);
-    assert.ok(seen.includes('/'));
+    assert.equal(seen.length, 4);
+    assert.ok(seen.includes('/') && seen.some((p) => p.startsWith('/assets/__etp4574-missing')));
   });
   it('reports failures prefixed by host and probe', async () => {
     const html = goodHtml();
@@ -148,8 +163,18 @@ describe('verifyHost', () => {
     const res = await verifyHost({ host: 'h.example.com', assetPath: '/assets/a.js', env: ENV, fetchFn });
     assert.ok(res.failures.some((f) => /^h\.example\.com .*html.*x-frame-options/.test(f)));
   });
-  it('exposes the three hosts', () => {
+  it('fails when a missing asset is served immutable (stale SPA shell pinned for a year)', async () => {
+    const html = goodHtml();
+    const fetchFn = async (url) => {
+      const missing = new URL(url).pathname.startsWith('/assets/__etp4574-missing');
+      return { status: 200, headers: new Headers(missing ? { ...html, 'cache-control': 'public, max-age=31536000, immutable' } : html) };
+    };
+    const res = await verifyHost({ host: 'h.example.com', assetPath: '/assets/a.js', env: ENV, fetchFn });
+    assert.ok(res.failures.some((f) => /missing-asset.*immutable|missing-asset.*cache-control/.test(f)));
+  });
+  it('exposes the three hosts; experimental is opt-in until the HSTS inventory exists', () => {
     assert.deepEqual(Object.keys(HOSTS).sort(), ['experimental', 'production', 'staging']);
+    assert.deepEqual(DEFAULT_ENVS, ['production', 'staging']);
   });
 });
 
@@ -171,5 +196,68 @@ describe('applyEnvironment with paths', () => {
       desired: loadPolicyByName(ASSETS, ENV), paths: ['/assets/*'],
     }), /\/assets\/\*/);
     assert.ok(!calls.includes('update-distribution'));
+  });
+});
+
+describe('edge CSP parity with com.etendoerp.go', () => {
+  // Pinned output of CspPolicy.enforcedValue("/sws/go/csp-report", ["https://glitchtip.example.com"])
+  // (com.etendoerp.go, CspPolicyTest guards that class). Change both together.
+  const JAVA_ENFORCED = "default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' blob: data:; frame-src 'self' blob:; connect-src 'self' https://dataplane.rum.eu-west-3.amazonaws.com https://glitchtip.example.com; upgrade-insecure-requests; report-uri /sws/go/csp-report; report-to csp-endpoint";
+  it('renders the v2 CSP identical to the backend definition', () => {
+    const p = loadPolicyByName(HTML, { CSP_CONNECT_ORIGINS: 'https://glitchtip.example.com' });
+    assert.equal(p.SecurityHeadersConfig.ContentSecurityPolicy.ContentSecurityPolicy, JAVA_ENFORCED);
+  });
+});
+
+describe('rollback after two applies with different policies on disjoint behaviors', () => {
+  const dist = () => ({
+    DefaultCacheBehavior: { TargetOriginId: 's3', ResponseHeadersPolicyId: 'V1' },
+    CacheBehaviors: { Quantity: 1, Items: [{ PathPattern: '/assets/*', ResponseHeadersPolicyId: 'V1' }] },
+  });
+  const policies = () => [
+    { Id: 'HTML2', ResponseHeadersPolicyConfig: loadPolicyByName(HTML, ENV) },
+    { Id: 'ASSETS2', ResponseHeadersPolicyConfig: loadPolicyByName(ASSETS, ENV) },
+  ];
+  function setup() {
+    const state = { dist: dist(), etag: 'E1', policies: policies() };
+    const aws = (args, body) => {
+      const op = args[1];
+      if (op === 'list-response-headers-policies') {
+        return { ResponseHeadersPolicyList: { Items: state.policies.map((p) => ({ ResponseHeadersPolicy: p })) } };
+      }
+      if (op === 'get-distribution-config') return { DistributionConfig: structuredClone(state.dist), ETag: state.etag };
+      if (op === 'update-distribution') { state.dist = body; state.etag += '1'; return {}; }
+      throw new Error(`unexpected ${op}`);
+    };
+    const apply = (desired, paths) => applyEnvironment({
+      aws, distributionId: 'D', snapshotDir: mkdtempSync(join(tmpdir(), 'snap-')), desired, paths, replaceExisting: true,
+    }).snapshotFile;
+    const ids = () => [state.dist.DefaultCacheBehavior.ResponseHeadersPolicyId, state.dist.CacheBehaviors.Items[0].ResponseHeadersPolicyId];
+    return { aws, apply, ids };
+  }
+  const twoApplies = () => {
+    const t = setup();
+    const snapA = t.apply(loadPolicyByName(ASSETS, ENV), ['/assets/*']);
+    const snapB = t.apply(loadPolicyByName(HTML, ENV), ['default']);
+    assert.deepEqual(t.ids(), ['HTML2', 'ASSETS2']);
+    return { ...t, snapA, snapB };
+  };
+  it('oldest snapshot alone restores every behavior to its prior id', () => {
+    const t = twoApplies();
+    rollbackEnvironment({ aws: t.aws, distributionId: 'D', snapshotFile: t.snapA });
+    assert.deepEqual(t.ids(), ['V1', 'V1']);
+  });
+  it('newest first, then oldest, also ends on the prior ids', () => {
+    const t = twoApplies();
+    rollbackEnvironment({ aws: t.aws, distributionId: 'D', snapshotFile: t.snapB });
+    assert.deepEqual(t.ids(), ['V1', 'ASSETS2']);
+    rollbackEnvironment({ aws: t.aws, distributionId: 'D', snapshotFile: t.snapA });
+    assert.deepEqual(t.ids(), ['V1', 'V1']);
+  });
+  it('oldest first, then newest, leaves /assets/* on the assets policy (wrong order)', () => {
+    const t = twoApplies();
+    rollbackEnvironment({ aws: t.aws, distributionId: 'D', snapshotFile: t.snapA });
+    rollbackEnvironment({ aws: t.aws, distributionId: 'D', snapshotFile: t.snapB });
+    assert.deepEqual(t.ids(), ['V1', 'ASSETS2']);
   });
 });

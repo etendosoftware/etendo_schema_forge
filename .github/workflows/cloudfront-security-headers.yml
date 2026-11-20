@@ -1,10 +1,10 @@
 name: CloudFront security headers
 
 # ETP-4573 (ADR-0002 D1). Manual only; each environment is an explicit choice.
-#   policy   create/update the account-global policy. ALWAYS runs in the reviewed
+#   policy   create/update the account-global policy named by `policy`. ALWAYS runs in the reviewed
 #            `production-cloudfront` environment, whatever environment is selected.
-#   apply    attach the policy to every behavior of ONE distribution.
-#   verify   read-only check of every behavior.
+#   apply    attach the policy to the behaviors of ONE distribution (`paths`, default: every behavior).
+#   verify   read-only check of those behaviors.
 #   rollback restore the policy ids from the snapshot artifact of an earlier apply run.
 on:
   workflow_dispatch:
