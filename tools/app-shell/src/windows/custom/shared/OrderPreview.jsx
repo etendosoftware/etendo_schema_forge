@@ -13,6 +13,7 @@ import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
 import { getSalesRelatedDocs, getPurchaseRelatedDocs } from '@/components/related-documents';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
+import { isCompletedStatus, isDraftStatus } from '../../../lib/docStatus.js';
 
 // ── General tab content ───────────────────────────────────────────────────────
 
@@ -91,12 +92,12 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   const [cachedAttachment, setCachedAttachment] = useState(null);
 
   const isSalesOrder = specName === 'sales-order';
-  const isDraft = order?.documentStatus === 'DR';
+  const isDraft = isDraftStatus(order?.documentStatus);
   // ETP-4717 — Send is only available once the order is Confirmed (CO),
   // matching the Grid row quick-action and Form-view topbar gates. No
   // per-spec difference: sales-order and purchase-order share this rule.
   // ETP-5205 — Solo-Lectura tier: Send is a write (mail + PDF attachment), Download stays.
-  const isSendable = order?.documentStatus === 'CO';
+  const isSendable = isCompletedStatus(order?.documentStatus);
   const canSend = isSendable && !readOnly;
   const ratePrecision = useCurrencyPrecision();
 

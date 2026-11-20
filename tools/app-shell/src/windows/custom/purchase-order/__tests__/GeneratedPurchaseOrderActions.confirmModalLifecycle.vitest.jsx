@@ -141,8 +141,8 @@ describe('PurchaseOrderActions — confirm modal lifecycle', () => {
     vi.restoreAllMocks();
   });
 
-  it('does not open the confirm modal for an order that is not in draft', async () => {
-    await renderActions('CO');
+  it.each(['CO', 'VO', 'UE', 'XX', null, undefined])('does not open the confirm modal for status %s', async (status) => {
+    await renderActions(status);
     expect(confirmModal()).not.toBeInTheDocument();
 
     await dispatchOpenConfirm();

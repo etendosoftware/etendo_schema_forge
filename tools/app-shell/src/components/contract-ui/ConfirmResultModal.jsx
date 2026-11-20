@@ -10,6 +10,7 @@ import {
 import { useUI } from '@/i18n';
 import { StatusTag } from '@/components/ui/status-tag';
 import { isOwnEscape, useDialogFocusTrap } from './ActionChoiceModal.jsx';
+import { isCompletedStatus } from '../../lib/docStatus.js';
 
 // ── Type config ───────────────────────────────────────────────────────────────
 // One row per document type: card label, single-document title, «Ver ...» button label, card
@@ -69,7 +70,7 @@ function DocCard({ doc, index, ui, onOpen }) {
   const navigable = Boolean(doc.route);
   // ETP-5381: the badge follows the real status — invoices are confirmed on creation while a
   // shipment in the same popup is still a draft, so this is per document, never blanket.
-  const completed = doc.documentStatus === 'CO';
+  const completed = isCompletedStatus(doc.documentStatus);
   const statusLabel = ui(completed ? COMPLETED_KEY_BY_GENDER[cfg.gender] : 'confirmResultModal.status.draft');
 
   const content = (

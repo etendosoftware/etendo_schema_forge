@@ -14,6 +14,7 @@ import EmailsCard from '../shared/preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from '../shared/preview-cards/RelatedDocumentsCard.jsx';
 
 import { SALES_RELATED_DOCS } from '@/components/related-documents/salesRelatedDocs.js';
+import { isCompletedStatus, isDraftStatus } from '../../../lib/docStatus.js';
 // ── Tab content components ────────────────────────────────────────────────────
 
 function ShipmentStatsPanel({ shipment, partnerName, movementDate, ui }) {
@@ -86,7 +87,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
   // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig below; lets
   // useShipmentPdf skip the jsreport round-trip and serve the marked attachment
   // directly when one already exists, instead of regenerating on every open.
-  const pdfCacheConfig = { tableName: 'M_InOut', storeCondition: shipment?.documentStatus !== 'DR', recordUpdated: shipment?.updated ?? null };
+  const pdfCacheConfig = { tableName: 'M_InOut', storeCondition: !isDraftStatus(shipment?.documentStatus), recordUpdated: shipment?.updated ?? null };
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useShipmentPdf(
     shipment?.id ?? null,
     apiBaseUrl,
@@ -98,10 +99,10 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
 
   // ETP-4717 — Send is only available once the shipment is Confirmed (CO),
   // matching the Grid row quick-action and Form-view topbar gates.
-  const isDownloadable = shipment.documentStatus === 'CO';
+  const isDownloadable = isCompletedStatus(shipment.documentStatus);
   // ETP-5205 — Solo-Lectura tier: Send is a write (mail + PDF attachment), Download stays.
   const isSendable = isDownloadable && !readOnly;
-  const isDraft = shipment.documentStatus === 'DR';
+  const isDraft = isDraftStatus(shipment.documentStatus);
 
   // ── Left panel ──────────────────────────────────────────────────────────────
 

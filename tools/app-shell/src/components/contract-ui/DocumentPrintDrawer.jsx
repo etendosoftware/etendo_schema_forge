@@ -14,6 +14,7 @@ import { hasClientPdf, buildClientPdfBlob, buildClientHtml } from '@/windows/cus
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch as ambientApiFetch } from '@/auth/api.js';
+import { isDraftStatus } from '../../lib/docStatus.js';
 /**
  * Posts rendered HTML to jsreport (through the Vite `/jsreport` proxy) and
  * returns the resulting PDF blob.
@@ -309,7 +310,7 @@ export async function printDocuments(windowName, documents, token, translate = (
       ? { id: doc.id, documentStatus: doc.documentStatus }
       : { id: doc, documentStatus: undefined }
   ));
-  const printableDocuments = normalizedDocuments.filter((doc) => doc.documentStatus !== 'DR');
+  const printableDocuments = normalizedDocuments.filter((doc) => !isDraftStatus(doc.documentStatus));
 
   if (printableDocuments.length === 0) {
     console.info(`[print-documents] ${windowName}: all ${normalizedDocuments.length} selected document(s) are Draft — nothing to print`);

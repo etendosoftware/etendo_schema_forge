@@ -1,3 +1,5 @@
+import { DOC_STATUS } from '../lib/docStatus.js';
+
 /**
  * Shared visibility predicates for record-level actions (toolbar + row quick actions).
  *
@@ -14,7 +16,7 @@
  * - 'RPAP' = Pending payment approval (transient pre-completion state used by
  *            some Etendo flows; treated as draft-like for delete purposes).
  */
-export const DELETABLE_DOC_STATUSES = ['DR', 'RPAP', 'N'];
+export const DELETABLE_DOC_STATUSES = [DOC_STATUS.DRAFT, 'RPAP', 'N'];
 
 /**
  * Returns true when the Delete action should be visible for a record.

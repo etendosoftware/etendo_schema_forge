@@ -29,6 +29,7 @@ import SendToEvaluationModal from '@generated/sales-quotation/custom/SendToEvalu
 import QuotationConfirmModal from '@generated/sales-quotation/custom/QuotationConfirmModal';
 import RejectQuotationModal from '@generated/sales-quotation/custom/RejectQuotationModal';
 import CreateRejectReasonModal from '@generated/sales-quotation/custom/CreateRejectReasonModal';
+import { isDraftStatus } from '../../../lib/docStatus.js';
 
 // The statuses whose Confirmar opens a modal: DR sends to evaluation; UE, CO (legacy) and ETGO_AC
 // (accepted by the customer from the portal, ETP-6209) convert into an order or an invoice.
@@ -133,7 +134,7 @@ const quotationBulkRowFilter = (row, action, ui) => {
   // because buildInOutActions fires on ANY draft present. QA flagged that union behaviour as a
   // minor observation on the return windows; there is no reason to reproduce it here.
   if (action !== 'CO') return true;
-  if ((row.documentStatus || row.docStatus) !== 'DR') return ui('bulkRowNotDraft');
+  if (!isDraftStatus(row.documentStatus || row.docStatus)) return ui('bulkRowNotDraft');
   return true;
 };
 
@@ -241,7 +242,7 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
   const closeReject = useCallback(() => setRejectRow(null), []);
 
   const confirmPortal = confirmRow && createPortal(
-    confirmRow.documentStatus === 'DR' ? (
+    isDraftStatus(confirmRow.documentStatus) ? (
       <SendToEvaluationModal
         quotationId={confirmRow.id}
         data={confirmRow}
