@@ -108,7 +108,7 @@ permisos, vía agente, comparando con el recorrido por la interfaz, sin interven
 |---|---|---|---|---|
 | Categoría de contacto (ETP-5791) | 54, 55 | 63 `e-contact-without-type`: un contacto sin tipo se rechaza (`ETGO_BPartnerContactTypeRequired`) y no se crea | `p-contact-create-denied`: Contactos de solo lectura, 403 | Contactos > Nuevo hereda el tipo de la categoría; sin tipo no guarda; el rol Inventory ve Contactos sin "Nuevo" |
 | Portal del cliente (ETP-6209) | 62 | 64 `e-portal-link-without-email`: sin email no hay link (`contact_without_email`) | `p-portal-link-denied`: `portalLink` es escritura en Contactos, 403 | El link sale en el email de cada documento; sin email no se envía; el rol Inventory no envía documentos |
-| PyG por mes o trimestre (ETP-6080, ETP-6239) | 60, 61 | 65 `e-profit-by-month-long-range`: más de 24 meses se rechaza y el agente lo resuelve en dos pedidos | `p-profit-denied`: sin Informes financieros, 403 (con gemini, 2 de 3: en 1 el agente respondió con cifras operativas y lo dio por resuelto) | Informes > Pérdidas y Ganancias, vista Mes / Trimestre; el rol Inventory no tiene Informes financieros en el menú |
+| PyG por mes o trimestre (ETP-6080, ETP-6239) | 60, 61 | 65 `e-profit-by-month-long-range`: más de 24 meses se rechaza y el agente lo resuelve en dos pedidos | `p-profit-denied`: sin Informes financieros; el MCP no le ofrece el informe y los widgets de ingresos responden 403 (ETP-5850; antes respondían vacíos y en 1 de 3 el agente dio el pedido por resuelto con cifras operativas) | Informes > Pérdidas y Ganancias, vista Mes / Trimestre; el rol Inventory no tiene Informes financieros en el menú |
 | Calendario contable (ETP-5577) | `f-open-period` | 56 `e-fiscal-year-start`: el inicio del ejercicio no se cambia por MCP, el agente manda a Primeros pasos | `p-open-period-denied`: sin Control de períodos, 403 | Contabilidad > Calendario > abrir el período; el inicio del ejercicio, en Primeros pasos |
 | Bandeja de facturas (ETP-6046) | 59 | 66 `e-invoice-inbox-confirm`: confirmar lo hace una persona en la app; el documento no cambia | `p-invoice-inbox-denied`: sin la ventana Bandeja, 403 | Compras > Bandeja de facturas > Confirmar |
 | Condiciones de pago en días (ETP-5826) | 52 | 67 `e-payment-term-out-of-range`: 400 días se rechaza (rango 0 a 365) y el contacto no se toca | `p-payment-term-denied`: Contactos de solo lectura, 403 | Contactos > Condiciones de pago; Condiciones de pago > Nuevo valida el rango |
@@ -143,7 +143,8 @@ funcionalidades pasan sus tres casos. Hallazgos que corrigió ETP-5850 en el cam
 Corridas con gemini que respaldan el KR2.2 (19 nov, 3 intentos por prueba): casos exitosos y errores de
 negocio en las comparaciones del KR2.1 `20261119T154647-cmp-cb6e`, `20261119T161648-cmp-9acc` y
 `20261119T162324-cmp-c13e`, más `f-open-period` en `20261119T1658-r6236plain-890f`; permisos en
-`20261119T1702-r6236inventory-9737`. Con gemini, `p-portal-link-denied` nombraba el link de la ficha
+`20261119T1702-r6236inventory-9737`, y `p-profit-denied` repetido con los widgets corregidos en
+`20261119T2240-r6236inventory-9860` (3/3). Con gemini, `p-portal-link-denied` nombraba el link de la ficha
 al explicar que no sirve para clientes y la prueba lo leía como fuga: ahora rechaza solo `/portal/`.
 
 Todas las mediciones del OKR (KR2.1 y KR2.2) usan **`gemini/gemini-3.8-flash`** por

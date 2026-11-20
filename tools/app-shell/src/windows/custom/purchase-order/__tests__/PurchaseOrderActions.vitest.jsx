@@ -1,132 +1,98 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-
-// --- Mocks ----------------------------------------------------------------
+// Live-module smoke tests for PurchaseOrderActions (ETP-5280). They replace the layout-independent
+// cases of the suite that used to target the dead app-shell copy. Layout-only cases of that suite
+// (poSave / delete / receive-goods / create-invoice / email buttons) were dropped: DetailView owns
+// those buttons now, and the live component's states are covered by the
+// GeneratedPurchaseOrderActions.* suites.
+import { render, screen, fireEvent, act } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useMenuLabel: () => (key) => key,
 }));
 
-vi.mock('@/lib/formatCurrency', () => ({
-  formatCurrency: (_curr, val) => `$${Number(val || 0).toFixed(2)}`,
-}));
-
-vi.mock('@phosphor-icons/react', () => ({
-  FileTextIcon: () => <span data-testid="icon-file" />,
-  CheckIcon: () => <span data-testid="icon-check" />,
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
 }));
 
 vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn(), custom: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), custom: vi.fn(), dismiss: vi.fn() },
 }));
 
-vi.mock('react-dom', async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    createPortal: (node) => node,
-  };
-});
+vi.mock('@/components/contract-ui/SendDocumentModal', () => ({
+  default: () => <div />,
+  SendDocumentButton: () => <button type="button" />,
+}));
 
-// --- Import under test ----------------------------------------------------
+vi.mock('@/components/contract-ui', () => ({
+  ConfirmResultModal: () => <div data-testid="confirm-result-modal" />,
+}));
 
-import PurchaseOrderActions from '../PurchaseOrderActions.jsx';
+vi.mock('@/components/contract-ui/CopyRecordLinkButton', () => ({
+  default: () => <button type="button" />,
+}));
 
-// --- Helpers --------------------------------------------------------------
+vi.mock('@/components/contract-ui/CloneOrderModal', () => ({
+  default: () => <div />,
+}));
 
-function renderActions(overrides = {}) {
-  const defaults = {
-    data: { documentStatus: 'DR', documentNo: 'PO-001', grandTotalAmount: 500 },
-    recordId: 'order-1',
-    token: 'tok',
-    apiBaseUrl: '/api/purchase-order',
-    api: { save: vi.fn() },
-    onProcess: vi.fn(),
-  };
-  return { ...render(<PurchaseOrderActions {...defaults} {...overrides} />), props: { ...defaults, ...overrides } };
+vi.mock('@/lib/surveys/survey-state.js', () => ({ incrementSurveyCounter: vi.fn() }));
+vi.mock('@/lib/surveys/survey-engine.js', () => ({ emitSurveyTrigger: vi.fn() }));
+vi.mock('@/windows/custom/shared/usePurchaseOrderPdf.js', () => ({
+  usePurchaseOrderPdf: () => ({ pdfUrl: null, loading: false }),
+}));
+vi.mock('@/lib/observability/health-events.js', () => ({
+  trackTransactionPosted: vi.fn(),
+  trackDocumentCreated: vi.fn(),
+}));
+vi.mock('@/lib/formatCurrency.js', () => ({
+  formatCurrency: (_currency, value) => `${Number(value || 0).toFixed(2)} €`,
+}));
+
+import PurchaseOrderActions from '@generated/purchase-order/custom/PurchaseOrderActions';
+
+const props = {
+  recordId: 'order-1',
+  token: 'tok',
+  apiBaseUrl: '/sws/neo/purchase-order',
+  onProcess: vi.fn(),
+  onRefresh: vi.fn(),
+  onSave: vi.fn(async () => ({ id: 'order-1' })),
+};
+const DRAFT = { documentStatus: 'DR', documentNo: 'PO-001', grandTotalAmount: 500 };
+
+async function renderActions(data) {
+  let result;
+  await act(async () => {
+    result = render(<PurchaseOrderActions {...props} data={data} />);
+  });
+  return result;
 }
 
-// --- Tests ----------------------------------------------------------------
-
-describe('PurchaseOrderActions', () => {
+describe('PurchaseOrderActions (live module)', () => {
   beforeEach(() => {
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ response: { data: [] } }),
-      }),
-    );
+    global.fetch = vi.fn(() => Promise.resolve({
+      ok: true, status: 200, json: () => Promise.resolve({ response: { data: [] } }),
+    }));
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('renders nothing when data is null', () => {
-    const { container } = render(
-      <PurchaseOrderActions
-        data={null}
-        recordId="x"
-        token="tok"
-        apiBaseUrl="/api"
-        onProcess={vi.fn()}
-      />,
-    );
+  it('renders nothing when data is null', async () => {
+    const { container } = await renderActions(null);
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders draft state buttons', () => {
-    renderActions();
-    expect(screen.getByText('poSave')).toBeInTheDocument();
-    expect(screen.getByText('poConfirmBtn')).toBeInTheDocument();
-  });
-
-  it('renders delete icon in draft state', () => {
-    renderActions();
-    expect(screen.getByLabelText('delete')).toBeInTheDocument();
-  });
-
-  it('calls api.save when save button is clicked', () => {
-    const { props } = renderActions();
-    fireEvent.click(screen.getByText('poSave'));
-    expect(props.api.save).toHaveBeenCalled();
-  });
-
-  it('calls onProcess(delete) when delete icon is clicked', () => {
-    const { props } = renderActions();
-    fireEvent.click(screen.getByLabelText('delete'));
-    expect(props.onProcess).toHaveBeenCalledWith('delete');
-  });
-
-  // ETP-4728 (Hallazgo 2) — the decorative Print icon (which called
-  // onProcess('print') → a broken handleProcess POST to .../action/undefined)
-  // was removed; the generic DetailView Printer button + DocumentPrintDrawer
-  // now own printing for this window (see DocumentPrintDrawer.vitest.jsx).
-  it('does not render a print icon (removed — see DocumentPrintDrawer)', () => {
-    renderActions();
+  // ETP-4728 — the decorative Print icon (onProcess('print') -> a broken POST) was removed; the
+  // generic DetailView Printer button + DocumentPrintDrawer own printing for this window.
+  it('does not render a print icon', async () => {
+    await renderActions(DRAFT);
     expect(screen.queryByLabelText('print')).not.toBeInTheDocument();
   });
 
-  it('shows confirm modal when confirm button is clicked', () => {
-    renderActions();
-    fireEvent.click(screen.getByText('poConfirmBtn'));
-    // The modal renders option cards
-    expect(screen.getByText('poConfirmWithInvoice')).toBeInTheDocument();
-    expect(screen.getByText('soConfirmOnly')).toBeInTheDocument();
-  });
-
-  it('renders confirmed state buttons', () => {
-    renderActions({
-      data: { documentStatus: 'CO', documentNo: 'PO-001', grandTotalAmount: 500 },
+  it('opens the confirm modal on the purchase-order:open-confirm-modal event, in draft', async () => {
+    await renderActions(DRAFT);
+    expect(screen.queryByTestId('action-confirm-modal')).not.toBeInTheDocument();
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('purchase-order:open-confirm-modal'));
     });
-    expect(screen.getByText('poReceiveGoods')).toBeInTheDocument();
-    expect(screen.getByText('poCreateInvoice')).toBeInTheDocument();
-  });
-
-  it('calls onProcess(email) when email icon is clicked in confirmed state', () => {
-    const { props } = renderActions({
-      data: { documentStatus: 'CO', documentNo: 'PO-001', grandTotalAmount: 500 },
-    });
-    fireEvent.click(screen.getByLabelText('send'));
-    expect(props.onProcess).toHaveBeenCalledWith('email');
+    expect(await screen.findByTestId('action-confirm-modal')).toBeInTheDocument();
   });
 });

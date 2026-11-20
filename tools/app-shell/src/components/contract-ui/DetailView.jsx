@@ -1948,7 +1948,10 @@ export function DetailView({
 
   const saveActionParams = {
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
-    ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, saveBusy,
+    ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls,
+    saveBusy,
+    // ETP-6233: Save stays disabled (no spinner) while a header process runs; a save would wait on it anyway.
+    processRunning: hook.runningProcess != null,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
     setShowProcessingModal, saveGate, hasExternalPrimaryAction, primarySave, onlySaveButton: onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode),
   };
@@ -2102,7 +2105,7 @@ export function DetailView({
                       variant={getProcessButtonVariant(p)}
                       size="default"
                       className={`${btnClass} ${saveBtnCls}`.trim()}
-                      disabled={isRunning}
+                      disabled={isRunning || hook.isSaving}
                       onClick={async () => {
                         for (const g of (p.requiresFieldMax ?? [])) {
                           const condOk = !g.conditionalOnField || data?.[g.conditionalOnField] === g.conditionalValue;
@@ -2203,7 +2206,7 @@ export function DetailView({
         {renderProcessConfirmModal(
           confirmProcess,
           processConfirmModal,
-          async () => { await hook.handleProcess?.(confirmProcess); setConfirmProcess(null); },
+          async () => { if ((await hook.handleProcess?.(confirmProcess)) !== false) setConfirmProcess(null); },
           () => setConfirmProcess(null),
           data,
           apiBaseUrl,

@@ -3879,28 +3879,30 @@ designer's Save button. Any other truthy value behaves as `true`. Product passes
 With `'primary'` the active secondary tab paints its text, icon and 2 px underline with `--primary`
 instead of the foreground colour. Opt-in per window; Product sets it in `windows/custom/product/index.jsx`.
 
-### A control that straddles a scrolling sidebar's border (portal from an anchor span)
+### A control that straddles a scrolling sidebar's border (CSS anchor on a `relative` column)
 
 A control centred on the border between the form and a side panel (the Product collapse/expand
-circle, `windows/custom/product/ProductSidebarDividerToggle.jsx`) cannot live inside the panel: the
-panel column is `overflow-y-auto`, which clips any child that overhangs its box (and forces
-`overflow-x` to clip too). The pattern:
+circle, `windows/custom/product/ProductSidebarDividerToggle.jsx`) must not be clipped by the panel:
+a column that is `overflow-y-auto` clips any child that overhangs its box (and forces `overflow-x`
+to clip too). The pattern (no JS measurement, no portal):
 
-1. Render a hidden anchor `<span hidden>` inside the panel as the DOM handle.
-2. From the anchor find the column: the closest ancestor with BOTH `border-l` and `overflow-y-auto`
-   (a bare `border-l` also matches other panels). If none matches, fall back to the parent and
-   `console.warn` once in dev. Its parent is the row that holds the form and the panel.
-3. Make the row the positioning context (`position: relative` if it is `static`, and restore the
-   inline style on unmount) and `createPortal`
-   the button into the row, `absolute`, at `left = column.offsetLeft - size/2` and a fixed `top`
-   offset from `column.offsetTop`.
-4. Re-measure with a `ResizeObserver` on the column and the row (and when the collapsed state
-   changes), so the control follows width changes.
+1. The column (`sidebarClassName` in `decisions.json`) is `relative` and has NO overflow of its own;
+   it only carries the width, the `border-l` and, if wanted, the width transition.
+2. Inside it, put two layers (`ProductSidebarFrame.jsx`): a clip layer (`overflow-hidden`) and, inside
+   that, the scroll layer (`overflow-y-auto`) with a fixed width per state, so the content does not
+   reflow while the column width animates.
+3. Render the button as a plain child of the column, outside the clip layer, `absolute`, with
+   `left-[-0.5px] top-6 -translate-x-1/2` (centred on the 1 px border, fixed offset from the top).
+   Being anchored by CSS to the column, it follows the divider on every frame of a width transition;
+   the earlier approach (a hidden anchor span, `createPortal` into the parent row, `offsetLeft`
+   measurement with a `ResizeObserver`, an inline `position` patch on the row) lagged behind the
+   animation (32 px of drift at the worst frame) and was removed.
 
-Do not add `overflow: visible` to the scrolling column to avoid the portal: the column must keep
-its own scroll. The button stays mounted across states, so it keeps keyboard focus. Give it a stable
-`aria-label` with `aria-expanded` and `aria-controls` (never a label that flips with the state); only
-the `title` tooltip changes.
+Render both states of the panel inside the same frame component so the button is not remounted when
+the state flips: it keeps keyboard focus. Give it a stable `aria-label` with `aria-expanded` and
+`aria-controls` (never a label that flips with the state); only the `title` tooltip changes. For the
+collapse animation use `transition-[width] duration-200 ease-in-out` (the system menu's duration and
+curve) with `motion-reduce:transition-none`.
 
 ### Bottom tab-strip icons — `components/contract-ui/tabIcons.js`
 
