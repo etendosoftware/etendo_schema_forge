@@ -27238,6 +27238,7 @@
     "reportErrorOrgAccess": "No tienes acceso a esta organización.",
     "reportErrorReportAccess": "No tienes acceso a este informe.",
     "reportErrorTimeout": "El informe tardó demasiado en cargar. Reduce el período o los filtros e inténtalo de nuevo.",
+    "reportErrorGeneric": "No se pudo generar el informe. Inténtalo de nuevo.",
     "reportErrorPeriodRangeTooLong": "El rango de períodos es demasiado largo para este formato. Elige un rango más corto o menos períodos.",
     "reportErrorInvalidPeriods": "Los períodos solicitados no son válidos. Revisa las fechas e inténtalo de nuevo.",
     "dynamicReportErrorReversedDates": "La fecha \"Desde\" es posterior a la fecha \"Hasta\".",
