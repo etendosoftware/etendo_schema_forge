@@ -769,7 +769,7 @@ describe('contacts import descriptor — structured address capability ON', () =
     assert.deepEqual(errors.map((e) => e.target), ['city']);
   });
 
-  // Mirrors ContactsLocationAddressHandler: street required (number never is) and the 70 / 16
+  // Mirrors ContactsLocationAddressHandler: street required (number never is) and the 60 / 16
   // max lengths of EM_OBSEPA_StrtNm / BldgNb. Each limit is pinned on both sides of the boundary.
   // The translator interpolates `{max}` like useUI does, so the too-long rows also prove the
   // limit reaches the TRANSLATED message (the other keys echo back and fall to English).
@@ -780,8 +780,8 @@ describe('contacts import descriptor — structured address capability ON', () =
     ['street blank, address given by the city', { streetName: '' }, ['streetName']],
     ['Número without Calle: one error, on Calle', { streetName: '', buildingNumber: '12' }, ['streetName']],
     ['only the country missing', { country: '' }, ['country']],
-    ['street at 70 characters', { streetName: 'S'.repeat(70) }, []],
-    ['street over 70 characters', { streetName: 'S'.repeat(71) }, ['streetName'], ['Máximo 70 caracteres.']],
+    ['street at 60 characters', { streetName: 'S'.repeat(60) }, []],
+    ['street over 60 characters', { streetName: 'S'.repeat(61) }, ['streetName'], ['Máximo 60 caracteres.']],
     ['number at 16 characters', { buildingNumber: '1'.repeat(16) }, []],
     ['number over 16 characters', { buildingNumber: '1'.repeat(17) }, ['buildingNumber'], ['Máximo 16 caracteres.']],
   ])('%s', (_label, cells, targets, messages) => {
