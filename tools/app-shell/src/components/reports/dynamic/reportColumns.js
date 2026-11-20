@@ -59,18 +59,21 @@ export function amountKinds(amountColumn, mode, compareMovements = false) {
  * With `amountColumns` (the contract's, ETP-6084) each group also carries `amounts`: `{ field, labelKey, columns }` per amount
  * column, and `columns` is their sub-columns in order. Without it a group has the single amount column of the P&L.
  */
-export function columnModel({ periods, grain, mode, locale, quarterPrefix, totalLabel, amountColumns = null, compareMovements = false }) {
+export function columnModel({ periods, grain, mode, locale, quarterPrefix, totalLabel, amountColumns = null, compareMovements = false, rules = null }) {
   const lang = (locale || 'en_US').replace('_', '-');
   const short = (p) => (grain === 'quarter' ? formatCalendarQuarterShort(p.dateFrom, quarterPrefix) : formatCalendarMonthShort(p.dateFrom, lang));
   const comparedLabelOf = (p, compared) => {
     if (!compared) return '';
-    if (grain === 'total' || p.idx === 0) return `${formatCalendarDate(compared.from, lang)} – ${formatCalendarDate(compared.to, lang)}`;
+    if (grain === 'total' || p.idx === 0) {
+      // A balance at a date compares a single day (ETP-6083): one date, not "d – d".
+      return compared.from === compared.to ? formatCalendarDate(compared.to, lang) : `${formatCalendarDate(compared.from, lang)} – ${formatCalendarDate(compared.to, lang)}`;
+    }
     return short({ dateFrom: compared.from });
   };
   const groups = (periods || []).map((p, pos) => {
     const partialMark = p.partial ? '*' : '';
     const label = p.idx === 0 ? totalLabel : `${short(p)}${partialMark}`;
-    const compared = mode === 'none' ? null : comparedRanges(p, grain)[mode];
+    const compared = mode === 'none' ? null : comparedRanges(p, grain, rules)[mode];
     const amounts = amountColumns?.map((a) => ({ field: a.field, labelKey: a.labelKey, columns: amountKinds(a, mode, compareMovements) }));
     return {
       pos,

@@ -107,3 +107,63 @@ describe('reportTree — mixed levels and dimension rows (ETP-6084)', () => {
     expect(ids(visibleRows(rows, foldExpansion(rows, { base: 'none', flipped: new Set() }, 'S')))).toEqual(['E1']);
   });
 });
+
+// ETP-6083: a fold option that cuts by the indent of the listed rows (`maxIndent`), not by E/C/D/S.
+describe('expansionForLevel with maxIndent', () => {
+  const TREE = [
+    { node_id: 'G1', parentId: null, elementlevel: 'E' },
+    { node_id: 'P1', parentId: 'G1', elementlevel: 'E' },
+    { node_id: 'C1', parentId: 'P1', elementlevel: 'C' },
+    { node_id: 'S1', parentId: 'C1', elementlevel: 'S' },
+  ];
+  it('Grupo (0) opens nothing; Epígrafe (1) opens the roots only', () => {
+    expect([...expansionForLevel(TREE, 'G', { maxIndent: 0 })]).toEqual([]);
+    expect([...expansionForLevel(TREE, 'P', { maxIndent: 1 })]).toEqual(['G1']);
+    expect(visibleRows(TREE, expansionForLevel(TREE, 'P', { maxIndent: 1 })).map((r) => r.node_id)).toEqual(['G1', 'P1']);
+  });
+  it('without maxIndent the E/C/D/S rank logic is unchanged', () => {
+    expect([...expansionForLevel(TREE, 'C')].sort()).toEqual(['G1', 'P1']);
+  });
+
+  describe('folded summaries (balance at a date)', () => {
+    const opt = { foldedSummary: true };
+    const fold = (rows, open = []) => visibleRows(rows, new Set(open), null, opt);
+    const cell = (amount, onTheFly) => ({ amount, ...(onTheFly != null && { result: { onTheFly, posted: amount - onTheFly } }) });
+    const leaf = (id, parentId, value, amount, onTheFly) => ({ node_id: id, parentId, elementlevel: 'S', value, amount, cells: [cell(amount, onTheFly)], ...(onTheFly != null && { result: { onTheFly, posted: amount - onTheFly } }) });
+    const head = (id, parentId, value, amount) => ({ node_id: id, parentId, elementlevel: 'C', value, amount, cells: [cell(amount)] });
+
+    it('is off by default', () => {
+      expect(visibleRows([head('P', null, '129', 60), leaf('L', 'P', '12901000', 60, 60)], new Set())[0].foldedRange).toBeUndefined();
+    });
+
+    it('a row made of result accounts alone gets its range and the aggregated result', () => {
+      const rows = [head('P', null, '129', 60), leaf('L1', 'P', '12901000', 40, 30), leaf('L2', 'P', '12902000', 20, 10)];
+      const [p] = fold(rows);
+      expect(p.foldedRange).toEqual({ from: '12901000', to: '12902000' });
+      expect(p.result).toEqual({ onTheFly: 40, posted: 20 });
+      expect(p.cells[0].result).toEqual({ onTheFly: 40, posted: 20 });
+      expect(p.foldedOnTheFly).toBeUndefined();
+    });
+
+    it('a mixed row has no result (posted would include other accounts) but carries its on-the-fly part', () => {
+      const rows = [head('H', null, '1', 100), leaf('L1', 'H', '12900', 60, 30), leaf('L2', 'H', '12100', 40)];
+      const [h] = fold(rows);
+      expect(h.result).toBeUndefined();
+      expect(h.foldedRange).toEqual({ from: '12100', to: '12900' });
+      expect(h.foldedOnTheFly).toEqual([{ amount: 30, sly: null, prev: null }]);
+    });
+
+    it('a zero-balance non-result account does not make the row mixed', () => {
+      const rows = [head('H', null, '1', 60), leaf('L1', 'H', '12900', 60, 30), leaf('L2', 'H', '12100', 0)];
+      expect(fold(rows)[0].result).toEqual({ onTheFly: 30, posted: 30 });
+    });
+
+    it('an interleaved range gets no foldedRange; the contiguous one keeps it', () => {
+      const rows = [head('X', null, '43', 5), leaf('X1', 'X', '430', 3), leaf('X2', 'X', '432', 2), head('Y', null, '44', 7), leaf('Y1', 'Y', '431', 7)];
+      const [x, y] = fold(rows);
+      expect(x.foldedRange).toBeUndefined();
+      expect(y.foldedRange).toEqual({ from: '431', to: '431' });
+      expect(fold(rows, ['X', 'Y']).some((r) => r.foldedRange)).toBe(false);
+    });
+  });
+});

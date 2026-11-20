@@ -103,10 +103,10 @@ function SplitRows({ split, groups, mode, depth, ui }) {
 function GroupCells({ parts, kinds, share, onOpenCurrent, onOpenCompared }) {
   return (
     <>
-      <AmountCell value={parts.amount} share={share} onOpen={onOpenCurrent} data-testid="AmountCell__2e8fe9" />
+      <AmountCell value={parts.amount} share={share} onOpen={onOpenCurrent && (() => onOpenCurrent(parts.amount))} data-testid="AmountCell__2e8fe9" />
       {kinds.includes('compared') && (
         <>
-          <AmountCell value={parts.compared} className={REF} onOpen={onOpenCompared} data-testid="AmountCell__2e8fe9" />
+          <AmountCell value={parts.compared} className={REF} onOpen={onOpenCompared && (() => onOpenCompared(parts.compared))} data-testid="AmountCell__2e8fe9" />
           <VariationCells parts={parts} data-testid="VariationCells__2e8fe9" />
         </>
       )}
@@ -170,6 +170,25 @@ function RowName({ drillable, name, onOpenLedger }) {
 }
 
 /**
+ * The click handler of one amount cell: the income-summary row (`explainable`) opens its explanation, an account (`drillable`)
+ * its ledger, anything else nothing. `which` is 'current' or 'compared'; the handler receives the cell's amount.
+ */
+function foldedCalculated(row, pos, which, mode) {
+  const part = row.foldedOnTheFly?.[pos];
+  return (which === 'compared' ? part?.[mode] : part?.amount) || 0;
+}
+
+function cellOpener({ row, group, which, explainable, drillable, mode, onOpenResult, onOpenLedger }) {
+  const range = which === 'compared' ? group.compared : group.current;
+  if (!range) return null;
+  if (explainable) return (amount) => onOpenResult(row, { pos: group.pos, which, range, amount, mode });
+  if (!drillable) return null;
+  // ETP-6083: a ledger holds posted lines only; a folded row that includes a calculated result is compared without it.
+  const calculated = foldedCalculated(row, group.pos, which, mode);
+  return (amount) => onOpenLedger(row, range, calculated ? amount - calculated : amount, calculated);
+}
+
+/**
  * ETP-6080 — the account tree: one row per visible node, a chevron to fold it, and with a split
  * dimension chosen, a split toggle on every leaf account that lists its parts underneath. A leaf
  * account's name opens its ledger in the drill-down panel (F9).
@@ -181,7 +200,7 @@ function RowName({ drillable, name, onOpenLedger }) {
  * ETP-6084: groups with `amounts` (the contract's amount columns) show one cell set per amount, headed by its
  * label; `totals` (the answer's per-period cells) adds the TOTALES row.
  */
-export default function DynamicReportTable({ rows, groups, mode, expanded, onToggle, splitBy, splits, onToggleSplit, onOpenLedger, totals = null }) {
+export default function DynamicReportTable({ rows, groups, mode, expanded, onToggle, splitBy, splits, onToggleSplit, onOpenLedger, onOpenResult = null, totals = null }) {
   const ui = useUI();
   const shares = useMemo(() => rowShares(rows), [rows]);
   const th = 'px-3 py-2 font-medium uppercase tracking-wide';
@@ -231,6 +250,9 @@ export default function DynamicReportTable({ rows, groups, mode, expanded, onTog
             // A dimension row (ETP-6084) is named by its contact / product / project / cost centre; none = "Sin asignar".
             const name = rowDisplayName(row, ui);
             const drillable = Boolean(onOpenLedger) && canDrill(row);
+            // ETP-6083: a row that carries `result` (the income-summary account) explains its posted / calculated parts instead.
+            const explainable = Boolean(onOpenResult) && Boolean(row.result);
+            const opener = (group, which) => cellOpener({ row, group, which, explainable, drillable, mode, onOpenResult, onOpenLedger });
             return [
               <tr
                 key={row.node_id}
@@ -256,7 +278,11 @@ export default function DynamicReportTable({ rows, groups, mode, expanded, onTog
                       onToggle={onToggle}
                       onToggleSplit={onToggleSplit}
                       data-testid="RowToggle__2e8fe9" />
-                    <RowName drillable={drillable} name={name} onOpenLedger={onOpenLedger && (() => onOpenLedger(row, null))} data-testid="RowName__2e8fe9" />
+                    <RowName
+                      drillable={drillable || explainable}
+                      name={name}
+                      onOpenLedger={explainable ? () => opener(groups.find((g) => g.pos === 0), 'current')(row.amount) : onOpenLedger && (() => { const calc = foldedCalculated(row, 0, 'current', mode); onOpenLedger(row, null, row.amount - calc, calc); })}
+                      data-testid="RowName__2e8fe9" />
                   </div>
                 </td>
                 {groups.map((g) => (
@@ -266,8 +292,8 @@ export default function DynamicReportTable({ rows, groups, mode, expanded, onTog
                     group={g}
                     mode={mode}
                     share={g.pos === 0 ? shares.get(row.node_id) : 0}
-                    onOpenCurrent={drillable ? () => onOpenLedger(row, g.current) : null}
-                    onOpenCompared={drillable && g.compared ? () => onOpenLedger(row, g.compared) : null}
+                    onOpenCurrent={opener(g, 'current')}
+                    onOpenCompared={opener(g, 'compared')}
                     data-testid="GroupRowCells__2e8fe9" />
                 ))}
               </tr>,

@@ -11,6 +11,13 @@ const SHORTCUTS = [
   ['quarter', 'dynamicReportQuarter'],
   ['year', 'dynamicReportYear'],
 ];
+// ETP-6083: the end-date shortcuts a contract offers on Hasta (`dateTo.shortcuts`).
+const END_SHORTCUTS = {
+  today: 'dynamicReportToday',
+  lastMonthEnd: 'dynamicReportLastMonthEnd',
+  lastQuarterEnd: 'dynamicReportLastQuarterEnd',
+  lastFiscalYearEnd: 'dynamicReportLastFiscalYearEnd',
+};
 const COMPARISONS = [
   ['', 'dynamicReportNoComparison'],
   ['same-last-year', 'dynamicReportSamePeriodLastYear'],
@@ -48,7 +55,7 @@ function Section({ title, children }) {
  */
 export default function DynamicReportPanel({
   state, onChange, onShortcut, onPickYear, onLevel, onExpandAll, onCollapseAll, onReset,
-  shortcut, yearId, years, orgs, splitDimensions, levelOptions, label, sectionLabel, noFiscalYear, selectorOf,
+  shortcut, yearId, years, orgs, splitDimensions, levelOptions, label, sectionLabel, noFiscalYear, selectorOf, endShortcuts = null, ledgerStart = false, compareOptions = null, endShortcutDates = {},
   offers = { columns: true, compare: true, splitBy: true }, pickers = DEFAULT_PICKERS, toggles = [], groupByOptions = null, collapsed = false, onToggleCollapsed, activeFilterCount = 0, collapseRef, expandRef,
 }) {
   const ui = useUI();
@@ -105,14 +112,32 @@ export default function DynamicReportPanel({
 
       <Section title={sectionLabel('periodo')} data-testid="Section__f52339">
         <div className="grid grid-cols-2 gap-2">
-          <label className="text-xs">{label('dateFrom')}
+          <label className="text-xs">{ledgerStart ? ui('dynamicReportLedgerStart') : label('dateFrom')}
             <DateField value={state.dateFrom} onChange={(v) => onChange({ dateFrom: v })} data-testid="DynamicReportPanel__dateFrom" />
           </label>
           <label className="text-xs">{label('dateTo')}
             <DateField value={state.dateTo} onChange={(v) => onChange({ dateTo: v })} data-testid="DynamicReportPanel__dateTo" />
           </label>
         </div>
-        <div className="flex rounded-lg border border-border overflow-hidden" role="group">
+        {ledgerStart && <p className="text-xs text-muted-foreground" data-testid="DynamicReportPanel__ledgerStartHint">{ui('dynamicReportLedgerStartHint')}</p>}
+        {endShortcuts ? (
+          <div className="grid grid-cols-2 gap-1" role="group">
+            {endShortcuts.filter((kind) => END_SHORTCUTS[kind]).map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                aria-pressed={shortcut === kind}
+                disabled={!endShortcutDates[kind]}
+                className={cn('py-1 px-1 text-xs rounded-lg border border-border disabled:opacity-50', shortcut === kind && 'bg-foreground text-background')}
+                onClick={() => onShortcut(kind)}
+                data-testid={`DynamicReportPanel__shortcut-${kind}`}
+              >
+                {ui(END_SHORTCUTS[kind])}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="flex rounded-lg border border-border overflow-hidden" role="group">
           {SHORTCUTS.map(([kind, key]) => (
             <button
               key={kind}
@@ -125,7 +150,8 @@ export default function DynamicReportPanel({
               {ui(key)}
             </button>
           ))}
-        </div>
+          </div>
+        )}
         {years.length > 0 && (
           <label className="text-xs">{ui('dynamicReportFiscalYear')}
             <select
@@ -212,7 +238,7 @@ export default function DynamicReportPanel({
           </select>
         </label>}
         {offers.compare && <select className={selectClass} value={state.compare} onChange={(e) => onChange({ compare: e.target.value })} aria-label={label('compareTo')} data-testid="DynamicReportPanel__compare">
-          {COMPARISONS.map(([value, key]) => <option key={value} value={value}>{ui(key)}</option>)}
+          {(compareOptions ?? COMPARISONS.map(([value, key]) => [value, ui(key)])).map(([value, text]) => <option key={value} value={value}>{text}</option>)}
         </select>}
         {offers.compare && offers.movements && state.compare && (
           <label className="flex items-start gap-2 text-xs">

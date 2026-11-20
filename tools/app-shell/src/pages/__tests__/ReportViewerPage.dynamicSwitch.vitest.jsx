@@ -43,7 +43,7 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: vi.fn() }));
 vi.mock('@/components/layout/FavoritesContext', () => ({ useFavorites: () => ({ toggleFavorite: vi.fn(), isFavorite: () => false }) }));
 vi.mock('@/lib/rolesApi.js', () => ({
-  fetchMyReportAccess: () => Promise.resolve({ reportAccess: { 'profit-loss': 'full', 'balance-sheet': 'full', 'report-trial-balance': 'full' } }),
+  fetchMyReportAccess: () => Promise.resolve({ reportAccess: { 'profit-loss': 'full', 'sales-report': 'full', 'report-trial-balance': 'full' } }),
 }));
 let mockFlagOn = false;
 vi.mock('@/lib/flags', async (importOriginal) => ({
@@ -55,7 +55,7 @@ import ReportViewerPage from '../ReportViewerPage.jsx';
 
 const REPORTS = [
   { id: 'profit-loss', title: { en_US: 'Profit & Loss' }, type: 'grouped', category: 'finance', outputs: ['pdf'], parameters: [] },
-  { id: 'balance-sheet', title: { en_US: 'Balance Sheet' }, type: 'grouped', category: 'finance', outputs: ['pdf'], parameters: [] },
+  { id: 'sales-report', title: { en_US: 'Sales Report' }, type: 'grouped', category: 'finance', outputs: ['pdf'], parameters: [] },
   { id: 'report-trial-balance', title: { en_US: 'Trial Balance' }, type: 'listing', category: 'finance', outputs: ['pdf'], parameters: [] },
 ];
 
@@ -108,7 +108,7 @@ describe('ReportViewerPage — dynamic-reports switch (ETP-6080)', () => {
 
   it('flag on: a report without a dynamic view keeps the old viewer', async () => {
     mockFlagOn = true;
-    open('balance-sheet');
+    open('sales-report');
     await waitFor(() => expect(screen.getByTestId('action-cancel')).toBeInTheDocument());
     expect(screen.queryByTestId('DynamicReportView')).not.toBeInTheDocument();
   });
@@ -144,7 +144,7 @@ describe('ReportViewerPage — the catalog marks interactive reports', () => {
   it('flag on: only the report with an interactive view carries the tag', async () => {
     mockFlagOn = true;
     render(<ReportViewerPage />);
-    await screen.findByText('Balance Sheet');
+    await screen.findByText('Sales Report');
     const tags = screen.getAllByTestId('DynamicReportBadge');
     expect(tags).toHaveLength(1); // the Trial Balance's descriptor here has no `tree`: not interactive
     expect(tags[0].closest('button')).toHaveTextContent('Profit & Loss');
@@ -154,7 +154,7 @@ describe('ReportViewerPage — the catalog marks interactive reports', () => {
   it('flag off: no report carries the tag', async () => {
     mockFlagOn = false;
     render(<ReportViewerPage />);
-    await screen.findByText('Balance Sheet');
+    await screen.findByText('Sales Report');
     expect(screen.queryByTestId('DynamicReportBadge')).toBeNull();
   });
 });
@@ -205,13 +205,13 @@ describe('ReportViewerPage — URL selections do not leak between reports (ETP-6
 
 describe('opensDynamicView', () => {
   it('needs both the flag and a listed report', () => {
-    expect([...DYNAMIC_REPORT_IDS]).toEqual(['profit-loss', 'report-trial-balance']);
+    expect([...DYNAMIC_REPORT_IDS]).toEqual(['profit-loss', 'report-trial-balance', 'balance-sheet']);
     expect(opensDynamicView('report-trial-balance', true)).toBe(false); // needs tree: 'chart'
     expect(opensDynamicView('report-trial-balance', true, { tree: 'chart' })).toBe(true);
     expect(opensDynamicView('report-trial-balance', false, { tree: 'chart' })).toBe(false);
     expect(opensDynamicView('profit-loss', true)).toBe(true);
     expect(opensDynamicView('profit-loss', false)).toBe(false);
-    expect(opensDynamicView('balance-sheet', true)).toBe(false);
+    expect(opensDynamicView('sales-report', true)).toBe(false);
     expect(opensDynamicView(null, true)).toBe(false);
   });
 });
