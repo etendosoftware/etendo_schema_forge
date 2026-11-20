@@ -84,6 +84,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { registerApiSession, resetApiSessionForTests } from '@etendosoftware/app-shell-core/auth';
 import PortalPage from '../PortalPage.jsx';
+import { ETENDO_PRICING_URL } from '../portal/PortalBits.jsx';
 import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
 
 /**
@@ -567,14 +568,25 @@ describe('PortalPage — shell', () => {
     expect(screen.queryByTestId('portal-customer-avatar')).not.toBeInTheDocument();
   });
 
-  it('links "Creado con etendo.ai" to the product site in a new tab, without an opener', async () => {
+  it('links the top bar "Creado con Etendo" pill to the pricing page in a new tab, without an opener', async () => {
     renderPortal();
     await shellReady();
 
     const link = screen.getByTestId('portal-created-with');
-    expect(link).toHaveAttribute('href', 'https://etendo.ai');
+    // The pill lives in the view's top bar, no longer in the rail.
+    expect(within(screen.getByTestId('portal-view-header')).getByTestId('portal-created-with')).toBe(link);
+    expect(within(screen.getByTestId('portal-sidebar')).queryByTestId('portal-created-with')).not.toBeInTheDocument();
+    expect(link).toHaveAttribute('href', ETENDO_PRICING_URL);
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(link).toHaveAttribute('aria-label', 'portalCreatedWithLinkLabel');
+    expect(link).toHaveTextContent('portalCreatedWith');
+    expect(link).toHaveTextContent('portalLearnMore');
+    // The mobile top bar carries the compact tile, to the same page.
+    const tile = screen.getByTestId('portal-created-with-mobile');
+    expect(tile).toHaveAttribute('href', ETENDO_PRICING_URL);
+    expect(tile).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(tile).toHaveAttribute('aria-label', 'portalCreatedWithLinkLabel');
   });
 
   it('marks the open view in the sidebar and counts what needs the customer', async () => {

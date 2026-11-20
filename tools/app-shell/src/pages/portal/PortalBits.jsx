@@ -1,3 +1,4 @@
+import { CaretRightIcon } from '@phosphor-icons/react';
 import { SearchBar } from '@/components/layout/SearchBar.jsx';
 import { useLocale, useLocaleSwitch, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -6,6 +7,67 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { getDueDateDotStyle, getDueDateState } from '@/lib/invoiceDueDate.js';
 import { invoicePaymentState, quotationValidity } from './portalPresentation.js';
+
+/**
+ * Where the top bar's "Creado con Etendo" pill sends the visitor: Etendo's pricing page.
+ * PROVISIONAL: marketing will send the final pricing URL (with its UTM); replace it here only.
+ */
+export const ETENDO_PRICING_URL = 'https://etendo.ai';
+
+/**
+ * The top bar's "Creado con Etendo / Conoce más" pill (Figma, 2026-11-20): a near-black rounded
+ * link with Etendo's lime tile on the left and a round arrow on the right, opening the pricing
+ * page ({@link ETENDO_PRICING_URL}) in a new tab. The arrow is part of the link, not a button.
+ */
+export function PortalCreatedWithPill({ className }) {
+  const ui = useUI();
+  return (
+    <a
+      href={ETENDO_PRICING_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={ui('portalCreatedWithLinkLabel')}
+      className={cn(
+        'flex h-10 min-w-0 max-w-full items-center gap-2 rounded-full bg-[#1B1A1F] py-1 pl-1 pr-1 text-left',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        className,
+      )}
+      data-testid="portal-created-with"
+    >
+      <img src="/logo-etendo-ai.png" alt="" className="h-8 w-8 shrink-0 rounded-lg" />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-xs font-semibold leading-4 text-white">{ui('portalCreatedWith')}</span>
+        <span className="truncate text-[11px] leading-[14px] text-[#9A9CA8]">{ui('portalLearnMore')}</span>
+      </span>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-white" aria-hidden="true">
+        <CaretRightIcon size={14} weight="bold" data-testid="CaretRight__7a317e" />
+      </span>
+    </a>
+  );
+}
+
+/**
+ * The compact "Creado con Etendo" link of the mobile top bar (no mobile design: coordinator
+ * decision, 2026-11-20): only the lime Etendo tile, same destination as the desktop pill, named
+ * and titled by the same copy.
+ */
+export function PortalCreatedWithTile() {
+  const ui = useUI();
+  const label = ui('portalCreatedWithLinkLabel');
+  return (
+    <a
+      href={ETENDO_PRICING_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={label}
+      title={label}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      data-testid="portal-created-with-mobile"
+    >
+      <img src="/logo-etendo-ai.png" alt="" className="h-8 w-8 rounded-lg" />
+    </a>
+  );
+}
 
 /** The viewer's BCP-47 locale, for dates. */
 export function usePortalLocale() {
@@ -360,7 +422,11 @@ export function PortalDesktopHeader({ title, count, breadcrumb, search, size }) 
         </span>
       </div>
       {search ?? <div />}
-      <div />
+      {/* Right column: the "Creado con Etendo" pill, from lg up (below, the 1fr column is too
+          narrow beside the search). */}
+      <div className="hidden min-w-0 justify-end lg:flex">
+        <PortalCreatedWithPill data-testid="PortalCreatedWithPill__7a317e" />
+      </div>
     </header>
   );
 }
