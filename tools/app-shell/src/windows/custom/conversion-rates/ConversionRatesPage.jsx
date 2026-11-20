@@ -241,9 +241,13 @@ export default function ConversionRatesPage({ apiBaseUrl }) {
 
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  // Synchronous in-flight guard: `deletingId` disables the button only after a render, which a
+  // fast double click on "Eliminar" can beat.
+  const deleteInFlight = useRef(false);
   const confirmDelete = useCallback(async () => {
     const row = pendingDelete;
-    if (!row) return;
+    if (!row || deleteInFlight.current) return;
+    deleteInFlight.current = true;
     setDeletingId(row.id);
     try {
       const res = await deleteManualRate(apiFetch, row.id);
@@ -257,6 +261,7 @@ export default function ConversionRatesPage({ apiBaseUrl }) {
     } catch (e) {
       toast.error(e?.message || ui('convRateDeleteFailed'));
     } finally {
+      deleteInFlight.current = false;
       setDeletingId(null);
     }
   }, [pendingDelete, apiFetch, ui, reloadAll]);

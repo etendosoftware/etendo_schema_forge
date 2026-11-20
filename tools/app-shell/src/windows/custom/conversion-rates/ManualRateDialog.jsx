@@ -79,6 +79,21 @@ export function refusedField(answer) {
   return keys.some((k) => START_FIELD_ERROR_KEYS.includes(k)) ? 'validFromDate' : null;
 }
 
+/**
+ * Whether a keydown is an Enter that submits the dialog's form: a plain Enter (no modifier, not
+ * composing) on an input of the form itself. An input whose list is open (`aria-expanded="true"`,
+ * the destination picker) keeps its Enter, and so does anything rendered outside the form's DOM
+ * (the DateTimeField calendar popover, a select's portal list) — React bubbles those events
+ * through the form, the DOM does not.
+ */
+export function isEnterSubmitKey(event, form) {
+  if (event?.key !== 'Enter' || event.nativeEvent?.isComposing) return false;
+  if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return false;
+  const target = event.target;
+  if (!form || !target || !form.contains(target) || target.tagName !== 'INPUT') return false;
+  return target.getAttribute('aria-expanded') !== 'true';
+}
+
 function PreviewLine({ item, ui }) {
   const range = isOpenEnded(item.validTo)
     ? ui('convRatePreviewOpenRange', { from: formatWallClock(item.validFrom) })
@@ -238,7 +253,10 @@ const DESTINATION_FIELD = { key: 'convRateToCurrency', id: 'convRateToCurrency',
  * the dialog shows its preview (`previewManualRate`, debounced) and its refusal messages as is.
  *
  * Tasa and Válido desde are required: the confirm button stays disabled and the field shows its
- * error until both are valid. Enter submits (it is a form), Esc and the corner X close.
+ * error until both are valid. Enter in a field submits — after the field commits its value
+ * (see {@link isEnterSubmitKey}); the submit still refuses while the button would be disabled.
+ * Esc and the corner X close. Every write is guarded against a double click: one request at a
+ * time (`inFlight`), not only a disabled button, which a second click can beat.
  *
  * @param {object} props
  * @param {boolean} props.open
@@ -271,6 +289,9 @@ export function ManualRateDialog({
   const [preview, setPreview] = useState(null);
   const [submitError, setSubmitError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // Synchronous in-flight guard of the writes: state alone lets a fast double click send twice.
+  const inFlight = useRef(false);
+  const formRef = useRef(null);
   // Modificar: the server's proposal for the typed rate, and the confirmation step.
   const [proposal, setProposal] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -423,72 +444,88 @@ export function ManualRateDialog({
     setSubmitError(typeof data?.error === 'string' ? data.error : ui('convRateSaveFailed'));
   }
 
-  async function submit(event) {
-    event?.preventDefault();
-    setTouched({ rate: true, date: true });
-    if (!canSubmit) return;
-    setSubmitError(null);
-    setSubmitErrorField(null);
-    if (isEdit) {
-      // An unchanged rate saves nothing; otherwise "Guardar cambios" only opens the confirmation.
-      if (rate === Number(row.multipleRateBy)) {
-        onClose();
-        return;
-      }
-      setSubmitting(true);
-      try {
-        const { res, data } = await updateManualRate(apiFetch, { id: row.id, multipleRateBy: rate });
-        if (!res.ok || data?.error || !data?.proposal) {
-          await showRefusal(res, data);
-          return;
-        }
-        setProposal({ rate, ...data.proposal });
-        setConfirmOpen(true);
-      } catch (e) {
-        setSubmitError(e?.message || ui('convRateSaveFailed'));
-      } finally {
-        setSubmitting(false);
-      }
-      return;
-    }
+  /**
+   * Runs one write at a time: a call while another is in flight is dropped. A thrown error closes
+   * the confirmation (when open) and shows the generic failure.
+   */
+  async function runOnce(task) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setSubmitting(true);
     try {
-      const create = isNewCurrency ? createManualCurrency : createManualRate;
-      const { res, data } = await create(apiFetch, {
-        toCurrency: dest.currencyId,
-        multipleRateBy: rate,
-        validFromDate: validFrom,
-      });
-      if (!res.ok || data?.error) {
-        await showRefusal(res, data);
-        return;
-      }
-      onSaved();
+      await task();
     } catch (e) {
+      setConfirmOpen(false);
       setSubmitError(e?.message || ui('convRateSaveFailed'));
     } finally {
+      inFlight.current = false;
       setSubmitting(false);
     }
   }
 
+  /** Modificar, "Guardar cambios": asks the server for the proposal and opens the confirmation. */
+  async function proposeChange() {
+    const { res, data } = await updateManualRate(apiFetch, { id: row.id, multipleRateBy: rate });
+    if (!res.ok || data?.error || !data?.proposal) {
+      await showRefusal(res, data);
+      return;
+    }
+    setProposal({ rate, ...data.proposal });
+    setConfirmOpen(true);
+  }
+
+  /** "Crear divisa" / "Crear tasa". */
+  async function createRate() {
+    const create = isNewCurrency ? createManualCurrency : createManualRate;
+    const { res, data } = await create(apiFetch, {
+      toCurrency: dest.currencyId,
+      multipleRateBy: rate,
+      validFromDate: validFrom,
+    });
+    if (!res.ok || data?.error) {
+      await showRefusal(res, data);
+      return;
+    }
+    onSaved();
+  }
+
+  async function submit(event) {
+    event?.preventDefault();
+    setTouched({ rate: true, date: true });
+    if (!canSubmit || inFlight.current) return;
+    setSubmitError(null);
+    setSubmitErrorField(null);
+    // Modificar: an unchanged rate saves nothing; otherwise "Guardar cambios" only opens the
+    // confirmation.
+    if (isEdit && rate === Number(row.multipleRateBy)) {
+      onClose();
+      return;
+    }
+    await runOnce(isEdit ? proposeChange : createRate);
+  }
+
   /** "Confirmar cambio": the only step of Modificar that saves (`updateManualRate` + `confirm`). */
-  async function confirmChange() {
-    setSubmitting(true);
-    try {
+  function confirmChange() {
+    return runOnce(async () => {
       const { res, data } = await updateManualRate(apiFetch, { id: row.id, multipleRateBy: rate, confirm: true });
+      setConfirmOpen(false);
       if (!res.ok || data?.error || data?.saved === false) {
-        setConfirmOpen(false);
         await showRefusal(res, data);
         return;
       }
-      setConfirmOpen(false);
       onSaved();
-    } catch (e) {
-      setConfirmOpen(false);
-      setSubmitError(e?.message || ui('convRateSaveFailed'));
-    } finally {
-      setSubmitting(false);
-    }
+    });
+  }
+
+  /**
+   * Enter in a field submits the primary action. The submit is deferred one tick so a field that
+   * commits on Enter (DateTimeField, the rate) has published its value; `submit` then judges the
+   * fresh state, so a disabled action stays disabled.
+   */
+  function onFormKeyDown(event) {
+    if (!isEnterSubmitKey(event, formRef.current)) return;
+    event.preventDefault();
+    setTimeout(() => formRef.current?.requestSubmit(), 0);
   }
 
   let title = ui('convRateNewCurrencyTitle');
@@ -558,7 +595,7 @@ export function ManualRateDialog({
         aria-busy={submitting || undefined}
         data-testid="convrate-dialog"
         data-mode={mode}>
-        <form onSubmit={submit} noValidate className="flex flex-col">
+        <form ref={formRef} onSubmit={submit} onKeyDown={onFormKeyDown} noValidate className="flex flex-col">
           <DialogHeader
             className="flex flex-row items-center justify-between space-y-0 border-b border-border px-[22px] py-3.5 text-left"
             data-testid="DialogHeader__51f9a2">
