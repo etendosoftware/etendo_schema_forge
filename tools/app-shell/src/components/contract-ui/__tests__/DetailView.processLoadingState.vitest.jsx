@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 /**
  * ETP-4542 (Block 2, Bug 6): header process button loading state.
  *
@@ -13,7 +14,7 @@
  *  (4) double-click blocked → the running button is disabled so onClick can't refire
  *  (5) per-button granularity → a different running process leaves this button normal
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { DetailView } from '../DetailView.jsx';
@@ -211,5 +212,40 @@ describe('DetailView header process loading state (ETP-4542)', () => {
     expect(screen.getByText('Create Amortization')).toBeInTheDocument();
     expect(screen.queryByText('generating')).toBeNull();
     expect(processButton()).not.toBeDisabled();
+  });
+});
+
+describe('DetailView save/process mutual disabling (ETP-6233)', () => {
+  afterEach(() => {
+    mockHook.isSaving = false;
+    mockHook.isDirtyHeader = false;
+  });
+
+  it('disables the process button while a save is in flight', () => {
+    mockHook.isSaving = true;
+    renderView();
+    expect(processButton()).toBeDisabled();
+  });
+
+  it('keeps the process button enabled when idle', () => {
+    renderView();
+    expect(processButton()).not.toBeDisabled();
+  });
+
+  it('disables Save (without a spinner) while a header process runs', () => {
+    mockHook.isDirtyHeader = true;
+    renderView();
+    expect(screen.getByTestId('action-save')).not.toBeDisabled();
+    cleanup();
+    // the spinner test id is live: a real save shows it, so its absence below is meaningful
+    mockHook.isSaving = true;
+    renderView();
+    expect(screen.getByTestId('Loader2__fa3275')).toBeInTheDocument();
+    cleanup();
+    mockHook.isSaving = false;
+    mockHook.runningProcess = 'CreateAmortization';
+    renderView();
+    expect(screen.getByTestId('action-save')).toBeDisabled();
+    expect(screen.queryByTestId('Loader2__fa3275')).toBeNull();
   });
 });
