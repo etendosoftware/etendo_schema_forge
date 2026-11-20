@@ -1143,6 +1143,227 @@ describe('ListModalWindow — read-only window access (ETP-4950)', () => {
   });
 });
 
+// A read-only role opens a record by row click (with or without rowClickEdit) and gets the modal
+// in VIEW mode: fields disabled, no save, an outline Close pill, the footer toggle locked, and no
+// write request whatever the form reports.
+describe('ListModalWindow — read-only view mode', () => {
+  const READ_ONLY = { readOnly: true };
+  const ROWS = [{ id: 'ROW-1', name: 'Alpha', priority: 10, createTransaction: true }];
+  const TOGGLE_FIELDS = [
+    { key: 'name', column: 'Name', type: 'text', required: true, section: 'general' },
+    { key: 'createTransaction', column: 'CreateTransaction', type: 'checkbox', section: 'general' },
+  ];
+  const openRow = () => fireEvent.click(screen.getByTestId('cell-name-ROW-1'));
+  const writes = () => apiFetchMock.mock.calls.filter(([, opts]) => opts?.method && opts.method !== 'GET');
+
+  beforeEach(() => {
+    neoState.data = ROWS;
+  });
+
+  it('a row click opens the record even without rowClickEdit', () => {
+    renderWindow({ window: READ_ONLY });
+    expect(screen.getByTestId('list-modal-row-ROW-1').className).toContain('cursor-pointer');
+    openRow();
+    expect(screen.getByTestId('entity-form')).toBeInTheDocument();
+    expect(lastEntityFormProps.data).toMatchObject({ id: 'ROW-1', name: 'Alpha' });
+  });
+
+  it('a full-access role without rowClickEdit still gets no row click', () => {
+    renderWindow({ window: { readOnly: false }, config: { editTitleKey: 'ruleEdit' } });
+    expect(screen.getByTestId('list-modal-row-ROW-1').className).not.toContain('cursor-pointer');
+    openRow();
+    expect(screen.queryByTestId('entity-form')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'ruleEdit' })).not.toBeInTheDocument();
+  });
+
+  it('titles the modal with the generic "view" label when no viewTitleKey is declared', () => {
+    renderWindow({ window: READ_ONLY, config: { editTitleKey: 'ruleEdit' } });
+    openRow();
+    expect(screen.getByRole('heading', { name: 'view' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'ruleEdit' })).not.toBeInTheDocument();
+  });
+
+  it('titles the modal with config.viewTitleKey when declared', () => {
+    renderWindow({ window: READ_ONLY, config: { editTitleKey: 'ruleEdit', viewTitleKey: 'ruleView' } });
+    openRow();
+    expect(screen.getByRole('heading', { name: 'ruleView' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'view' })).not.toBeInTheDocument();
+  });
+
+  it('a full-access role keeps the edit title (viewTitleKey is ignored)', () => {
+    renderWindow({ config: { rowClickEdit: true, editTitleKey: 'ruleEdit', viewTitleKey: 'ruleView' } });
+    openRow();
+    expect(screen.getByRole('heading', { name: 'ruleEdit' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'ruleView' })).not.toBeInTheDocument();
+  });
+
+  it('hands EntityForm readOnly, which a full-access role does not get', () => {
+    const { unmount } = renderWindow({ window: READ_ONLY });
+    openRow();
+    expect(lastEntityFormProps.readOnly).toBe(true);
+    unmount();
+
+    renderWindow({ config: { rowClickEdit: true } });
+    openRow();
+    expect(lastEntityFormProps.readOnly).toBe(false);
+  });
+
+  it('renders the outline Close pill instead of the submit button', () => {
+    renderWindow({ window: READ_ONLY });
+    openRow();
+    expect(screen.queryByTestId('list-modal-submit')).not.toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-close-view')).toHaveTextContent('close');
+  });
+
+  it('a full-access edit modal has the submit button and no Close pill', () => {
+    renderWindow({ config: { rowClickEdit: true } });
+    openRow();
+    expect(screen.getByTestId('list-modal-submit')).toBeInTheDocument();
+    expect(screen.queryByTestId('list-modal-close-view')).not.toBeInTheDocument();
+  });
+
+  it('Close closes the modal and leaves the deep-linked record URL', () => {
+    renderWindow({ window: READ_ONLY, windowName: 'match-rule', recordId: 'ROW-1' });
+    expect(screen.getByTestId('entity-form')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('list-modal-close-view'));
+    expect(screen.queryByTestId('entity-form')).not.toBeInTheDocument();
+    expect(navigateMock).toHaveBeenCalledWith('/match-rule', { replace: true });
+  });
+
+  // Every way out of the wide view closes it and drops the record URL, not only the Close pill.
+  for (const [how, dismiss] of [
+    ['Escape', () => fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })],
+    ['the dialog X', () => fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }))],
+  ]) {
+    it(`${how} closes the wide view and leaves the deep-linked record URL`, () => {
+      renderWindow({ window: READ_ONLY, windowName: 'match-rule', recordId: 'ROW-1' });
+      expect(screen.getByTestId('list-modal-close-view')).toBeInTheDocument();
+      dismiss();
+      expect(screen.queryByTestId('entity-form')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('list-modal-close-view')).not.toBeInTheDocument();
+      expect(navigateMock).toHaveBeenCalledWith('/match-rule', { replace: true });
+      expect(writes()).toHaveLength(0);
+    });
+  }
+
+  // Defence in depth: the real ListModalCell locks the toggle for a read-only role, but the host
+  // still hands it `onToggle`. The stubbed cell fires it unconditionally, so this proves the HOST
+  // refuses the PATCH even if a cell ever reports a toggle.
+  it('sends no PATCH when a grid cell reports an inline toggle', async () => {
+    renderWindow({ window: READ_ONLY });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('cell-toggle-active-ROW-1'));
+    });
+    expect(writeCalls('PATCH')).toHaveLength(0);
+    expect(neoState.reload).not.toHaveBeenCalled();
+  });
+
+  it('a full-access inline toggle does send the PATCH (control)', async () => {
+    renderWindow();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('cell-toggle-active-ROW-1'));
+    });
+    expect(writeCalls('PATCH')).toHaveLength(1);
+    expect(writeCalls('PATCH')[0][0]).toBe(`${API_BASE}/${ENTITY}/ROW-1`);
+  });
+
+  it('shows the footer toggle disabled, and clicking it changes nothing', () => {
+    renderWindow({ window: READ_ONLY, fields: TOGGLE_FIELDS, config: { footerToggleField: 'createTransaction' } });
+    openRow();
+    const toggle = screen.getByTestId('list-modal-footer-toggle-createTransaction');
+    expect(toggle).toBeDisabled();
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('list-modal-footer-toggle-createTransaction')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('a full-access role keeps the footer toggle enabled', () => {
+    renderWindow({ fields: TOGGLE_FIELDS, config: { rowClickEdit: true, footerToggleField: 'createTransaction' } });
+    openRow();
+    expect(screen.getByTestId('list-modal-footer-toggle-createTransaction')).toBeEnabled();
+  });
+
+  it('ignores a field change reported by the form and sends no write request', async () => {
+    renderWindow({ window: READ_ONLY });
+    openRow();
+    await act(async () => {
+      lastEntityFormProps.onChange('name', 'Changed');
+    });
+    expect(lastEntityFormProps.data).toMatchObject({ name: 'Alpha' });
+    fireEvent.click(screen.getByTestId('list-modal-close-view'));
+    expect(writes()).toHaveLength(0);
+  });
+
+  // The view mode has no subtitle: the create / edit subtitles describe an editor.
+  describe('subtitle', () => {
+    const SUBTITLED = { subtitleKey: 'ruleNewSub', editSubtitleKey: 'ruleEditSub' };
+
+    it('wide: a read-only row click opens the view with no subtitle', () => {
+      renderWindow({ window: READ_ONLY, config: SUBTITLED });
+      openRow();
+      expect(screen.getByRole('heading', { name: 'view' })).toBeInTheDocument();
+      expect(screen.queryByTestId('list-modal-subtitle')).not.toBeInTheDocument();
+      expect(screen.queryByText('ruleEditSub')).not.toBeInTheDocument();
+      expect(screen.queryByText('ruleNewSub')).not.toBeInTheDocument();
+    });
+
+    it('wide: a read-only deep link opens the view with no subtitle', () => {
+      renderWindow({ window: READ_ONLY, config: SUBTITLED, windowName: 'match-rule', recordId: 'ROW-1' });
+      expect(screen.getByTestId('entity-form')).toBeInTheDocument();
+      expect(screen.queryByTestId('list-modal-subtitle')).not.toBeInTheDocument();
+    });
+
+    it('wide: read-only with only subtitleKey still shows no subtitle (no fallback leaks in)', () => {
+      renderWindow({ window: READ_ONLY, config: { subtitleKey: 'ruleNewSub' } });
+      openRow();
+      expect(screen.queryByTestId('list-modal-subtitle')).not.toBeInTheDocument();
+    });
+
+    it('wide: a full-access edit still shows the edit subtitle', () => {
+      renderWindow({ config: { ...SUBTITLED, rowClickEdit: true } });
+      openRow();
+      expect(screen.getByTestId('list-modal-subtitle')).toHaveTextContent('ruleEditSub');
+    });
+
+    it('wide: a full-access edit falls back to subtitleKey when no editSubtitleKey is declared', () => {
+      renderWindow({ config: { subtitleKey: 'ruleNewSub', rowClickEdit: true } });
+      openRow();
+      expect(screen.getByTestId('list-modal-subtitle')).toHaveTextContent('ruleNewSub');
+    });
+
+    it('compact: a read-only row click and deep link open the popup with no subtitle', () => {
+      const config = { ...SUBTITLED, modalVariant: 'compact' };
+      const { unmount } = renderWindow({ window: READ_ONLY, config });
+      openRow();
+      expect(screen.getByTestId('list-modal-compact-dialog')).toBeInTheDocument();
+      expect(screen.queryByTestId('list-modal-subtitle')).not.toBeInTheDocument();
+      unmount();
+
+      renderWindow({ window: READ_ONLY, config, windowName: 'match-rule', recordId: 'ROW-1' });
+      expect(screen.getByTestId('list-modal-compact-dialog')).toBeInTheDocument();
+      expect(screen.queryByTestId('list-modal-subtitle')).not.toBeInTheDocument();
+    });
+
+    it('compact: a full-access edit still shows the edit subtitle', () => {
+      renderWindow({ config: { ...SUBTITLED, modalVariant: 'compact', rowClickEdit: true } });
+      openRow();
+      expect(screen.getByTestId('list-modal-subtitle')).toHaveTextContent('ruleEditSub');
+    });
+  });
+
+  it('compact variant: the popup gets readOnly, no Save, and its outline pill reads "close"', () => {
+    renderWindow({ window: READ_ONLY, config: { modalVariant: 'compact', viewTitleKey: 'ptView' } });
+    openRow();
+    expect(screen.getByTestId('list-modal-compact-dialog')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'ptView' })).toBeInTheDocument();
+    expect(lastEntityFormProps.readOnly).toBe(true);
+    expect(screen.queryByTestId('list-modal-submit')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('list-modal-cancel'));
+    expect(screen.queryByTestId('list-modal-compact-dialog')).not.toBeInTheDocument();
+    expect(writes()).toHaveLength(0);
+  });
+});
+
 // The grid header resolved `tMenu(col.label)` only, so it showed the raw AD label
 // ("Overdue Payment Days Rule") while the advanced filter of the same window — and every
 // standard list — showed the window's field label (labelOverrides / per-window label slice).
@@ -1338,13 +1559,16 @@ describe('ListModalWindow — templateConfig opt-ins', () => {
       expect(lastEntityFormProps.data).toMatchObject({ id: 'ROW-1' });
     });
 
-    it('a read-only role gets no row-click edit', () => {
+    it('a read-only role: the row click opens the record in view mode, not in the editor', () => {
       renderWindow({ config: EDIT, window: { readOnly: true } });
       const row = screen.getByTestId('list-modal-row-ROW-1');
-      expect(row.className).not.toContain('cursor-pointer');
+      expect(row.className).toContain('cursor-pointer');
       fireEvent.click(row);
+      expect(screen.getByRole('heading', { name: 'view' })).toBeInTheDocument();
       expect(screen.queryByRole('heading', { name: 'ptEdit' })).not.toBeInTheDocument();
-      expect(screen.queryByTestId('list-modal-compact-dialog')).not.toBeInTheDocument();
+      expect(lastEntityFormProps.readOnly).toBe(true);
+      expect(lastEntityFormProps.data).toMatchObject({ id: 'ROW-1' });
+      expect(screen.queryByTestId('list-modal-submit')).not.toBeInTheDocument();
     });
   });
 });
@@ -1625,19 +1849,48 @@ describe('ListModalWindow — deep link', () => {
     });
   });
 
+  // A read-only role gets the same modal in view mode, so a shared link opens the record for it.
   describe('a read-only role', () => {
-    it('just shows the list: no popup, no request, no redirect', () => {
-      renderWindow({ ...DEEP, recordId: 'A', window: { readOnly: true } });
-      expect(screen.getByTestId('list-modal-row-A')).toBeInTheDocument();
-      expect(screen.queryByTestId('list-modal-compact-dialog')).not.toBeInTheDocument();
+    const READ_ONLY = { readOnly: true };
+
+    it('opens a record in the list in the view popup: no request, no redirect', () => {
+      renderWindow({ ...DEEP, recordId: 'A', window: READ_ONLY });
+      expect(screen.getByTestId('list-modal-compact-dialog')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'view' })).toBeInTheDocument();
+      expect(lastEntityFormProps.readOnly).toBe(true);
+      expect(lastEntityFormProps.data).toMatchObject({ id: 'A', name: 'Alpha' });
+      expect(screen.queryByTestId('list-modal-submit')).not.toBeInTheDocument();
+      expect(screen.getByTestId('list-modal-cancel')).toHaveTextContent('close');
       expect(apiFetchMock).not.toHaveBeenCalled();
       expect(navigateMock).not.toHaveBeenCalled();
     });
 
-    it('does not read a record outside the list either', () => {
-      renderWindow({ ...DEEP, recordId: 'ZZ', window: { readOnly: true } });
-      expect(apiFetchMock).not.toHaveBeenCalled();
+    it('reads a record outside the list by id and opens it in view mode', async () => {
+      apiFetchMock = vi.fn(() => Promise.resolve(jsonResponse({ response: { data: [{ id: 'B', name: 'Beta' }] } })));
+      renderWindow({ ...DEEP, recordId: 'B', window: READ_ONLY });
+      await waitFor(() => expect(screen.getByTestId('list-modal-compact-dialog')).toBeInTheDocument());
+      expect(getCalls()).toHaveLength(1);
+      expect(getCalls()[0][0]).toBe(`${API_BASE}/${ENTITY}/B`);
+      expect(lastEntityFormProps.readOnly).toBe(true);
+      expect(lastEntityFormProps.data).toMatchObject({ id: 'B', name: 'Beta' });
+      expect(screen.queryByTestId('list-modal-submit')).not.toBeInTheDocument();
       expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('a record the server does not return toasts and drops back to the list URL', async () => {
+      apiFetchMock = vi.fn(() => Promise.resolve(jsonResponse({ response: { data: [] } })));
+      renderWindow({ ...DEEP, recordId: 'ZZ', window: READ_ONLY });
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('recordNotFoundTitle'));
+      expect(navigateMock).toHaveBeenCalledWith(`/${WINDOW}`, { replace: true });
+      expect(screen.queryByTestId('list-modal-compact-dialog')).not.toBeInTheDocument();
+    });
+
+    it('Close leaves the record URL and does not write', () => {
+      renderWindow({ ...DEEP, recordId: 'A', window: READ_ONLY });
+      fireEvent.click(screen.getByTestId('list-modal-cancel'));
+      expect(screen.queryByTestId('list-modal-compact-dialog')).not.toBeInTheDocument();
+      expect(navigateMock).toHaveBeenCalledWith(`/${WINDOW}`, { replace: true });
+      expect(apiFetchMock).not.toHaveBeenCalled();
     });
   });
 
@@ -1843,13 +2096,30 @@ describe('ListModalWindow — row keyboard open', () => {
     expect(screen.getByTestId('list-modal-row-ROW-1')).toHaveAttribute('tabindex', '0');
   });
 
-  it('leaves rows unfocusable without rowClickEdit or for a read-only role', () => {
-    const { unmount } = renderWindow();
+  it('leaves rows unfocusable for a full-access role without rowClickEdit', () => {
+    renderWindow();
     expect(screen.getByTestId('list-modal-row-ROW-1')).not.toHaveAttribute('tabindex');
+    fireEvent.keyDown(screen.getByTestId('list-modal-row-ROW-1'), { key: 'Enter' });
+    expect(screen.queryByTestId('entity-form')).not.toBeInTheDocument();
+  });
+
+  it('makes rows focusable for a read-only role, with or without rowClickEdit', () => {
+    const { unmount } = renderWindow({ window: { readOnly: true } });
+    expect(screen.getByTestId('list-modal-row-ROW-1')).toHaveAttribute('tabindex', '0');
     unmount();
     renderWindow({ config: EDIT, window: { readOnly: true } });
-    expect(screen.getByTestId('list-modal-row-ROW-1')).not.toHaveAttribute('tabindex');
+    expect(screen.getByTestId('list-modal-row-ROW-1')).toHaveAttribute('tabindex', '0');
   });
+
+  for (const key of ['Enter', ' ']) {
+    it(`${JSON.stringify(key)} on a focused row opens the view modal for a read-only role without rowClickEdit`, () => {
+      renderWindow({ window: { readOnly: true } });
+      fireEvent.keyDown(screen.getByTestId('list-modal-row-ROW-1'), { key });
+      expect(screen.getByRole('heading', { name: 'view' })).toBeInTheDocument();
+      expect(lastEntityFormProps.readOnly).toBe(true);
+      expect(lastEntityFormProps.data).toMatchObject({ id: 'ROW-1' });
+    });
+  }
 
   for (const key of ['Enter', ' ']) {
     it(`${JSON.stringify(key)} on the focused row opens it`, () => {
