@@ -109,6 +109,125 @@ function flipFoldedRow(fold, id) {
   return { ...fold, flipped };
 }
 
+/** ETP-6084: what the contract declares drives the filters, the toggles, the grouping and the amount columns. */
+function useContractReportConfig(report, locale) {
+  const params = report.parameters || [];
+  const chartTree = report.tree === 'chart';
+  const amountColumns = report.amountColumns ?? null;
+  const pickers = useMemo(() => urlStateSpec(report).pickers, [report]);
+  const toggleParams = useMemo(
+    () => (chartTree ? params.filter((p) => p.type === 'toggle' && !p.hidden && p.name !== 'compareTo') : []),
+    [chartTree, params],
+  );
+  const config = useMemo(
+    () => ({ pickers, toggleDefaults: Object.fromEntries(toggleParams.map((p) => [p.name, isOn(p.default)])) }),
+    [pickers, toggleParams],
+  );
+  // The grouping's options: the parameter's own, or (as the old viewer) one per dimension filter that declares a `groupByValue`.
+  const groupByOptions = useMemo(() => {
+    const declared = params.find((p) => p.name === 'groupBy');
+    if (!chartTree || !declared) return null;
+    const options = declared.options ?? params.filter((p) => p.groupByValue).map((p) => ({ value: p.groupByValue, label: p.label }));
+    return options.map((o) => ({ value: o.value, label: pick(o.label, locale) }));
+  }, [chartTree, params, locale]);
+  const levelParam = params.find((p) => p.name === 'accountLevel');
+  const defaultLevel = levelParam?.default || 'C';
+  const levelOptions = (levelParam?.options || []).map((o) => ({ value: o.value, label: pick(o.label, locale) }));
+  return { chartTree, amountColumns, pickers, toggleParams, config, groupByOptions, defaultLevel, levelOptions };
+}
+
+/** Writes the view state back to the URL (minus the defaults); a no-op when the address already says it. */
+function syncReportUrl({ state, report, selectedOrgId, opening, current, onSearchChange }) {
+  const next = writeReportUrlState(current, state, report, { orgId: selectedOrgId, dateFrom: opening?.dateFrom, dateTo: opening?.dateTo });
+  if (next.replace(/^\?/, '') === current.replace(/^\?/, '')) return;
+  if (onSearchChange) onSearchChange(next);
+  else window.history.replaceState(window.history.state, '', `${window.location.pathname}${next}${window.location.hash}`);
+}
+
+/** The export buttons of the top bar. */
+function ExportButtons({ exporting, disabled, exportTooLong, onExport }) {
+  return (
+    <div className="flex items-center gap-1">
+      {EXPORTS.map(({ format, label: text, icon: Icon }) => (
+        <Button
+          key={format}
+          variant="ghost"
+          className="h-9 px-3 gap-1.5 text-sm"
+          disabled={disabled || exporting !== null || (exportTooLong && format !== 'pdf')}
+          onClick={() => onExport(format)}
+          data-testid={`DynamicReportView__export-${format}`}
+        >
+          {exporting === format ? <CircleNotchIcon className="w-4 h-4 animate-spin" data-testid="Loader2__c51cea" /> : <Icon className="w-4 h-4" data-testid="Icon__c51cea" />}
+          {text}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+/** The active-filter chips under the title; each one with a `clear` can be removed. */
+function ReportChips({ chips, ui, onClear }) {
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1 my-3 text-xs text-muted-foreground" data-testid="DynamicReportView__chips">
+      {chips.map((c) => (
+        <span key={c.key} className="inline-flex items-center gap-1" data-testid={`DynamicReportView__chip-${c.key}`}>
+          {c.label}: <b className="text-foreground font-semibold">{c.value}</b>
+          {c.clear && (
+            <button
+              type="button"
+              className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-muted"
+              aria-label={ui('dynamicReportRemoveFilter', { label: c.label })}
+              onClick={() => onClear(c.clear)}
+              data-testid={`DynamicReportView__chipRemove-${c.key}`}
+            >
+              <XIcon className="w-3 h-3" data-testid="X__c51cea" />
+            </button>
+          )}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** The notes under the table: periods hidden by the cap and partial periods. */
+function PeriodNotes({ hiddenCount, hasPartial, ui }) {
+  if (hiddenCount <= 0 && !hasPartial) return null;
+  return (
+    <div className="mt-2 text-xs text-muted-foreground" data-testid="DynamicReportView__periodNotes">
+      {hiddenCount > 0 && <p data-testid="DynamicReportView__hiddenNote">{ui(hiddenCount === 1 ? 'dynamicReportHiddenPeriodsOne' : 'dynamicReportHiddenPeriods', { count: hiddenCount })}</p>}
+      {hasPartial && <p data-testid="DynamicReportView__partialNote">{ui('dynamicReportPartialPeriods')}</p>}
+    </div>
+  );
+}
+
+/** The body under the filters: the empty note, or the balance, the KPIs, the table and the period notes. */
+function ReportResults({ ui, data, rows, shown, noSchema, loading, chartTree, partialFilters, kpis, compare, groups, mode, expanded, onToggle, splitBy, splits, hasRange, onToggleSplit, onOpenLedger, hiddenCount, hasPartial }) {
+  return (
+    <>
+      {(noSchema || (data && !rows.length)) && <p className="text-sm text-muted-foreground" data-testid="DynamicReportView__empty">{ui('noResults')}</p>}
+      {rows.length > 0 && (
+        <div className={loading ? 'opacity-60 transition-opacity' : undefined}>
+          {chartTree && data?.balance && <DynamicReportBalance balance={data.balance} partial={partialFilters} data-testid="DynamicReportBalance__c51cea" />}
+          {kpis && <DynamicReportKpis kpis={kpis} compare={compare} data-testid="DynamicReportKpis__c51cea" />}
+          <DynamicReportTable
+            rows={shown}
+            groups={groups}
+            mode={mode}
+            expanded={expanded}
+            onToggle={onToggle}
+            splitBy={splitBy}
+            splits={splits}
+            onToggleSplit={hasRange ? onToggleSplit : undefined}
+            onOpenLedger={onOpenLedger}
+            totals={chartTree ? (data?.totals ?? null) : null}
+            data-testid="DynamicReportTable__c51cea" />
+          <PeriodNotes hiddenCount={hiddenCount} hasPartial={hasPartial} ui={ui} />
+        </div>
+      )}
+    </>
+  );
+}
+
 /**
  * ETP-6080 — the interactive report view (behind `dynamic-reports`). Opens on the fiscal year that
  * contains today (§19), applies every change on its own through `useReportQuery`, folds the tree
@@ -135,28 +254,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const label = (name) => pick(paramOf(name)?.label, locale) || name;
   const selectorOf = (name) => paramOf(name)?.selector;
   const sectionLabel = (id) => pick((report.sections || []).find((s) => s.id === id)?.label, locale);
-  // ETP-6084: what the contract declares drives the filters, the toggles, the grouping and the amount columns.
-  const chartTree = report.tree === 'chart';
-  const amountColumns = report.amountColumns ?? null;
-  const pickers = useMemo(() => urlStateSpec(report).pickers, [report]);
-  const toggleParams = useMemo(
-    () => (chartTree ? params.filter((p) => p.type === 'toggle' && !p.hidden && p.name !== 'compareTo') : []),
-    [chartTree, params],
-  );
-  const config = useMemo(
-    () => ({ pickers, toggleDefaults: Object.fromEntries(toggleParams.map((p) => [p.name, isOn(p.default)])) }),
-    [pickers, toggleParams],
-  );
-  // The grouping's options: the parameter's own, or (as the old viewer) one per dimension filter that declares a `groupByValue`.
-  const groupByOptions = useMemo(() => {
-    const declared = params.find((p) => p.name === 'groupBy');
-    if (!chartTree || !declared) return null;
-    const options = declared.options ?? params.filter((p) => p.groupByValue).map((p) => ({ value: p.groupByValue, label: p.label }));
-    return options.map((o) => ({ value: o.value, label: pick(o.label, locale) }));
-  }, [chartTree, params, locale]);
-  const levelParam = paramOf('accountLevel');
-  const defaultLevel = levelParam?.default || 'C';
-  const levelOptions = (levelParam?.options || []).map((o) => ({ value: o.value, label: pick(o.label, locale) }));
+  const { chartTree, amountColumns, pickers, toggleParams, config, groupByOptions, defaultLevel, levelOptions } = useContractReportConfig(report, locale);
   // Q7: the org picker only when the role reaches more than one org; `0` (*) is not an org to pick.
   const orgs = useMemo(() => roleOrgs.filter((o) => o?.id && o.id !== '0'), [roleOrgs]);
   // Same rule for the Organización split and chip: with one org there is nothing to tell apart.
@@ -184,11 +282,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   searchRef.current = search;
   useEffect(() => {
     if (defaults.loading) return;
-    const current = searchRef.current ?? window.location.search;
-    const next = writeReportUrlState(current, state, report, { orgId: selectedOrgId, dateFrom: opening?.dateFrom, dateTo: opening?.dateTo });
-    if (next.replace(/^\?/, '') === current.replace(/^\?/, '')) return;
-    if (onSearchChange) onSearchChange(next);
-    else window.history.replaceState(window.history.state, '', `${window.location.pathname}${next}${window.location.hash}`);
+    syncReportUrl({ state, report, selectedOrgId, opening, current: searchRef.current ?? window.location.search, onSearchChange });
   }, [state, report, selectedOrgId, opening, defaults.loading, onSearchChange]);
   // The opening period lands once the years have loaded; a user edit before that is kept.
   useEffect(() => {
@@ -357,6 +451,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   // The strip's badge counts what the user chose to narrow; the period and the (required) org are always on.
   const activeFilterCount = chips.filter((c) => c.clear).length;
   const errorText = reversed ? ui('dynamicReportErrorReversedDates') : queryErrorText(error, errorCode, ui);
+  const shownError = errorText || exportError;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-testid="DynamicReportView">
@@ -364,21 +459,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
         <Button variant="outline" className="h-9 px-3 rounded-lg" data-testid="action-cancel" onClick={onBack}>
           {ui('cancel')}
         </Button>
-        <div className="flex items-center gap-1">
-          {EXPORTS.map(({ format, label: text, icon: Icon }) => (
-            <Button
-              key={format}
-              variant="ghost"
-              className="h-9 px-3 gap-1.5 text-sm"
-              disabled={!data || !hasRange || exporting !== null || (exportTooLong && format !== 'pdf')}
-              onClick={() => exportAs(format)}
-              data-testid={`DynamicReportView__export-${format}`}
-            >
-              {exporting === format ? <CircleNotchIcon className="w-4 h-4 animate-spin" data-testid="Loader2__c51cea" /> : <Icon className="w-4 h-4" data-testid="Icon__c51cea" />}
-              {text}
-            </Button>
-          ))}
-        </div>
+        <ExportButtons exporting={exporting} disabled={!data || !hasRange} exportTooLong={exportTooLong} onExport={exportAs} />
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row">
@@ -419,55 +500,36 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
               {loading && <CircleNotchIcon className="w-4 h-4 animate-spin text-muted-foreground" data-testid="DynamicReportView__loading" />}
             </div>
 
-            <div className="flex flex-wrap gap-x-4 gap-y-1 my-3 text-xs text-muted-foreground" data-testid="DynamicReportView__chips">
-              {chips.map((c) => (
-                <span key={c.key} className="inline-flex items-center gap-1" data-testid={`DynamicReportView__chip-${c.key}`}>
-                  {c.label}: <b className="text-foreground font-semibold">{c.value}</b>
-                  {c.clear && (
-                    <button
-                      type="button"
-                      className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-muted"
-                      aria-label={ui('dynamicReportRemoveFilter', { label: c.label })}
-                      onClick={() => userChange(c.clear)}
-                      data-testid={`DynamicReportView__chipRemove-${c.key}`}
-                    >
-                      <XIcon className="w-3 h-3" data-testid="X__c51cea" />
-                    </button>
-                  )}
-                </span>
-              ))}
-            </div>
+            <ReportChips chips={chips} ui={ui} onClear={userChange} />
 
             {exportTooLong && <p className="text-xs text-muted-foreground mb-3" data-testid="DynamicReportView__exportTooLong">{ui('dynamicReportExportTooLong')}</p>}
-            {(errorText || exportError) && (
-              <p role="alert" className="text-sm text-destructive mb-3" data-testid="DynamicReportView__error">{errorText || exportError}</p>
+            {shownError && (
+              <p role="alert" className="text-sm text-destructive mb-3" data-testid="DynamicReportView__error">{shownError}</p>
             )}
 
-            {(noSchema || (data && !rows.length)) && <p className="text-sm text-muted-foreground" data-testid="DynamicReportView__empty">{ui('noResults')}</p>}
-            {rows.length > 0 && (
-              <div className={loading ? 'opacity-60 transition-opacity' : undefined}>
-                {chartTree && data?.balance && <DynamicReportBalance balance={data.balance} partial={partialFilters} data-testid="DynamicReportBalance__c51cea" />}
-                {kpis && <DynamicReportKpis kpis={kpis} compare={compare} data-testid="DynamicReportKpis__c51cea" />}
-                <DynamicReportTable
-                  rows={shown}
-                  groups={groups}
-                  mode={mode}
-                  expanded={expandedSet}
-                  onToggle={toggleRow}
-                  splitBy={state.splitBy}
-                  splits={splits}
-                  onToggleSplit={hasRange ? toggleSplit : undefined}
-                  onOpenLedger={canOpen(LEDGER_REPORT_ID) ? openLedger : null}
-                  totals={chartTree ? (data?.totals ?? null) : null}
-                  data-testid="DynamicReportTable__c51cea" />
-                {(hiddenCount > 0 || hasPartial) && (
-                  <div className="mt-2 text-xs text-muted-foreground" data-testid="DynamicReportView__periodNotes">
-                    {hiddenCount > 0 && <p data-testid="DynamicReportView__hiddenNote">{ui(hiddenCount === 1 ? 'dynamicReportHiddenPeriodsOne' : 'dynamicReportHiddenPeriods', { count: hiddenCount })}</p>}
-                    {hasPartial && <p data-testid="DynamicReportView__partialNote">{ui('dynamicReportPartialPeriods')}</p>}
-                  </div>
-                )}
-              </div>
-            )}
+            <ReportResults
+              ui={ui}
+              data={data}
+              rows={rows}
+              shown={shown}
+              noSchema={noSchema}
+              loading={loading}
+              chartTree={chartTree}
+              partialFilters={partialFilters}
+              kpis={kpis}
+              compare={compare}
+              groups={groups}
+              mode={mode}
+              expanded={expandedSet}
+              onToggle={toggleRow}
+              splitBy={state.splitBy}
+              splits={splits}
+              hasRange={hasRange}
+              onToggleSplit={toggleSplit}
+              onOpenLedger={canOpen(LEDGER_REPORT_ID) ? openLedger : null}
+              hiddenCount={hiddenCount}
+              hasPartial={hasPartial}
+            />
           </div>
         </main>
       </div>
