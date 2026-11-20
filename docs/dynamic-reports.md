@@ -4,7 +4,7 @@
 
 ## How a report joins the engine (ETP-6084)
 
-Two shapes exist. The period engine (P&L, balance sheet) reads a `report-periods` tree. A **chart-tree** report (Trial Balance) reads the chart of accounts directly; it declares:
+Two shapes exist. The period engine (P&L and, since ETP-6083, the balance sheet) reads a `report-periods` tree. A **chart-tree** report (Trial Balance) reads the chart of accounts directly; it declares:
 
 - **`tree: 'chart'`** in the contract. Without it nothing below applies.
 - **`sql.treeQuery`**: one row per chart node with a posted descendant up to `__DATETO__`: `node_id, parent_id, value, name, elementlevel, sort_path, account_id`, `dimension_id` (NULL) and its own amounts `opening_balance, activity_debit, activity_credit, closing_balance` (raw sums, may be negative). With grouping, extra rows per (S leaf, dimension value) carry `dimension_id` / `dimension_name`. No LIMIT.
@@ -23,6 +23,25 @@ Two shapes exist. The period engine (P&L, balance sheet) reads a `report-periods
 **No row cap on the chart `/query`.** `treeQuery` and `periodQuery` are not limited (a cap would drop chart nodes); only the statement timeout applies, so a large account x dimension grouping can be heavy.
 
 **Descriptor forwarding.** The report descriptor (core `buildReportDescriptor`, dev engine `report-api.js` `listReports`, only when the loaded core has the chart path) forwards `tree` and `amountColumns`; if a descriptor drops them the report silently renders as a P&L.
+
+## A report that is a balance at a date (ETP-6083)
+
+The period engine has a second consumer, the Balance Sheet, which is read **at a date** instead of over a period. Nothing in the view or in core names the report: it opts in through contract keys, and a contract without them answers and renders exactly as before.
+
+| Key | Where | Effect |
+|-----|-------|--------|
+| `balanceCheck: true` | contract top level (server-side, not in the descriptor) | `/query` and `/render` answer `balance: { balanced, activo, pnPasivo, diff }` (`meta.balance` / `meta.balanceRef` on `/render`): the two root groups summed in displayed sign. `null` unless there are exactly two root groups, or when `showOnlyAccountsWithValue` hides a whole side. `DynamicReportBalance` shows it; it has two shapes (`debitCreditDiff` for the Trial Balance, `activo` for a sheet) |
+| `result_onthefly` / `result_onthefly_ref` (tree) and `own_result` / `own_result_sly` / `own_result_prev` (period and split queries) | SQL columns on the income-summary node only | core adds `row.result` / `cells[i].result = { onTheFly, posted }` (`posted = amount - onTheFly`, displayed sign). A row that carries `result` opens `DynamicResultPanel` instead of the ledger |
+| `dateTo.shortcuts: ['today','lastMonthEnd','lastQuarterEnd','lastFiscalYearEnd']` | `dateTo` parameter | the panel offers these end-date buttons instead of Mes / Trimestre / Año; the fiscal year comes from the org calendar (`dynamicDates.js` `endShortcutDate`) |
+| `dateFrom.role: 'ledgerStart'` | `dateFrom` parameter | Desde never changes the amounts: the query always sends the start of the fiscal year of Hasta (no refetch on a Desde edit), and Desde only moves where the ledger drill starts, clamped to that year (`ledgerStartFor`) |
+| `compareTo.compareModes: { sly, prev }` | `compareTo` parameter | `sameDateLastYear` / `previousFiscalYearClose`: each comparison is a **one-day range** (`comparedRanges(period, grain, rules)`); the panel and column headers name the date. Absent (P&L): the period-shaped comparisons |
+| `maxIndent` | an `accountLevel` option | the fold cuts by the indent of the **listed** rows (`reportTree.js` `expansionForIndent`) instead of the E/C/D/S rank, so a chart whose roots are never rows can still offer Grupo / Epígrafe |
+| `dynamicOnly` / `legacyOnly` | an `accountLevel` **option** (the parameter and section forms are described above) | `dynamicOnly`: hidden from the old viewer (`ReportViewerPage.jsx`); `legacyOnly`: hidden from the interactive view (`useContractReportConfig`) |
+| `excludeFromSummary: true` | a **parameter** (section-level already existed, ETP-5128) | the control stays live in the viewer but is not printed in the PDF/HTML filter grid (core `report-filters.js`) |
+
+Ledger drill of such a report (`ledgerParams(..., { atDate: true })`): the ledger is asked with `openingEntryAmount=true`, so its signed closing balance equals the amount clicked (`ledgerSummary` `closingSigned`), and `DynamicDrillPanel` shows whether they match. The result panel opens the P&L through `RESULT_REPORT_ID` (`drillDown.js`), like the ledger and entry reports.
+
+A report with this shape declares **no** `columns` parameter: Mes / Trimestre are not offered (columns by period on the Balance Sheet: ETP-6292). Its URL keys follow *Selections in the URL* unchanged (`orgId`, `dateFrom` + `dateTo`, `compare`, pickers). Report-specific behaviour: `docs/generated-custom-windows/balance-sheet.md`; core side: `schema_forge_core` `docs/report-query.md` → *Balance block and income-summary split (ETP-6083)* and *Export filter grid*.
 
 ## Selections in the URL (ETP-6239)
 
