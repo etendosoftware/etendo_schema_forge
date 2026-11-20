@@ -423,8 +423,8 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
     refold('level');
   };
 
-  const [drill, setDrill] = useState(null); // { row, range, clicked }: the account whose ledger is open, the cell's range (null = the view's period) and the amount clicked
-  const openLedger = useCallback((row, cellRange, clicked) => setDrill({ row: drillRowOf(row), range: cellRange, clicked }), []);
+  const [drill, setDrill] = useState(null); // { row, range, clicked, calculated }: the account whose ledger is open, the cell's range (null = the view's period) and the amount clicked
+  const openLedger = useCallback((row, cellRange, clicked, calculated = 0) => setDrill({ row: drillRowOf(row), range: cellRange, clicked, calculated }), []);
   // ETP-6083: the ledger of a balance reads from the ledger start (Desde, inside the fiscal year of the cell's date) to that date.
   const drillRange = useMemo(() => atDate.drillRange(drill), [atDate.drillRange, drill]);
   // ETP-6083: the income-summary row's explanation: { row, pos, which, range }.
@@ -588,6 +588,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
         range={drillRange}
         atDate={ledgerStart}
         clicked={drill?.clicked ?? null}
+        calculated={drill?.calculated ?? 0}
         queryParams={queryParams}
         session={telemetry.session}
         canOpenEntry={canOpen(ENTRY_REPORT_ID)}
@@ -598,7 +599,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
         years={defaults.years}
         state={state}
         pickers={pickers}
-        onOpenLedger={canOpen(LEDGER_REPORT_ID) ? (row, range, clicked) => { setResultInfo(null); openLedger(row, range, clicked); } : null}
+        onOpenLedger={canOpen(LEDGER_REPORT_ID) ? (row, range, clicked, calculated) => { setResultInfo(null); openLedger(row, range, clicked, calculated); } : null}
         onClose={() => setResultInfo(null)}
         data-testid="DynamicResultPanel__c51cea" />
     </div>

@@ -2094,6 +2094,22 @@ describe('DynamicReportView — Balance Sheet (ETP-6083)', () => {
       expect(queriesTo('report-general-ledger')[0]).toMatchObject({ accountId: '', fromAccountId: '21300', toAccountId: '21310', dateTo: '2026-11-03' });
     });
 
+    it('a row that holds the result and other accounts opens the ledger, compared without the calculated part', async () => {
+      // P1 = 129's 37.504 + a capital account with 100 posted.
+      const mixed = FOLDED_ROWS.map((r) => (r.node_id === 'P1' || r.node_id === 'P2' ? { ...r, amount: 37604, cells: [{ ...ONE_DAY(37604, 24811, 20000) }] } : r));
+      mixed.push(row({ node_id: '100', parentId: 'P2', elementlevel: 'C', value: '100', name: 'Capital', sign: 'C', group: 'Pasivo' }, ONE_DAY(100, 100, 100)));
+      queryAnswer = (params) => json({ kind: 'tree', periods: [{ idx: 0, dateFrom: params.dateFrom, dateTo: params.dateTo, partial: false }], hiddenCount: 0, rows: mixed, balance: BALANCED });
+      ledgerAnswer = () => ({ kind: 'rows', rows: [], openingRows: [{ openingtotal: -100 }] });
+      renderBs();
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__level'), { target: { value: 'G' } });
+      fireEvent.click((await openNode('P1')).getByTestId('DynamicReportTable__ledger'));
+      await waitFor(() => expect(queriesTo('report-general-ledger')).toHaveLength(1));
+      expect(queriesTo('report-general-ledger')[0]).toMatchObject({ accountId: '', fromAccountId: '100', toAccountId: '12901000' });
+      expect(screen.queryByTestId('DynamicResultPanel')).toBeNull();
+      expect(await screen.findByTestId('DynamicDrillPanel__closingCheck')).toHaveTextContent('dynamicReportClosingMatches'); // 100 = 37.604 - 37.504
+      expect(screen.getByTestId('DynamicDrillPanel__calculatedNote')).toBeInTheDocument();
+    });
+
     it('a heading with no account under it stays plain text', async () => {
       renderBs();
       expect((await openNode('A1')).queryByTestId('DynamicReportTable__ledger')).toBeNull();

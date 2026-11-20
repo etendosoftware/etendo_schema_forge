@@ -125,21 +125,45 @@ describe('expansionForLevel with maxIndent', () => {
     expect([...expansionForLevel(TREE, 'C')].sort()).toEqual(['G1', 'P1']);
   });
 
-  it('a closed row gets the code range of its hidden leaf accounts and the aggregated result they carry', () => {
-    const rows = [
-      { node_id: 'H', parentId: null, elementlevel: 'E', value: 'A.I', amount: 100 },
-      { node_id: 'P', parentId: 'H', elementlevel: 'C', value: '12', amount: 100 },
-      { node_id: 'L1', parentId: 'P', elementlevel: 'S', value: '12900', amount: 60, result: { onTheFly: 30, posted: 30 } },
-      { node_id: 'L2', parentId: 'P', elementlevel: 'S', value: '12100', amount: 40 },
-    ];
+  describe('folded summaries (balance at a date)', () => {
     const opt = { foldedSummary: true };
-    const [h, p] = [visibleRows(rows, new Set(), null, opt), visibleRows(rows, new Set(['H']), null, opt)];
-    expect(visibleRows(rows, new Set())[0].foldedRange).toBeUndefined(); // off by default
-    expect(h).toHaveLength(1);
-    expect(h[0].foldedRange).toEqual({ from: '12100', to: '12900' });
-    expect(h[0].result).toEqual({ onTheFly: 30, posted: 70 }); // posted = what is left of the amount
-    expect(p[1].foldedRange).toEqual({ from: '12100', to: '12900' });
-    expect(visibleRows(rows, expandAll(rows), null, opt).some((r) => r.foldedRange)).toBe(false);
-    expect(visibleRows(rows, expandAll(rows), null, opt)[2].result).toEqual({ onTheFly: 30, posted: 30 }); // an open leaf keeps its own
+    const fold = (rows, open = []) => visibleRows(rows, new Set(open), null, opt);
+    const cell = (amount, onTheFly) => ({ amount, ...(onTheFly != null && { result: { onTheFly, posted: amount - onTheFly } }) });
+    const leaf = (id, parentId, value, amount, onTheFly) => ({ node_id: id, parentId, elementlevel: 'S', value, amount, cells: [cell(amount, onTheFly)], ...(onTheFly != null && { result: { onTheFly, posted: amount - onTheFly } }) });
+    const head = (id, parentId, value, amount) => ({ node_id: id, parentId, elementlevel: 'C', value, amount, cells: [cell(amount)] });
+
+    it('is off by default', () => {
+      expect(visibleRows([head('P', null, '129', 60), leaf('L', 'P', '12901000', 60, 60)], new Set())[0].foldedRange).toBeUndefined();
+    });
+
+    it('a row made of result accounts alone gets its range and the aggregated result', () => {
+      const rows = [head('P', null, '129', 60), leaf('L1', 'P', '12901000', 40, 30), leaf('L2', 'P', '12902000', 20, 10)];
+      const [p] = fold(rows);
+      expect(p.foldedRange).toEqual({ from: '12901000', to: '12902000' });
+      expect(p.result).toEqual({ onTheFly: 40, posted: 20 });
+      expect(p.cells[0].result).toEqual({ onTheFly: 40, posted: 20 });
+      expect(p.foldedOnTheFly).toBeUndefined();
+    });
+
+    it('a mixed row has no result (posted would include other accounts) but carries its on-the-fly part', () => {
+      const rows = [head('H', null, '1', 100), leaf('L1', 'H', '12900', 60, 30), leaf('L2', 'H', '12100', 40)];
+      const [h] = fold(rows);
+      expect(h.result).toBeUndefined();
+      expect(h.foldedRange).toEqual({ from: '12100', to: '12900' });
+      expect(h.foldedOnTheFly).toEqual([{ amount: 30, sly: null, prev: null }]);
+    });
+
+    it('a zero-balance non-result account does not make the row mixed', () => {
+      const rows = [head('H', null, '1', 60), leaf('L1', 'H', '12900', 60, 30), leaf('L2', 'H', '12100', 0)];
+      expect(fold(rows)[0].result).toEqual({ onTheFly: 30, posted: 30 });
+    });
+
+    it('an interleaved range gets no foldedRange; the contiguous one keeps it', () => {
+      const rows = [head('X', null, '43', 5), leaf('X1', 'X', '430', 3), leaf('X2', 'X', '432', 2), head('Y', null, '44', 7), leaf('Y1', 'Y', '431', 7)];
+      const [x, y] = fold(rows);
+      expect(x.foldedRange).toBeUndefined();
+      expect(y.foldedRange).toEqual({ from: '431', to: '431' });
+      expect(fold(rows, ['X', 'Y']).some((r) => r.foldedRange)).toBe(false);
+    });
   });
 });

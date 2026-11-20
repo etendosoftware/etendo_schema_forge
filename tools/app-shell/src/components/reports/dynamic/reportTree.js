@@ -171,25 +171,53 @@ function foldedResult(row, withResult) {
   return { result: parts, cells: row.cells ? cells : row.cells };
 }
 
+const amountsOf = (r) => [r.amount, ...(r.cells || []).flatMap((c) => [c.amount, c.sly?.amount, c.prev?.amount])];
+const isZero = (r) => amountsOf(r).every((x) => Math.abs(Number(x) || 0) < 0.005);
+
+/** The on-the-fly part a folded row contains, per cell (`{ amount, sly, prev }`): what its ledger (posted lines only) does not hold. */
+function foldedOnTheFly(row, withResult) {
+  const at = (i, key) => {
+    const pick = (d) => (i == null ? d.result : d.cells?.[i]?.result);
+    const parts = withResult.map(pick).map((r) => (key ? r?.[key] : r)).filter(Boolean);
+    return parts.length ? sumOf(parts, (r) => r.onTheFly) : null;
+  };
+  return (row.cells?.length ? row.cells.map((_, i) => i) : [null]).map((i) => ({ amount: at(i, null), sly: at(i, 'sly'), prev: at(i, 'prev') }));
+}
+
 /**
  * ETP-6083: a row the fold closes hides its sub-accounts, so on its own it could neither open a ledger nor explain a `result`
- * those sub-accounts carry. Such a row gets `foldedRange` (the code range of its hidden accounts: the ledger reads several accounts
- * as a range) and, when a hidden account carries a `result`, that result aggregated. Structural: no account is named.
+ * those sub-accounts carry. Such a row gets:
+ *  - `foldedRange` (the code range of its hidden leaf accounts: the ledger reads several accounts as a range), only when the range
+ *    is EXACT: no other leaf account of the tree has a code inside it (a chart that interleaves its codes across headings stays plain);
+ *  - `result` (aggregated) when every hidden account without a `result` is zero, so "posted" is really the posted part of the result;
+ *  - otherwise `foldedOnTheFly`, the calculated part per cell, so the ledger can be compared with the amount without it.
+ * Structural: no account is named.
  */
 function foldedSummaries(out, rows, expanded) {
   const children = new Map();
   for (const r of rows || []) if (r.parentId != null) children.set(r.parentId, [...(children.get(r.parentId) || []), r]);
+  const codeOf = (r) => (r.isDimension || r.isFormula ? null : r.account_value ?? r.value);
+  const leaves = (rows || []).filter((r) => !children.has(r.node_id) && codeOf(r));
   return out.map((row) => {
     if (!row.hasChildren || expanded.has(row.node_id)) return row;
     const hidden = [];
     const walk = (id) => (children.get(id) || []).forEach((c) => { hidden.push(c); walk(c.node_id); });
     walk(row.node_id);
     // Only leaf accounts hold postings: a summary row's own code (a heading) is not an account and would widen the range.
-    const accounts = hidden.filter((r) => !children.has(r.node_id) && !r.isDimension && !r.isFormula && (r.account_value ?? r.value));
+    const accounts = hidden.filter((r) => !children.has(r.node_id) && codeOf(r));
     if (!accounts.length) return row;
-    const codes = accounts.map((r) => String(r.account_value ?? r.value)).sort();
+    const codes = accounts.map((r) => String(codeOf(r))).sort();
+    const range = { from: codes[0], to: codes[codes.length - 1] };
+    const own = new Set(accounts.map((r) => r.node_id));
+    const exact = leaves.every((r) => own.has(r.node_id) || String(codeOf(r)) < range.from || String(codeOf(r)) > range.to);
     const withResult = hidden.filter((r) => r.result);
-    return { ...row, foldedRange: { from: codes[0], to: codes[codes.length - 1] }, ...(withResult.length && foldedResult(row, withResult)) };
+    const pure = withResult.length > 0 && accounts.every((r) => r.result || isZero(r));
+    return {
+      ...row,
+      ...(exact && { foldedRange: range }),
+      ...(pure && foldedResult(row, withResult)),
+      ...(withResult.length && !pure && { foldedOnTheFly: foldedOnTheFly(row, withResult) }),
+    };
   });
 }
 

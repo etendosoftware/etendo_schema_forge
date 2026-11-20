@@ -47,7 +47,7 @@ function Status({ loading, error, errorCode, empty }) {
   return null;
 }
 
-function Ledger({ params, sign, locale, dateText, onOpenEntry, session, allLines, onLoadAll, atDate = false, clicked = null }) {
+function Ledger({ params, sign, locale, dateText, onOpenEntry, session, allLines, onLoadAll, atDate = false, clicked = null, calculated = 0 }) {
   const ui = useUI();
   const [search, setSearch] = useState('');
   // One line past the cap tells a capped ledger from one that has exactly the cap.
@@ -86,6 +86,9 @@ function Ledger({ params, sign, locale, dateText, onOpenEntry, session, allLines
         >
           {ui(sameAmount(summary.closingSigned, clicked) ? 'dynamicReportClosingMatches' : 'dynamicReportClosingDiffers', { closing: amount(summary.closingSigned), clicked: amount(clicked) })}
         </p>
+      )}
+      {atDate && calculated !== 0 && (
+        <p className="text-xs text-muted-foreground" data-testid="DynamicDrillPanel__calculatedNote">{ui('dynamicReportIncludesCalculated', { calculated: amount(calculated) })}</p>
       )}
       {capped && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground" data-testid="DynamicDrillPanel__capped">
@@ -219,7 +222,7 @@ function Entry({ params, locale, accountValue, session }) {
  * goes back to its step. An entry whose table has no window mapped ends the drill-down there (Q5).
  * Each step emits `report_drilldown` (ledger / entry timed, document when the tab opens).
  */
-export default function DynamicDrillPanel({ reportTitle, account, range = null, queryParams, session, canOpenEntry = true, atDate = false, clicked = null, onClose }) {
+export default function DynamicDrillPanel({ reportTitle, account, range = null, queryParams, session, canOpenEntry = true, atDate = false, clicked = null, calculated = 0, onClose }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const [entry, setEntry] = useState(null);
@@ -259,6 +262,7 @@ export default function DynamicDrillPanel({ reportTitle, account, range = null, 
           sign={account?.sign}
           atDate={atDate}
           clicked={clicked}
+          calculated={calculated}
           locale={locale}
           dateText={dateText}
           onOpenEntry={canOpenEntry ? setEntry : null}

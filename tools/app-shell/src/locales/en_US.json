@@ -26947,6 +26947,7 @@
     "dynamicReportSheetPartial": "Partial result: with a contact or product filter the balance sheet may not balance.",
     "dynamicReportSheetDiff": "Assets = {assets}; equity and liabilities = {equity}; difference = {diff}.",
     "dynamicReportSheetProductNote": "Opening balances carry no product, so the balances brought forward from earlier years are not included.",
+    "dynamicReportIncludesCalculated": "The amount in the report includes {calculated} of calculated result, which is not posted: the ledger holds the rest.",
     "dynamicReportClosingMatches": "The closing balance ({closing}) matches the amount in the report.",
     "dynamicReportClosingDiffers": "The closing balance ({closing}) does not match the amount in the report ({clicked}).",
     "dynamicReportResultIntro": "Result not yet regularized up to {date}, split into what is posted and what is calculated.",

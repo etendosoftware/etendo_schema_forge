@@ -27185,6 +27185,7 @@
     "dynamicReportSheetPartial": "Resultado parcial: con un filtro de contacto o producto el balance puede no cuadrar.",
     "dynamicReportSheetDiff": "Activo = {assets}; patrimonio neto y pasivo = {equity}; diferencia = {diff}.",
     "dynamicReportSheetProductNote": "Los saldos de apertura no llevan producto, así que no se incluyen los saldos arrastrados de ejercicios anteriores.",
+    "dynamicReportIncludesCalculated": "El importe del informe incluye {calculated} de resultado calculado, no contabilizado: el mayor contiene el resto.",
     "dynamicReportClosingMatches": "El saldo final ({closing}) coincide con el importe del informe.",
     "dynamicReportClosingDiffers": "El saldo final ({closing}) no coincide con el importe del informe ({clicked}).",
     "dynamicReportResultIntro": "Resultado no regularizado hasta {date}, repartido entre lo contabilizado y lo calculado.",

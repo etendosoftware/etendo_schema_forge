@@ -173,12 +173,19 @@ function RowName({ drillable, name, onOpenLedger }) {
  * The click handler of one amount cell: the income-summary row (`explainable`) opens its explanation, an account (`drillable`)
  * its ledger, anything else nothing. `which` is 'current' or 'compared'; the handler receives the cell's amount.
  */
+function foldedCalculated(row, pos, which, mode) {
+  const part = row.foldedOnTheFly?.[pos];
+  return (which === 'compared' ? part?.[mode] : part?.amount) || 0;
+}
+
 function cellOpener({ row, group, which, explainable, drillable, mode, onOpenResult, onOpenLedger }) {
   const range = which === 'compared' ? group.compared : group.current;
   if (!range) return null;
   if (explainable) return (amount) => onOpenResult(row, { pos: group.pos, which, range, amount, mode });
-  if (drillable) return (amount) => onOpenLedger(row, range, amount);
-  return null;
+  if (!drillable) return null;
+  // ETP-6083: a ledger holds posted lines only; a folded row that includes a calculated result is compared without it.
+  const calculated = foldedCalculated(row, group.pos, which, mode);
+  return (amount) => onOpenLedger(row, range, calculated ? amount - calculated : amount, calculated);
 }
 
 /**
@@ -274,7 +281,7 @@ export default function DynamicReportTable({ rows, groups, mode, expanded, onTog
                     <RowName
                       drillable={drillable || explainable}
                       name={name}
-                      onOpenLedger={explainable ? () => opener(groups.find((g) => g.pos === 0), 'current')(row.amount) : onOpenLedger && (() => onOpenLedger(row, null, row.amount))}
+                      onOpenLedger={explainable ? () => opener(groups.find((g) => g.pos === 0), 'current')(row.amount) : onOpenLedger && (() => { const calc = foldedCalculated(row, 0, 'current', mode); onOpenLedger(row, null, row.amount - calc, calc); })}
                       data-testid="RowName__2e8fe9" />
                   </div>
                 </td>
