@@ -18101,7 +18101,7 @@
     "sendModalSend": "Send",
     "sendModalSending": "Sending...",
     "sendModalSentSuccess": "{documentType} sent",
-    "sendModalDuplicate": "{documentType} was already sent",
+    "sendModalDuplicate": "No email was sent: an identical one was sent moments ago. You can try again in a minute.",
     "sendModalThrottled": "Too many send attempts. Try again in {seconds}s",
     "sendModalUnauthorized": "You are not authorized to send this document",
     "sendModalValidationFailed": "The document cannot be sent",
