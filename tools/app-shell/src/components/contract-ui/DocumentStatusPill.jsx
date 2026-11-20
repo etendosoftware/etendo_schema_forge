@@ -1,6 +1,7 @@
 import { ClockIcon, CheckIcon, XIcon, WarningIcon } from '@phosphor-icons/react';
 import { useLocale } from '@/i18n';
-import { getStatusTone, statusLabel } from '@/lib/statusBadge.js';
+import { statusLabel } from '@/lib/statusBadge.js';
+import { resolveStatusTone } from '@/lib/statusToneOverride.js';
 import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
 
 const TONE_ICON = {
@@ -41,7 +42,9 @@ const LABEL_STYLE = { padding: '0 4px' };
  * - status: raw status value; nothing renders when null/undefined.
  * - label: explicit text; otherwise resolved via statusLabel(status, dictionary, null, enumLabels).
  * - enumLabels: optional enum-to-label map passed to statusLabel.
- * - tone: overrides getStatusTone(status); one of success | warning | destructive | caution | neutral.
+ * - enumVariants: optional per-code tones (the status field's `enumVariants`, same map the grid chip uses);
+ *   a code it does not declare falls back to the global catalog. Without it the tone is unchanged.
+ * - tone: overrides the resolved tone; one of success | warning | destructive | caution | neutral.
  * - prefix: optional bold "prefix:" rendered before the text.
  * - hint: tooltip (title attribute).
  * - testId (default "document-status-pill"): overrides data-testid for callers that must keep a legacy id.
@@ -56,11 +59,11 @@ const LABEL_STYLE = { padding: '0 4px' };
  * switch), so existing consumers/tests that assert it are unaffected; data-has-icon flags the
  * custom icon separately.
  */
-export default function DocumentStatusPill({ status, label, enumLabels, tone: toneProp, prefix, hint, showIcon = true, icon, testId = 'document-status-pill' }) {
+export default function DocumentStatusPill({ status, label, enumLabels, enumVariants, tone: toneProp, prefix, hint, showIcon = true, icon, testId = 'document-status-pill' }) {
   const dictionary = useLocale();
   if (status == null) return null;
 
-  const tone = toneProp ?? getStatusTone(status);
+  const tone = toneProp ?? resolveStatusTone(status, enumVariants);
   const Icon = TONE_ICON[tone];
   const text = label ?? statusLabel(status, dictionary, null, enumLabels);
   const palette = TONE_STYLES[tone] ?? TONE_STYLES.neutral;

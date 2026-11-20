@@ -1436,12 +1436,13 @@ export function pushOthers(showOthers, tabs, othersLabel, ui) {
   }
 }
 
-export function renderEmbeddedStatusPill(statusField, data, statusEnumLabels) {
+export function renderEmbeddedStatusPill(statusField, data, statusEnumLabels, statusEnumVariants = null) {
   return statusField && data[statusField] ? (
       <div className="flex items-center gap-3 px-6 py-3 border-b border-border/30">
         <DocumentStatusPill
           status={data[statusField]}
           enumLabels={statusEnumLabels}
+          enumVariants={statusEnumVariants}
           data-testid="DocumentStatusPill__fa3275" />
       </div>
   ) : null;
@@ -1521,6 +1522,10 @@ export // ETP-4797 — same rationale/hardcoding constraint as WINDOW_DELETE_ACT
 const WINDOW_HIDE_STATUS_PILL_FOR = {
   'payment-in': new Set(['RPPC']),
   'payment-out': new Set(['RPPC']),
+  // ETP-6247 — on a Pendiente de envío / Enviada al banco remittance the header status chip is the
+  // window's own selector (RemittanceStatusSelector, its `topbarExtra`): the plain pill is hidden so
+  // the status is not shown twice. Other statuses keep the plain pill.
+  remittance: new Set(['PR', 'SB']),
 };
 
 export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActivePrimaryTab, activePrimaryTab, tMenu) {

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  CaretRightIcon,
   CircleNotchIcon,
   CopyIcon,
   DotsThreeVerticalIcon,
@@ -42,6 +43,13 @@ function isActionVisible(config, fallbackVisibleWhen, row) {
  *   3. Email/Send      — only when documentPreview is configured for the window
  *   4. More (kebab)    — popover containing every menuActions[] item from the window config
  *   5. Delete          — respects the same hideDeleteWhenComplete + statusField gate as DetailView
+ *
+ * A `menuActions` entry may carry a `submenu` (ETP-6247): `[{ key, label | labelKey, content?, disabled?, onClick }]`.
+ * The entry then renders as a row with a chevron that opens a side panel to its left (hover or click),
+ * instead of running anything itself. `content` is an optional node drawn in place of the text (e.g. a
+ * status chip); a `disabled` item is dimmed and not clickable (it stays listed, never hidden). A click
+ * closes the kebab and calls `item.onClick({ row, windowName, apiBaseUrl, token })`. Entries without
+ * `submenu` are unchanged.
  *
  * `menuActions` entries with a `neoAction` field (ETP-5414) support two optional siblings:
  *   - `neoActionName` — overrides the literal wire action name sent to
@@ -133,6 +141,8 @@ export default function RowQuickActions({
 }) {
   const ui = useUI();
   const [showMenu, setShowMenu] = useState(false);
+  // Key of the kebab entry whose `submenu` is open (one at a time); reset whenever the kebab closes.
+  const [openSubmenu, setOpenSubmenu] = useState(null);
   const capabilities = useCapabilitiesSafe();
   const [menuPos, setMenuPos] = useState(null);
   const [inFlight, setInFlight] = useState({});
@@ -210,6 +220,8 @@ export default function RowQuickActions({
     hideDeleteWhenComplete,
     hideDeleteButton,
   });
+
+  useEffect(() => { if (!showMenu) setOpenSubmenu(null); }, [showMenu]);
 
   const stop = (e) => { e.stopPropagation(); };
 
@@ -440,6 +452,68 @@ export default function RowQuickActions({
             >
               {visibleMenuActions.map((action, i) => {
                 const ActionIcon = action.icon;
+                if (Array.isArray(action.submenu) && action.submenu.length > 0) {
+                  const subKey = action.key ?? String(i);
+                  const subOpen = openSubmenu === subKey;
+                  const subLabel = action.labelKey ? ui(action.labelKey) : action.label;
+                  return (
+                    <div
+                      key={subKey}
+                      className="relative"
+                      onMouseEnter={() => setOpenSubmenu(subKey)}
+                      onMouseLeave={() => setOpenSubmenu((current) => (current === subKey ? null : current))}
+                    >
+                      <button
+                        type="button"
+                        data-testid={`menu-action-${subKey}`}
+                        aria-haspopup="menu"
+                        aria-expanded={subOpen}
+                        onClick={(e) => { stop(e); setOpenSubmenu(subKey); }}
+                        className="w-full text-left px-3 py-1.5 text-sm leading-6 transition-colors flex items-center gap-2 text-foreground hover:bg-secondary"
+                      >
+                        {ActionIcon && (
+                          <ActionIcon
+                            className="h-4 w-4 flex-shrink-0"
+                            style={{ color: 'hsl(var(--text-disabled))' }}
+                            data-testid="ActionIcon__ec6673" />
+                        )}
+                        <span className="flex-1">{subLabel}</span>
+                        <CaretRightIcon className="h-4 w-4 flex-shrink-0 text-[hsl(var(--text-disabled))]" aria-hidden="true" data-testid="ChevronRight__ec6673" />
+                      </button>
+                      {subOpen && (
+                        <div
+                          role="menu"
+                          className="absolute right-full top-0 z-[62] min-w-[160px] rounded-lg bg-card py-2"
+                          style={{ boxShadow: '0px 0px 0px 1px hsl(var(--foreground) / 0.1), 0px 10px 18px hsl(var(--foreground) / 0.03), 0px 2px 4px hsl(var(--foreground) / 0.04)' }}
+                          data-testid={`submenu-${subKey}`}
+                        >
+                          {action.submenu.map((item) => (
+                            <button
+                              key={item.key}
+                              type="button"
+                              role="menuitem"
+                              disabled={item.disabled === true}
+                              aria-disabled={item.disabled === true}
+                              data-testid={`submenu-action-${subKey}-${item.key}`}
+                              onClick={(e) => {
+                                stop(e);
+                                if (item.disabled) return;
+                                setShowMenu(false);
+                                item.onClick?.({ row, windowName, apiBaseUrl, token });
+                              }}
+                              className={[
+                                'w-full text-left px-3 py-1.5 text-sm leading-6 transition-colors flex items-center gap-2',
+                                item.disabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-secondary',
+                              ].join(' ')}
+                            >
+                              {item.content ?? (item.labelKey ? ui(item.labelKey) : item.label)}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
                 const label = action.labelKey ? ui(action.labelKey) : action.label;
                 const inFlightKey = `menu:${action.key ?? action.label ?? 'unknown'}`;
                 const pending = !!inFlight[inFlightKey];
