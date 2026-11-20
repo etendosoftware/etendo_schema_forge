@@ -97,26 +97,51 @@ function validDay(raw) {
 export function readReportUrlState(search, report, { orgIds = [] } = {}) {
   const spec = urlStateSpec(report);
   const q = new URLSearchParams(search || '');
-  const patch = {};
+  return {
+    ...readOrg(q, spec, orgIds),
+    ...readPeriod(q, spec),
+    ...readControls(q, spec, orgIds),
+    ...readPickers(q, spec),
+    ...readChartOptions(q, spec),
+  };
+}
+
+function readOrg(q, spec, orgIds) {
   const orgId = q.get('orgId');
-  if (spec.org && orgId && ID.test(orgId) && new Set(orgIds).has(orgId)) patch.orgId = orgId;
-  if (spec.period) {
-    const from = validDay(q.get('dateFrom'));
-    const to = validDay(q.get('dateTo'));
-    // A period is both bounds, in order; half of one or a reversed one is ignored as a whole.
-    if (from && to && from <= to) Object.assign(patch, { dateFrom: from, dateTo: to });
-  }
+  return spec.org && orgId && ID.test(orgId) && new Set(orgIds).has(orgId) ? { orgId } : {};
+}
+
+/** A period is both bounds, in order; half of one or a reversed one is ignored as a whole. */
+function readPeriod(q, spec) {
+  if (!spec.period) return {};
+  const from = validDay(q.get('dateFrom'));
+  const to = validDay(q.get('dateTo'));
+  return from && to && from <= to ? { dateFrom: from, dateTo: to } : {};
+}
+
+function readControls(q, spec, orgIds) {
+  const patch = {};
   for (const key of spec.controls) {
     const v = q.get(key);
     if (ENUMS[key].includes(v)) patch[key] = v;
   }
   // The Organización split only exists for a role that reaches more than one org (the panel hides it otherwise).
   if (patch.splitBy === 'org' && orgIds.length <= 1) delete patch.splitBy;
+  return patch;
+}
+
+function readPickers(q, spec) {
+  const patch = {};
   for (const { name } of spec.pickers) {
     // A list beyond the cap keeps its first MAX_PICKER_IDS; an invalid id drops the whole value.
     const ids = [...new Set((q.get(name) || '').split(',').filter(Boolean))].slice(0, MAX_PICKER_IDS);
     if (ids.length && ids.every((id) => ID.test(id))) patch[name] = ids.join(',');
   }
+  return patch;
+}
+
+function readChartOptions(q, spec) {
+  const patch = {};
   const { toggles, groupBy, movements } = spec.chart;
   const group = q.get('groupBy');
   if (groupBy && group && groupBy.includes(group)) patch.groupBy = group;
@@ -136,7 +161,7 @@ export function writeReportUrlState(search, state, report, defaults = {}) {
   for (const key of reportUrlKeys(report)) q.delete(key);
   const put = (key, value, def = '') => { if (value && value !== def) q.set(key, value); };
   if (spec.org) put('orgId', state.orgId, defaults.orgId);
-  if (spec.period && state.dateFrom && state.dateTo && !(state.dateFrom === defaults.dateFrom && state.dateTo === defaults.dateTo)) {
+  if (periodDiffersFromDefault(spec, state, defaults)) {
     q.set('dateFrom', state.dateFrom);
     q.set('dateTo', state.dateTo);
   }
@@ -147,4 +172,10 @@ export function writeReportUrlState(search, state, report, defaults = {}) {
   if (spec.chart.movements && state.compareMovements) q.set('compareMovements', 'true');
   const out = q.toString();
   return out ? `?${out}` : '';
+}
+
+/** Both bounds set and not the defaults: the only case in which the period is written. */
+function periodDiffersFromDefault(spec, state, defaults) {
+  if (!spec.period || !state.dateFrom || !state.dateTo) return false;
+  return !(state.dateFrom === defaults.dateFrom && state.dateTo === defaults.dateTo);
 }

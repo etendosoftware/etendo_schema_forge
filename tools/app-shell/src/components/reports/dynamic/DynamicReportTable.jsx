@@ -20,6 +20,12 @@ const STICKY = 'sticky left-0 z-10';
 // The compared period is the reference, not the figure being read: a quieter column.
 const REF = 'bg-muted/30 text-muted-foreground';
 
+/** A dimension row is named by its contact / product / project / cost centre; an account row by "value - name". */
+function rowDisplayName(row, ui) {
+  if (row.isDimension) return row.dimension_name || row.name || ui('dynamicReportSplitNone');
+  return row.value ? `${row.value} - ${row.name}` : row.name;
+}
+
 function VariationCells({ parts }) {
   const moved = Number(parts.variationAmount) || 0;
   return (
@@ -223,7 +229,7 @@ export default function DynamicReportTable({ rows, groups, mode, expanded, onTog
             const splittable = Boolean(splitBy) && canSplit(row);
             const split = splits[row.node_id];
             // A dimension row (ETP-6084) is named by its contact / product / project / cost centre; none = "Sin asignar".
-            const name = row.isDimension ? (row.dimension_name || row.name || ui('dynamicReportSplitNone')) : (row.value ? `${row.value} - ${row.name}` : row.name);
+            const name = rowDisplayName(row, ui);
             const drillable = Boolean(onOpenLedger) && canDrill(row);
             return [
               <tr

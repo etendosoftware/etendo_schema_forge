@@ -80,7 +80,7 @@ export function columnModel({ periods, grain, mode, locale, quarterPrefix, total
       compared,
       comparedLabel: comparedLabelOf(p, compared),
       amounts,
-      columns: amounts ? amounts.flatMap((a) => a.columns) : (mode === 'none' ? ['current'] : COLUMNS_WITH_COMPARISON),
+      columns: amounts ? amounts.flatMap((a) => a.columns) : plainColumns(mode),
     };
   });
   // Only the last `periodLimit` periods of the mode show; `pos` still indexes the answer's `row.cells`.
@@ -89,6 +89,11 @@ export function columnModel({ periods, grain, mode, locale, quarterPrefix, total
   const kept = groups.filter((g) => g.pos === 0 || g.pos > total - 1 - limit);
   // The range's total goes last on screen ("se agrega al final la columna de total"); `pos` still indexes `row.cells`.
   return [...kept.slice(1), ...kept.slice(0, 1)];
+}
+
+/** The columns of a period group when the contract declares no amount columns. */
+function plainColumns(mode) {
+  return mode === 'none' ? ['current'] : COLUMNS_WITH_COMPARISON;
 }
 
 /** How many table columns after Concepto the groups take. */

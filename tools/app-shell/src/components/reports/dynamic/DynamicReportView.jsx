@@ -102,6 +102,13 @@ function initialState(defaultOrgId, period, level, config) {
   return state;
 }
 
+/** The fold with `id` flipped from its base (open becomes closed and back); the input is not mutated. */
+function flipFoldedRow(fold, id) {
+  const flipped = new Set(fold.flipped);
+  if (flipped.has(id)) flipped.delete(id); else flipped.add(id);
+  return { ...fold, flipped };
+}
+
 /**
  * ETP-6080 — the interactive report view (behind `dynamic-reports`). Opens on the fiscal year that
  * contains today (§19), applies every change on its own through `useReportQuery`, folds the tree
@@ -285,11 +292,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const refold = (base) => setFold({ base, flipped: new Set() });
   const toggleRow = (id) => {
     groupToggled(expandedSet.has(id) ? 'collapse' : 'expand');
-    setFold((f) => {
-      const flipped = new Set(f.flipped);
-      if (flipped.has(id)) flipped.delete(id); else flipped.add(id);
-      return { ...f, flipped };
-    });
+    setFold((f) => flipFoldedRow(f, id));
   };
   // The level folds on screen: nothing loads, so the change is applied at once.
   const setLevel = (level) => {

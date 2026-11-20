@@ -1253,6 +1253,17 @@ const TRIAL_BALANCE_DIMENSION_PARAM_NAMES = {
   costcenter: 'costCenterId',
 };
 
+/** A parameter's initial value from its contract default; the `__TODAY__`-style tokens resolve against now. */
+function contractDefaultOf(p) {
+  const now = new Date();
+  const isoDay = (d) => d.toISOString().split('T')[0];
+  if (p.default === '__TODAY__') return isoDay(now);
+  if (p.default === '__FIRST_OF_PREV_MONTH__') return isoDay(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  if (p.default === '__FIRST_OF_YEAR__') return isoDay(new Date(now.getFullYear(), 0, 1));
+  if (p.default !== undefined && p.default !== null && p.default !== false) return String(p.default);
+  return '';
+}
+
 function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, roleOrgIds, categoryFilter }) {
   const iframeRef = useRef(null);
   const [loading, setLoading] = useState(false);
@@ -1328,18 +1339,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
     const defaults = {};
     for (const p of report.parameters || []) {
       if (p.dynamicOnly) continue; // not shown here, so never seeded (its default would print in the export header)
-      if (p.default === '__TODAY__') {
-        defaults[p.name] = new Date().toISOString().split('T')[0];
-      } else if (p.default === '__FIRST_OF_PREV_MONTH__') {
-        const now = new Date();
-        defaults[p.name] = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
-      } else if (p.default === '__FIRST_OF_YEAR__') {
-        defaults[p.name] = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
-      } else if (p.default !== undefined && p.default !== null && p.default !== false) {
-        defaults[p.name] = String(p.default);
-      } else {
-        defaults[p.name] = '';
-      }
+      defaults[p.name] = contractDefaultOf(p);
       // A deep-link query-string value (e.g. the "open in new tab" drill-down
       // button, ETP-4898) overrides the contract default for that same
       // parameter name — this is what lets a new tab land pre-filled instead
