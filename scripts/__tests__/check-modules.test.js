@@ -147,10 +147,21 @@ describe('retired Bitbucket host', () => {
     git(clone, 'checkout', '-q', '-B', EPIC, `origin/${EPIC}`);
     const realOrigin = git(clone, 'remote', 'get-url', 'origin');
     git(clone, 'remote', 'set-url', 'origin', 'git@bitbucket.org:koodu_software/org.openbravo.module.sii.git');
+    // evaluateRepo drops every GIT_* variable, so only HOME/XDG_CONFIG_HOME keep the developer's
+    // global config (e.g. the recommended `url.git@ssh.bitbucket.org:.insteadOf` rule) from
+    // rewriting the retired origin before the check sees it.
+    const saved = { HOME: process.env.HOME, XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME };
+    const emptyHome = mkdtempSync(join(root, 'home-'));
+    process.env.HOME = emptyHome;
+    process.env.XDG_CONFIG_HOME = emptyHome;
     try {
       const r = await evaluateRepo(clone, epicSpec, EPIC);
       assert.ok(errors(r).some((m) => m.includes('remote set-url origin git@ssh.bitbucket.org:koodu_software/org.openbravo.module.sii.git')));
     } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
       git(clone, 'remote', 'set-url', 'origin', realOrigin);
     }
   });
