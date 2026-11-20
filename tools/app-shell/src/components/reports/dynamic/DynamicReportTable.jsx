@@ -103,10 +103,10 @@ function SplitRows({ split, groups, mode, depth, ui }) {
 function GroupCells({ parts, kinds, share, onOpenCurrent, onOpenCompared }) {
   return (
     <>
-      <AmountCell value={parts.amount} share={share} onOpen={onOpenCurrent} data-testid="AmountCell__2e8fe9" />
+      <AmountCell value={parts.amount} share={share} onOpen={onOpenCurrent && (() => onOpenCurrent(parts.amount))} data-testid="AmountCell__2e8fe9" />
       {kinds.includes('compared') && (
         <>
-          <AmountCell value={parts.compared} className={REF} onOpen={onOpenCompared} data-testid="AmountCell__2e8fe9" />
+          <AmountCell value={parts.compared} className={REF} onOpen={onOpenCompared && (() => onOpenCompared(parts.compared))} data-testid="AmountCell__2e8fe9" />
           <VariationCells parts={parts} data-testid="VariationCells__2e8fe9" />
         </>
       )}
@@ -181,7 +181,7 @@ function RowName({ drillable, name, onOpenLedger }) {
  * ETP-6084: groups with `amounts` (the contract's amount columns) show one cell set per amount, headed by its
  * label; `totals` (the answer's per-period cells) adds the TOTALES row.
  */
-export default function DynamicReportTable({ rows, groups, mode, expanded, onToggle, splitBy, splits, onToggleSplit, onOpenLedger, totals = null }) {
+export default function DynamicReportTable({ rows, groups, mode, expanded, onToggle, splitBy, splits, onToggleSplit, onOpenLedger, onOpenResult = null, totals = null }) {
   const ui = useUI();
   const shares = useMemo(() => rowShares(rows), [rows]);
   const th = 'px-3 py-2 font-medium uppercase tracking-wide';
@@ -231,6 +231,9 @@ export default function DynamicReportTable({ rows, groups, mode, expanded, onTog
             // A dimension row (ETP-6084) is named by its contact / product / project / cost centre; none = "Sin asignar".
             const name = rowDisplayName(row, ui);
             const drillable = Boolean(onOpenLedger) && canDrill(row);
+            // ETP-6083: a row that carries `result` (the income-summary account) explains its posted / calculated parts instead.
+            const explainable = Boolean(onOpenResult) && Boolean(row.result);
+            const openResult = (g, which, amt) => onOpenResult(row, { pos: g.pos, which, range: which === 'compared' ? g.compared : g.current, amount: amt, mode });
             return [
               <tr
                 key={row.node_id}
@@ -256,7 +259,11 @@ export default function DynamicReportTable({ rows, groups, mode, expanded, onTog
                       onToggle={onToggle}
                       onToggleSplit={onToggleSplit}
                       data-testid="RowToggle__2e8fe9" />
-                    <RowName drillable={drillable} name={name} onOpenLedger={onOpenLedger && (() => onOpenLedger(row, null))} data-testid="RowName__2e8fe9" />
+                    <RowName
+                      drillable={drillable || explainable}
+                      name={name}
+                      onOpenLedger={explainable ? () => openResult(groups.find((g) => g.pos === 0), 'current', row.amount) : onOpenLedger && (() => onOpenLedger(row, null, row.amount))}
+                      data-testid="RowName__2e8fe9" />
                   </div>
                 </td>
                 {groups.map((g) => (
@@ -266,8 +273,8 @@ export default function DynamicReportTable({ rows, groups, mode, expanded, onTog
                     group={g}
                     mode={mode}
                     share={g.pos === 0 ? shares.get(row.node_id) : 0}
-                    onOpenCurrent={drillable ? () => onOpenLedger(row, g.current) : null}
-                    onOpenCompared={drillable && g.compared ? () => onOpenLedger(row, g.compared) : null}
+                    onOpenCurrent={explainable ? (amt) => openResult(g, 'current', amt) : drillable && ((amt) => onOpenLedger(row, g.current, amt)) || null}
+                    onOpenCompared={g.compared && (explainable ? (amt) => openResult(g, 'compared', amt) : drillable && ((amt) => onOpenLedger(row, g.compared, amt))) || null}
                     data-testid="GroupRowCells__2e8fe9" />
                 ))}
               </tr>,

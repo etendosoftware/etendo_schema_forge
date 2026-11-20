@@ -50,7 +50,8 @@ function nestedAtCutoff(rows, cutoff) {
  * children are dimension rows (the account grouped by contact, ...) is expanded too. With `nested`
  * (a mixed-level chart tree), a parent at the level that holds nodes of that same level is expanded as well.
  */
-export function expansionForLevel(rows, level, { nested = false } = {}) {
+export function expansionForLevel(rows, level, { nested = false, maxIndent = null } = {}) {
+  if (maxIndent != null) return expansionForIndent(rows, maxIndent);
   const cutoff = LEVEL_RANK[level] ?? LEVEL_RANK.S;
   const parents = parentIds(rows);
   const dimensionParents = dimensionParentIds(rows);
@@ -60,6 +61,25 @@ export function expansionForLevel(rows, level, { nested = false } = {}) {
     const rank = LEVEL_RANK[r.elementlevel];
     if (!parents.has(r.node_id)) continue;
     if (rank === undefined || rank < cutoff || sameLevel.has(r.node_id) || dimensionParents.has(r.node_id)) expanded.add(r.node_id);
+  }
+  return expanded;
+}
+
+/**
+ * ETP-6083: a fold option that cuts by the indent of the LISTED rows (`maxIndent` on an `accountLevel` option: the Balance's
+ * Grupo = 0, Epígrafe = 1) instead of by the E/C/D/S rank. A parent shows its children while its own indent is below the
+ * cutoff, so no row deeper than `maxIndent` shows. Report-agnostic: the indent is the row's place in the answer, so a
+ * chart of another shape just cuts where its rows are. A parent whose children are dimension rows stays open.
+ */
+function expansionForIndent(rows, maxIndent) {
+  const parents = parentIds(rows);
+  const dimensionParents = dimensionParentIds(rows);
+  const indent = new Map();
+  const expanded = new Set();
+  for (const r of rows || []) {
+    const depth = r.parentId != null && indent.has(r.parentId) ? indent.get(r.parentId) + 1 : 0;
+    indent.set(r.node_id, depth);
+    if (parents.has(r.node_id) && (depth < maxIndent || dimensionParents.has(r.node_id))) expanded.add(r.node_id);
   }
   return expanded;
 }

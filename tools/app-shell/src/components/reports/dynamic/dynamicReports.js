@@ -1,9 +1,10 @@
 /**
  * ETP-6080 — reports that open the interactive view when the `dynamic-reports` flag is on.
- * Balance Sheet joins when its story lands (plan decision Q4). ETP-6084: Trial Balance joined, with its own
- * contract-declared columns, filters and totals (`tree: 'chart'`).
+ * ETP-6084: Trial Balance joined, with its own contract-declared columns, filters and totals (`tree: 'chart'`).
+ * ETP-6083: Balance Sheet joined: a balance at a date on the period tree, all from its contract (`dateFrom.role`, `dateTo.shortcuts`,
+ * `compareTo.compareModes`, `accountLevel` options with `maxIndent`, `balanceCheck`).
  */
-export const DYNAMIC_REPORT_IDS = Object.freeze(new Set(['profit-loss', 'report-trial-balance']));
+export const DYNAMIC_REPORT_IDS = Object.freeze(new Set(['profit-loss', 'report-trial-balance', 'balance-sheet']));
 
 /**
  * Reports that need a descriptor carrying `tree: 'chart'` (core that forwards it): against an older core the

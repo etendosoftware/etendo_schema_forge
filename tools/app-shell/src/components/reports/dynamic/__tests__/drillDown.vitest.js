@@ -36,12 +36,19 @@ describe('drillDown', () => {
     expect(sqlDateDay(null)).toBe('');
   });
 
+  it('a balance at a date counts the opening entry: openingEntryAmount true, whatever the view says', () => {
+    const params = ledgerParams({ ...VIEW, openingEntryAmount: 'false' }, { node_id: 'A1', value: '4000' }, { from: '2026-01-01', to: '2026-11-03' }, { atDate: true });
+    expect(params).toMatchObject({ dateFrom: '2026-01-01', dateTo: '2026-11-03', openingEntryAmount: 'true' });
+  });
+
   it('opening, debit, credit and closing in debit − credit terms; the movement signed like the row', () => {
     const rows = [{ amtacctdr: '50', amtacctcr: 0 }, { amtacctdr: 0, amtacctcr: 1050 }];
-    expect(ledgerSummary(rows, [{ openingtotal: -150 }, { openingtotal: '-50' }])).toEqual({ opening: -200, debit: 50, credit: 1050, closing: -1200, movement: -1000 });
+    expect(ledgerSummary(rows, [{ openingtotal: -150 }, { openingtotal: '-50' }])).toEqual({ opening: -200, debit: 50, credit: 1050, closing: -1200, movement: -1000, openingSigned: -200, closingSigned: -1200 });
     // A credit-signed row (revenue): the movement is the amount the report shows for it.
     expect(ledgerSummary(rows, [], 'C').movement).toBe(1000);
-    expect(ledgerSummary([], null)).toEqual({ opening: 0, debit: 0, credit: 0, closing: 0, movement: 0 });
+    expect(ledgerSummary([], null)).toEqual({ opening: 0, debit: 0, credit: 0, closing: 0, movement: 0, openingSigned: 0, closingSigned: 0 });
+    // ETP-6083: a credit-signed balance (liabilities) closes positive in the report's sign.
+    expect(ledgerSummary(rows, [{ openingtotal: -150 }], 'C')).toMatchObject({ closing: -1150, closingSigned: 1150, openingSigned: 150 });
   });
 
   it('the search looks at description, dimensions and day, ignoring case', () => {

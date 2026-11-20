@@ -107,3 +107,21 @@ describe('reportTree — mixed levels and dimension rows (ETP-6084)', () => {
     expect(ids(visibleRows(rows, foldExpansion(rows, { base: 'none', flipped: new Set() }, 'S')))).toEqual(['E1']);
   });
 });
+
+// ETP-6083: a fold option that cuts by the indent of the listed rows (`maxIndent`), not by E/C/D/S.
+describe('expansionForLevel with maxIndent', () => {
+  const TREE = [
+    { node_id: 'G1', parentId: null, elementlevel: 'E' },
+    { node_id: 'P1', parentId: 'G1', elementlevel: 'E' },
+    { node_id: 'C1', parentId: 'P1', elementlevel: 'C' },
+    { node_id: 'S1', parentId: 'C1', elementlevel: 'S' },
+  ];
+  it('Grupo (0) opens nothing; Epígrafe (1) opens the roots only', () => {
+    expect([...expansionForLevel(TREE, 'G', { maxIndent: 0 })]).toEqual([]);
+    expect([...expansionForLevel(TREE, 'P', { maxIndent: 1 })]).toEqual(['G1']);
+    expect(visibleRows(TREE, expansionForLevel(TREE, 'P', { maxIndent: 1 })).map((r) => r.node_id)).toEqual(['G1', 'P1']);
+  });
+  it('without maxIndent the E/C/D/S rank logic is unchanged', () => {
+    expect([...expansionForLevel(TREE, 'C')].sort()).toEqual(['G1', 'P1']);
+  });
+});
