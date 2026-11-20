@@ -249,6 +249,7 @@ export function PortalMobileBrandBar({ identity, logoUrl, onSearch }) {
           data-testid="PortalBrand__a5d12f" />
       </div>
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+        {/* Provisional placement until the mobile design arrives (user decision, 2026-11-20). */}
         <PortalCreatedWithTile data-testid="PortalCreatedWithTile__a5d12f" />
         {onSearch ? (
           <button

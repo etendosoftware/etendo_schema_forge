@@ -67,11 +67,12 @@ export function PortalCreatedWithPill({ className }) {
 }
 
 /**
- * The compact "Creado con Etendo" link of the mobile top bar (no mobile design: coordinator
- * decision, 2026-11-20): only Etendo's lime circle, same destination as the desktop pill, named
- * and titled by the same copy.
+ * The compact "Creado con Etendo" link: only Etendo's lime circle, same destination as the desktop
+ * pill, named and titled by the same copy. Used on mobile top bars and, between md and lg, in the
+ * desktop headers. PROVISIONAL placement (user decision, 2026-11-20) until the designer sends the
+ * mobile design.
  */
-export function PortalCreatedWithTile() {
+export function PortalCreatedWithTile({ testId = 'portal-created-with-mobile' }) {
   const ui = useUI();
   const label = ui('portalCreatedWithLinkLabel');
   return (
@@ -82,10 +83,29 @@ export function PortalCreatedWithTile() {
       aria-label={label}
       title={label}
       className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      data-testid="portal-created-with-mobile"
+      data-testid={testId}
     >
       <EtendoMark data-testid="EtendoMark__7a317e" />
     </a>
+  );
+}
+
+/**
+ * The Etendo link of a desktop header's right side: the exact-Figma pill from lg up (inside the
+ * Figma's 224×44 wrapper, whose 8px right padding keeps it off the window's edge) and, between md
+ * and lg, where the pill does not fit beside the search, the compact lime circle with the same
+ * right spacing. Never both. The md–lg tile is PROVISIONAL until the mobile/medium design arrives.
+ */
+export function PortalCreatedWithHeaderLink() {
+  return (
+    <>
+      <span className="flex shrink-0 pr-2 lg:hidden">
+        <PortalCreatedWithTile testId="portal-created-with-compact" data-testid="PortalCreatedWithTile__7a317e" />
+      </span>
+      <div className="hidden h-11 w-[224px] min-w-0 max-w-full items-center pr-2 lg:flex">
+        <PortalCreatedWithPill data-testid="PortalCreatedWithPill__7a317e" />
+      </div>
+    </>
   );
 }
 
@@ -442,13 +462,9 @@ export function PortalDesktopHeader({ title, count, breadcrumb, search, size }) 
         </span>
       </div>
       {search ?? <div />}
-      {/* Right column: the "Creado con Etendo" pill, from lg up (below, the 1fr column is too
-          narrow beside the search). The Figma's 224×44 wrapper: the 216px pill plus an 8px right
-          padding, the only spacing that keeps it off the window's edge. */}
-      <div className="hidden min-w-0 justify-end lg:flex">
-        <div className="flex h-11 w-[224px] min-w-0 max-w-full items-center pr-2">
-          <PortalCreatedWithPill data-testid="PortalCreatedWithPill__7a317e" />
-        </div>
+      {/* Right column: the Etendo link (the pill from lg up, the compact circle md–lg). */}
+      <div className="flex min-w-0 items-center justify-end">
+        <PortalCreatedWithHeaderLink data-testid="PortalCreatedWithHeaderLink__7a317e" />
       </div>
     </header>
   );
