@@ -392,10 +392,16 @@ async function clickAndExpectAction(page, trigger, actionPattern, label) {
   );
   await trigger.click();
   const resp = await respPromise;
-  // The body is gone when the action makes the page reload (DocAction does):
-  // the status is still checked, and callers that need the body assert on the
+  // The body can be unavailable: gone when the action makes the page reload, and never
+  // reported finished by Chromium when the page does not read it and the response is
+  // `Cache-Control: no-store` (every NEO JSON response since ETP-4571; the action modals
+  // do not read success bodies). `resp.text()` then neither resolves nor rejects, so it is
+  // bounded. The status is still checked, and callers that need the body assert on the
   // returned data, so a missing body cannot pass silently there.
-  const text = await resp.text().catch(() => '');
+  const text = await Promise.race([
+    resp.text().catch(() => ''),
+    new Promise((resolve) => { setTimeout(() => resolve(''), 10_000); }),
+  ]);
   expect(resp.status(), `${label} should succeed — response: ${text.slice(0, 300)}`).toBeLessThan(400);
   expect(text,
     `[ETP-4567] ${label} must not answer "No pending lines to invoice"`,

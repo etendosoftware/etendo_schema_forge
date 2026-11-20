@@ -84,6 +84,8 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { registerApiSession, resetApiSessionForTests } from '@etendosoftware/app-shell-core/auth';
 import PortalPage from '../PortalPage.jsx';
+import { ETENDO_PRICING_URL, PortalCreatedWithHeaderLink } from '../portal/PortalBits.jsx';
+import { PortalListTable } from '../portal/PortalListDesktop.jsx';
 import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
 
 /**
@@ -254,6 +256,25 @@ const urlView = () => Object.fromEntries(new URLSearchParams(screen.getByTestId(
 
 /** The kind of the list on screen (its toolbar carries it). */
 const listKind = () => screen.getByTestId('portal-document-list').querySelector('[data-kind]')?.getAttribute('data-kind');
+
+/** Every "Creado con Etendo" link: the pricing page, in a new tab, with no opener, named by its label. */
+function expectEtendoLink(link) {
+  expect(link).toHaveAttribute('href', ETENDO_PRICING_URL);
+  expect(link).toHaveAttribute('target', '_blank');
+  expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  expect(link).toHaveAccessibleName('portalCreatedWithLinkLabel');
+}
+
+const ETENDO_LINK_TEST_IDS = ['portal-created-with', 'portal-created-with-compact', 'portal-created-with-mobile'];
+
+/** Renders below `md`, where the page opens a document as a full page with its own headers. */
+function withViewportWidth(width, body) {
+  const original = window.innerWidth;
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: width });
+  return Promise.resolve(body()).finally(() => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: original });
+  });
+}
 
 /** Exact options of every GET the page makes; `/renew` adds `method: 'POST'`. */
 const PORTAL_GET_OPTIONS = { token: TOKEN, headers: { 'X-Portal-Token': TOKEN }, on401: 'ignore' };
@@ -567,15 +588,70 @@ describe('PortalPage — shell', () => {
     expect(screen.queryByTestId('portal-customer-avatar')).not.toBeInTheDocument();
   });
 
-  it('links "Creado con etendo.ai" to the product site in a new tab, without an opener', async () => {
-    renderPortal();
-    await shellReady();
+  it('draws the header "Creado con Etendo" pill from lg and the compact tile below it, never both', () => {
+    render(<PortalCreatedWithHeaderLink />);
 
-    const link = screen.getByTestId('portal-created-with');
-    expect(link).toHaveAttribute('href', 'https://etendo.ai');
-    expect(link).toHaveAttribute('target', '_blank');
-    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    const pill = screen.getByTestId('portal-created-with');
+    const compact = screen.getByTestId('portal-created-with-compact');
+    // jsdom has no layout: what splits the two at the breakpoint is their wrappers' classes.
+    expect(pill.parentElement).toHaveClass('hidden', 'lg:flex');
+    expect(pill.parentElement).not.toHaveClass('lg:hidden');
+    expect(compact.parentElement).toHaveClass('lg:hidden');
+    expect(compact.parentElement).not.toHaveClass('hidden');
+    // The pill writes the copy; the compact tile is only the mark, named and titled by the label.
+    expect(pill).toHaveTextContent('portalCreatedWith');
+    expect(pill).toHaveTextContent('portalLearnMore');
+    expect(compact.textContent).toBe('');
+    expect(compact).toHaveAttribute('title', 'portalCreatedWithLinkLabel');
+    for (const link of [pill, compact]) expectEtendoLink(link);
   });
+
+  // Each view draws its own headers: the link must be in every one of them, and the rail (where
+  // the old etendo.ai brand lived) must not carry it.
+  for (const { view, path, width, ready, desktopHeader, mobileHeader } of [
+    {
+      view: 'home',
+      path: `/portal/${TOKEN}`,
+      ready: shellReady,
+      desktopHeader: () => screen.getByTestId('portal-view-header'),
+      mobileHeader: () => screen.getByTestId('portal-mobile-topbar'),
+    },
+    {
+      view: 'list',
+      path: `/portal/${TOKEN}?view=list&kind=INVOICE`,
+      ready: listReady,
+      desktopHeader: () => screen.getByTestId('portal-view-header'),
+      // The list's mobile header has no test id of its own; the only tile on this view is in it.
+      mobileHeader: () => screen.getByTestId('portal-created-with-mobile').closest('header'),
+    },
+    {
+      // Below md a document is a full page with both headers (desktop opens it as a drawer).
+      view: 'document page',
+      path: `/portal/${TOKEN}?view=doc&kind=ORDER&id=ord-1`,
+      width: 500,
+      ready: detailReady,
+      desktopHeader: () => screen.getByTestId('portal-back').closest('header'),
+      mobileHeader: () => screen.getByTestId('portal-back-mobile').closest('header'),
+    },
+  ]) {
+    it(`puts the Etendo link in the ${view} desktop and mobile headers, and never in the rail`, async () => {
+      await withViewportWidth(width ?? window.innerWidth, async () => {
+        renderPortal(path);
+        await ready();
+      });
+
+      const desktop = within(desktopHeader());
+      const mobile = mobileHeader();
+      expect(mobile).toHaveClass('md:hidden');
+      for (const link of [
+        desktop.getByTestId('portal-created-with'),
+        desktop.getByTestId('portal-created-with-compact'),
+        within(mobile).getByTestId('portal-created-with-mobile'),
+      ]) expectEtendoLink(link);
+      const rail = within(screen.getByTestId('portal-sidebar'));
+      for (const testId of ETENDO_LINK_TEST_IDS) expect(rail.queryByTestId(testId)).not.toBeInTheDocument();
+    });
+  }
 
   it('marks the open view in the sidebar and counts what needs the customer', async () => {
     renderPortal();
@@ -614,6 +690,53 @@ describe('PortalPage — rail', () => {
     await user.click(screen.getByTestId('portal-nav-documents'));
     expect(rail).toHaveAttribute('data-collapsed', 'false');
     expect(screen.getByTestId('portal-promo')).toBeInTheDocument();
+  });
+
+  // The header is the only place the company appears in the rail. Scoped to `portal-rail-company`:
+  // the mobile top bar writes the tenant name too.
+  for (const { state, collapse, alt, title } of [
+    // Expanded, the name is written beside the logo, so the image stays silent.
+    { state: 'expanded', collapse: false, alt: '', title: null },
+    // Collapsed, the logo stands alone: it says the company, and its tooltip names it.
+    { state: 'collapsed', collapse: true, alt: 'Acme SA', title: 'Acme SA' },
+  ]) {
+    it(`heads the ${state} rail with the company's round logo`, async () => {
+      const user = userEvent.setup();
+      responses.me = jsonResponse({ ...IDENTITY, hasLogo: true });
+      responses.logo = blobResponse(new Blob(['logo'], { type: 'image/png' }));
+      renderPortal();
+      await shellReady();
+      if (collapse) await user.click(screen.getByTestId('portal-rail-toggle'));
+
+      const company = screen.getByTestId('portal-rail-company');
+      const logo = await waitFor(() => within(company).getByTestId('portal-logo'));
+      expect(logo).toHaveAttribute('src', 'blob:portal-object');
+      expect(logo).toHaveAttribute('alt', alt);
+      expect(within(company).getByTestId('portal-logo-tile')).toHaveClass('rounded-full');
+      expect(company.getAttribute('title')).toBe(title);
+      const names = within(company).queryAllByTestId('portal-tenant-name');
+      expect(names.map((name) => name.textContent)).toEqual(collapse ? [] : ['Acme SA']);
+    });
+  }
+
+  it('shows the company\'s initials without a logo, and no company item in either rail state', async () => {
+    const user = userEvent.setup();
+    renderPortal();
+    await shellReady();
+
+    const company = () => screen.getByTestId('portal-rail-company');
+    expect(within(company()).queryByTestId('portal-logo')).not.toBeInTheDocument();
+    expect(within(company()).getByTestId('portal-logo-tile').textContent).toBe('AS');
+    expect(screen.queryByTestId('portal-company')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('portal-rail-toggle'));
+
+    expect(within(company()).getByTestId('portal-logo-tile').textContent).toBe('AS');
+    expect(screen.queryByTestId('portal-company')).not.toBeInTheDocument();
+    // Collapsed, the menu below the header is only expand, Inicio and "Mis documentos".
+    const menu = screen.getByTestId('portal-nav-home').parentElement;
+    expect([...menu.children].map((item) => item.dataset.testid))
+      .toEqual(['portal-rail-toggle', 'portal-nav-home', 'portal-nav-documents']);
   });
 });
 
@@ -964,6 +1087,26 @@ describe('PortalPage — document list', () => {
 
     await detailReady();
     expect(urlView()).toEqual({ view: 'doc', kind: 'INVOICE', id: 'inv-1' });
+  });
+
+  it('opens a document once from its number, by click or Enter, with only the row\'s hover', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    const row = order(1);
+    render(<PortalListTable kind="ORDER" documents={[row]} onOpen={onOpen} />);
+
+    const number = screen.getByTestId('portal-document-open');
+    // Hover belongs to the row (Figma): the number has no colour of its own, but keeps a focus ring.
+    expect(number.className).not.toMatch(/hover:text-/);
+    expect(number).toHaveClass('focus-visible:ring-2');
+
+    // The row opens the same document: the number's click must not reach it a second time.
+    await user.click(number);
+    expect(onOpen.mock.calls).toEqual([[row]]);
+
+    number.focus();
+    await user.keyboard('{Enter}');
+    expect(onOpen.mock.calls).toEqual([[row], [row]]);
   });
 });
 
