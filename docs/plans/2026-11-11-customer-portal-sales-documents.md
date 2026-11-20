@@ -972,6 +972,20 @@ arrives, so every shared piece takes the new look as an opt-in (`PortalSection v
   The choice is remembered per browser (`localStorage`, `etendo.portal.railCollapsed`; the rail
   works without it).
 - **Top bar.** "Portal del cliente" (20/32) with the same subtitle, the 392 px white search pill.
+- **Branding update (Figma, 2026-11-20; supersedes the etendo.ai mark above).** The rail header
+  shows the issuing company instead of the etendo.ai mark: its round 40×40 logo (initials without
+  one) and, expanded, its name beside it; the company block that sat below the header is gone, and
+  the collapsed rail no longer has an "Empresa" item (toggle, Inicio, Mis documentos). The Etendo
+  link moved to the top bar's right column as a dark pill "Creado con Etendo / Conoce más" (from
+  `lg` up) and, on the mobile Inicio bar, as the compact lime tile left of the search button. Both
+  open `ETENDO_PRICING_URL` (`PortalBits.jsx`; provisional `https://etendo.ai` until marketing
+  sends the pricing URL with its UTM).
+- **Etendo link on every view (user decision, 2026-11-20; PROVISIONAL until the designer sends the
+  mobile design).** Desktop headers (Inicio, the lists, the document detail) carry the exact-Figma
+  pill from `lg` up and the compact lime circle between `md` and `lg` (one or the other, never both:
+  `PortalCreatedWithHeaderLink`). Below `md` the compact circle sits in each view's mobile top bar,
+  left of the other controls: Inicio (search, avatar), lists (avatar), detail (PDF download). The
+  detail drawer has no header of its own; the list header behind it carries the link.
 - **Body.** Greeting with the smiley tile; tiles 154 px with the icon bubble, the 60 px figure and a
   pill badge (icons: FileText, Receipt, ShoppingCart, Package — the closest Lucide glyphs to the
   design's Phosphor ones); "Tu saldo" now lists "Pagado este año" first, each with a count pill and

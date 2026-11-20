@@ -3,7 +3,6 @@ import {
   SquaresFourIcon,
   ArrowLineLeftIcon,
   ArrowLineRightIcon,
-  CaretDownIcon,
   CaretRightIcon,
   FilesIcon,
   FileTextIcon,
@@ -26,11 +25,8 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { LanguageMenuSection } from '@/components/LanguageMenuSection.jsx';
-import { PortalTag } from './PortalBits.jsx';
+import { PortalCreatedWithTile, PortalTag } from './PortalBits.jsx';
 import { PORTAL_HIGHLIGHTS, PORTAL_KIND_META } from './portalPresentation.js';
-
-/** The product's site (no shared constant exists for it): the rail's etendo.ai brand. */
-export const ETENDO_AI_URL = 'https://etendo.ai';
 
 /**
  * Where the promo card's "Empieza gratis" sends the visitor to create an account (PO answer): the
@@ -81,9 +77,10 @@ function initialsOf(name) {
  * The company's logo in the design's fixed rounded-square tile (32×32; 40×40 on the mobile bar):
  * the logo is contained in it on a neutral card background, so a wide logotype is shrunk to fit
  * instead of being squeezed into a strip; with no logo the tile shows the company's initials, the
- * way the app's avatars fall back.
+ * way the app's avatars fall back. `round`: the rail header's round avatar (40×40, fully rounded).
+ * `decorative`: the company's name is already written beside it, so the image stays silent.
  */
-export function PortalLogoTile({ identity, logoUrl, size = 'sm' }) {
+export function PortalLogoTile({ identity, logoUrl, size = 'sm', round = false, decorative = false }) {
   const large = size === 'lg';
   const sizes = {
     xs: 'h-6 w-6 rounded-md',
@@ -95,6 +92,7 @@ export function PortalLogoTile({ identity, logoUrl, size = 'sm' }) {
       className={cn(
         'flex shrink-0 items-center justify-center overflow-hidden border border-border bg-card',
         sizes[size] ?? sizes.sm,
+        round ? 'rounded-full' : '',
       )}
       data-testid="portal-logo-tile"
     >
@@ -103,7 +101,7 @@ export function PortalLogoTile({ identity, logoUrl, size = 'sm' }) {
           src={logoUrl}
           // The tenant name, not "logo": a screen reader should say the company; with no name the
           // empty alt correctly marks the image as decorative.
-          alt={identity?.tenantName ?? ''}
+          alt={decorative ? '' : (identity?.tenantName ?? '')}
           className="h-full w-full object-contain p-0.5"
           data-testid="portal-logo"
         />
@@ -231,8 +229,9 @@ export function PortalCustomer({ identity, variant = 'row' }) {
 }
 
 /**
- * The mobile top bar of Inicio (design Movil-Inicio): the brand, a search button and the customer's
- * avatar, which opens the user menu (the language).
+ * The mobile top bar of Inicio (design Movil-Inicio): the brand, then on the right the compact
+ * "Creado con Etendo" tile, a search button and the customer's avatar, which opens the user menu
+ * (the language).
  */
 export function PortalMobileBrandBar({ identity, logoUrl, onSearch }) {
   const ui = useUI();
@@ -250,6 +249,8 @@ export function PortalMobileBrandBar({ identity, logoUrl, onSearch }) {
           data-testid="PortalBrand__a5d12f" />
       </div>
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+        {/* Provisional placement until the mobile design arrives (user decision, 2026-11-20). */}
+        <PortalCreatedWithTile data-testid="PortalCreatedWithTile__a5d12f" />
         {onSearch ? (
           <button
             type="button"
@@ -293,22 +294,34 @@ const RAIL_ITEM = 'flex h-8 w-full items-center rounded-lg border border-transpa
 /** A group heading ("General", "Mis documentos"). */
 const RAIL_HEADING = 'px-4 py-1 text-xs leading-6 tracking-[-0.005em] text-[#6B7280]';
 
-/** The rail's header (62px): the etendo.ai brand and, expanded, the button that collapses it. */
-function RailHeader({ collapsed, onToggle }) {
+/**
+ * The rail's header (62px, padding 0 8px): the issuing company's round logo (40×40; its initials
+ * without a logo) and, expanded, its name and the button that collapses the rail. The company is
+ * shown only here (Figma, 2026-11-20): neither rail state repeats it in the menu below.
+ */
+function RailHeader({ identity, logoUrl, collapsed, onToggle }) {
   const ui = useUI();
+  const tenantName = identity?.tenantName;
   return (
-    <div className={cn('flex h-[62px] shrink-0 items-center px-2', collapsed ? 'justify-center' : 'justify-between')}>
-      <a
-        href={ETENDO_AI_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={ui('portalCreatedWith')}
-        className="flex items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        data-testid="portal-created-with"
+    <div className={cn('flex h-[62px] shrink-0 items-center px-2', collapsed ? 'justify-center' : 'justify-between gap-2')}>
+      <div
+        className="flex min-w-0 items-center gap-2"
+        title={collapsed ? (tenantName ?? undefined) : undefined}
+        data-testid="portal-rail-company"
       >
-        <img src="/logo-etendo-ai.png" alt="" className="h-10 w-10 shrink-0 rounded-lg" />
-        {collapsed ? null : <span className="text-lg font-semibold leading-7 tracking-[-0.01em] text-[#1B1A1F]">{ui('portalBrandName')}</span>}
-      </a>
+        <PortalLogoTile
+          identity={identity}
+          logoUrl={logoUrl}
+          size="lg"
+          round
+          decorative={!collapsed && Boolean(tenantName)}
+          data-testid="PortalLogoTile__a5d12f" />
+        {!collapsed && tenantName ? (
+          <span className="min-w-0 truncate text-sm font-semibold leading-6 text-[#1B1A1F]" data-testid="portal-tenant-name">
+            {tenantName}
+          </span>
+        ) : null}
+      </div>
       {collapsed ? null : (
         <button
           type="button"
@@ -325,9 +338,12 @@ function RailHeader({ collapsed, onToggle }) {
   );
 }
 
-/** The collapsed rail's icons: expand, the company, Inicio and "Mis documentos" with its total. */
+/**
+ * The collapsed rail's icons: expand, Inicio and "Mis documentos" with its total. The company is
+ * not an item here: it is the header's avatar.
+ */
 function RailCollapsedMenu({
-  identity, logoUrl, isActive, documentsActive, totalBadge, onToggle, onNavigate,
+  isActive, documentsActive, totalBadge, onToggle, onNavigate,
 }) {
   const ui = useUI();
   return (
@@ -342,7 +358,6 @@ function RailCollapsedMenu({
       >
         <ArrowLineRightIcon size={20} aria-hidden="true" data-testid="ArrowLineRight__a5d12f" />
       </button>
-      <PortalCompany identity={identity} logoUrl={logoUrl} collapsed data-testid="PortalCompany__a5d12f" />
       <button
         type="button"
         aria-label={ui('portalNavHome')}
@@ -403,12 +418,14 @@ function RailKindItem({ kind, badge, active, onNavigate }) {
   );
 }
 
-/** The expanded rail's menu: the company, "General", "Mis documentos" and the promo card. */
-function RailExpandedMenu({ identity, logoUrl, kinds, tiles, isActive, onNavigate }) {
+/**
+ * The expanded rail's menu: "General", "Mis documentos" and the promo card. The company is the
+ * header's (logo and name), so it is not repeated here.
+ */
+function RailExpandedMenu({ kinds, tiles, isActive, onNavigate }) {
   const ui = useUI();
   return (
     <div className="flex flex-1 flex-col gap-2 pb-2">
-      <PortalCompany identity={identity} logoUrl={logoUrl} data-testid="PortalCompany__a5d12f" />
       <div className="flex flex-col gap-1">
         <span className={RAIL_HEADING}>{ui('portalNavGeneral')}</span>
         <button
@@ -453,11 +470,12 @@ function RailExpandedMenu({ identity, logoUrl, kinds, tiles, isActive, onNavigat
  * the designer's spec of 2026-11-17).
  *
  * Desktop: the design's left rail beside the view's own column. Expanded (the default): the
- * etendo.ai brand with the collapse button, the company the portal belongs to, "General · Inicio",
+ * issuing company (round logo and name) with the collapse button, "General · Inicio",
  * "Mis documentos" with one entry per kind and its count chip, the promo card ("Lleva tu negocio más
  * lejos" — only while expanded), and at the bottom the help link and the customer, which opens the
  * user menu (the language). Collapsed
- * (56 px): icons only — Inicio, and "Mis documentos" with the total count, which expands the rail
+ * (56 px): the company's round logo, then icons only — Inicio, and "Mis documentos" with the total
+ * count, which expands the rail
  * to choose a kind. The choice is remembered per browser. Mobile: the view's own top bar (each
  * view draws it) and the bottom navigation (Inicio, Presupuestos, Facturas, Más). The user menu
  * holds only the language: the portal has no login.
@@ -496,6 +514,8 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
       >
         {/* Cabecera: 62px */}
         <RailHeader
+          identity={identity}
+          logoUrl={logoUrl}
           collapsed={collapsed}
           onToggle={toggleRail}
           data-testid="RailHeader__a5d12f" />
@@ -504,8 +524,6 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
         <div className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto', collapsed ? 'pl-2' : 'px-2')}>
           {collapsed ? (
             <RailCollapsedMenu
-              identity={identity}
-              logoUrl={logoUrl}
               isActive={isActive}
               documentsActive={documentsActive}
               totalBadge={totalBadge}
@@ -514,8 +532,6 @@ export default function PortalShell({ identity, logoUrl, current, tiles, onNavig
               data-testid="RailCollapsedMenu__a5d12f" />
           ) : (
             <RailExpandedMenu
-              identity={identity}
-              logoUrl={logoUrl}
               kinds={kinds}
               tiles={tiles}
               isActive={isActive}
@@ -546,45 +562,6 @@ function RailUserAvatar() {
     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#F3F5F9]">
       <UserIcon size={13} weight="fill" className="text-[#C7CBD3]" aria-hidden="true" data-testid="User__a5d12f" />
     </span>
-  );
-}
-
-/**
- * The company the portal belongs to, where the design draws its company selector (224×32,
- * white, shadow-xs): the tenant's 20px round logo, its name in grey and a decorative CaretDown —
- * a portal link belongs to one company, so nothing opens. Collapsed: a 36×36 grey button with the
- * logo, named by its tooltip. Without a logo the initials tile stands in.
- */
-function PortalCompany({ identity, logoUrl, collapsed = false }) {
-  const mark = logoUrl ? (
-    <img src={logoUrl} alt="" className="h-5 w-5 shrink-0 rounded-full object-contain" data-testid="portal-logo" />
-  ) : (
-    <PortalLogoTile identity={identity} logoUrl={null} size="xs" data-testid="PortalLogoTile__a5d12f" />
-  );
-  if (collapsed) {
-    return (
-      <span
-        role="img"
-        aria-label={identity?.tenantName ?? ''}
-        title={identity?.tenantName ?? undefined}
-        className={RAIL_ICON_BUTTON}
-        data-testid="portal-company"
-      >
-        {mark}
-      </span>
-    );
-  }
-  return (
-    <div
-      className={`flex h-8 w-full min-w-0 items-center rounded-lg border border-[#E3E7EC] bg-white px-2 py-1 ${RAIL_SHADOW}`}
-      data-testid="portal-company"
-    >
-      {mark}
-      <span className="min-w-0 flex-1 truncate px-1 text-sm font-medium leading-6 text-[#9A9CA8]" data-testid="portal-tenant-name">
-        {identity?.tenantName ?? ''}
-      </span>
-      <CaretDownIcon size={20} className="shrink-0 text-[#C7CBD3]" aria-hidden="true" data-testid="CaretDown__a5d12f" />
-    </div>
   );
 }
 

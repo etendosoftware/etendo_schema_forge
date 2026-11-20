@@ -228,11 +228,12 @@ export function PortalListTable({ kind, documents, onOpen }) {
               <td className={cn(td, 'font-semibold tabular-nums')}><PortalDate value={document.date} data-testid="PortalDate__b71e0c" /></td>
               {isInvoice ? <td className={td}><PortalInvoiceTypeBadge document={document} data-testid="PortalInvoiceTypeBadge__b71e0c" /></td> : null}
               <td className={td}>
-                {/* The number stays its own link-like control; the row opens the same document. */}
+                {/* The number stays its own button (keyboard and screen readers); the row opens the
+                    same document. Hover is the row's only (Figma): no colour change on the number. */}
                 <button
                   type="button"
                   onClick={(event) => { event.stopPropagation(); onOpen(document); }}
-                  className="hover:text-[#325CFF]"
+                  className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   data-testid="portal-document-open"
                 >
                   {document.documentNo}

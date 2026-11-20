@@ -27,7 +27,7 @@ import { portalPdfFileName } from '@/lib/portal/portalInvoices.js';
 import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
 import {
   PortalDate, PortalMain, PortalMoney, PortalPaymentStatus, PortalSection, PORTAL_SECTION_TITLE,
-  PORTAL_FIGMA_BUTTON_SECONDARY, PORTAL_FIGMA_SHADOW,
+  PORTAL_FIGMA_BUTTON_SECONDARY, PORTAL_FIGMA_SHADOW, PortalCreatedWithHeaderLink, PortalCreatedWithTile,
 } from './PortalBits.jsx';
 
 import {
@@ -230,6 +230,9 @@ export default function PortalDocumentDetailView({
           <h1 className="truncate text-xl font-semibold leading-7">{title}</h1>
           <span className="truncate text-[13px] leading-[18px] text-muted-foreground">{ui('portalIssuedBy', { name: issuer })}</span>
         </div>
+        {/* Etendo link left of the other controls, as on the Inicio bar (provisional until the
+            mobile design arrives). */}
+        <PortalCreatedWithTile data-testid="PortalCreatedWithTile__6a1d3b" />
         {document.hasPdf ? (
           <button
             type="button"
@@ -400,6 +403,10 @@ function DesktopHeader({ title, breadcrumb, plural, onBack }) {
       <div className="flex min-w-0 flex-col">
         <h1 className="truncate text-lg font-semibold leading-7" data-testid="portal-view-title">{title}</h1>
         <span className="truncate text-xs leading-4 text-muted-foreground" data-testid="portal-breadcrumb">{breadcrumb}</span>
+      </div>
+      {/* The Etendo link on the right, as in the home and list headers. */}
+      <div className="ml-auto flex shrink-0 items-center">
+        <PortalCreatedWithHeaderLink data-testid="PortalCreatedWithHeaderLink__6a1d3b" />
       </div>
     </header>
   );
