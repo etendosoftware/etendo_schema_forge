@@ -8,26 +8,6 @@ import userEvent from '@testing-library/user-event';
 
 const GENERIC = 'No se pudo generar el informe.';
 
-const { apiFetchCalls } = vi.hoisted(() => ({ apiFetchCalls: [] }));
-
-vi.mock('@/auth/useApiFetch.js', async (importOriginal) => {
-  const actual = await importOriginal();
-  const wrapped = new WeakMap();
-  return {
-    ...actual,
-    useApiFetch: (baseUrl) => {
-      const real = actual.useApiFetch(baseUrl);
-      if (!wrapped.has(real)) {
-        wrapped.set(real, (path, options = {}) => {
-          apiFetchCalls.push({ path, options });
-          return real(path, options);
-        });
-      }
-      return wrapped.get(real);
-    },
-  };
-});
-
 let mockSearchParams = new URLSearchParams();
 const mockSetSearchParams = vi.fn();
 
@@ -35,8 +15,6 @@ vi.mock('react-router-dom', () => ({
   useSearchParams: () => [mockSearchParams, mockSetSearchParams],
 }));
 
-// networkErrorRetry is mapped so the case holds whether the page shows the NetworkError's own
-// (translator-resolved) message or asks ui() for the key itself.
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => (key === 'reportErrorGeneric' ? GENERIC : key),
   useMenuLabel: () => (key) => key,
@@ -105,7 +83,6 @@ function stubFetch(onRender) {
   });
 }
 
-const renderCalls = () => apiFetchCalls.filter(({ path }) => String(path).includes('/render'));
 
 const openDrillDown = () => act(() => {
   window.dispatchEvent(new MessageEvent('message', {
@@ -151,6 +128,7 @@ describe('ReportViewerPage — render catch blocks (ETP-5645)', () => {
     openDrillDown();
     await waitFor(() => expect(globalThis.fetch.mock.calls.some(([u]) => String(u).includes('/render'))).toBe(true));
     const dialog = screen.getByTestId('dialog');
+    await waitFor(() => expect(within(dialog).queryByText('loadingDetails')).not.toBeInTheDocument());
     expect(within(dialog).queryByText(/superseded/)).not.toBeInTheDocument();
     expect(within(dialog).queryByText(GENERIC)).not.toBeInTheDocument();
   });
