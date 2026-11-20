@@ -450,3 +450,7 @@ The list opens with the date filter on "Últimos 30 días" (`window.listViewOpti
 ## Agent prompts on account and status — ETP-5852
 
 `decisions.json` carries an `agentPrompt` on `account` (the financial account the money is received into), `status` (the collection lifecycle codes, RPAP to RPPC, and that accounting is a separate field) and `etblkpAccountingstatus` (Y posted, N not posted, any other value the reason posting failed). Feedback M-29.
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. `financialTransactionConvertRate` (`Finacc_Txn_Convert_Rate`) on `finPayment` is now `decimal` in the backend contract. No frontend field changes.

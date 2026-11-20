@@ -92,6 +92,64 @@ auto-synced when a generated prop's shape changes.
 
 ---
 
+## Icons (ETP-6155)
+
+**Every icon comes from `@phosphor-icons/react`** — tabs, toolbars, buttons, forms, tables,
+selectors, pop-ups, notifications and empty states. lucide-react and the hand-drawn SVG icons
+(the Attachments clip, the "Iconic" row-action set, the product box, the pricing coins) were
+replaced; only brand marks (logo, isotype) keep their own artwork.
+
+`@phosphor-icons/react` is in the `dedupe` lists of `vite.config.js` / `vitest.config.js` so core icons share
+the app's single Phosphor instance (and its `IconContext`). `lucide-react` stays in
+`tools/app-shell/package.json` (and those lists) for one reason only: the published `@etendosoftware/app-shell-core` and
+`@etendosoftware/etendo-go-core` packages still import it at runtime (and declare it as a peer
+dependency). The app-shell source itself has no lucide import (enforced by
+`test/icon-library-policy.test.js`). Uninstall it once those core packages are migrated to Phosphor
+and a release is consumed here.
+
+- **Import the `*Icon` name** (`TrashIcon`, `MagnifyingGlassIcon`), not the deprecated
+  unsuffixed alias: it never collides with a component or a browser global (`Link`, `File`,
+  `Image`).
+- **Weight: Regular.** It is the default (`IconContext` in `src/main.jsx`), so pass no `weight`.
+  The only exception is the Navigation Rail, which draws its active entry with `weight="fill"`.
+- **Size and colour:** size with Tailwind classes (`h-4 w-4`, `size-5`) or `size`, colour with
+  `text-*` (the glyph is `currentColor`). An icon with no size is 24px. Phosphor ignores
+  `strokeWidth`; do not pass it.
+- **One action, one icon** — reuse these rather than picking a look-alike:
+
+| Action | Icon |
+|---|---|
+| New / add | `PlusIcon` |
+| Save | `FloppyDiskIcon` |
+| Edit | `PencilSimpleIcon` |
+| Delete | `TrashIcon` |
+| Duplicate / copy | `CopyIcon` |
+| Filter | `FunnelSimpleIcon` |
+| Search | `MagnifyingGlassIcon` |
+| Export / download | `DownloadSimpleIcon` |
+| Import / upload | `UploadSimpleIcon` |
+| Attachments | `PaperclipIcon` |
+| Print | `PrinterIcon` |
+| Send by email | `EnvelopeSimpleIcon` |
+| Refresh | `ArrowsClockwiseIcon` |
+| More actions | `DotsThreeVerticalIcon` |
+| Close | `XIcon` |
+| Loading | `CircleNotchIcon` + `animate-spin` |
+| Open externally | `ArrowSquareOutIcon` |
+| Warning / error / info | `WarningIcon` / `WarningCircleIcon` / `InfoIcon` |
+
+Exception (ETP-4997, SHELL-02): the list toolbar Export/Import buttons follow the direction the *data* travels (export = `UploadSimpleIcon`, import = `DownloadSimpleIcon`); asserted by `ListViewExport.vitest.js`. Pending Design confirmation.
+
+- **Tests:** a suite that mocks the icons mocks `@phosphor-icons/react`; prefer
+  `allIconsAs` (`src/test/iconMock.js`) over a hand-written list. Phosphor stamps no class on its
+  `svg`, so find a rendered icon with `findIcon(root, Icon)` (`src/test/iconGlyph.js`).
+- Guardrail: `tools/app-shell/test/icon-library-policy.test.js` fails on a file that imports
+  or mocks lucide-react or one of the replaced hand-drawn icon modules.
+- Icons rendered by `@etendosoftware/app-shell-core` (dialogs, selects, date pickers) are owned by
+  that package and migrate there.
+
+---
+
 ## Default column widths by field type (ETP-5833)
 
 One lookup (`tools/app-shell/src/lib/linesColumnWidth.js`) sizes **and** expands every grid column from its `type`. `columnFlex()` feeds the lines grid (`InlineLinesPanel`) and the add-row colgroup; `columnMinWidthPx()` feeds the plain list (`DataTable` list mode, header + body + `<col>`). Both read the same tables, so the surfaces cannot disagree. Bases are **constants per type, never measured from content**: sorting or paging cannot move a column (ETP-5182), and there is no autofit. The only measured input is the plain-list **header label** (below), which depends on label + locale, never on row data. **One exception, lines grid only (ETP-5133):** a no-truncate column (any lookup selector, or `noTruncate: true` — see `docs/decisions-reference.md`) gets `contentWidthPx` from `withContentWidths()` (`lib/linesContentWidth.js`): the widest identifier among the loaded lines plus the add-row draft (published by `DataTable` through `lib/linesScrollHost.js`), measured with `measureTextPx` in the cell font. `columnFlex()` only ever raises the type basis to it (no maximum), so header, lines, totals and the add-row colgroup stay aligned and the grid's horizontal scroll absorbs the overflow.
@@ -1170,18 +1228,10 @@ inheriting shadcn's baked-in sizing. Reach for a plain `<button>` (styled
 with the `--floating-toolbar-*` CSS variables, same as the shell itself) for
 any new bulk-toolbar action button, rather than `<Button size="sm">`.
 
-**Icons: lucide-react, deliberately not Figma's "Iconic" library glyphs.**
-The Figma spec for the two text-bearing buttons above sources its icons
-(`file-plus`/`file-checkmark`) from the "Iconic" icon library, whose glyphs
-draw the plus/check as a badge overlapping the file's corner with a heavier
-stroke — visually different from this app's lucide-react set (`FilePlus`/
-`FileCheck`), which draws the same glyphs contained inside the file body
-with a thinner stroke. This is a **confirmed, deliberate decision, not a
-drift from Figma to fix**: lucide-react's versions were kept for visual
-consistency with every other icon already in this toolbar (`Trash2`, `X`,
-`Printer`, `Copy` — all lucide, thin stroke) rather than pixel-matching
-Figma's specific icon-library glyph. Do not "fix" this back to Iconic's glyph
-shape without re-confirming with design first.
+**Icons: Phosphor, like the rest of the app (ETP-6155).** The two
+text-bearing buttons above draw `FilePlusIcon` / `SealCheckIcon` from
+`@phosphor-icons/react`, the single icon family of the app — see
+**Icons** above.
 
 **Real examples:** `ListView.jsx` (grid multi-select), `DetailView.jsx` (two
 usages), `AmortizationLinesTable.jsx`, `AssetsAmortizationPanel.jsx`,
@@ -1243,6 +1293,16 @@ also installs that effect, and it re-runs whenever `ui` changes identity — so 
 consumes the caller's own persisted result before the fallback reload can hand it
 to the next mount. `useBulkActionToast()` belongs at the list level (it is called
 once in `ListView.jsx`, covering every window), not inside an action.
+
+**Listing the failed rows is opt-in: `showBulkActionToast(ui, result, { listFailures: true })`
+(ETP-6286).** By default a multi-record failure shows only the counts, plus a plan-quota refusal
+(ETP-5051) or a reason every failure shares (ETP-5591). ETP-5316 forbids per-row errors in a bulk
+toast because they do not scale and DocAction errors cite line numbers nobody can locate. With the
+option, the description lists the failures grouped by translated reason, one line per reason:
+`Doc A, Doc B +2 — <reason>`. It is capped at 3 lines and closes with a `bulkFailuresMore` count;
+the toast stays 10 s. Each failure's label is `label`, else `documentNo`. Opt in only when the errors are
+document-level and the user can fix them from the list. Today only the bulk post of
+`not-posted-documents` does.
 
 A bulk action that produces a result and does *not* refetch is a bug of its own
 class, not merely a missed nicety: `BulkInvoiceFromShipment.jsx` ("Crear
@@ -1570,7 +1630,7 @@ addLineGuard={(_, children) => children.length < 0}   // maxDetailLines: 0 — a
   - passes `canAddLine={false}` to the lines empty state — the shared `LinesEmptyState` hides its primary `+ Add Lines` button and keeps `secondaryAction` (typically an import button), which becomes the only way to create lines;
   - never renders the add-line area below the lines table (`canShowAddLineArea` requires `canAddLines`), which also hides the inline `detailExtraActions` trigger and the add-line kebab fed by `lineMenuActions`, since both live inside that area — `DetailView` itself renders no line-creation control once lines exist (see the panel-rendered pattern below to keep import available).
 
-**Keeping import available once lines exist (window-scoped, panel-rendered pattern):** because the suppressed add-line area is also where `detailExtraActions` renders, a window that must allow importing MORE lines into a draft that already has lines re-renders its import trigger from its own `customComponents.bottomSection` panel — the bottom section always renders below the lines area and receives `lines`, `data`, `recordId`, `token`, and `apiBaseUrl` from `DetailView`:
+**Keeping import available once lines exist (window-scoped, panel-rendered pattern):** because the suppressed add-line area is also where `detailExtraActions` renders, a window that must allow importing MORE lines into a draft that already has lines re-renders its import trigger from its own `customComponents.bottomSection` panel — the bottom section always renders below the lines area and receives `lines`, `data`, `recordId`, `token`, and `apiBaseUrl` from `DetailView`. The same applies to a lines entity that is read-only (`entities.lines.readOnly` / `methods: ["GET", …]`), whose lines only come from a picker. An example is the remittance's «Seleccionar desde factura» (`artifacts/remittance/custom/RemittanceBottomPanel.jsx`, ETP-6148), which opens the generic `DocumentPickerModal` (see *Document picker modal* below):
 
 ```jsx
 export default function MyBottomPanel(props) {
@@ -1781,6 +1841,7 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
     - **Big pages and a hold while it locates (ETP-6103).** A value that is not on the first page used to show the list from the top, stretch the scrollbar page by page and then jump, and a value among the last loaded rows jumped twice. Two rules in `useLocateCommittedValue` fix it for all four paged pickers (`SearchPopup`, `InlineSearchCombo`, `CreatableSearchSelect`, `ProductDrawerShell`):
       - *Bigger pages.* An open with a committed value and no typed search asks for 100 rows in its first page (`firstPageLimit`). If the value is not there, the walk's second request asks for all the rest of the walk total in one go (`locatePageLimit`: 900 rows, so 1000 in all, which is the selector cap of the server, `MAX_LIMIT` in `NeoSelectorService`). A typical tenant's ~650-account catalogue is therefore located in two requests, and a value beyond 1000 rows is pinned on top. A 100-row request costs about the same as a 30-row one. Typed searches, opens without a value and infinite scroll keep the own size. `ProductDrawerShell` opts out (`largePages: false`) because every mounted row fetches its own avatar: it keeps its own page size and the old walk total of `LOCATE_SELECTION_MAX_PAGES` x that size, but it still holds. Each picker takes `hasMore` from the server's answer when it carries one, else judges it against the limit it actually requested, and an empty page never has more; it advances its offset by the rows it received. A page that adds no rows ends the walk (and the extra-page centring), so a server answering an empty page with `hasMore: true` cannot make it loop. `SearchPopup`'s `loadPage(query, offset, signal, { limit })` gets the size as a fourth argument; a loader may ignore it. The backend must carry the 1000 cap (ETP-6103) before this frontend: an older backend clamps the request to 100 rows.
       - *The hold.* The hook returns `{ locating }`. While it is true the caller keeps its rows laid out but `invisible` (so the centring can measure them), hides the scrollbar (`overflow-hidden`) and renders `<LocatingNotice />` with the existing `loading` text. It starts once the first page has landed and ends when the value is centred, or when it was not found (the pin takes over), the list ended, a page failed, the page cap was hit, the user typed or pressed a key, or the picker closed. A value among the last loaded rows stays held until one more page arrives or the list ends. The hook requests that page at the picker's own size, not the rest of the walk: the value is already found and only needs rows below it. Centring runs in a layout effect so the first painted frame is already centred. A new picker built on the hook must wire `locating` the same way.
+    - **`SearchPopup` rows are memoized (ETP-6280).** Each option is a `React.memo` row (`SearchPopupOption`, kept in `SearchPopup.jsx` so guardrail rule A still holds) with a stable click handler that calls the latest `onSelect` through a ref. Appending a page therefore renders only the new rows, and an arrow key renders only the two rows whose highlight changed; before, both re-rendered every loaded row, which made a long walk quadratic and the arrow keys janky on slow machines with a ~650-account catalogue. A new prop on the row must stay stable (a string, a boolean, the option object, a ref or a stable callback), or the memo silently stops working; `SearchPopup.vitest.jsx` counts row renders to catch that. Two further ideas were considered and rejected: *virtualizing the list* (no such library is installed, the locate centring needs the committed row mounted and laid out, and E2E/`aria-activedescendant` address rows that would be unmounted) and *not rendering rows while locating* (the centring runs during the hold and measures the real rows; with memoized rows the hidden rows cost nothing per page anyway). A test that waits on a long list should not poll `getAllByRole('option')` inside `waitFor`: a role query over ~1000 rows costs ~140 ms per poll, and it was most of the time of the 1000-row walk test.
     - **Enforced for new pickers.** `tools/app-shell/test/committed-selection-policy.test.js` fails the build when (A) a source file renders `role="option"` without importing `selectorSelection.js` (directly or through `useLocateCommittedValue`), or (B) a JSX use of `SearchPopup`, `AccountLookupPopup`, `ProductSearchDrawer`, `ProductStockSearchDrawer`, `ProductDrawerShell` or a drawer taken from `lookupDrawers.js` passes no `value=`. Both scan `tools/app-shell/src` and `artifacts/`. The way out is a `committed-selection-ok: <reason>` comment, anywhere in the file for (A) and on or up to two lines above the tag for (B). It is meant for lists with no single committed value, or short, fully rendered lists that already set `aria-selected` from their value. The opt-outs in place today are the list-filter menus (`ListModalToolbarFilter`, `AccountTypeFilter`, `DistinctValuesList`), three fiscal custom lists, and the add-row `LookupButton` in `DataTable`. `DistinctValuesList` is paged and does not scroll to the active filter, which is a known gap noted in its opt-out.
     - In the default product drawer, the check marks what *is* chosen (the committed value, or the multi-select picks of the report picker). A click that is still in flight keeps only its border and background.
   - **Arrows start from the current value (ETP-5903).** With an empty query and nothing highlighted yet, the first `ArrowDown` lands on the row **after** the committed one and `ArrowUp` on the row before it (`nextActiveIndex`); with no committed value, or after typing, arrows start from the top as before. Typing a query also scrolls the panel back to the top, so the first match is in view.
@@ -1902,7 +1963,7 @@ classes.
   rowActions={[
     {
       key: 'archive',            // unique key — also the default data-testid suffix
-      icon: ArchiveIcon,         // any lucide-react icon component
+      icon: ArchiveIcon,         // any @phosphor-icons/react icon component
       tooltip: ui('archiveLineTooltip'),   // aria-label + title — the icon's only label, matches Pencil/Trash's own pattern
       onClick: (row) => handleArchive(row),
       show: (row) => row.status !== 'archived',  // optional: boolean OR (row) => boolean, defaults to visible
@@ -2941,6 +3002,28 @@ server-side ordering on a large catalog.
 
 ---
 
+### 19d. A window's own create modal on a selector — `FieldCreateContext` (ETP-6209)
+
+For a selector whose record the generic `allowCreate` (§19c) cannot create — it only POSTs `{ name }`
+to a CRUD spec — a custom window can give the field a "+ create" row that opens the window's OWN modal.
+The window wraps its `GeneratedApp` in `FieldCreateContext.Provider`
+(`tools/app-shell/src/components/contract-ui/FieldCreateContext.js`) with a value keyed by field key:
+
+```jsx
+<FieldCreateContext.Provider value={{
+  rejectReason: { label: `+ ${ui('createRejectReason')}`, onOpen: (query, onSelect) => openMyModal(query, onSelect) },
+}}>
+```
+
+`EntityForm`'s searchable selector (`renderSearchSelectField` → `CreatableSearchSelect`) shows the row
+for that field; `onOpen(query, onSelect)` opens the modal, and calling `onSelect({ id, name })` selects
+the created record in the field. No provider, a field the value does not name, or a field that declares
+`allowCreate` (which wins): exactly the previous behaviour. Nothing in `decisions.json` — the context
+lives in the window's custom code, so it survives regeneration. Only user: sales-quotation's
+`rejectReason` (editable on a rejected quotation), which opens the reject flow's
+`CreateRejectReasonModal` (`createRejectReason` action) — `tools/app-shell/src/windows/custom/sales-quotation/index.jsx`.
+Sibling of `CreateContactContext` (the contact create on `type: 'search'` fields).
+
 ### 20. Follow-up documents — `FollowUpDocumentButton` + `draftMode.afterProcess` (ETP-5576)
 
 A generic flow that offers the document that naturally follows a completed one (today:
@@ -2979,7 +3062,7 @@ options: {
     descriptionOneKey,             // optional singular variant (count === 1)
     badgeKey, badgeTone,           // optional badge; tone 'success' (green, default) | 'info' (blue)
     actionLabelKey,                // primary button in the single-option layout («Crear albarán»)
-    icon,                          // lucide component
+    icon,                          // Phosphor icon component
     titleKey, buttonLabelKey,      // used when this is the only follow-up offered; separate keys: the
                                    // modal title asks («¿Gestionar envío?»), the button does not («Gestionar envío»)
     resultDocType,                 // ConfirmResultModal doc type (see §21 for the full list) — drives the
@@ -3145,7 +3228,7 @@ no amount, and its title, banner and buttons are computed:
 | `devolucionCompra` | Devolución de compra | Devolución de compra creada | `confirmResultModal.view.devolucion` | feminine | goods-receipt «Crear devolución» (opens `/return-to-vendor-shipment/{id}`) |
 | `pedidoVenta` | Pedido de venta | Pedido creado | `sqViewOrder` | masculine | sales-quotation «Crear pedido» |
 
-Adding a document type = one `TYPE_CONFIG` row (label key, title key, view key, lucide icon,
+Adding a document type = one `TYPE_CONFIG` row (label key, title key, view key, Phosphor icon,
 gender) plus its `confirmResultModal.docType.*` / `confirmResultModal.title.*` keys in all three
 locales. Shared hooks pass the type through instead of a title: `invoiceDocType` in
 `useRowConfirmAction` / `ReturnWindowShell`'s `confirmAction`, `invoiceType` in
@@ -3194,7 +3277,7 @@ every current flow:
 | Confirm with invoice (orders, shipments, receipts, returns) | `ConfirmInOutModal` (also behind `ConfirmWithCreditButtonBase`), the order `ConfirmModal`s in `OrderCreateInvoice.jsx` / `PurchaseOrderActions.jsx` |
 | Create the invoice of a confirmed document (single and bulk ONE-invoice) | `CreateInvoiceConfirmModal` via its `sifDefaultsUrl` / `sifDefaultsBody` props; the orders' `CreateDocsModal` |
 | Quotation «Facturar directamente» | `QuotationConfirmModal` → `InvoiceSifStepModal` (its own dialog, because `ActionChoiceModal` cannot host it) |
-| Bulk "one invoice per selected order" | `BulkOrderMoreMenu` / `BulkPurchaseOrderMoreMenu` → `resolveBulkSifPreview` + `InvoiceSifStepModal` in `readOnly` mode |
+| Bulk "one invoice per selected order" | `BulkOrderMoreMenu` / `BulkPurchaseOrderMoreMenu` → `resolveBulkSifPreview` + `BulkInvoiceSifStepModal` (editable, one set of values for every invoice) |
 
 **The backend is the source of truth.** The step is built from the source record's
 `POST …/action/sifDefaults` (`InvoiceSifPreset` in `com.etendoerp.go`, `neo-headless.md` §4.12.36b):
@@ -3202,6 +3285,42 @@ which fiscal systems are active (SII on both sides, TicketBAI and VERI\*FACTU on
 SIF-tab fields are editable, their allowed codes and the value each would get. The values go back
 as `sifFields` in the invoice-creating action's body. A field the caller does not send gets its
 preview value on the server, so the screen and the API always produce the same invoice.
+
+**Rectification codes come as the backend previews them** — the step never picks one itself.
+On the rectificative of a **customer return** (return-material-receipt, both the Confirmar path and
+the *Crear factura rectificativa* button) the preview preselects **`R1`** for the SII motive
+(`aeatsiiMotivoRectif`), the TicketBAI code (`tbaiReverseinvoicecode`) and the VERI\*FACTU type
+(`etvfacInvType`, which there only offers `R1`–`R5`), for the systems active for the organization:
+editable, marked mandatory (decided by the user, ETP-6179). On **any other** rectificative (the bulk
+order runs, or an order/shipment flow under an unusual document-type setup) the preview leaves them
+EMPTY: the selects show the "—" placeholder and the user has to choose each one before the primary
+button is enabled. A caller that sends **no `sifFields` at all** (MCP/API, or this screen when the
+preview failed and the step was skipped) gets `R1` in those fields
+(`InvoiceSifPreset.unattendedRectificationFallback`, `neo-headless.md` §4.12.36b). Manual
+rectificatives of the sales-invoice window keep no preselected code (ETP-5745 CP-14).
+
+**Mandatory fields carry the red `*`**, here and in the invoices' SIF tab (`SifTab.jsx`), from ONE
+rule: `isSifFieldRequired(name, { rectificative, verifactu })` in
+`tools/app-shell/src/windows/custom/shared/sifRequiredFields.js`. No SIF column is mandatory in the
+AD; the rule lists the fields a fiscal system refuses when empty:
+
+| System | Field | Mandatory when | Who refuses it empty |
+|---|---|---|---|
+| SII | Tipo factura (`aeatsiiClaveTipo` / purchase `aeatsiiClaveTipoFc`) | always | SII pre-send validation (`SIIUtils`) |
+| SII | Descripción SII (`aeatsiiDescripcionSii`) | always | SII pre-send validation |
+| SII | Motivo de rectificación (`aeatsiiMotivoRectif`) | sales rectificative | `RectificationFiscalCodeGuard` (422 on completion), `EM_AEATSII_C_INV_RECT_CHK` |
+| TicketBAI | Código de factura rectificativa (`tbaiReverseinvoicecode`) | sales rectificative | `RectificationFiscalCodeGuard` |
+| VERI\*FACTU | Tipo de factura (`etvfacInvType`) | always (`R1`–`R5` on a rectificative) | VERI\*FACTU `InitialValidator`, `RectificationFiscalCodeGuard` |
+| VERI\*FACTU | Descripción de la operación (`etvfacVerifacDesc`) | always | VERI\*FACTU `InitialValidator` |
+| SII / VERI\*FACTU | Fecha operación (`etsgDateOperation`) | VERI\*FACTU active | VERI\*FACTU `InitialValidator` |
+
+The SII exemption cause is deliberately NOT in the list: an exempt tax without a cause only raises
+a non-blocking warning toast. The marker is the app's own `RequiredMark`
+(`@/components/ui/required-mark.jsx`, `aria-hidden`), with `aria-required` / `required` on the
+control, and — like the header form — it is not shown on a field the user cannot edit (a completed
+invoice, a read-only role). To make a field mandatory or stop it being
+so, change `sifRequiredFields.js` only: the tab, the step's `*` and the step's blocked button all
+follow.
 
 **Wiring a NEW invoice-creating modal** (reuse a wired modal first; only build a new one when none fits):
 
@@ -3233,22 +3352,48 @@ Behaviour the hook already owns — do not re-implement it:
 - **Fetched on the primary click, not on open**, so a flow that creates no invoice never asks and
   the preview reflects the record at that moment. The answer is cached per URL + body, so Back →
   Continue keeps what the user typed.
-- **Fails open.** A preview the server cannot answer skips the step and runs the flow; the backend
-  applies the same defaults and refuses an invalid invoice with its own 422.
-- **`sif.valid`** is false while a rectificative lacks a code of an active system (the primary
-  button is disabled and `invoiceSifStep.rectificationRequired` is shown). The server refuses the
-  same blank with 422 `ETGO_InvoiceRectificationCodeRequired`.
+- **Fails open.** A preview the server cannot answer skips the step and runs the flow with no
+  `sifFields`; the backend then applies its own values (on a rectificative, the `R1` fallback) and
+  refuses an invalid invoice with its own 422.
+- **`sif.valid`** is false while a mandatory field of the step (`sifRequiredFields.js`, above) is
+  empty; `sif.missing` names them. The primary button is disabled and a hint is shown:
+  `invoiceSifStep.rectificationRequired` while a rectification code is missing, the generic
+  `requiredFieldsMissing` otherwise. A rectificative whose preview preselects no code starts
+  invalid; a customer return's (codes preselected `R1`) starts valid. The server refuses a blank code with 422 `ETGO_InvoiceRectificationCodeRequired`.
 - **`withSifFields`** adds `sifFields` only while the step was shown; with no active system the
   body is byte-for-byte what it was before ETP-6179.
 - A modal that cannot host the panel (a shared first screen) renders `InvoiceSifStepModal`
   (× / Cancelar / Atrás / confirm) instead; remember the option the user picked so Atrás returns to
   it (`QuotationConfirmModal`'s `chosenOption`).
-- **Bulk, one invoice per document:** never an editable step per invoice. Fetch every preview with
-  `resolveBulkSifPreview(apiFetch, urls)`; on `kind: 'summary'` show
-  `InvoiceSifStepModal` with `sif={readOnlySifStep(preview, varying)}`, `readOnly`,
-  `notice={ui('invoiceSifStep.bulkNotice', …)}` and `onCancel`; a field that differs reads
-  "Según cada cliente" (SII key) or "Según cada pedido" (anything else). Each POST then sends its
-  OWN document's `previews[i].fields` as `sifFields`. On `kind: 'none'` run as before.
+- **Bulk, one invoice per document:** ONE editable set of values for every invoice of the run,
+  never an editable step per invoice (whoever wants other values on one invoice creates it
+  individually; `invoiceSifStep.bulkNotice` says so). Fetch every preview with
+  `resolveBulkSifPreview(apiFetch, urls)`; on `kind: 'summary'` render
+  `BulkInvoiceSifStepModal` with `summary`, `notice={ui('invoiceSifStep.bulkNotice', …)}`,
+  `confirmLabel`, `loading`, `onCancel`, and an `onConfirm(sifFieldsList)` that sends
+  `sifFieldsList[i]` as the `sifFields` of the POST of the document behind `previews[i]`. On
+  `kind: 'none'` run as before. What it does (`useBulkSifStep`, `bulkSifFields`):
+  - **Same `*` and same blocking** as the single-record step (`sifRequiredFields.js`).
+  - **A field that differs between the invoices** starts empty with the note "Según cada cliente"
+    (SII key) or "Según cada pedido" (anything else). Left untouched, each invoice keeps its OWN
+    preview value, and it counts as filled — unless the field is mandatory and one of those values
+    is empty (e.g. an order with no SII description): then it blocks until the user sets it. Once
+    the user sets a value, it goes to every invoice that has the field.
+  - **Fields are compared only among the invoices that have them**, and an invoice is only ever
+    sent the fields of its own preview: an ordinary invoice never receives a rectification code.
+  - **Rectificatives in the run:** their codes come empty with `*` (never preselected) and block
+    until chosen; the chosen codes go to the rectificative invoices only. When the run MIXES
+    ordinary and rectificative invoices, the fields of the rectificatives read "(solo facturas
+    rectificativas)" (`invoiceSifStep.rectificativeOnly`), and VERI\*FACTU's type appears twice —
+    the ordinary F1/F2 one and the R1–R5 one of the rectificatives
+    (`BULK_RECTIFICATIVE_VF_KEY`), since it is one backend field with two meanings. Which order is
+    a rectificative comes from each preview's own `rectificative` flag.
+    Known limit: in such a mixed run the two VERI\*FACTU flags (`etvfacSimpinvart7273` /
+    `etvfacInvNoIDArt61d`) are one slot shared by both kinds and are shown according to the
+    ordinary invoices' type, not the rectificatives' R-code. Mixed runs are practically unreachable
+    (orders do not produce rectificatives in a normal setup), so the slot is not split.
+  - **Shared option fields** offer only the codes every invoice carrying them accepts; if they
+    accept none in common, the select offers nothing.
 - **Option labels:** any SIF select uses `sifOptionLabel(option, ui)` ("CODE - Label", the code
   once), as the SIF tab does.
 
@@ -3347,17 +3492,18 @@ with the shared round `RowExpandToggle` (ETP-5593, sized 24 × 24 through `class
 adornment slot and the amount; an expanded document shows a bordered lines table with a master
 checkbox and a −/+ quantity stepper (`NumberStepperInput`, bounded by the line's available
 quantity, typed values still validated on blur); the footer has the selection hint and the
-«Cancelar» / primary pills. The hint reads «N Seleccionados» (`selected`) and the primary button
-counts the selected lines; with `countLinesInFooter` the hint counts LINES with singular/plural
-wording instead (see the prop table).
+«Cancelar» / primary pills. The hint counts the selected LINES with singular/plural wording («1 línea
+seleccionada» / «N líneas seleccionadas», ETP-5651, in every import popup) and the primary button
+counts them too. Per Figma (ETP-5651) «Cancelar» is a borderless text pill and the import button is
+black (`bg-foreground text-background`) while enabled and grey (`bg-muted`) while nothing is
+selected; it does not use the theme's `primary` colour.
 
 **Optional props added by ETP-5828** (all default to the previous behaviour):
 
 | Prop | Effect |
 |---|---|
 | `renderSelectionPanel(selection)` | Renders the fixed-height notice area under the list (`ImportLinesModal__selectionPanelSlot`). Return an `<ImportNotice tone="neutral"\|"warning" title body control? />` (exported from the same file); `null` shows the neutral «Información de importación» notice. Without the prop there is no notice area. |
-| `countLinesInFooter` | Default `false` («N Seleccionados»). `true`: the footer reads «**1 línea** seleccionada» / «**N líneas** seleccionadas» (keys `importLinesSelectedCountOne/Many`, `importLinesSelectedSuffixOne/Many`). Opted in only by the invoices' «Importar desde pedido» (`InvoiceOrderImportModal`, ETP-5828 QA UI-6), which until then counted ORDERS through the removed `selectedDocumentsKey` prop («1 pedido(s)» with two lines). |
-| `describeLine(line, { imported })` | The note under a line's product. On a greyed-out line return a string (e.g. the order import's «en factura borrador FV1000002», from the line's `inDraftInvoices`, ETP-5828 QA UI-4) or `null` to keep the default («ya importado», or «en albarán: …» from `_inDraftShipments`) — `ImportLinesModal__importedNote`. On a selectable line a string adds a note (e.g. «1 en factura borrador FC1000020» for a line another draft holds part of, QA OBS-2), `null` shows none — `ImportLinesModal__lineNote`. Every note (the default one too) wraps onto at most 2 lines inside the fixed product column, so the 64 px row never grows, with its full text as a tooltip (`title`) — QA BUG-1: a single truncated line cut the draft number. |
+| `describeLine(line, { imported })` | The note under a line's product. On a greyed-out line return a string (e.g. the order import's «en factura borrador FV1000002», from the line's `inDraftInvoices`, ETP-5828 QA UI-4) or `null` to keep the default («ya importado», or «en albarán: …» from `_inDraftShipments`) — `ImportLinesModal__importedNote`. On a selectable line a string adds a note (e.g. «1 en factura borrador FC1000020» for a line another draft holds part of, QA OBS-2, or «2 ya en esta factura» for a line partly on THIS invoice, QA UI-7 — both joined with « · » when both apply), `null` shows none — `ImportLinesModal__lineNote`. Every note (the default one too) wraps onto at most 2 lines inside the fixed product column, so the 64 px row never grows, with its full text as a tooltip (`title`) — QA BUG-1: a single truncated line cut the draft number. |
 | `importButtonKey` | i18n key of the primary button (default `importSelected`; `{count}` receives `" (N)"` or `""`). |
 
 **The notice box (Figma «Alert»).** The slot is 92 px: a 12 px gap and an 80 px alert (padding 16,
@@ -3722,6 +3868,42 @@ action of the detail view passes `primarySave={true}` to keep the default filled
 Default `false`; it does not change the new-record path, where `hasExternalPrimaryAction` is the
 equivalent switch in the other direction.
 
+**`primarySave="strong"` (ETP-5889, Product).** The string value `'strong'` keeps the filled primary
+look AND adds `hover:!bg-[var(--primary-hover-strong)]` (#2B48BC), the darker hover of the
+designer's Save button. Any other truthy value behaves as `true`. Product passes it from
+`windows/custom/product/index.jsx`; no other window is affected.
+
+### `tabsActiveAccent="primary"` — blue active secondary tab (ETP-5889, Product)
+
+`DetailView` prop (default `'default'`), forwarded as `buttonProps.activeAccent` to `TabStripButton`.
+With `'primary'` the active secondary tab paints its text, icon and 2 px underline with `--primary`
+instead of the foreground colour. Opt-in per window; Product sets it in `windows/custom/product/index.jsx`.
+
+### A control that straddles a scrolling sidebar's border (CSS anchor on a `relative` column)
+
+A control centred on the border between the form and a side panel (the Product collapse/expand
+circle, `windows/custom/product/ProductSidebarDividerToggle.jsx`) must not be clipped by the panel:
+a column that is `overflow-y-auto` clips any child that overhangs its box (and forces `overflow-x`
+to clip too). The pattern (no JS measurement, no portal):
+
+1. The column (`sidebarClassName` in `decisions.json`) is `relative` and has NO overflow of its own;
+   it only carries the width, the `border-l` and, if wanted, the width transition.
+2. Inside it, put two layers (`ProductSidebarFrame.jsx`): a clip layer (`overflow-hidden`) and, inside
+   that, the scroll layer (`overflow-y-auto`) with a fixed width per state, so the content does not
+   reflow while the column width animates.
+3. Render the button as a plain child of the column, outside the clip layer, `absolute`, with
+   `left-[-0.5px] top-6 -translate-x-1/2` (centred on the 1 px border, fixed offset from the top).
+   Being anchored by CSS to the column, it follows the divider on every frame of a width transition;
+   the earlier approach (a hidden anchor span, `createPortal` into the parent row, `offsetLeft`
+   measurement with a `ResizeObserver`, an inline `position` patch on the row) lagged behind the
+   animation (32 px of drift at the worst frame) and was removed.
+
+Render both states of the panel inside the same frame component so the button is not remounted when
+the state flips: it keeps keyboard focus. Give it a stable `aria-label` with `aria-expanded` and
+`aria-controls` (never a label that flips with the state); only the `title` tooltip changes. For the
+collapse animation use `transition-[width] duration-200 ease-in-out` (the system menu's duration and
+curve) with `motion-reduce:transition-none`.
+
 ### Bottom tab-strip icons — `components/contract-ui/tabIcons.js`
 
 The icon before each secondary-tab label in the detail view's bottom tab strip is resolved by
@@ -3798,3 +3980,99 @@ else — no `decisions.json` key, no generator change, no regeneration of the wi
 
 > Watch out for `stopPropagation()` in the grid: without it a cell click also triggers the
 > row's own `onNavigate`, which wins and sends the user to *this* window's record instead.
+
+### Per-column link (`link` in `decisions.json`) — ETP-6148
+
+The registry above is shared: an entry changes every window that has that AD column. When
+ONE window wants ONE grid column to open another record, declare it on the field instead:
+
+```json
+"invoiceDocumentNo": {
+  "link": {
+    "idField": "invoice",
+    "window": { "field": "invoiceSalesTransaction", "values": { "true": "sales-invoice", "false": "purchase-invoice" } }
+  }
+}
+```
+
+- `idField` — the row key that holds the target record id (often a hidden read-only field,
+  e.g. a `propertyPath` field reaching the invoice).
+- `window` — the target route segment (spec name), or `{ field, values }` to pick it per row
+  from a sibling field's value (`true`/`false` also match `Y`/`N`).
+- The window names live in the window's own `decisions.json`, never in shared code.
+
+Rendering is the same underlined value + ↗ icon as the FK link above and the «Pago» column
+of Financial Account > Movimientos. `InlineLinesPanel` (`ReadCell` → `LinkedReadCell`) and
+`DataTable` (`renderCellValue`, before the registry) both resolve it through
+`resolveColumnLink()` in `fkNavigation.js`, and it fails closed in the same way: no id or
+no matching window means the plain cell. The panel renders the shared `RecordLink.jsx` (the
+only part that calls `useNavigate()`), mounted for a resolvable link only, so panels rendered
+without a Router are unaffected. A picker can render `RecordLink` with `resolveColumnLink` too. First consumer: the remittance lines' Factura column.
+
+### Lines grid without row edit, one amount editable in place — ETP-6148
+
+Two opt-ins in `decisions.json`, usable apart or together (the remittance lines use both):
+
+- **`entities.<name>.rowEdit: false`.** The grid has no row edit mode. `InlineLinesPanel` (the
+  default `inlineEditable` lines layout) normally lets a row be edited in place: the pencil in the
+  hover strip, or a click on a cell, turns the row into inputs. With this, the generator passes
+  `rowEditDisabled` in that entity's generated `<Entity>Table.jsx`. The panel hides the Edit action,
+  and neither the pencil nor a cell click enters edit mode. Delete and any caller `rowActions` stay.
+- **Field `editInPlace: { resetToField?, maxField? }`** (at least one of the two). An always-visible amount input for that
+  column (`ResettableAmountInput`), outside the row edit mode and even with `rowEditDisabled`.
+  - `resetToField` is the sibling field a small ↻ button restores. Its tooltip and `aria-label`
+    come from `resetAmountTo`, with the amount through `formatCurrency`. The button is always
+    rendered when there is a reset value. While the amount already equals it, the button is
+    disabled (muted, `aria-disabled`, a click does nothing), so the number never shifts between
+    rows.
+  - `maxField` is the sibling field the amount may not exceed in magnitude, and whose sign it must
+    have.
+  - The rules live in `lib/boundedAmount.js` (`validateBoundedAmount`): not empty, not 0, the
+    bound's sign, `|amount| <= |bound|`. A refused value shows a red border, the message as
+    tooltip and as an alert, and a toast. It stays on screen and is not sent.
+  - A valid, changed value is committed on blur or Enter through the panel's `commitField` →
+    `onUpdateRow`, the generic inline PATCH.
+  - The column turns into plain read-only text when the document is read-only
+    (`isDocumentReadOnly`) or there is no `onUpdateRow`.
+  - The backend must accept the PATCH (`methods` with `PATCH`, the field `ISREADONLY = 'N'`) and
+    enforce the same rule.
+
+`ResettableAmountInput` is also the amount cell of `DocumentPickerModal` (below), so a grid and a
+picker refuse exactly the same values.
+
+### Badge on selector options (`optionBadge` in `decisions.json`) — ETP-6148
+
+A selector field can mark some of its options with a small neutral badge, driven by a key the
+selector endpoint already serves on each item:
+
+```json
+"financialAccount": { "optionBadge": { "field": "ibanValid", "equals": false, "labelKey": "remittanceAccountNoIbanBadge" } }
+```
+
+`EntityForm` builds a `renderOption` for `CreatableSearchSelect` (`buildOptionBadgeRenderer`): the
+option's name, plus the badge when `item[field] === equals`. Fields without the option keep the
+default row. The committed-value marking of the picker is untouched; only the row content changes.
+First consumer: remittance's Cuenta («Sin IBAN»).
+
+### Document picker modal (`DocumentPickerModal`) — ETP-6148
+
+`components/contract-ui/DocumentPickerModal.jsx` picks documents (or their dues) from a server-driven
+list and says how much of each to take. It uses the frame of the sales invoice «Importar desde
+pedido» popup (`ImportLinesModal`): title and subtitle, search, «Seleccionar todo», the list, a
+notice (the exported `ImportNotice`), a footer status, Cancelar + the primary. It has no per-line
+sub-selection: one row is one pick. `ImportLinesModal` is not changed.
+
+- The caller owns the data: `rows`, `loading`, `loadingMore`, `search` / `onSearchChange`,
+  `onReachBottom`.
+- The caller owns the columns: `{ key, labelKey, align, width, render(row, { close }) }`. `close`
+  lets a `RecordLink` leave the modal.
+- The last column is the editable amount: `amount = { labelKey, getMax, getReset, getCurrency }`.
+- The modal owns the selection and the amounts.
+- Committed rows (`isCommitted(row)`) open checked and `aria-selected`, through `committedIdSet`
+  in `selectorSelection.js`, with `getInitialAmount(row)`.
+- `onConfirm({ add, update, remove })` receives the difference with the committed set
+  (`diffSelection`). Only rows that were loaded take part, so a paged, searchable list never drops
+  a committed row the user did not see.
+- The primary button is disabled while nothing changed, while any selected amount is invalid, and
+  while the confirm runs.
+- First consumer: remittance «Seleccionar desde factura» (`artifacts/remittance/custom/SelectDueItemsModal.jsx`).

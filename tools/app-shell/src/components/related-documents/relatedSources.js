@@ -22,13 +22,20 @@ export function criteriaSource(key, type, spec, entity, column) {
   };
 }
 
-/** Invoices of this order-like document through the `listInvoices` header action. */
-export function listInvoicesSource(key, type, spec, entity) {
+/**
+ * Invoices of this order-like document through the `listInvoices` header action.
+ * `excludeRectificatives` (ETP-6002, sales order and quotation) leaves out the rows the backend
+ * flags `isRectificative: true`: a rectificative is the original invoice's relation, not the
+ * order's. Without it (purchase) every row is kept, as before.
+ */
+export function listInvoicesSource(key, type, spec, entity, { excludeRectificatives = false } = {}) {
   return {
     key,
     type,
-    fetch: ({ id, token, apiBaseUrl }) =>
-      fetchListInvoices(spec, entity, id, token, apiBaseUrl),
+    fetch: async ({ id, token, apiBaseUrl }) => {
+      const rows = await fetchListInvoices(spec, entity, id, token, apiBaseUrl);
+      return excludeRectificatives ? asArray(rows).filter(row => row?.isRectificative !== true) : rows;
+    },
   };
 }
 
@@ -104,5 +111,69 @@ export function returnDefinition({ spec, entity, sourceField, sourceType, invoic
       selectSource(sourceField, sourceType, sourceField),
       selectSource('returnInvoices', invoiceType, 'returnInvoices'),
     ],
+  };
+}
+
+/**
+ * The three definitions of one document flow, shared by sales and purchases (ETP-6002, so the two
+ * modules no longer repeat them): the INVOICE (its orders, its goods movements and returns, the
+ * invoices it rectifies and the ones that rectify it), the GOODS MOVEMENT ({@link
+ * movementDefinition}) and the RETURN movement ({@link returnDefinition}). Each side passes only
+ * what differs; the result is keyed by spec, in that order, to be spread into the side's map.
+ *
+ * @param {object} flow
+ * @param {string} flow.invoiceSpec — the invoice spec, also its chip type and the movements' invoice chip
+ * @param {string} flow.refreshEvent — the invoice's document-created window event
+ * @param {object} flow.orderSource — the invoice's order source (its key, chip type and fetch)
+ * @param {string} flow.movementsKey — source key of the invoice's movements
+ * @param {string} flow.movementsField — detail field the invoice's movements are read from
+ * @param {string} flow.movementChip — chip type of a movement (and of a return's source)
+ * @param {string} flow.returnChip — chip type of a return movement
+ * @param {string} flow.movementSpec — the goods-movement spec
+ * @param {string} flow.movementEntity — its header entity
+ * @param {string | Function} flow.orderType — chip type of the movement's orders
+ * @param {string} flow.returnsField — detail field the movement's returns are read from
+ * @param {string} flow.returnSpec — the return-movement spec
+ * @param {string} flow.returnEntity — its header entity
+ * @param {string} flow.returnSourceField — detail field of the movements a return returns
+ */
+export function invoiceFlowDefinitions(flow) {
+  return {
+    [flow.invoiceSpec]: {
+      spec: flow.invoiceSpec,
+      entity: 'header',
+      refreshEvent: flow.refreshEvent,
+      depsKey: record => [
+        invoiceOrdersDepsKey(record),
+        originInvoicesDepsKey(record),
+        idsOf(record?.rectifyingInvoices),
+      ].join('|'),
+      sources: [
+        flow.orderSource,
+        // Read from each invoice line's own movement link; deliveries and returns are told apart
+        // by `isReturn` (ETP-4534), never derived from the invoice's order.
+        selectSource(flow.movementsKey,
+          doc => (doc.isReturn === true ? flow.returnChip : flow.movementChip), flow.movementsField),
+        // What this rectificative rectifies: its C_Invoice_Reverse links (`originInvoices`).
+        originInvoicesSource(flow.invoiceSpec),
+        // The mirror: the rectificativa(s) that rectify THIS invoice (ETP-5745 CP-12).
+        selectSource('rectifyingInvoices', flow.invoiceSpec, 'rectifyingInvoices'),
+      ],
+    },
+    [flow.movementSpec]: movementDefinition({
+      spec: flow.movementSpec,
+      entity: flow.movementEntity,
+      orderType: flow.orderType,
+      invoiceType: flow.invoiceSpec,
+      returnType: flow.returnChip,
+      returnsField: flow.returnsField,
+    }),
+    [flow.returnSpec]: returnDefinition({
+      spec: flow.returnSpec,
+      entity: flow.returnEntity,
+      sourceField: flow.returnSourceField,
+      sourceType: flow.movementChip,
+      invoiceType: flow.invoiceSpec,
+    }),
   };
 }

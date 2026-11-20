@@ -1,12 +1,12 @@
 import { parseCalendarDate } from '@/lib/dateOnly';
 import { computePeriodRange } from './productSidebarPeriod';
+import { chartSeriesColor } from '@/lib/chartPalette';
 
 // Pure series math of the product side-panel / modal stock chart (ETP-5908). A series is a list of
 // points { day, value } positioned on a DATE scale: `day` is a calendar-day number (days since the
 // epoch, timezone-free), so a movement can never slip to the neighbouring day.
 
 const MS_DAY = 86400000;
-const SINGLE_COLOR = 'var(--status-info-fg)';
 
 /** Calendar-day number of a Date (local Y/M/D components, so DST and the UTC offset never shift it). */
 export const dayNumber = (date) => Math.round(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / MS_DAY);
@@ -98,21 +98,29 @@ export function toMovements(transactions, keep = () => true) {
   return out;
 }
 
+/** {fill, line, color} of series `index`; `color` mirrors `fill`. */
+const seriesColors = (index) => {
+  const { fill, line } = chartSeriesColor(index);
+  return { fill, line, color: fill };
+};
+
 /**
  * Chart model of a period: the shared window plus one series per warehouse (colour = legend order),
  * or a single aggregated line when there are no warehouses. A warehouse is matched through
  * `locatorToWarehouse`; movements of an unknown locator are ignored. Returns null when there is
  * nothing to draw (no history and no stock, or the whole aggregated line sits at 0).
- * @returns {{range:{startDay:number,endDay:number}, series:{name:string|null,color:string,points:object[]}[]}|null}
+ * Every series carries the Etendo AI palette entry of its index: `fill` (areas, legend dots, swatches, tooltip),
+ * `line` (stroke) and `color` (= fill, kept for the legend/tooltip consumers).
+ * @returns {{range:{startDay:number,endDay:number}, series:{name:string|null,color:string,fill:string,line:string,points:object[]}[]}|null}
  */
-export function buildChartModel({ transactions, currentStock, warehouses = [], locatorToWarehouse = {}, months, today, colors }) {
+export function buildChartModel({ transactions, currentStock, warehouses = [], locatorToWarehouse = {}, months, today }) {
   const range = periodDayRange(months, today);
   const totalPoints = buildDailyPoints({ movements: toMovements(transactions), anchor: currentStock, ...range });
   if (totalPoints.every((p) => p.value === 0)) return null;
-  if (warehouses.length === 0) return { range, series: [{ name: null, color: SINGLE_COLOR, points: totalPoints }] };
+  if (warehouses.length === 0) return { range, series: [{ name: null, ...seriesColors(0), points: totalPoints }] };
   const series = warehouses.map((w, i) => ({
     name: w.binName,
-    color: colors[i % colors.length],
+    ...seriesColors(i),
     points: buildDailyPoints({
       movements: toMovements(transactions, (t) => locatorToWarehouse[t.storageBin] === w.binName),
       anchor: w.quantityOnHand,

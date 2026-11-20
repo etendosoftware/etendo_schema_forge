@@ -1,8 +1,8 @@
 {
-  "version": "0.12.0",
+  "version": "0.13.0",
   "generatedAt": "2026-04-29T18:12:11.134Z",
-  "updatedAt": "2026-10-16T17:42:48.757Z",
-  "checksum": "12f3a673bc9098ab",
+  "updatedAt": "2026-11-19T14:38:10.412Z",
+  "checksum": "94ca6acf4837089d",
   "frontendContract": {
     "window": {
       "id": "146",
@@ -11,6 +11,7 @@
       "category": "settings",
       "hidePrint": true,
       "hideMoreMenu": true,
+      "breadcrumb": "Inventory / Price List",
       "summaryFields": [],
       "labelOverrides": {
         "es_ES": {
@@ -459,8 +460,8 @@
             "apiKey": "cost",
             "column": "Cost",
             "label": "Cost",
-            "type": "string",
-            "tsType": "string",
+            "type": "decimal",
+            "tsType": "number",
             "visibility": "editable",
             "required": true,
             "grid": false,
@@ -544,6 +545,7 @@
       "category": "settings",
       "hidePrint": true,
       "hideMoreMenu": true,
+      "breadcrumb": "Inventory / Price List",
       "summaryFields": [],
       "labelOverrides": {
         "es_ES": {
@@ -893,7 +895,7 @@
             "name": "cost",
             "apiKey": "cost",
             "column": "Cost",
-            "type": "string",
+            "type": "decimal",
             "visibility": "editable",
             "required": true
           },
@@ -1569,7 +1571,7 @@
         "entity": "productPrice",
         "field": "cost",
         "runner": "node",
-        "description": "Field 'cost' should have type 'string' in productPrice"
+        "description": "Field 'cost' should have type 'number' in productPrice"
       },
       {
         "id": "t-field-type-productPrice-listPrice",

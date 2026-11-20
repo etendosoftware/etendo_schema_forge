@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Coverage-decrease gate: this repo's ONE implementation of the rule enforced by Jenkins'
 // "Compare Coverage Results" stage (sonarUtils.compareCoverage). Called by
-// `run-sonar.sh --compare-coverage` (pre-push) and by the `Sonar Build` job of
-// .github/workflows/test.yml. See docs/coverage-gate.md. (com.etendoerp.go's
+// `run-sonar.sh --compare-coverage` (pre-push) and by the unit tests + Sonar job of the mini and
+// full pipelines (.github/actions/unit-tests-sonar). See docs/coverage-gate.md. (com.etendoerp.go's
 // run-sonar.sh still has its own Python copy — a known duplicate.)
 //
 // Rule, on OVERALL coverage read live from Sonar:
@@ -13,6 +13,12 @@
 // In ci context any OTHER failure to read the base (401/403, 5xx, timeout,
 // network) fails closed instead.
 //
+// With --check-quality-gate (and --report-task) it then reads the quality gate of that same
+// analysis (api/qualitygates/project_status?analysisId=...) and fails when it is ERROR, listing
+// the conditions that failed: one wait, one check for the coverage rule and SonarQube's gate,
+// so the "SonarQube Code Analysis" check is no longer needed as a required check (ETP-6374,
+// as com.etendoerp.go's compare-sonar-coverage.py does since ETP-6324).
+//
 // Usage:
 //   node scripts/compare-sonar-coverage.js --base-branch <branch>
 //     [--pull-request <key>]      read the current coverage of this Sonar PR analysis
@@ -21,6 +27,7 @@
 //     [--project-key <key>]       default: sonar.projectKey of sonar-project.properties
 //     [--report-task <file>]      wait for that scanner task (ceTaskUrl) to be processed
 //     [--wait-timeout <seconds>]  default 600
+//     [--check-quality-gate]      then fail on that analysis's quality gate (needs --report-task)
 //     [--context push|ci]         push (default): tooling failures never block and the
 //                                 hints mention re-push; ci: tooling failures fail
 // Env: SONAR_HOST_URL, SONAR_TOKEN, COVERAGE_TOLERANCE, COVERAGE_MINIMUM.
@@ -71,9 +78,18 @@ const VALUE_FLAGS = {
   '--context': 'context',
 };
 
+const BOOLEAN_FLAGS = {
+  '--check-quality-gate': 'checkQualityGate',
+};
+
 export function parseArgs(argv) {
-  const opts = { context: 'push', waitTimeout: String(DEFAULT_WAIT_TIMEOUT_S) };
+  const opts = { context: 'push', waitTimeout: String(DEFAULT_WAIT_TIMEOUT_S), checkQualityGate: false };
   for (let i = 0; i < argv.length; i++) {
+    const flag = BOOLEAN_FLAGS[argv[i]];
+    if (flag) {
+      opts[flag] = true;
+      continue;
+    }
     const key = VALUE_FLAGS[argv[i]];
     if (!key) throw new UsageError(`Unknown argument: ${argv[i]}`);
     const value = argv[i + 1];
@@ -86,6 +102,9 @@ export function parseArgs(argv) {
   if (!opts.baseBranch) throw new UsageError('--base-branch is required');
   if (opts.pullRequest && opts.branch) {
     throw new UsageError('--pull-request and --branch are mutually exclusive');
+  }
+  if (opts.checkQualityGate && !opts.reportTask) {
+    throw new UsageError('--check-quality-gate needs --report-task: the gate is read for that analysis');
   }
   if (!['push', 'ci'].includes(opts.context)) {
     throw new UsageError(`--context must be 'push' or 'ci', got '${opts.context}'`);
@@ -228,6 +247,44 @@ export async function waitForCeTask(getJson, ceTaskUrl, {
   }
 }
 
+/**
+ * The quality gate of the analysis a processed CE task produced: { status, failed }, status being
+ * OK, ERROR or NONE and failed the conditions in ERROR. Throws a SonarReadError when the task has
+ * no analysisId or the gate cannot be read.
+ */
+export async function readQualityGate(getJson, ceTaskUrl) {
+  const task = await getJson(ceTaskUrl);
+  const analysisId = task?.task?.analysisId;
+  if (!analysisId) throw new SonarReadError('the analysis task has no analysisId');
+  const doc = await getJson(`/api/qualitygates/project_status?analysisId=${encodeURIComponent(analysisId)}`);
+  if (!doc?.projectStatus) throw new SonarReadError(`no quality gate for analysis ${analysisId}`);
+  const failed = (doc.projectStatus.conditions ?? []).filter((c) => c.status === 'ERROR');
+  return { status: doc.projectStatus.status ?? '', failed };
+}
+
+/** 'new_violations: 3 (GT 0)' for a failed quality gate condition. */
+export function describeCondition(c) {
+  return `${c.metricKey ?? '?'}: ${c.actualValue ?? '?'} (${c.comparator ?? '?'} ${c.errorThreshold ?? '?'})`;
+}
+
+/**
+ * Output of a quality gate read. Pure. exitCode null means an unexpected status: the caller treats
+ * it as a tooling failure.
+ */
+export function formatQualityGate({ status, failed }) {
+  if (status === 'ERROR') {
+    const conditions = failed.length ? failed.map(describeCondition) : ['(none listed)'];
+    return {
+      exitCode: 1,
+      lines: ['\n❌ QUALITY GATE FAILED — conditions not met:', ...conditions.map((c) => `   - ${c}`)],
+      annotation: `Quality gate failed: ${conditions.join('; ')}.`,
+    };
+  }
+  if (status === 'OK') return { exitCode: 0, lines: ['    Quality gate passed ✅'] };
+  if (status === 'NONE') return { exitCode: 0, lines: ['    SKIPPED ⚠️  The project has no quality gate: nothing to check.'] };
+  return { exitCode: null, lines: [] };
+}
+
 /** Apply the rule. Pure: no I/O. */
 export function evaluateCoverage({ current, base, tolerance, minimum }) {
   if (current === null || current === undefined) return { verdict: 'no-current' };
@@ -240,7 +297,7 @@ export function evaluateCoverage({ current, base, tolerance, minimum }) {
 
 const f2 = (n) => n.toFixed(2);
 
-/** Base branches whose pushes are always analysed by the `Sonar Build` job. */
+/** Base branches whose pushes are always analysed (mini pipeline on develop, full pipeline on main). */
 export const ANALYSED_BASE_BRANCHES = ['develop', 'main'];
 
 /**
@@ -347,6 +404,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     hostUrl: env.SONAR_HOST_URL, token: env.SONAR_TOKEN, fetchImpl: deps.fetchImpl, warn,
   });
 
+  let ceTaskUrl = '';
   if (opts.reportTask) {
     if (!existsSync(opts.reportTask)) {
       return toolingFailure(opts, `${opts.reportTask} not found (did the scanner run?)`, log);
@@ -359,6 +417,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
       return toolingFailure(opts,
         `ceTaskUrl in ${opts.reportTask} does not point to SONAR_HOST_URL (refusing to send the token)`, log);
     }
+    ceTaskUrl = task.ceTaskUrl;
     log(`==> Waiting for Sonar to process analysis ${task.ceTaskId ?? task.ceTaskUrl} ...`);
     const status = await waitForCeTask(getJson, task.ceTaskUrl, {
       timeoutMs: opts.waitTimeout * 1000, log, sleep: deps.sleep, now: deps.now,
@@ -404,6 +463,33 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     log(`::error title=Coverage gate::${out.annotation}`);
   }
   if (out.warning) log(`::warning title=Coverage gate::${out.warning}`);
+  if (!opts.checkQualityGate) return out.exitCode;
+  return Math.max(out.exitCode, await checkQualityGate(getJson, ceTaskUrl, opts, log));
+}
+
+/** 0 when the analysis's quality gate passed (or there is none), 1 when it failed. */
+async function checkQualityGate(getJson, ceTaskUrl, opts, log) {
+  log('\n==> Quality gate');
+  const unreadable = (message) => {
+    if (opts.context !== 'ci') {
+      log(`    SKIPPED ⚠️  ${message} — not blocking.`);
+      return 0;
+    }
+    log(`\n❌ QUALITY GATE NOT EVALUATED — ${message}.`);
+    log(`::error title=Quality gate::${message}`);
+    return 1;
+  };
+  let gate;
+  try {
+    gate = await readQualityGate(getJson, ceTaskUrl);
+  } catch (err) {
+    if (!(err instanceof SonarReadError)) throw err;
+    return unreadable(`the quality gate could not be read (${err.message})`);
+  }
+  const out = formatQualityGate(gate);
+  if (out.exitCode === null) return unreadable(`unexpected quality gate status '${gate.status}'`);
+  out.lines.forEach((line) => log(line));
+  if (opts.context === 'ci' && out.annotation) log(`::error title=Quality gate::${out.annotation}`);
   return out.exitCode;
 }
 

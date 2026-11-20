@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { AlertTriangle } from 'lucide-react';
+import { WarningIcon } from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { Button } from '@/components/ui/button';
@@ -89,7 +89,7 @@ export function BillingStatusBanner() {
   return (
     <InfoBanner
       tone={warning.escalated ? 'danger' : 'warning'}
-      icon={AlertTriangle}
+      icon={WarningIcon}
       dismissible={dismissible}
       onDismiss={dismiss}
       dismissTestId="billing-status-banner-dismiss"

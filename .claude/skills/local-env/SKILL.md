@@ -64,21 +64,21 @@ listed here. This skill carries what is specific to Etendo GO and to this machin
    - The rest (`copilot`, `docker`, `tomcat`, `devassistant`, `hqlquerytool`) stay on
      whatever the user has; they do not shape the DB model GO depends on.
 
-   Before `local-env worktree`, run this from `etendo_develop/modules` and report any
-   module that is not on the expected branch or shows `behind>0`:
+   Before `local-env worktree`, run `make check-modules` from a schema_forge checkout and
+   report every `ERROR` and every `OUTDATED` warning. It reads the module policy of its own
+   branch **and** of `origin/develop`, so it also reports a module the team added that is
+   **not cloned** at all (2026-11-16: `org.openbravo.module.remittance`, needed by
+   `com.etendoerp.go` since ETP-6148, was missing and `update.database` failed on
+   `ETGO_SF_FLD_COL_FK`), and a module whose `origin` is still on the retired
+   `git@bitbucket.org` host (fetch fails; it prints the `remote set-url` fix). A loop over
+   `modules/*` cannot see either: it only lists what is already cloned.
 
-   ```bash
-   for d in */; do d=${d%/}; [ -e "$d/.git" ] || continue; git -C "$d" fetch -q origin
-     u=$(git -C "$d" rev-parse --abbrev-ref @{u} 2>/dev/null)
-     printf '%-42s %-22s behind=%s\n' "$d" "$(git -C "$d" branch --show-current)" \
-       "$([ -n "$u" ] && git -C "$d" rev-list --count HEAD.."$u" || echo '?')"; done
-   ```
-
-   Pulling is the user's call (it changes their main checkout): ask, then create the
-   environment after they pull. When a module must be on a task branch, name it with
-   `--module <module>=<branch>` so it becomes a real worktree instead of a copy.
-   Recompute the epic list with the same loop (the modules whose branch is `epic/*`)
-   instead of trusting the dated list above.
+   Cloning a missing module or pulling is the user's call in the main checkout (it changes
+   it): ask, then create the environment. For one environment only, clone it straight into
+   `<env>/modules/` (`git clone -b epic/ETP-3504 git@ssh.bitbucket.org:koodu_software/<m>.git`)
+   and check that environment with `make check-modules ROOT=<env>`. When a module must be on
+   a task branch, name it with `--module <module>=<branch>` so it becomes a real worktree
+   instead of a copy.
 5. **Know where each branch is checked out before creating.** A task branch can sit in
    the main checkout's repo, in a manual or agent worktree (`schema_forge-ETP-XXXX`,
    `.claude/worktrees/*`, `modules/*` worktrees), or nowhere. git allows a branch in one
@@ -155,6 +155,15 @@ What the GO plugin adds on `up`:
   `export ETGO_ALLOWED_ORIGINS=http://localhost:<port>,http://127.0.0.1:<port>` into
   `<env>/build/local-env/env` (merged with any value already there) at creation, or on
   the first `up` of an older environment. Tomcat inherits it from that file.
+- points `context.url` at the environment's Tomcat (worktrees only), so the MCP's upload URLs
+  (`etendo_request_*_upload`) name this Tomcat and not the main checkout's :8080;
+- exports each boolean `feature-flag <key>=<value>` line of `worktree.conf` as
+  `ETGO_FLAG_<KEY>` in `<env>/build/local-env/env`, so the backend sees the flags too (not only
+  the SPA). A value in `Openbravo.properties` still wins;
+- with `setting copilot=on` in `worktree.conf`, runs the environment's `modules/com.etendoerp.copilot`
+  (`uv run python run.py`) on its own ports (5007+ in a worktree) and points `copilot.host` /
+  `copilot.port` at it: needed for OCR (*Subir factura*, `etendo_extract_invoice_document`, the
+  invoice inbox). `status` shows it; `stop` stops it. Details: `docs/local-env-plugin.md`.
 
 JUnit inside an environment, from `<env>`: `./gradlew test --no-daemon --tests '...'`.
 Its config already points at the environment's DB.

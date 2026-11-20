@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useAccountMutations.js
 import { renderHook, act } from '@testing-library/react';
 
 import { AuthProvider } from '@/auth/AuthContext.jsx';
@@ -352,6 +353,38 @@ describe('useAccountMutations', () => {
     const body = JSON.parse(init.body);
     expect(body).not.toHaveProperty('eTGODateTolerance');
     expect(body).not.toHaveProperty('eTGOAmountTolerance');
+  });
+
+  // ETP-6148 — the per-account «Admite remesas» flag is gone (Bank accounts are provisioned on
+  // create): an `allowRemittance` key a stale caller still passes is no longer mapped to the DAL
+  // property, nor forwarded as is.
+  it.each([true, false])('updateAccount no longer maps allowRemittance (%s) to eTGOAllowRemittance', async (value) => {
+    globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
+
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
+    await act(async () => {
+      await result.current.updateAccount('acc-1', { name: 'Renamed', allowRemittance: value });
+    });
+
+    const [, init] = findFetchCall(`${ENTITY_URL}/acc-1`);
+    const body = JSON.parse(init.body);
+    expect(body).toMatchObject({ name: 'Renamed' });
+    expect(body).not.toHaveProperty('eTGOAllowRemittance');
+    expect(body).not.toHaveProperty('allowRemittance');
+  });
+
+  it('updateAccount with only allowRemittance sends no remittance key', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-1' }]));
+
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
+    await act(async () => {
+      await result.current.updateAccount('acc-1', { allowRemittance: true });
+    });
+
+    const [, init] = findFetchCall(`${ENTITY_URL}/acc-1`);
+    const body = JSON.parse(init.body);
+    expect(body).not.toHaveProperty('eTGOAllowRemittance');
+    expect(body).not.toHaveProperty('allowRemittance');
   });
 
   it('updateAccount URL-encodes the account id', async () => {

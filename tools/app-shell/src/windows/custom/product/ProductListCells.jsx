@@ -1,12 +1,6 @@
-import { BoxIcon } from '@/components/ui/box-icon';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 
 /* eslint-disable react/prop-types */
-
-// BoxIcon now lives in a shared util (@/components/ui/box-icon) so the
-// generic `multiField` renderer and Product cells share one glyph. Re-exported
-// here to keep existing importers (ProductGallery, tests) working unchanged.
-export { BoxIcon };
 
 // eStock / eSalePrice / ePurchasePrice are STORED COMPUTED columns (EPL-1807):
 // they are materialized on M_Product and returned by the product LIST fetch as

@@ -1,31 +1,53 @@
 // ETP-5424 — confirming a purchase order runs the document process synchronously (and, with
 // "confirm + invoice", creates the invoice right after). Either can outlive apiFetch's default
-// timeout; a client-side cut while the server still commits invites a double submit, so both
-// requests of the confirm flow opt out with `timeout: 0`. The real client performs the request;
-// only its options are recorded (see `@/test/recordApiFetch.js`).
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+// timeout; a client-side cut while the server still commits invites a double submit, so the
+// documentAction and createPurchaseInvoice requests opt out with `timeout: 0`. The goods-receipt
+// request is deliberately NOT covered here: ETP-5424 never changed it (it keeps the default).
+// The real client performs the request; only its options are recorded (see `@/test/recordApiFetch.js`).
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useMenuLabel: () => (key) => key,
 }));
 
-vi.mock('@/lib/formatCurrency', () => ({
-  formatCurrency: (_curr, val) => `$${Number(val || 0).toFixed(2)}`,
-}));
-
-vi.mock('lucide-react', () => ({
-  FileText: () => <span data-testid="icon-file" />,
-  Check: () => <span data-testid="icon-check" />,
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
 }));
 
 vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn(), custom: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), custom: vi.fn(), dismiss: vi.fn() },
 }));
 
-vi.mock('react-dom', async (importOriginal) => {
-  const actual = await importOriginal();
-  return { ...actual, createPortal: (node) => node };
-});
+vi.mock('@/components/contract-ui/SendDocumentModal', () => ({
+  default: () => <div />,
+  SendDocumentButton: () => <button type="button" />,
+}));
+
+vi.mock('@/components/contract-ui', () => ({
+  ConfirmResultModal: () => <div data-testid="confirm-result-modal" />,
+}));
+
+vi.mock('@/components/contract-ui/CopyRecordLinkButton', () => ({
+  default: () => <button type="button" />,
+}));
+
+vi.mock('@/components/contract-ui/CloneOrderModal', () => ({
+  default: () => <div />,
+}));
+
+vi.mock('@/lib/surveys/survey-state.js', () => ({ incrementSurveyCounter: vi.fn() }));
+vi.mock('@/lib/surveys/survey-engine.js', () => ({ emitSurveyTrigger: vi.fn() }));
+vi.mock('@/windows/custom/shared/usePurchaseOrderPdf.js', () => ({
+  usePurchaseOrderPdf: () => ({ pdfUrl: null, loading: false }),
+}));
+vi.mock('@/lib/observability/health-events.js', () => ({
+  trackTransactionPosted: vi.fn(),
+  trackDocumentCreated: vi.fn(),
+}));
+vi.mock('@/lib/formatCurrency.js', () => ({
+  formatCurrency: (_currency, value) => `${Number(value || 0).toFixed(2)} €`,
+}));
 
 vi.mock('@/auth/useApiFetch.js', async (importOriginal) => {
   const { wrapUseApiFetchModule } = await import('@/test/recordApiFetch.js');
@@ -33,19 +55,25 @@ vi.mock('@/auth/useApiFetch.js', async (importOriginal) => {
 });
 
 import { apiFetchCallsTo, resetApiFetchCalls } from '@/test/recordApiFetch.js';
-import PurchaseOrderActions from '../PurchaseOrderActions.jsx';
+import PurchaseOrderActions from '@generated/purchase-order/custom/PurchaseOrderActions';
 
-function renderDraft() {
-  return render(
-    <PurchaseOrderActions
-      data={{ documentStatus: 'DR', documentNo: 'PO-001', grandTotalAmount: 500 }}
-      recordId="order-1"
-      token="tok"
-      apiBaseUrl="/api/purchase-order"
-      api={{ save: vi.fn() }}
-      onProcess={vi.fn()}
-    />,
-  );
+async function renderDraftAndOpenConfirm() {
+  await act(async () => {
+    render(
+      <PurchaseOrderActions
+        data={{ documentStatus: 'DR', documentNo: 'PO-001', grandTotalAmount: 500 }}
+        recordId="order-1"
+        token="tok"
+        apiBaseUrl="/sws/neo/purchase-order"
+        onProcess={vi.fn()}
+        onRefresh={vi.fn()}
+        onSave={vi.fn(async () => ({ id: 'order-1' }))}
+      />,
+    );
+  });
+  await act(async () => {
+    window.dispatchEvent(new CustomEvent('purchase-order:open-confirm-modal'));
+  });
 }
 
 describe('PurchaseOrderActions — confirm flow timeout opt-out (ETP-5424)', () => {
@@ -53,8 +81,8 @@ describe('PurchaseOrderActions — confirm flow timeout opt-out (ETP-5424)', () 
     resetApiFetchCalls();
     global.fetch = vi.fn((url) => {
       const u = String(url);
-      if (u.includes('/action/rMCreateInvoice')) {
-        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ response: { data: { id: 'inv-1', documentNo: 'INV-1' } } }) });
+      if (u.includes('/action/')) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ response: { data: { id: 'doc-1', documentNo: 'D-1' } } }) });
       }
       if (u.includes('/lines')) {
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ response: { data: [] } }) });
@@ -68,23 +96,23 @@ describe('PurchaseOrderActions — confirm flow timeout opt-out (ETP-5424)', () 
   });
 
   it('the documentAction (CO) request passes timeout: 0', async () => {
-    renderDraft();
-    fireEvent.click(screen.getByText('poConfirmBtn'));
-    fireEvent.click(screen.getByText('soConfirmOnly'));
-    fireEvent.click(await screen.findByText('soConfirmActionOnly'));
+    await renderDraftAndOpenConfirm();
+    fireEvent.click(await screen.findByTestId('action-confirm-modal'));
 
     await waitFor(() => expect(apiFetchCallsTo('/action/documentAction').length).toBe(1));
     expect(apiFetchCallsTo('/action/documentAction')[0].options.timeout).toBe(0);
   });
 
-  it('confirm + invoice: the rMCreateInvoice request passes timeout: 0 too', async () => {
-    renderDraft();
-    fireEvent.click(screen.getByText('poConfirmBtn'));
-    fireEvent.click(screen.getByText('poConfirmWithInvoice'));
-    fireEvent.click(await screen.findByText('soConfirmActionInvoice'));
+  it('confirm + invoice: the documentAction and createPurchaseInvoice requests pass timeout: 0', async () => {
+    await renderDraftAndOpenConfirm();
+    // The receipt option is selected too only so the flow runs end to end; its timeout is not asserted.
+    fireEvent.click(await screen.findByText('poCreateReceiptTitle'));
+    fireEvent.click(screen.getByText('soCreateInvoiceTitle'));
+    fireEvent.click(screen.getByTestId('action-confirm-modal'));
 
-    await waitFor(() => expect(apiFetchCallsTo('/action/rMCreateInvoice').length).toBe(1));
+    await waitFor(() => expect(apiFetchCallsTo('/action/createPurchaseInvoice').length).toBe(1));
     expect(apiFetchCallsTo('/action/documentAction')[0].options.timeout).toBe(0);
-    expect(apiFetchCallsTo('/action/rMCreateInvoice')[0].options.timeout).toBe(0);
+    expect(apiFetchCallsTo('/action/createPurchaseInvoice')[0].options.timeout).toBe(0);
+    expect(apiFetchCallsTo('/action/createGoodsReceipt')[0].options.timeout).toBeUndefined();
   });
 });

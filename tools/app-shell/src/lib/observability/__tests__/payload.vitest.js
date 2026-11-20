@@ -106,6 +106,12 @@ describe('sanitizeEventProperties', () => {
     expect(sanitizeEventProperties({ action: 'click', type: 'button' })).toEqual({ action: 'click', type: 'button' });
   });
 
+  it('keeps internal_user only as a boolean (ETP-6230)', () => {
+    expect(sanitizeEventProperties({ internal_user: true })).toEqual({ internal_user: true });
+    expect(sanitizeEventProperties({ internal_user: false })).toEqual({ internal_user: false });
+    expect(sanitizeEventProperties({ internal_user: 'yes' })).toEqual({});
+  });
+
   it('keeps safe keys with number values', () => {
     expect(sanitizeEventProperties({ status: 200 })).toEqual({ status: 200 });
   });
@@ -246,6 +252,22 @@ describe('sanitizeEventProperties', () => {
       specName: 'sales-order',
       supportRequested: false,
     });
+  });
+
+  // ETP-6072 — tenant_type is a closed set of strings: anything else is dropped, never passed through.
+  it('keeps tenant_type only when it is demo or productive', () => {
+    expect(sanitizeEventProperties({ tenant_type: 'demo' })).toEqual({ tenant_type: 'demo' });
+    expect(sanitizeEventProperties({ tenant_type: 'productive' })).toEqual({ tenant_type: 'productive' });
+  });
+
+  it.each([
+    ['an unknown value', 'free'],
+    ['the backend casing', 'PRODUCTIVE'],
+    ['a list', ['demo']],
+    ['a boolean', true],
+    ['an empty string', ''],
+  ])('drops tenant_type when it is %s', (_label, value) => {
+    expect(sanitizeEventProperties({ tenant_type: value, category: 'sales' })).toEqual({ category: 'sales' });
   });
 
   it('returns empty object for empty input', () => {

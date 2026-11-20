@@ -217,7 +217,7 @@
       ]
     },
     "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
-      "checksum": "8d6f8ffbb550de7fe8e1a9ffac23e95c6893e9f6982f0e0852f768dc3bc8cd5d",
+      "checksum": "d9e280c1f517badaa082bbfd8a46e3e4c1ae106b22e653eb542fb277700140bf",
       "params": [
         "123"
       ],
@@ -340,6 +340,22 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Estado VIES",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "EM_Obsepad_Mandate_Date",
+          "displaylogic": "@IsCustomer@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Mandate Date of Signature",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "EM_Obsepad_Mandate_Identifier",
+          "displaylogic": "@IsCustomer@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Mandate Identification",
           "readonlylogic": null
         },
         {
@@ -7790,6 +7806,238 @@
         }
       ]
     },
+    "71ffdfc8865e7daf652e4f855e18d8bb6126fff59ba2b01e651989778533de54": {
+      "checksum": "149705bc8528843ccb2581529f13507d325df01981b759ecdc083ce515877cad",
+      "params": [
+        "FF8080812E71F7C7012E71FD0499001B"
+      ],
+      "rows": [
+        {
+          "columnname": "AD_Client_ID",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Client",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "AD_Org_ID",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Organization",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "C_Doctype_ID",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Document Type",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "Chargedate",
+          "displaylogic": "@ISDISCOUNT@='Y' & @REM_Remittance_Type_ID@ ! ''",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Discount Date",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "Createfrom",
+          "displaylogic": "@Processed@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Select Orders or Invoices",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "DateAcct",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Accounting Date",
+          "readonlylogic": "@Posted@='Y'"
+        },
+        {
+          "columnname": "DateAcct",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Accounting Date",
+          "readonlylogic": "@Posted@='Y'"
+        },
+        {
+          "columnname": "Datetrx",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Transaction Date",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "DocumentNo",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Document No.",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "Duedate",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Expected Date",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "EM_Etar_Automaticprocess",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Process Automated",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "EM_OBSEPAD_SeqTp",
+          "displaylogic": "@OBSEPAD_IS_DIRECT_DEBIT@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Transaction Type",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "FIN_Financial_Account_ID",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Financial Account",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "FIN_Payment_ID",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Payment",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "FIN_Payment_ID",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Payment",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "FIN_Payment_ID",
+          "displaylogic": "@FIN_Payment_ID@ ! null",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Payment",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "Getfile",
+          "displaylogic": "@Processed@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Create Remittance File",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Line",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Line No.",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "Line",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Line No.",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "Posted",
+          "displaylogic": "@Processed@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Posted",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Posted",
+          "displaylogic": "@Processed@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Posted",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Posted",
+          "displaylogic": "@Processed@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Posted",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "REM_Remittance_Type_ID",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Remittance Type",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "Selectpayments",
+          "displaylogic": "@Processed@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Select Payments",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "SinglePayment",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "SinglePayment",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "Undo",
+          "displaylogic": "@Processed@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Protest Undo",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Undo",
+          "displaylogic": "@Processed@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Settle Undo",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "selectInvoicesAndOrders",
+          "displaylogic": "@Processed@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Select Invoices and Orders",
+          "readonlylogic": null
+        }
+      ]
+    },
     "7a3f9d7a689e84e5d068b46c04ad4a3a05634954d924672e2d18f287019437e0": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [
@@ -13531,7 +13779,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "bcbae15c1c01b511ce900e164d14226cb75b51be8fd90dbf1b47ed3e0808044c",
+      "checksum": "f6c1547d576bc5851e3e6b5d66a20dad405ad29c963dbeb4ad21b56cb6ec6ff4",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -14153,6 +14401,14 @@
           "readonlylogic": null
         },
         {
+          "columnname": "EM_PSD2_Discard_Line",
+          "displaylogic": "@FIN_FinAcc_Transaction_ID@='' & @EM_PSD2_Transaction_Identifier@!''",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Discard / Restore",
+          "readonlylogic": null
+        },
+        {
           "columnname": "EM_PSD2_Get_Bankstatement",
           "displaylogic": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasActiveConnections@>=1 & @Type@!'C'",
           "displaylogic_server": null,
@@ -14610,7 +14866,7 @@
         },
         {
           "columnname": "Reconnect_Conn",
-          "displaylogic": "@Connection_Status@='IN'",
+          "displaylogic": "@Connection_Status@='IN' | @Connection_Status@='DI' | @Last_Fail_Message@!''",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Reconnect Account",

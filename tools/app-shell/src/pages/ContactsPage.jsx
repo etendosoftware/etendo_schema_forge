@@ -7,14 +7,14 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Users, Mail, Phone, MapPin, X } from 'lucide-react';
+import { UsersIcon, EnvelopeSimpleIcon, PhoneIcon, MapPinIcon, XIcon } from '@phosphor-icons/react';
 
 import { kpisConfig, sections } from '@generated/contacts/generated/config';
 import * as mockData from '@generated/contacts/generated/mockData';
 
 // -- Icon map (string name -> component) --------------------------------------
 
-const ICON_MAP = { Users };
+const ICON_MAP = { Users: UsersIcon };
 
 // -- Derived data from aggregate contract -------------------------------------
 
@@ -72,7 +72,7 @@ function DetailPanel({ contact, onClose }) {
             onClick={onClose}
             aria-label={ui("closeDetailPanel")}
             data-testid="Button__af5294">
-            <X className="h-4 w-4" data-testid="X__af5294" />
+            <XIcon className="h-4 w-4" data-testid="X__af5294" />
           </Button>
         </div>
 
@@ -83,7 +83,7 @@ function DetailPanel({ contact, onClose }) {
           </div>
           <h2 className="text-lg font-semibold">{contact.title}</h2>
           <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-            <MapPin className="h-3.5 w-3.5" data-testid="MapPin__af5294" />
+            <MapPinIcon className="h-3.5 w-3.5" data-testid="MapPin__af5294" />
             {contact.subtitle}
           </p>
         </div>
@@ -93,19 +93,19 @@ function DetailPanel({ contact, onClose }) {
         {/* Contact info */}
         <div className="space-y-3">
           <div className="flex items-center gap-3 text-sm">
-            <Mail
+            <EnvelopeSimpleIcon
               className="h-4 w-4 text-muted-foreground shrink-0"
               data-testid="Mail__af5294" />
             <span className="truncate">{MOCK_EMAILS[contact.id] || 'N/A'}</span>
           </div>
           <div className="flex items-center gap-3 text-sm">
-            <Phone
+            <PhoneIcon
               className="h-4 w-4 text-muted-foreground shrink-0"
               data-testid="Phone__af5294" />
             <span>{MOCK_PHONES[contact.id] || 'N/A'}</span>
           </div>
           <div className="flex items-center gap-3 text-sm">
-            <MapPin
+            <MapPinIcon
               className="h-4 w-4 text-muted-foreground shrink-0"
               data-testid="MapPin__af5294" />
             <span>{contact.subtitle}</span>

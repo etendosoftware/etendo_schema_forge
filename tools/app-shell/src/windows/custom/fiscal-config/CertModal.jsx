@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { FileText, Upload, Eye, EyeOff, Lock, TriangleAlert, Check, Info } from 'lucide-react';
+import { CheckIcon, EyeIcon, EyeSlashIcon, FileTextIcon, InfoIcon, LockIcon, UploadSimpleIcon, WarningIcon } from '@phosphor-icons/react';
+import { CircularProgress, useSimulatedProgress } from './CircularProgress.jsx';
 import FiscalStepItem from './FiscalStepItem.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -12,7 +13,7 @@ function AlertBox({ type, title, body, onDismiss }) {
   if (type === 'error') {
     return (
       <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-destructive/10 border border-destructive/30 text-sm text-destructive">
-        <TriangleAlert
+        <WarningIcon
           size={16}
           className="text-destructive flex-shrink-0"
           data-testid="TriangleAlert__a22bc2" />
@@ -26,7 +27,7 @@ function AlertBox({ type, title, body, onDismiss }) {
   const styles = {
     success: {
       wrap: 'bg-status-success border-l-[3px] border-l-green-500',
-      icon: <div className="w-6 h-6 rounded-full bg-status-success flex items-center justify-center flex-shrink-0 mt-0.5"><Check
+      icon: <div className="w-6 h-6 rounded-full bg-status-success flex items-center justify-center flex-shrink-0 mt-0.5"><CheckIcon
         size={13}
         strokeWidth={2.5}
         className="text-primary-foreground"
@@ -36,7 +37,7 @@ function AlertBox({ type, title, body, onDismiss }) {
     },
     warning: {
       wrap: 'bg-status-warning border-l-[3px] border-l-amber-400',
-      icon: <div className="w-6 h-6 rounded-full bg-status-warning flex items-center justify-center flex-shrink-0 mt-0.5"><Info
+      icon: <div className="w-6 h-6 rounded-full bg-status-warning flex items-center justify-center flex-shrink-0 mt-0.5"><InfoIcon
         size={13}
         strokeWidth={2.5}
         className="text-primary-foreground"
@@ -81,28 +82,6 @@ function MiniStepper({ step, ui }) {
   );
 }
 
-function CircularProgress({ progress }) {
-  const r = 54;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (progress / 100) * circ;
-  return (
-    <svg width="140" height="140" viewBox="0 0 140 140" className="mx-auto">
-      <circle cx="70" cy="70" r={r} fill="none" stroke="hsl(var(--border-subtle))" strokeWidth="8" />
-      <circle
-        cx="70" cy="70" r={r}
-        fill="none" stroke="hsl(var(--foreground))" strokeWidth="8"
-        strokeDasharray={circ} strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform="rotate(-90 70 70)"
-        style={{ transition: 'stroke-dashoffset 0.2s ease' }}
-      />
-      <text x="70" y="76" textAnchor="middle" fontSize="22" fontWeight="600" fill="hsl(var(--foreground))">
-        {progress}%
-      </text>
-    </svg>
-  );
-}
-
 export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUpload, debugInitialState }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
@@ -124,23 +103,12 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
   const [errMsg,      setErrMsg]      = useState(debugInitialState?.errMsg ?? null);
   const [certDetails, setCertDetails] = useState(debugInitialState?.certDetails ?? null);
   const [pendingNif,  setPendingNif]  = useState(debugInitialState?.pendingNif ?? null);
-  const [progress,    setProgress]    = useState(0);
   const inputRef = useRef(null);
 
   const subtitle = CONTEXT_SUBTITLE[context] ?? ui('fiscal.cert.subtitle.default');
 
-  // Animate circular progress when in verify step
-  useEffect(() => {
-    if (step !== 'verify') { setProgress(0); return; }
-    setProgress(0);
-    const id = setInterval(() => {
-      setProgress(p => {
-        if (p >= 90) { clearInterval(id); return 90; }
-        return p + 4;
-      });
-    }, 80);
-    return () => clearInterval(id);
-  }, [step]);
+  // Circular progress, animated while in the verify step
+  const progress = useSimulatedProgress(step === 'verify');
 
   function pickFile(f) {
     if (!f) return;
@@ -275,12 +243,12 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                 <div className={`w-11 h-11 mx-auto mb-3 rounded-xl flex items-center justify-center
                   ${file ? 'bg-[hsl(var(--foreground))]' : 'bg-muted text-foreground'}`}>
                   {file
-                    ? <FileText
+                    ? <FileTextIcon
                     size={20}
                     strokeWidth={1.5}
                     className="text-primary-foreground"
                     data-testid="FileText__a22bc2" />
-                    : <Upload size={20} strokeWidth={1.5} data-testid="Upload__a22bc2" />}
+                    : <UploadSimpleIcon size={20} strokeWidth={1.5} data-testid="Upload__a22bc2" />}
                 </div>
                 {file ? (
                   <>
@@ -359,12 +327,12 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                       className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground"
                       aria-label={showPwd ? ui('fiscal.cert.pwd.hide') : ui('fiscal.cert.pwd.show')}
                     >
-                      {showPwd ? <EyeOff size={14} strokeWidth={1.75} data-testid="EyeOff__a22bc2" /> : <Eye size={14} strokeWidth={1.75} data-testid="Eye__a22bc2" />}
+                      {showPwd ? <EyeSlashIcon size={14} strokeWidth={1.75} data-testid="EyeOff__a22bc2" /> : <EyeIcon size={14} strokeWidth={1.75} data-testid="Eye__a22bc2" />}
                     </button>
                   </div>
                 </form>
                 <p className="text-xs text-[hsl(var(--foreground))] mt-1.5 flex items-center gap-1">
-                  <Lock size={11} strokeWidth={2} data-testid="Lock__a22bc2" /> {ui('fiscal.cert.pwd.hint')}
+                  <LockIcon size={11} strokeWidth={2} data-testid="Lock__a22bc2" /> {ui('fiscal.cert.pwd.hint')}
                 </p>
               </div>
 
@@ -431,7 +399,7 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
               </div>
 
               <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Lock size={11} strokeWidth={2} data-testid="Lock__a22bc2" /> {ui('fiscal.cert.success.encrypted')}
+                <LockIcon size={11} strokeWidth={2} data-testid="Lock__a22bc2" /> {ui('fiscal.cert.success.encrypted')}
               </p>
             </div>
           )}
@@ -446,7 +414,7 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                 disabled={!file || !pwd}
                 className="rounded-full"
                 data-testid="Button__a22bc2">
-                <Check size={14} className="mr-1.5" data-testid="Check__a22bc2" />{ui('fiscal.cert.btn.verify')}
+                <CheckIcon size={14} className="mr-1.5" data-testid="Check__a22bc2" />{ui('fiscal.cert.btn.verify')}
               </Button>
             </div>
           )}

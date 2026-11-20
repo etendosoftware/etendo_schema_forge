@@ -470,6 +470,94 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - `account_subscription_moved_clicked`, the "Go to My companies" button on `/account`.
   - No event carries a company id or name.
 
+#### 3.2a-sexies Changing plan from `/account` (ETP-5053)
+
+- **Where:** `tools/app-shell/src/components/account/SubscriptionSection.jsx` (the **Change plan**
+  action, `SubscriptionSection__changePlan`, and the pending line `SubscriptionSection__pendingChange`)
+  and `tools/app-shell/src/components/account/PlanChangeDialog.jsx` (the dialog).
+- **When the action is offered:** on a renewing subscription (`status` in `RENEWING_STATUSES`) that
+  has a catalog plan (`planName`). A past-due or canceled subscription gets no action: the backend
+  refuses it anyway (`409 SUBSCRIPTION_NOT_CURRENT`). The dialog applies the same set
+  (`lib/upgrade/subscriptionStatus.js`) to the `subscriptionStatus` of the offer
+  (`PlanChangeDialog__notCurrent`).
+- **Data:** `GET /sws/go/billing/subscription/plan-changes` (`lib/upgrade/api.js` →
+  `getPlanChanges`), the active *Allowed plan changes* rows of the current plan: each target with
+  `timing` (`immediate` / `period_end`), `intervalChange`, its catalog price, and `quotas[]` — the
+  tenant's **current** usage measured against the **target** plan's limits (the `QuotaItem` shape of
+  §3.2a-quater). The dialog offers nothing the backend does not list
+  (`PlanChangeDialog__none` when the list is empty).
+- **Before confirming** (`PlanChangeDialog__consequences`), for the chosen target: the timing note
+  (`planChangeImmediateNote` for an upgrade — applies now, the difference invoiced today, the billing
+  date unchanged; `planChangeIntervalNote` for monthly → annual — billing switches to yearly and
+  keeps the billing date, today the yearly price minus the unused part of the period;
+  `planChangeIntervalToMonthlyNote` for an annual → monthly change applied now (not offered by
+  default, an operator can configure it) — billing switches to monthly and keeps the billing date,
+  the unused part of the period is credited against the next invoices; the note is picked by the
+  target's `billingInterval`;
+  `planChangePeriodEndNote` with the current period end for a downgrade — nothing changes before
+  then), for an upgrade **the charge line** (`PlanChangeDialog__charge`: `planChangeChargeTodayCard`
+  "You will be charged {amount} today on your {brand} ending in {last4}", `planChangeChargeToday`
+  without a saved card, `planChangeChargeLoading` while it is quoted, `planChangeChargeUnknown`
+  when the quote fails — the confirm stays enabled then; a quoted `amountDue` of `0` is shown as a
+  zero charge, only a missing one is unknown), the quota note (`planChangeQuotaKept`,
+  always: the quota year follows the billing period, which flexible billing keeps), and **one line
+  per exceeded quota of the target**
+  (`PlanChangeDialog__quotaExceededItem`, `planChangeQuotaExceeded`: "{resource}: you have used
+  {consumed} of the {included} included in {plan}. New records of this kind will be refused from the
+  effective date until your next anniversary; existing data stays available."), or
+  `planChangeQuotaFine` when nothing is exceeded. The numbers are today's: usage at the period end
+  will be higher, so the copy says "you have used", never a promise about the boundary.
+- **Quote:** selecting an upgrade posts `POST /sws/go/billing/subscription/plan-change/preview`
+  (`previewPlanChange`): `amountDue`, `currency`, `paymentMethod` and the `prorationDate` it was
+  computed at. A downgrade charges nothing today and is not quoted. The confirm button waits for
+  the quote.
+- **Confirm:** `POST /sws/go/billing/subscription/plan-change` (`requestPlanChange`, with the
+  quote's `prorationDate`, so the charge equals the amount shown). The saved card is charged at
+  once; the plan changes only when that payment succeeds. When it needs the customer (a decline,
+  or the bank asks to authenticate) the answer has `paymentRequired: true`: the dialog says
+  `planChangePaymentRequired` and offers **Complete the payment**
+  (`PlanChangeDialog__completePayment`, the provider's invoice page in a new tab); the plan changes
+  as soon as it is paid. That page has no return address, so the dialog adds
+  `planChangePaymentReturnHint` (close the payment tab and come back) and, while the payment is
+  outstanding, asks the section to re-read the subscription every time the tab becomes visible
+  again (`visibilitychange`/`focus` → `onChanged`; both fire on one return, so a recheck within
+  1 s of the previous one is skipped) and every 5 s while the tab stays visible
+  (`PAYMENT_RECHECK_INTERVAL_MS`: the webhook may land after the customer is back), stopping when
+  the change has applied or the dialog closes; once the section's `planKey` is the target
+  (the paid invoice applied the change and its webhook updated the row) the dialog turns into the
+  **Plan changed** confirmation. Closing and reopening the dialog keeps the outstanding payment
+  (its link, no options): offering the options again would let the customer confirm the same
+  upgrade a second time, with a new quote and a second invoice; once the change has applied a
+  reopen starts from the options again. Otherwise the answer is
+  shown in place (`PlanChangeDialog__done`: `planChangeDoneImmediate` with the new plan, or
+  `planChangeDoneScheduled` with the date; `planChangeAlreadyPending` when the same downgrade was
+  already scheduled) and the section re-reads the subscription in the background (`onChanged` →
+  `refresh`, no loading state, so the dialog stays on its confirmation until the customer closes
+  it), so the plan, the quotas and the pending line follow. Refusals keep the dialog open with their own line: `planChangeNotAllowed`
+  (409 `PLAN_CHANGE_NOT_ALLOWED`), `planChangeNotCurrent` (409 `SUBSCRIPTION_NOT_CURRENT`),
+  `planChangeFailed` (anything else); a 401 is handed to the host as everywhere on the page.
+  A refusal or failure line belongs to the option it was about: picking another option clears it.
+- **Keeping the current plan:** while a downgrade is pending the backend lists the changes of the
+  plan it moves to, with the current plan first as `timing: "keep"` (badge `planChangeTimingKeep`,
+  note `planChangeKeepNote` "Cancels the scheduled change to {plan}…", no charge line, no quote).
+  Confirming it cancels the scheduled downgrade; the answer has `pendingCancelled: true` and the
+  dialog says `planChangePendingCancelled`.
+- **Pending downgrade:** while `pendingChange` is set on `GET /billing/subscription`, the section
+  shows `subscriptionPendingChange` ("Your plan changes to {plan} on {date}") persistently; the
+  dialog repeats it (`PlanChangeDialog__pending`). It disappears when the change applies at the
+  period end or an upgrade releases it.
+- **Formatting:** prices through `formatCurrency` with the `upgradePlanPriceMonthly` /
+  `upgradePlanPriceYearly` keys (present in all three locales: the UI has no locale fallback, a
+  missing key shows raw); dates through `formatCalendarDate`. Strings in `en_US.json`,
+  `es_ES.json` and `es_AR.json` (`locales/__tests__/plan-change-locale-parity.vitest.js` pins parity).
+- **Test ids:** `PlanChangeDialog__root`, `__loading`, `__unavailable`, `__retry`, `__none`,
+  `__pending`, `__options`, `__option` (with `data-plan-key`, `data-timing`), `__optionName`,
+  `__optionPrice`, `__optionTiming`, `__optionIcon` / `__optionSelectedIcon` (with `data-selected` on
+  the option), `__consequences`, `__timingNote`, `__quotaKept`, `__quotaFine`,
+  `__charge` (with `data-preview-status`), `__quotaExceeded`, `__quotaExceededItem`, `__error`,
+  `__doneBlock`, `__done`, `__completePayment`, `__confirm`, `__close`.
+- **Backend reference:** `com.etendoerp.go/docs/plan-changes.md`.
+
 #### 3.2b Global header layout at the 1280×720 minimum (ETP-5504)
 
 - **Where:** `tools/app-shell/src/components/layout/TopBar/TopBar.jsx` (layout) and
@@ -480,7 +568,10 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   the middle column even when a page has no title and no back button. The column gap is **20px**
   (`gap-5`, ETP-5504 QA): the left column ends exactly 20px before the search's left edge, and
   symmetrically the right column starts 20px after its right edge.
-  - **Search** (`topbar-search-slot` > `global-search-trigger`): fixed `w-[392px]`, **exactly
+  - **Search** (`topbar-search-slot` > `global-search-trigger`): the pill itself is the shared,
+    presentational `components/layout/SearchBar.jsx` (ETP-6209; also used by the customer portal
+    with its own search), while `TopBar.jsx` keeps the global search state, scopes, vector search
+    and popup and passes them in as props. Fixed `w-[392px]`, **exactly
     centered in the visible bar** (the header's border box) whatever the width of the title block
     or of the actions — the two side tracks are equal `1fr` tracks and the header has no
     horizontal padding (the 24px right inset is `pr-6` on the actions group, inside column 3), so
@@ -516,8 +607,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
     row is a one-line CSS grid (`minmax(0,max-content)` per ancestor, `max-content` for `⋯`,
     `minmax(4rem,1fr)` for the current page), not a flex row: in a flex row every level takes a
     share of the shortage, and even a sub-pixel share makes the ellipsis eat a short ancestor. So
-    `Configuración / Tarifa / Tarifa de venta princ…` instead of
-    `Configurac… / Tar… / Tarifa de venta princ…`. The full trail is always in the tooltip. A
+    `Inventario / Tarifa / Tarifa de venta princ…` instead of
+    `Inventar… / Tar… / Tarifa de venta princ…`. The full trail is always in the tooltip. A
     plain ≤3-level string breadcrumb with no navigable level stays one line that elides at the end.
   - Producers: `DetailView` publishes an array via `getBreadcrumbItems` (menu path + record
     title, with the window level linking back to `/<window>`). Every other producer still
@@ -551,7 +642,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
      the back button): the search stays at the exact horizontal center of the visible top bar.
   3. Open a record whose menu path is deeper than two folders: the breadcrumb shows first level /
      `⋯` / record, and `⋯` lists the hidden levels.
-  4. Open Tarifa de venta principal (Configuración / Tarifa) or a contact with a long name at
+  4. Open Tarifa de venta principal (Inventario / Tarifa) or a contact with a long name at
      1280px: the ancestor levels stay readable and only the current page elides; the gap between
      the breadcrumb and the search is 20px.
   5. Open a report from Finanzas / Informes: clicking Informes in the breadcrumb returns to the

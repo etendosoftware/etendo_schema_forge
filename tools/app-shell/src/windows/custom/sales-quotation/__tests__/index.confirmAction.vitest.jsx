@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/sales-quotation/index.jsx
 // ETP-5378 — row-hover "Confirmar" for Presupuesto de Venta.
 //
 // Unlike every other window fixed under this ticket, this one dispatches to TWO
@@ -90,6 +91,16 @@ vi.mock('@generated/sales-quotation/custom/RejectQuotationModal', () => ({
   default: (props) => { rejectProps = props; return <div data-testid="reject-modal" />; },
 }));
 
+let createReasonProps;
+vi.mock('@generated/sales-quotation/custom/CreateRejectReasonModal', () => ({
+  default: (props) => { createReasonProps = props; return <div data-testid="create-reject-reason-modal" />; },
+}));
+
+let lastFieldCreateCtx;
+vi.mock('@/components/contract-ui/FieldCreateContext.js', () => ({
+  FieldCreateContext: { Provider: ({ value, children }) => { lastFieldCreateCtx = value; return children; } },
+}));
+
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SalesQuotationWindow from '../index.jsx';
@@ -117,9 +128,10 @@ describe('SalesQuotationWindow — row-hover Confirmar (ETP-5378)', () => {
     toastError.mockClear();
   });
 
-  it('offers Confirm on Draft, Bajo evaluación and Completado', () => {
+  it('offers Confirm on Draft, Bajo evaluación, Completado and Aceptado', () => {
     render(<SalesQuotationWindow windowName="sales-quotation" apiBaseUrl="/sws/neo/sales-quotation" token="tkn" />);
-    for (const documentStatus of ['DR', 'UE', 'CO']) {
+    // ETGO_AC: accepted by the customer from the portal, still converted from here.
+    for (const documentStatus of ['DR', 'UE', 'CO', 'ETGO_AC']) {
       const actions = lastGeneratedAppProps.rowQuickActions.menuActions({ row: { documentStatus }, status: documentStatus });
       expect(actions.some(a => a.key === 'confirm')).toBe(true);
     }
@@ -166,6 +178,22 @@ describe('SalesQuotationWindow — row-hover Confirmar (ETP-5378)', () => {
     // summedLineAmount, so this is exactly the value ETP-4468 would have hidden
     // forever behind the stale row if it had been passed instead.
     expect(quotationConfirmProps.data).toEqual(fresh);
+  });
+
+  it('opens the convert modal (QuotationConfirmModal) on a row the customer accepted (ETGO_AC)', async () => {
+    const fresh = { id: 'q-3', documentStatus: 'ETGO_AC', grandTotalAmount: 121 };
+    apiFetchMock.mockResolvedValue(jsonResponse({ response: { data: [fresh] } }));
+    await openConfirm({ id: 'q-3', documentStatus: 'ETGO_AC' });
+
+    expect(screen.getByTestId('quotation-confirm-modal')).toBeInTheDocument();
+    expect(screen.queryByTestId('send-to-eval-modal')).not.toBeInTheDocument();
+    expect(quotationConfirmProps.data).toEqual(fresh);
+  });
+
+  it('keeps a plain Save on a completed quotation for the reject reason only', () => {
+    render(<SalesQuotationWindow windowName="sales-quotation" recordId="q-1" apiBaseUrl="/sws/neo/sales-quotation" token="tkn" />);
+    // Shadows decisions.json -> draftMode, so the two must agree: rejectReason and nothing else.
+    expect(lastGeneratedAppProps.draftMode.keepSaveWhenCompletedFields).toEqual(['rejectReason']);
   });
 
   it('does not pass onSave to QuotationConfirmModal — nothing is unsaved from a row action', async () => {
@@ -265,5 +293,31 @@ describe('SalesQuotationWindow — rowMenuActions respects windowAccessTier (ETP
     const actions = lastGeneratedAppProps.rowQuickActions.menuActions({ row: { id: 'q-ro-1', documentStatus: 'UE' }, status: 'UE' });
 
     expect(actions).toEqual([]);
+  });
+});
+
+describe('SalesQuotationWindow — "+ Crear razón" on the form\'s reject reason (ETP-6209)', () => {
+  beforeEach(() => {
+    lastFieldCreateCtx = null;
+    createReasonProps = null;
+  });
+
+  it('offers the create row on rejectReason only, opening the reject flow\'s CreateRejectReasonModal', async () => {
+    render(<SalesQuotationWindow windowName="sales-quotation" recordId="q-1" apiBaseUrl="/sws/neo/sales-quotation" token="tkn" />);
+
+    expect(Object.keys(lastFieldCreateCtx)).toEqual(['rejectReason']);
+    expect(screen.queryByTestId('create-reject-reason-modal')).not.toBeInTheDocument();
+    const onSelect = vi.fn();
+    await act(async () => { lastFieldCreateCtx.rejectReason.onOpen('  Deudor ', onSelect); });
+
+    expect(screen.getByTestId('create-reject-reason-modal')).toBeInTheDocument();
+    expect(createReasonProps.initialName).toBe('Deudor');
+    expect(createReasonProps.quotationId).toBe('q-1');
+
+    // The created reason is handed back to the field (selected), and the popup closes.
+    await act(async () => { createReasonProps.onCreated({ id: 'rr-1', name: 'Deudor' }); });
+    expect(onSelect).toHaveBeenCalledWith({ id: 'rr-1', name: 'Deudor' });
+    expect(screen.queryByTestId('create-reject-reason-modal')).not.toBeInTheDocument();
+    expect(apiFetchMock).not.toHaveBeenCalled();
   });
 });

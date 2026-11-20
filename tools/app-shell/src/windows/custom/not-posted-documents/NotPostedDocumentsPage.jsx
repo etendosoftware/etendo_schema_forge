@@ -3,7 +3,7 @@ import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { FileCheck, Link2 } from 'lucide-react';
+import { SealCheckIcon, LinkSimpleIcon } from '@phosphor-icons/react';
 import { useUI, useLabel } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { DistinctValuesFilter } from '@etendosoftware/app-shell-core/components/ui/distinct-values-filter.jsx';
@@ -378,16 +378,20 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         toast.error(ui('postingFailed'));
         return;
       }
-      // Same outcome toast every other list's bulk "Contabilizar" shows. A single failed row
-      // surfaces its real backend error; more than one gets the generic count summary.
+      // A single failed row surfaces its real backend error. Otherwise, unlike the other lists,
+      // the failed rows are listed with their reason (ETP-6286): posting errors are
+      // document-level and fixable from here, and the Estado column only shows a coarse bucket.
+      // Joined by recordId, not by position; the label never falls back to the UUID.
+      const labelById = new Map(postable.map((r) => [r.documentId, r.description || r.documentTypeLabel]));
       const failed = (json.results ?? [])
         .filter((r) => r.success !== true)
         .map((r) => ({
+          label: labelById.get(r.recordId),
           message: r.message,
           messageKeys: extractBackendMessageKeys(r),
           messageParams: extractBackendMessageParams(r),
         }));
-      showBulkActionToast(ui, { ok: json.ok ?? 0, omitted, failed });
+      showBulkActionToast(ui, { ok: json.ok ?? 0, omitted, failed }, { listFailures: true });
       clearSelection();
       reload();
     } catch {
@@ -512,7 +516,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           aria-label={ui('copyLink')}
           className={ICON_BUTTON_CLASS}
           data-testid="npd-share">
-          <Link2 className="h-5 w-5" data-testid="Link2__npd" />
+          <LinkSimpleIcon className="h-5 w-5" data-testid="Link2__npd" />
         </button>
         <ListSortPopover
           columns={columns}
@@ -585,7 +589,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           className="inline-flex items-center gap-1 rounded-md px-3 py-[7px] text-sm font-medium transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)] disabled:cursor-not-allowed disabled:opacity-50"
           style={{ color: 'hsl(var(--floating-toolbar-fg))' }}
           data-testid="npd-post-selected">
-          <FileCheck className="h-3.5 w-3.5" data-testid="FileCheck__npd" />
+          <SealCheckIcon className="h-3.5 w-3.5" data-testid="FileCheck__npd" />
           {ui('post')}
         </button>
       </SelectionToolbar>

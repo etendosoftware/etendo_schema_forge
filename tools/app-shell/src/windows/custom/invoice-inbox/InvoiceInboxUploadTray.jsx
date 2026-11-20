@@ -1,4 +1,10 @@
-import { AlertCircle, Check, FileText, Image as ImageIcon, X } from 'lucide-react';
+import {
+  WarningCircleIcon,
+  CheckIcon,
+  FileTextIcon,
+  ImageIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { TruncatedText } from '@/components/ui/truncated-text';
 import { useUI } from '@/i18n';
 import { isImageFileName } from './invoiceInboxUploadPolicy.js';
@@ -29,19 +35,19 @@ function ItemBar({ status }) {
 
 function ItemIcon({ status }) {
   if (status === ITEM_ACCEPTED) return (
-    <Check
+    <CheckIcon
       className="h-3.5 w-3.5 text-status-success-foreground"
       aria-hidden="true"
       data-testid="Check__fad457" />
   );
   if (status === ITEM_REJECTED) return (
-    <AlertCircle
+    <WarningCircleIcon
       className="h-3.5 w-3.5 text-destructive"
       aria-hidden="true"
       data-testid="AlertCircle__fad457" />
   );
   if (status === ITEM_UNCONFIRMED) return (
-    <AlertCircle
+    <WarningCircleIcon
       className="h-3.5 w-3.5 text-status-warning-foreground"
       aria-hidden="true"
       data-testid="AlertCircle__unconfirmed" />
@@ -51,7 +57,7 @@ function ItemIcon({ status }) {
 
 function TrayItem({ item, index }) {
   const ui = useUI();
-  const FileIcon = isImageFileName(item.name) ? ImageIcon : FileText;
+  const FileIcon = isImageFileName(item.name) ? ImageIcon : FileTextIcon;
   let messageTone = 'text-muted-foreground';
   if (item.status === ITEM_REJECTED) messageTone = 'text-destructive';
   else if (item.status === ITEM_UNCONFIRMED) messageTone = 'text-status-warning-foreground';
@@ -119,7 +125,7 @@ export default function InvoiceInboxUploadTray({ items, done, total, finished, p
             className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
             data-testid="invoice-inbox-upload-close"
           >
-            <X className="h-4 w-4" aria-hidden="true" data-testid="X__fad457" />
+            <XIcon className="h-4 w-4" aria-hidden="true" data-testid="X__fad457" />
           </button>
         )}
       </div>

@@ -535,6 +535,15 @@ const BACKEND_ERROR_KEY_MAP = {
   // is where they become Spanish.
   ETGO_BPGroupContactTypeRequired: 'backendError.bpGroupContactTypeRequired',
   ETGO_BPartnerContactTypeRequired: 'backendError.bpartnerContactTypeRequired',
+  // ETP-6175 — the contact identity refusals of com.etendoerp.go (ContactIdentityRules): a person
+  // needs a first and a last name and gets its legal name derived from them; a company needs a
+  // legal name and has no first or last name. The form's Company/Person toggle sends the right
+  // fields, so the app meets these only in a race or a stale form; REST/MCP callers get the
+  // backend text. Same reason as above: no es_ES translation pack, so this map makes them Spanish.
+  ETGO_BPartnerPersonNamesRequired: 'backendError.bpartnerPersonNamesRequired',
+  ETGO_BPartnerPersonNameNotAllowed: 'backendError.bpartnerPersonNameNotAllowed',
+  ETGO_BPartnerCompanyNameRequired: 'backendError.bpartnerCompanyNameRequired',
+  ETGO_BPartnerCompanyPersonNamesNotAllowed: 'backendError.bpartnerCompanyPersonNamesNotAllowed',
   // ETP-5669 — com.etendoerp.go GlJournalHeaderHandler: completing a G/L journal whose stored period
   // does not contain its accounting date. Its own identity on purpose: core's PeriodNotValid for the
   // same case maps to "period not open", which sends the user to open a period they do not need.
@@ -561,6 +570,58 @@ const BACKEND_ERROR_KEY_MAP = {
   ETGO_FinAccCountryRequired: 'backendError.countryRequired',
   ETGO_FinAccInvalidCountry: 'backendError.invalidCountry',
   ETGO_FinAccIbanRequiresCountry: 'backendError.countryIban',
+  // ETP-6148 — every remittance endpoint answers 403 with this key while the sepa-remittances flag
+  // is off (SepaRemittancesFlag.featureDisabled).
+  ETGO_SepaRemittancesDisabled: 'backendError.sepaRemittancesDisabled',
+  // ETP-6148 — the remittance header's account refusals (RemittanceHeaderHandler, 422 on a create or
+  // update that sets financialAccount): not a bank account, no valid IBAN, or no remittance payment
+  // methods linked (an account created before the feature, or with the flag off; no backfill).
+  // There is no per-account «Admite remesas» switch any more: Bank accounts get the methods when
+  // they are created, and that create answers 409 ETGO_RemittanceProvisioningConflict on a race
+  // (retry).
+  ETGO_RemittanceAccountNotBank: 'backendError.remittanceAccountNotBank',
+  ETGO_RemittanceAccountIbanRequired: 'backendError.remittanceAccountIbanRequired',
+  ETGO_RemittanceAccountNotAllowed: 'backendError.remittanceAccountNotAllowed',
+  ETGO_RemittanceProvisioningConflict: 'backendError.remittanceProvisioningConflict',
+  // ETP-6148 — FinancialAccountHandler: a financial-account update that changes `type` from Bank
+  // to Cash or Card while the account has open SEPA remittances (REM status PE, PR, CP or PP of a
+  // provisioned type), 422. Not gated by the flag. The backend embeds the open count as `{0}` and
+  // sends no `messageParams`, so the sentence takes `{count}`: while the param is absent the key
+  // route yields (UNFILLED_PARAM) and the backend's own text, already in the request language and
+  // carrying the count, is shown — never a sentence without the number.
+  ETGO_RemittanceAccountTypeChangeBlocked: 'backendError.remittanceAccountTypeChangeBlocked',
+  // ETP-6148 — RemittanceMethodLinkObserver (DAL): a SEPA remittance payment method added to, or
+  // reactivated on, a non-Bank account (financial-account paymentMethod tab, MCP etendo_create /
+  // etendo_update, or Classic). 422 business_rule.
+  ETGO_RemittanceMethodAccountNotAllowed: 'backendError.remittanceMethodAccountNotAllowed',
+  // ETP-6148 — RemittanceHeaderHandler: a new or changed «Fecha de cargo/abono» earlier than
+  // today (422). The SPA blocks it first through the field's `minDate`; this is the safety net.
+  ETGO_RemittanceDueDatePast: 'backendError.remittanceDueDatePast',
+  // ETP-6148 — «Seleccionar desde factura» refusals (RemittanceHeaderHandler availableDueItems /
+  // selectDueItems / syncDueItems, 422). ETGO_RemittanceDueItemsSelectionFailed embeds the cause as `{0}` and the
+  // backend sends no `messageParams`, so its sentence takes a `{detail}` param: while the param is
+  // absent the key route yields (UNFILLED_PARAM) and the backend's own text, already in the request
+  // language and carrying the cause, is shown instead.
+  ETGO_RemittanceProcessedNotEditable: 'backendError.remittanceProcessedNotEditable',
+  ETGO_RemittanceTypeOrAccountMissing: 'backendError.remittanceTypeOrAccountMissing',
+  ETGO_RemittanceDueItemsRequired: 'backendError.remittanceDueItemsRequired',
+  ETGO_RemittanceDueItemNotAvailable: 'backendError.remittanceDueItemNotAvailable',
+  ETGO_RemittanceDueItemsSelectionFailed: 'backendError.remittanceDueItemsSelectionFailed',
+  // ETP-6148 round 3 — «A remesar» edits (lines PATCH) and the picker sync (syncDueItems, 422).
+  // The amount refusal's sentence takes no number: the SPA has already refused the same values
+  // inline (lib/boundedAmount.js) with the exact maximum, so this is the safety net.
+  ETGO_RemittanceLineAmountInvalid: 'backendError.remittanceLineAmountInvalid',
+  ETGO_RemittanceLineAmountNotEditable: 'backendError.remittanceLineAmountNotEditable',
+  ETGO_RemittanceDueItemNotIncluded: 'backendError.remittanceDueItemNotIncluded',
+  // ETP-6148 — «Procesar» / «Reactivar» (RemittanceHeaderHandler process / reactivate, 422). The
+  // two *Failed keys carry REM's own text as `{0}` with no `messageParams`, so their sentences
+  // take `{detail}`: without the param the key route yields and REM's text, already in the
+  // request language, is shown (same rule as SelectionFailed above).
+  ETGO_RemittanceAlreadyProcessed: 'backendError.remittanceAlreadyProcessed',
+  ETGO_RemittanceNoLines: 'backendError.remittanceNoLines',
+  ETGO_RemittanceProcessFailed: 'backendError.remittanceProcessFailed',
+  ETGO_RemittanceNotProcessed: 'backendError.remittanceNotProcessed',
+  ETGO_RemittanceReactivateFailed: 'backendError.remittanceReactivateFailed',
   // ETP-5684 — NeoAccountingAccessPolicy (com.etendoerp.go): a post/unpost from a role without
   // Show Accounting Fields. The SPA hides those actions, so this reaches only a stale screen.
   ETGO_AccountingAccessDenied: 'backendError.accountingAccessDenied',
@@ -857,6 +918,8 @@ function translateExchangeRateMissing(messageKeys, messageParams, t) {
  * @returns {string} the translated message
  */
 export function translateBackendErrorBody(body, t, fallback) {
+  const importRefusal = translateMappedImportRefusal(body, t);
+  if (importRefusal) return importRefusal;
   const message = body?.error?.message || body?.response?.message || pickBackendErrorText(body) || fallback;
   return translateBackendError(message, t, {
     messageKeys: extractBackendMessageKeys(body),
@@ -1906,11 +1969,47 @@ const IMPORT_REFUSAL_KEYS = {
 };
 
 function importRefusalKey(code, details) {
+  // ETP-6002 CP-30: a quantity of 0 or below; the sign is the problem, not the pending.
+  if (code === 'importQuantityExceedsPending' && details?.quantityNotPositive === true) {
+    return 'backendError.importQuantityMustBePositive';
+  }
+  // ETP-6002 CP-30: the edit of a saved line; its maximum counts what the line already holds.
+  if (code === 'importQuantityExceedsPending' && details?.maximumAllowed != null) {
+    return 'backendError.importQuantityExceedsLineMaximum';
+  }
   // "nothing is pending on this line" is the same code with pending 0: its own sentence.
   if (code === 'importQuantityExceedsPending' && Number(details?.pending) === 0) {
     return 'backendError.importQuantityNothingPendingOnLine';
   }
   return IMPORT_REFUSAL_KEYS[code];
+}
+
+// The sentence of an import refusal with the details its body carries, or null when the code has
+// no sentence or the locale lacks it.
+function renderImportRefusal(code, body, t) {
+  const details = body?.error && typeof body.error === 'object' ? body.error : {};
+  const key = importRefusalKey(code, details);
+  if (!key || typeof t !== 'function') return null;
+  const translated = t(key, {
+    product: details.product ?? '',
+    requested: details.requested ?? '',
+    pending: details.pending ?? '',
+  });
+  return translated && translated !== key ? translated : null;
+}
+
+/**
+ * The translated sentence of a mapped line-import refusal, or `null` for any other body. For the
+ * paths that are not an import action but can receive one of these refusals: a goods shipment line
+ * saved above its invoice line's pending answers `importQuantityExceedsPending` (ETP-6002 CP-30).
+ *
+ * @param {object|null|undefined} body parsed JSON error body
+ * @param {function} t the `ui` function from `useUI()`
+ * @returns {string|null}
+ */
+export function translateMappedImportRefusal(body, t) {
+  const code = extractBackendErrorCode(body);
+  return Object.hasOwn(IMPORT_REFUSAL_KEYS, code ?? '') ? renderImportRefusal(code, body, t) : null;
 }
 
 /**
@@ -1938,19 +2037,25 @@ export function isImportRefusalCode(code) {
 export function translateImportRefusal(body, t, fallback) {
   const code = extractBackendErrorCode(body);
   if (!isImportRefusalCode(code)) return translateBackendErrorBody(body, t, fallback);
-  const details = body?.error && typeof body.error === 'object' ? body.error : {};
-  const key = importRefusalKey(code, details);
-  if (!key || typeof t !== 'function') return fallback;
-  const translated = t(key, {
-    product: details.product ?? '',
-    requested: details.requested ?? '',
-    pending: details.pending ?? '',
-  });
-  return translated && translated !== key ? translated : fallback;
+  return renderImportRefusal(code, body, t) ?? fallback;
 }
 
 export function isDuplicateConflict(status, code) {
   return status === 409 && (!code || code === 'duplicate_key');
+}
+
+/**
+ * ETP-6148 — whether a refusal names a backend message this module translates by key
+ * (BACKEND_ERROR_KEY_MAP). A code-less 409 is read as «duplicate name» by isDuplicateConflict, but
+ * a 409 sent through NeoMessageText (e.g. ETGO_RemittanceProvisioningConflict, a «try again» on a
+ * Bank account create) has no `code` and DOES carry its identity in `messageKeys`; callers check
+ * this first so such a refusal is translated instead of being shown as «the name already exists».
+ *
+ * @param {string[]|undefined} messageKeys - from extractBackendMessageKeys
+ * @returns {boolean}
+ */
+export function hasMappedMessageKey(messageKeys) {
+  return Array.isArray(messageKeys) && messageKeys.some((key) => Boolean(BACKEND_ERROR_KEY_MAP[key]));
 }
 
 function codeEntry(data) {
@@ -1997,6 +2102,8 @@ export async function parseBackendError(res) {
     ...(quota ? { quota } : {}),
     ...(quotaCheckFailed ? { quotaCheckFailed } : {}),
     ...codeEntry(data),
+    // ETP-6002 CP-30: its sentence needs the details of the body, which the fields above drop.
+    ...(Object.hasOwn(IMPORT_REFUSAL_KEYS, extractBackendErrorCode(data) ?? '') ? { importRefusalBody: data } : {}),
   };
 }
 
@@ -2016,8 +2123,10 @@ export async function parseBackendErrorMessage(res) {
  */
 export async function translateBackendErrorResponse(res, t) {
   const {
-    message, messageKeys, messageParams, quota, quotaCheckFailed, code,
+    message, messageKeys, messageParams, quota, quotaCheckFailed, code, importRefusalBody,
   } = await parseBackendError(res);
+  const importRefusal = translateMappedImportRefusal(importRefusalBody, t);
+  if (importRefusal) return importRefusal;
   return translateBackendError(message ?? `Error ${res.status}`, t,
     { messageKeys, messageParams, quota, quotaCheckFailed, code });
 }

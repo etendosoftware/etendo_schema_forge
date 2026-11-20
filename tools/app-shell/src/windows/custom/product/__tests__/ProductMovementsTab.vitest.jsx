@@ -1,8 +1,10 @@
 // @covers tools/app-shell/src/windows/custom/product/ProductMovementsTab.jsx
 // ETP-5889 — the Product "Movements" tab: server-side filters, sorting and paging over the product's
 // transactions, with the source document and the resulting stock the backend adds to each row.
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { createContext, useContext } from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mocks = vi.hoisted(() => ({
@@ -11,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   // The per-account flag, published by the backend as `capabilities.productMovements`.
   capabilities: { productMovements: true },
   navigate: vi.fn(),
+  dictionary: {},
+  locale: 'es_ES',
   location: { pathname: '/product/p1', search: '?a=1', hash: '', state: null },
 }));
 vi.mock('react-router-dom', () => ({
@@ -18,7 +22,14 @@ vi.mock('react-router-dom', () => ({
   useLocation: () => mocks.location,
 }));
 
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+// `dictionary` / `locale` let a test show real labels in a given language; by default a label is its key.
+vi.mock('@/i18n', () => ({
+  useUI: () => (key, params) => Object.entries(params ?? {}).reduce(
+    (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+    mocks.dictionary[key] ?? key,
+  ),
+  useLocaleSwitch: () => ({ locale: mocks.locale }),
+}));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => mocks.apiFetch }));
 vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({ useCapabilitiesSafe: () => mocks.capabilities }));
 vi.mock('@/hooks/useCurrency', () => ({ useCurrency: () => 'EUR' }));
@@ -46,12 +57,13 @@ vi.mock('@/components/ui/select', () => {
     },
   };
 });
-vi.mock('lucide-react', () => new Proxy({}, {
+vi.mock('@phosphor-icons/react', () => new Proxy({}, {
   has: (_t, prop) => typeof prop === 'string' && prop !== 'then',
   get: (_t, prop) => (typeof prop === 'string' && prop !== 'then' ? (props) => <span {...props} /> : undefined),
 }));
 
 import ProductMovementsTab from '../ProductMovementsTab';
+import { MOVEMENTS_TABLE_MIN_HEIGHT } from '../productMovements';
 import { computePeriodRange } from '../productSidebarPeriod.js';
 import enUS from '@/locales/en_US.json';
 import esES from '@/locales/es_ES.json';
@@ -97,6 +109,8 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     mocks.navigate.mockReset();
     mocks.location = { pathname: '/product/p1', search: '?a=1', hash: '', state: null };
     mocks.capabilities = { productMovements: true };
+    mocks.dictionary = {};
+    mocks.locale = 'es_ES';
     route();
   });
 
@@ -223,6 +237,9 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     expect(params.get('_startRow')).toBe('0');
     expect(params.get('_endRow')).toBe('49');
     const criteria = JSON.parse(params.get('criteria'));
+    // 7 calendar days, both ends included: from = today - 6 days
+    const [from, to] = criteria.map((c) => new Date(`${c.value}T00:00:00`));
+    expect(Math.round((to - from) / 86400000)).toBe(6);
     expect(criteria.map((c) => `${c.fieldName}:${c.operator}`)).toEqual(['movementDate:greaterOrEqual', 'movementDate:lessOrEqual']);
   });
 
@@ -273,7 +290,7 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     const [entry, exit] = await screen.findAllByTestId('product-movements-row');
     const colourOf = (line) => [...line.querySelectorAll('span')].find((el) => /^[+\u2212]\d/.test(el.textContent)).style.color;
     expect(colourOf(entry)).toBe('var(--status-success-fg)');
-    expect(colourOf(exit)).toBe('hsl(var(--destructive))');
+    expect(colourOf(exit)).toBe('var(--quantity-negative-fg)');
   });
 
   it('shows a dash, not a zero, when the backend sends no resulting stock', async () => {
@@ -311,7 +328,7 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     expect(lines[1]).toHaveTextContent('productMovementsTypeTransfer');
   });
 
-  it('shows the time of day under the date, straight from etgoProcessTime', async () => {
+  it('shows the time of day next to the date on the same line, straight from etgoProcessTime', async () => {
     route({ pages: [[
       row({ etgoProcessTime: '2026-11-03T09:05:07' }),
       row({ etgoProcessTime: '2026-11-03T16:21:43' }),
@@ -321,17 +338,21 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     const times = await screen.findAllByTestId('product-movements-time');
     expect(times.map((t) => t.textContent)).toEqual(['09:05', '16:21']);
     const [first] = await screen.findAllByTestId('product-movements-row');
-    expect(first.querySelector('[data-testid="product-movements-time"]').className).toContain('text-muted-foreground');
+    const timeEl = first.querySelector('[data-testid="product-movements-time"]');
+    expect(timeEl.className).toContain('text-muted-foreground');
+    // one line: date and time are siblings of the same inline row, not stacked in a column
+    expect(timeEl.parentElement.className).not.toContain('flex-col');
+    expect(timeEl.parentElement).toHaveTextContent('20/10/2026');
   });
 
-  it('renders no second line and no extra element when etgoProcessTime is absent or malformed', async () => {
+  it('renders only the date, with no time element, when etgoProcessTime is absent or malformed', async () => {
     route({ pages: [[row(), row({ etgoProcessTime: null }), row({ etgoProcessTime: 'nope' })]], total: 3 });
     render(<ProductMovementsTab data={storable} isActive />);
 
     const lines = await screen.findAllByTestId('product-movements-row');
     expect(lines).toHaveLength(3);
     expect(screen.queryByTestId('product-movements-time')).toBeNull();
-    lines.forEach((line) => expect(line.querySelector('[role="cell"]').children).toHaveLength(0));
+    lines.forEach((line) => expect(line.querySelector('[role="cell"]').children).toHaveLength(1));
   });
 
   it('sorts by the warehouse name and starts again from the first page', async () => {
@@ -354,6 +375,66 @@ describe('ProductMovementsTab (ETP-5889)', () => {
 
     await waitFor(() => expect(pageRequests()).toHaveLength(2));
     expect(query(pageRequests()[1]).get('_sortBy')).toBe('movementDate,transactionProcessDate,id');
+  });
+
+  describe('Type column sorts by the visible label', () => {
+    const labelsOf = (dict) => ({ ...dict.genericLabels });
+
+    it('sends the label order of the active language, ascending then descending, and nothing for other columns', async () => {
+      mocks.dictionary = labelsOf(esES);
+      render(<ProductMovementsTab data={storable} isActive />);
+      await waitFor(() => expect(pageRequests()).toHaveLength(1));
+      expect(query(pageRequests()[0]).has('typeLabelOrder')).toBe(false);
+
+      await userEvent.click(screen.getByText(esES.genericLabels.typeColumn));
+      await waitFor(() => expect(pageRequests()).toHaveLength(2));
+      const asc = query(pageRequests()[1]);
+      expect(asc.get('_sortBy')).toBe('etgoDocKind,-movementDate,-transactionProcessDate,-id');
+      expect(asc.get('typeLabelOrder')).toBe(
+        'vendor-receipt,customer-shipment,internal-consumption,vendor-return,customer-return,inventory-in,inventory-out,transfer');
+
+      await userEvent.click(screen.getByText(esES.genericLabels.typeColumn));
+      await waitFor(() => expect(pageRequests()).toHaveLength(3));
+      const desc = query(pageRequests()[2]);
+      expect(desc.get('_sortBy')).toBe('-etgoDocKind,-movementDate,-transactionProcessDate,-id');
+      expect(desc.get('typeLabelOrder')).toBe(asc.get('typeLabelOrder'));
+
+      await userEvent.click(screen.getByText(esES.genericLabels.productMovementsQuantity));
+      await waitFor(() => expect(pageRequests()).toHaveLength(4));
+      expect(query(pageRequests()[3]).has('typeLabelOrder')).toBe(false);
+    });
+
+    it('computes another order in another language and asks again when the language changes', async () => {
+      mocks.dictionary = labelsOf(enUS);
+      mocks.locale = 'en_US';
+      const { rerender } = render(<ProductMovementsTab data={storable} isActive />);
+      await waitFor(() => expect(pageRequests()).toHaveLength(1));
+      await userEvent.click(screen.getByText(enUS.genericLabels.typeColumn));
+      await waitFor(() => expect(pageRequests()).toHaveLength(2));
+      const english = query(pageRequests()[1]).get('typeLabelOrder');
+      expect(english).toBe(
+        'customer-return,vendor-receipt,internal-consumption,inventory-in,inventory-out,customer-shipment,transfer,vendor-return');
+
+      mocks.dictionary = labelsOf(esES);
+      mocks.locale = 'es_ES';
+      rerender(<ProductMovementsTab data={storable} isActive />);
+      await waitFor(() => expect(pageRequests()).toHaveLength(3));
+      const spanish = query(pageRequests()[2]);
+      expect(spanish.get('typeLabelOrder')).not.toBe(english);
+      expect(spanish.get('_startRow')).toBe('0');
+    });
+
+    it('keeps aria-sort on the Type header only and does not refetch on a language change under another sort', async () => {
+      render(<ProductMovementsTab data={storable} isActive />);
+      await waitFor(() => expect(pageRequests()).toHaveLength(1));
+      await userEvent.click(screen.getByText('typeColumn'));
+      await waitFor(() => expect(pageRequests()).toHaveLength(2));
+      expect(screen.getByText('typeColumn').closest('[role="columnheader"]')).toHaveAttribute('aria-sort', 'ascending');
+      expect(screen.getByText('date').closest('[role="columnheader"]')).toHaveAttribute('aria-sort', 'none');
+      await userEvent.click(screen.getByText('date'));
+      await waitFor(() => expect(pageRequests()).toHaveLength(3));
+      expect(query(pageRequests()[2]).has('typeLabelOrder')).toBe(false);
+    });
   });
 
   it('does not let the resulting stock be sorted', async () => {
@@ -412,6 +493,140 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     expect(box.className).toContain('overflow-y-auto');
   });
 
+  it('bleeds the block (table + total) to the card edges (-ml-2 / -mr-4) and leaves the scroll box itself without bleed margins', async () => {
+    route({ pages: [[row({ id: 'a-0' })]], total: 1 });
+    render(<ProductMovementsTab data={storable} isActive />);
+    await waitFor(() => expect(screen.getAllByTestId('product-movements-row')).toHaveLength(1));
+    const tokens = screen.getByTestId('product-movements-block').className.split(/\s+/);
+    expect(tokens).toContain('-ml-2');
+    expect(tokens).toContain('-mr-4');
+    const boxTokens = screen.getByTestId('product-movements-scroll').className.split(/\s+/);
+    expect(boxTokens).not.toContain('-ml-2');
+    expect(boxTokens).not.toContain('-mr-4');
+  });
+
+  it('keeps the table at least 340 px high (inline floor from the shared constant) and drops the card border', async () => {
+    route({ pages: [[row({ id: 'a-0' })]], total: 1 });
+    render(<ProductMovementsTab data={storable} isActive />);
+    await waitFor(() => expect(screen.getAllByTestId('product-movements-row')).toHaveLength(1));
+    const box = screen.getByTestId('product-movements-scroll');
+    expect(box.style.minHeight).toBe(`${MOVEMENTS_TABLE_MIN_HEIGHT}px`);
+    expect(MOVEMENTS_TABLE_MIN_HEIGHT).toBe(340);
+    expect(box.className).not.toMatch(/\bmin-h-\[/);
+    expect(box.className).not.toContain('border');
+    expect(box.className).not.toContain('rounded');
+  });
+
+  it('renders the total as a sticky sibling of the scroll box (not inside it, no mt-auto), offset -bottom-2', async () => {
+    mocks.apiFetch.mockImplementation(async (path) => (path.startsWith('/stock')
+      ? respond([])
+      : respond([row()], 1, { totals: { netQuantity: 4, count: 1 } })));
+    render(<ProductMovementsTab data={storable} isActive />);
+    const total = await screen.findByTestId('product-movements-total');
+    const box = screen.getByTestId('product-movements-scroll');
+    expect(box.className.split(' ')).toEqual(expect.arrayContaining(['flex', 'flex-col', 'overflow-y-auto', '[scrollbar-gutter:stable]']));
+    const tokens = total.className.split(' ');
+    expect(tokens).toEqual(expect.arrayContaining(['sticky', '-bottom-2', 'z-40', 'overflow-hidden']));
+    expect(tokens).not.toContain('mt-auto');
+    expect(box.contains(total)).toBe(false);
+    // Rows must not shrink inside the flex column.
+    expect(screen.getByTestId('product-movements-row').className).toContain('shrink-0');
+  });
+
+  it('stacks the total row above the sticky table header (compares the z tokens, not a literal)', async () => {
+    mocks.apiFetch.mockImplementation(async (path) => (path.startsWith('/stock')
+      ? respond([])
+      : respond([row()], 1, { totals: { netQuantity: 4, count: 1 } })));
+    render(<ProductMovementsTab data={storable} isActive />);
+    const total = await screen.findByTestId('product-movements-total');
+    const header = screen.getAllByRole('row')[0];
+    const z = (el) => Number(el.className.split(/\s+/).find((t) => /^z-\d+$/.test(t))?.slice(2));
+    expect(Number.isFinite(z(header)), 'the sticky header row must carry a z-N token').toBe(true);
+    expect(Number.isFinite(z(total)), 'the Total row must carry a z-N token').toBe(true);
+    expect(
+      z(total),
+      'at 1280x720 the table header sits in the Total band until the page scrolls: the Total must paint above it or its label and value are hidden',
+    ).toBeGreaterThan(z(header));
+  });
+
+  it('keeps the header white and sticky, and every row as wide as the columns for sideways scroll', async () => {
+    route({ pages: [[row({ id: 'a-0' })]], total: 1 });
+    render(<ProductMovementsTab data={storable} isActive />);
+    const line = await screen.findByTestId('product-movements-row');
+    const header = screen.getAllByRole('row')[0];
+    expect(header.className).toContain('sticky');
+    expect(header.className).toContain('top-0');
+    expect(header.className).toContain('bg-card');
+    expect(header.className).toContain('min-w-[994px]');
+    expect(line.className).toContain('min-w-[994px]');
+  });
+
+  it('derives the row minimum width from its own columns: min-w equals track minimums + gaps + horizontal padding', async () => {
+    route({ pages: [[row({ id: 'a-0' })]], total: 1 });
+    render(<ProductMovementsTab data={storable} isActive />);
+    await screen.findByTestId('product-movements-row');
+    const header = screen.getAllByRole('row')[0];
+    const cls = header.className;
+    const tracks = cls.match(/grid-cols-\[([^\]]+)\]/)?.[1].split('_');
+    expect(tracks, 'the header row lost its grid-cols-[...] template').toBeTruthy();
+    // A track's minimum: `150px` -> 150, `minmax(220px,1.6fr)` -> 220.
+    const minimum = (t) => Number(t.match(/^(?:minmax\()?(\d+)px/)?.[1]);
+    const tracksSum = tracks.reduce((sum, t) => sum + minimum(t), 0);
+    expect(Number.isFinite(tracksSum), `unparsable track in ${tracks.join(' ')}`).toBe(true);
+    const gap = Number(cls.match(/gap-x-(\d+)/)?.[1]) * 4;
+    const pad = Number(cls.match(/(?:^|\s)px-(\d+)(?:\s|$)/)?.[1]) * 4;
+    const declared = Number(cls.match(/min-w-\[(\d+)px\]/)?.[1]);
+    expect(
+      declared,
+      'the row minimum width must equal what the columns need (track minimums + gaps + horizontal padding) or cells overflow the row',
+    ).toBe(tracksSum + (tracks.length - 1) * gap + 2 * pad);
+  });
+
+  it('shares the same horizontal padding and gap across header, data row, skeleton row and the Total inner grid', async () => {
+    const tokensOf = (el) => {
+      const cls = el.className;
+      return { px: cls.match(/(?:^|\s)px-(\d+)(?:\s|$)/)?.[1], gap: cls.match(/(?:^|\s)gap-x-(\d+)(?:\s|$)/)?.[1], minW: cls.match(/min-w-\[(\d+)px\]/)?.[1] };
+    };
+    const MESSAGE = 'header, rows, skeleton rows and the Total must share the same horizontal padding and gap or their columns drift';
+    // Loading: header + skeleton rows + the Total (its value is a placeholder while the totals are pending).
+    mocks.apiFetch.mockImplementation((path) => (path.startsWith('/stock') ? Promise.resolve(respond([])) : new Promise(() => {})));
+    const loading = render(<ProductMovementsTab data={storable} isActive />);
+    const skeleton = (await screen.findAllByTestId('product-movements-skeleton'))[0];
+    const header = screen.getAllByRole('row')[0];
+    const loadingTotal = await screen.findByTestId('product-movements-total');
+    const reference = tokensOf(header);
+    expect(reference.px, 'header row lost its px-N').toBeTruthy();
+    expect(reference.gap, 'header row lost its gap-x-N').toBeTruthy();
+    expect(tokensOf(skeleton), MESSAGE).toEqual(reference);
+    expect(tokensOf(loadingTotal.firstElementChild), MESSAGE).toEqual(reference);
+    loading.unmount();
+    // Loaded: the data row.
+    mocks.apiFetch.mockImplementation(async (path) => (path.startsWith('/stock') ? respond([]) : respond([row()], 1, { totals: { netQuantity: 4, count: 1 } })));
+    render(<ProductMovementsTab data={storable} isActive />);
+    const dataRow = await screen.findByTestId('product-movements-row');
+    expect(tokensOf(dataRow), MESSAGE).toEqual(reference);
+    expect(tokensOf((await screen.findByTestId('product-movements-total')).firstElementChild), MESSAGE).toEqual(reference);
+  });
+
+  const classOfTag = (src, testid) => {
+    const tag = src.match(new RegExp(`<[A-Za-z][^<>]*?data-testid="${testid}"[^<>]*>`, 's'))?.[0];
+    expect(tag, `no element with data-testid="${testid}" in ProductMovementsTab.jsx`).toBeTruthy();
+    return tag.match(/className="([^"]*)"/)?.[1] ?? '';
+  };
+
+  it('keeps the Total on the same horizontal bleed as the block and cancels the tab root gap so it touches the table (from source)', () => {
+    const src = readFileSync(resolve(__dirname, '../ProductMovementsTab.jsx'), 'utf8');
+    const total = classOfTag(src, 'product-movements-total').split(/\s+/);
+    const block = classOfTag(src, 'product-movements-block').split(/\s+/);
+    for (const t of ['-ml-2', '-mr-4']) {
+      expect(total, `the Total must carry ${t} like the block`).toContain(t);
+      expect(block).toContain(t);
+    }
+    const rootGap = Number(classOfTag(src, 'product-movements-tab').match(/(?:^|\s)gap-(\d+)(?:\s|$)/)?.[1]);
+    const mt = Number(total.join(' ').match(/(?:^|\s)-mt-(\d+)(?:\s|$)/)?.[1]);
+    expect(mt, 'the Total must cancel the root gap so it touches the table').toBe(rootGap);
+  });
+
   it('loads the next 50 rows when the list is scrolled to the end', async () => {
     const firstPage = Array.from({ length: 50 }, (_, i) => row({ id: `a-${i}` }));
     route({ pages: [firstPage, [row({ id: 'b-0' })]], total: 51 });
@@ -441,11 +656,69 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     expect(pageRequests()).toHaveLength(1);
   });
 
-  it('says there are no results for the filters when the page comes back empty', async () => {
-    route({ pages: [[]], total: 0 });
-    render(<ProductMovementsTab data={storable} isActive />);
+  describe('empty states (probe: does the product have ANY movement?)', () => {
+    // Routes the list: filtered pages (with criteria) answer `filtered`, the probe (pageSize 1, no criteria) `any`.
+    const routeProbe = ({ filtered = [], any = [row()], probeFails = false } = {}) => {
+      mocks.apiFetch.mockImplementation(async (path) => {
+        if (path.startsWith('/stock')) return respond([]);
+        const q = query(path);
+        if (q.get('_endRow') === '0' && !q.has('criteria')) {
+          if (probeFails) throw new Error('boom');
+          return respond(any);
+        }
+        return respond(filtered);
+      });
+    };
+    const probeRequests = () => pageRequests().filter((p) => query(p).get('_endRow') === '0');
 
-    expect(await screen.findByTestId('product-movements-no-results')).toHaveTextContent('productMovementsNoResults');
+    it('product with movements, filters match none: says no results for the filters', async () => {
+      routeProbe({ any: [row()] });
+      render(<ProductMovementsTab data={storable} isActive />);
+
+      expect(await screen.findByTestId('product-movements-no-results')).toHaveTextContent('productMovementsNoResults');
+      expect(screen.queryByTestId('product-movements-empty')).toBeNull();
+      expect(probeRequests()).toHaveLength(1);
+      expect(query(probeRequests()[0]).has('criteria')).toBe(false);
+    });
+
+    it('product with no movement at all: shows the design empty state', async () => {
+      routeProbe({ any: [] });
+      render(<ProductMovementsTab data={storable} isActive />);
+
+      const empty = await screen.findByTestId('product-movements-empty');
+      expect(empty).toHaveTextContent('noStockMovements');
+      expect(empty).toHaveTextContent('productMovementsEmptyText');
+      // same icon as the side panel's "Ver movimientos" link (Phosphor ArrowsLeftRightIcon)
+      expect(empty.querySelector('[data-testid="ArrowLeftRight__763719"]')).not.toBeNull();
+      expect(empty.querySelector('[data-testid^="PackageOpen"]')).toBeNull();
+      expect(screen.queryByTestId('product-movements-no-results')).toBeNull();
+    });
+
+    it('does not probe when rows exist', async () => {
+      route({ pages: [[row()]] });
+      render(<ProductMovementsTab data={storable} isActive />);
+      await screen.findAllByTestId('product-movements-row');
+      expect(pageRequests().filter((p) => query(p).get('_endRow') === '0')).toHaveLength(0);
+    });
+
+    it('a failed probe falls back to the filters message and is not retried', async () => {
+      routeProbe({ probeFails: true });
+      render(<ProductMovementsTab data={storable} isActive />);
+
+      expect(await screen.findByTestId('product-movements-no-results')).toBeInTheDocument();
+      await waitFor(() => expect(probeRequests()).toHaveLength(1));
+    });
+
+    it('caches the answer: a second empty filter combination does not probe again', async () => {
+      routeProbe({ any: [row()] });
+      render(<ProductMovementsTab data={storable} isActive />);
+      await screen.findByTestId('product-movements-no-results');
+
+      await userEvent.click(screen.getByTestId('period'));
+      await waitFor(() => expect(pageRequests().length).toBeGreaterThan(2));
+      await screen.findByTestId('product-movements-no-results');
+      expect(probeRequests()).toHaveLength(1);
+    });
   });
 
   it('shows skeleton rows while the first page loads', async () => {
@@ -742,6 +1015,25 @@ describe('ProductMovementsTab (ETP-5889)', () => {
     });
   });
 
+  it('labels the cost column "Costo de la transacción" in both Spanish locales', () => {
+    expect(esES.genericLabels.productMovementsCost).toBe('Costo de la transacción');
+    expect(esAR.genericLabels.productMovementsCost).toBe('Costo de la transacción');
+  });
+
+  it('puts the type pill and the document chip on the same line', async () => {
+    route({ pages: [[row({ etgoDocKind: 'goods-receipt', etgoDocWindow: 'goods-receipt', etgoDocHeaderId: 'h1', etgoDocLabel: 'MV-0021' })]] });
+    render(<ProductMovementsTab data={storable} isActive />);
+
+    const chip = await screen.findByTestId('product-movements-doc-link');
+    expect(chip).toHaveTextContent('MV-0021');
+    expect(chip.querySelector('[data-testid="FileText__763719"]')).not.toBeNull();
+    expect(chip.parentElement.className).not.toContain('flex-col');
+    expect(chip.parentElement.className).not.toContain('flex-wrap');
+    expect(chip.parentElement.className).toContain('flex-nowrap');
+    expect(chip.parentElement.className).toContain('gap-2');
+    expect(chip.parentElement).toHaveTextContent('productMovementsTypeVendorReceipt');
+  });
+
   it.each([['en_US', enUS], ['es_ES', esES], ['es_AR', esAR]])('declares a non-empty productMovementsDirection label in %s', (_locale, json) => {
     expect(JSON.stringify(json)).toMatch(/"productMovementsDirection":\s*"[^"]+"/);
   });
@@ -997,5 +1289,376 @@ describe('ProductMovementsTab (ETP-5889)', () => {
       rerender(<ProductMovementsTab data={storable} isActive />);
       await waitFor(() => expect(mocks.tracking).toHaveBeenLastCalledWith({ isActive: true, source: 'tab' }));
     });
+  });
+  describe('document link and single-line rows (ETP-5889 M3)', () => {
+    it('shows the date and the time 8 px apart on one line (gap-2)', async () => {
+      route({ pages: [[row({ etgoProcessTime: '2026-10-20T17:34:10' })]] });
+      render(<ProductMovementsTab data={storable} isActive />);
+      const time = await screen.findByTestId('product-movements-time');
+      expect(time.parentElement.className).toContain('gap-2');
+      expect(time.parentElement.className).toContain('whitespace-nowrap');
+    });
+
+    it('renders the type label truncated with the full text in a title, never wrapping', async () => {
+      route({ pages: [[row({ etgoDocKind: 'goods-movements' })]] });
+      render(<ProductMovementsTab data={storable} isActive />);
+      const type = await screen.findByTestId('product-movements-type');
+      expect(type).toHaveAttribute('title', 'productMovementsTypeTransfer');
+      expect(type.className).toContain('truncate');
+    });
+
+    it('styles the document link as an underlined text link with a document icon, no pill and no arrow', async () => {
+      render(<ProductMovementsTab data={storable} isActive />);
+      const link = await screen.findByTestId('product-movements-doc-link');
+      expect(link.className).toContain('underline');
+      expect(link.className).not.toContain('border');
+      expect(link.className).not.toContain('rounded-md');
+      expect(link.querySelector('[data-testid="FileText__763719"]')).not.toBeNull();
+      expect(link.querySelector('[data-testid="ArrowUpRight__763719"]')).toBeNull();
+      expect(link).toHaveAttribute('type', 'button');
+    });
+  });
+
+  describe('period total row (ETP-5889 M4)', () => {
+    const totalsOf = (netQuantity, count) => ({ totals: { netQuantity, count } });
+    const routeWithTotals = (rows, extra) => {
+      mocks.apiFetch.mockImplementation(async (path) => (path.startsWith('/stock') ? respond([]) : respond(rows, rows.length, extra)));
+    };
+    const withLabels = () => { mocks.dictionary = { ...esES.genericLabels }; };
+
+    it('asks for the totals with the selected warehouse as an equals criterion and still renders the Total', async () => {
+      withLabels();
+      mocks.apiFetch.mockImplementation(async (path) => (path.startsWith('/stock')
+        ? respond([{ warehouse: 'wh-9', 'warehouse$_identifier': 'Almacén Sur' }])
+        : respond([row()], 1, totalsOf(5, 1))));
+      render(<ProductMovementsTab data={storable} isActive />);
+      await userEvent.click(await screen.findByTestId('warehouse-wh-9'));
+      await waitFor(() => expect(pageRequests().some((p) => query(p).get('etgoTotals') === 'true'
+        && JSON.parse(query(p).get('criteria')).some((c) => c.fieldName === 'etgoWarehouse' && c.value === 'wh-9'))).toBe(true));
+      const total = await screen.findByTestId('product-movements-total');
+      expect(total).toHaveTextContent('Total del período');
+      expect(screen.getByTestId('product-movements-total-value')).toHaveTextContent('+5');
+    });
+
+    it('shows the server net sum with a real minus sign, red, and the pluralised count', async () => {
+      withLabels();
+      routeWithTotals([row({ movementQuantity: -7 })], totalsOf(-7, 3));
+      render(<ProductMovementsTab data={storable} isActive />);
+
+      const total = await screen.findByTestId('product-movements-total');
+      expect(total).toHaveTextContent('Total del período');
+      expect(total).toHaveTextContent('· 3 movimientos');
+      const value = screen.getByTestId('product-movements-total-value');
+      expect(value).toHaveTextContent('−7');
+      expect(value.style.color).toBe('var(--quantity-negative-fg)');
+      expect(value.className).toContain('text-[15px]');
+      expect(value.className).toContain('font-bold');
+      expect(total.className).toContain('sticky');
+      expect(total.className).toContain('-bottom-2');
+      expect(total.className).toContain('bg-[var(--surface-subtle)]');
+    });
+
+    it('shows a green plus for a positive net sum, grouped with at most 2 decimals', async () => {
+      withLabels();
+      routeWithTotals([row()], totalsOf(1234.5, 2));
+      render(<ProductMovementsTab data={storable} isActive />);
+
+      const value = await screen.findByTestId('product-movements-total-value');
+      expect(value).toHaveTextContent('+1.234,5');
+      expect(value.style.color).toBe('var(--status-success-fg)');
+    });
+
+    it('shows zero with no sign in the neutral colour', async () => {
+      routeWithTotals([row()], totalsOf(0, 2));
+      render(<ProductMovementsTab data={storable} isActive />);
+
+      const value = await screen.findByTestId('product-movements-total-value');
+      expect(value.textContent).toBe('0');
+      expect(value.style.color).toBe('hsl(var(--foreground))');
+    });
+
+    it('uses the singular for one movement, in English too', async () => {
+      mocks.dictionary = { ...enUS.genericLabels };
+      routeWithTotals([row()], totalsOf(4, 1));
+      render(<ProductMovementsTab data={storable} isActive />);
+
+      const total = await screen.findByTestId('product-movements-total');
+      expect(total).toHaveTextContent('Period total');
+      expect(total).toHaveTextContent('· 1 movement');
+      expect(total).not.toHaveTextContent('1 movements');
+    });
+
+    it.each([
+      ['missing', {}],
+      ['incomplete', { totals: { netQuantity: 5 } }],
+      ['not numeric', { totals: { netQuantity: '5', count: '1' } }],
+    ])('hides the row when the totals are %s (no partial sum from the loaded rows)', async (_name, extra) => {
+      routeWithTotals([row({ movementQuantity: 4 })], extra);
+      render(<ProductMovementsTab data={storable} isActive />);
+
+      await screen.findByTestId('product-movements-row');
+      expect(screen.queryByTestId('product-movements-total')).toBeNull();
+    });
+
+    it('shows a skeleton in the value cell while the first page loads, then the value', async () => {
+      let release;
+      mocks.apiFetch.mockImplementation((path) => (path.startsWith('/stock')
+        ? Promise.resolve(respond([]))
+        : new Promise((resolve) => { release = () => resolve(respond([row()], 1, totalsOf(4, 1))); })));
+      render(<ProductMovementsTab data={storable} isActive />);
+
+      const total = await screen.findByTestId('product-movements-total');
+      expect(screen.getByTestId('product-movements-total-value')).toHaveAttribute('aria-busy', 'true');
+      expect(screen.queryByTestId('product-movements-total-count')).toBeNull();
+
+      release();
+      await waitFor(() => expect(screen.getByTestId('product-movements-total-value')).toHaveTextContent('+4'));
+    });
+
+    it('is not rendered in the empty states', async () => {
+      routeWithTotals([], totalsOf(0, 0));
+      render(<ProductMovementsTab data={storable} isActive />);
+
+      await screen.findByTestId('product-movements-empty');
+      expect(screen.queryByTestId('product-movements-total')).toBeNull();
+    });
+
+    it('is not rendered when the first page fails', async () => {
+      mocks.apiFetch.mockImplementation(async (path) => (path.startsWith('/stock')
+        ? respond([])
+        : { ok: false, status: 500, statusText: 'Server Error', json: async () => ({}) }));
+      render(<ProductMovementsTab data={storable} isActive />);
+
+      await screen.findByRole('alert');
+      expect(screen.queryByTestId('product-movements-total')).toBeNull();
+    });
+
+    it('is a labelled group outside the block, a direct child of the tab right after the block, and not one of the data rows', async () => {
+      withLabels();
+      routeWithTotals([row(), row()], totalsOf(8, 2));
+      render(<ProductMovementsTab data={storable} isActive />);
+
+      const total = await screen.findByTestId('product-movements-total');
+      expect(screen.getAllByTestId('product-movements-row')).toHaveLength(2);
+      const box = screen.getByTestId('product-movements-scroll');
+      expect(total.getAttribute('role')).toBe('group');
+      expect(total.getAttribute('aria-label')).toBe('Total del período');
+      expect(box.contains(total)).toBe(false);
+      const block = screen.getByTestId('product-movements-block');
+      expect(block.contains(total)).toBe(false);
+      expect(total.parentElement).toBe(screen.getByTestId('product-movements-tab'));
+      expect(block.nextElementSibling).toBe(total);
+      expect(within(total).queryAllByRole('cell')).toHaveLength(0);
+    });
+
+    describe('alignment with the table box (jsdom has no layout: sizes are stubbed)', () => {
+      const sizes = { offsetWidth: 1000, clientWidth: 985, scrollWidth: 1200 };
+      let observers;
+      const spies = [];
+      beforeEach(() => {
+        observers = [];
+        vi.stubGlobal('ResizeObserver', class {
+          constructor(cb) { this.cb = cb; observers.push(this); }
+          observe() {}
+          disconnect() {}
+        });
+        for (const prop of Object.keys(sizes)) {
+          const desc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, prop);
+          Object.defineProperty(HTMLElement.prototype, prop, {
+            configurable: true,
+            get() { return this.getAttribute?.('data-testid') === 'product-movements-scroll' ? sizes[prop] : (desc?.get ? desc.get.call(this) : 0); },
+          });
+          spies.push([prop, desc]);
+        }
+      });
+      afterEach(() => {
+        spies.splice(0).forEach(([prop, desc]) => {
+          if (desc) Object.defineProperty(HTMLElement.prototype, prop, desc); else delete HTMLElement.prototype[prop];
+        });
+        vi.unstubAllGlobals();
+        Object.assign(sizes, { offsetWidth: 1000, clientWidth: 985, scrollWidth: 1200 });
+      });
+
+      const grid = (total) => total.firstElementChild;
+
+      it('reserves the table scrollbar width on the right and gives the inner grid the table content width', async () => {
+        routeWithTotals([row()], totalsOf(4, 1));
+        render(<ProductMovementsTab data={storable} isActive />);
+        const total = await screen.findByTestId('product-movements-total');
+        expect(total.style.paddingRight).toBe('15px');
+        expect(grid(total).style.minWidth).toBe('1200px');
+      });
+
+      it('re-measures when the box is resized (ResizeObserver) and when the rows change', async () => {
+        routeWithTotals([row()], totalsOf(4, 1));
+        const { rerender } = render(<ProductMovementsTab data={storable} isActive />);
+        const total = await screen.findByTestId('product-movements-total');
+        expect(observers.length).toBeGreaterThan(0);
+        Object.assign(sizes, { clientWidth: 1000, scrollWidth: 1000 }); // overlay scrollbar / no overflow
+        act(() => observers.forEach((o) => o.cb()));
+        expect(total.style.paddingRight).toBe('0px');
+        expect(grid(total).style.minWidth).toBe('1000px');
+        Object.assign(sizes, { clientWidth: 980, scrollWidth: 1500 }); // rows loaded: wider content, scrollbar back
+        rerender(<ProductMovementsTab data={{ ...storable }} isActive />);
+        expect(total.style.paddingRight).toBe('20px');
+        expect(grid(total).style.minWidth).toBe('1500px');
+      });
+
+      // jsdom ignores scrollLeft writes: back it with a store so the tab's reads and writes are observable.
+      async function withScrollStore(fn) {
+        const store = new WeakMap();
+        const original = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollLeft');
+        Object.defineProperty(Element.prototype, 'scrollLeft', {
+          configurable: true,
+          get() { return store.get(this) ?? 0; },
+          set(v) { store.set(this, v); },
+        });
+        try {
+          await fn();
+        } finally {
+          if (original) Object.defineProperty(Element.prototype, 'scrollLeft', original); else delete Element.prototype.scrollLeft;
+        }
+      }
+
+      it('mirrors the table horizontal scroll onto the total row on every scroll event', () => withScrollStore(mirrorsHorizontalScroll));
+
+      // The browser clamps the Total's scrollLeft when its grid narrows, with NO scroll event. The layout effect keyed on
+      // gridWidth/scrollbarWidth must re-copy the box position after the new width is committed (drop those
+      // dependencies and these two tests fail: the Total stays at the clamped 0).
+      it('re-syncs the total scrollLeft to the box after a ResizeObserver re-measure, without any scroll event', () => withScrollStore(async () => {
+        routeWithTotals([row()], totalsOf(4, 1));
+        render(<ProductMovementsTab data={storable} isActive />);
+        const box = await screen.findByTestId('product-movements-scroll');
+        const total = await screen.findByTestId('product-movements-total');
+        box.scrollLeft = 120;
+        total.scrollLeft = 0; // what the browser did when the grid narrowed
+        Object.assign(sizes, { scrollWidth: 900, clientWidth: 970 });
+        act(() => observers.forEach((o) => o.cb()));
+        expect(grid(total).style.minWidth).toBe('900px');
+        expect(total.scrollLeft).toBe(120);
+      }));
+
+      it('re-syncs on the late path too: stale width at render, new width on the next render, still no scroll event', () => withScrollStore(async () => {
+        routeWithTotals([row()], totalsOf(4, 1));
+        const { rerender } = render(<ProductMovementsTab data={storable} isActive />);
+        const box = await screen.findByTestId('product-movements-scroll');
+        const total = await screen.findByTestId('product-movements-total');
+        box.scrollLeft = 120;
+        total.scrollLeft = 0;
+        Object.assign(sizes, { scrollWidth: 1600 });
+        rerender(<ProductMovementsTab data={{ ...storable }} isActive />);
+        expect(grid(total).style.minWidth).toBe('1600px');
+        expect(total.scrollLeft).toBe(120);
+      }));
+
+      // TOTAL_ROW_RESERVE_PX is not exported (module-private), so the literal 48 is asserted: it must stay equal to the
+      // bottomGap reserve so keyboard focus / scrolling clears the sticky Total.
+      it('keeps scroll-padding-bottom on the table scroller equal to the Total reserve so focus clears the sticky row', async () => {
+        routeWithTotals([row()], totalsOf(4, 1));
+        render(<ProductMovementsTab data={storable} isActive />);
+        const box = await screen.findByTestId('product-movements-scroll');
+        expect(box.style.scrollPaddingBottom).toBe('48px');
+      });
+
+      async function mirrorsHorizontalScroll() {
+        routeWithTotals([row()], totalsOf(4, 1));
+        render(<ProductMovementsTab data={storable} isActive />);
+        const box = await screen.findByTestId('product-movements-scroll');
+        const total = await screen.findByTestId('product-movements-total');
+        box.scrollLeft = 120;
+        fireEvent.scroll(box);
+        expect(total.scrollLeft).toBe(120);
+        box.scrollLeft = 300;
+        fireEvent.scroll(box);
+        expect(total.scrollLeft).toBe(300);
+      }
+    });
+
+    it('asks for the totals on the first page only: not on later pages, not on the probe', async () => {
+      const full = Array.from({ length: 50 }, (_, i) => row({ id: `r-${i}` }));
+      let page = 0;
+      mocks.apiFetch.mockImplementation(async (path) => {
+        if (path.startsWith('/stock')) return respond([]);
+        page += 1;
+        return respond(page === 1 ? full : [row({ id: 'last' })], 51, page === 1 ? totalsOf(51, 51) : {});
+      });
+      render(<ProductMovementsTab data={storable} isActive />);
+      await waitFor(() => expect(screen.getAllByTestId('product-movements-row')).toHaveLength(50));
+
+      const box = screen.getByTestId('product-movements-scroll');
+      Object.defineProperty(box, 'clientHeight', { configurable: true, value: 300 });
+      Object.defineProperty(box, 'scrollHeight', { configurable: true, value: 1000 });
+      Object.defineProperty(box, 'scrollTop', { configurable: true, value: 700 });
+      fireEvent.scroll(box);
+      await waitFor(() => expect(pageRequests()).toHaveLength(2));
+
+      expect(query(pageRequests()[0]).get('etgoTotals')).toBe('true');
+      expect(query(pageRequests()[1]).get('_startRow')).toBe('50');
+      expect(query(pageRequests()[1]).has('etgoTotals')).toBe(false);
+      // The total of the first page survives the next page (that response carries none).
+      expect(screen.getByTestId('product-movements-total-value')).toHaveTextContent('+51');
+    });
+
+    it('never sends the totals flag on the one-record probe', async () => {
+      mocks.apiFetch.mockImplementation(async (path) => (path.startsWith('/stock') ? respond([]) : respond([])));
+      render(<ProductMovementsTab data={storable} isActive />);
+      await userEvent.click(await screen.findByTestId('period-6m'));
+      await waitFor(() => expect(pageRequests().some((p) => query(p).get('_endRow') === '0')).toBe(true));
+
+      const probe = pageRequests().find((p) => query(p).get('_endRow') === '0');
+      expect(query(probe).has('etgoTotals')).toBe(false);
+    });
+
+    it('re-reads the totals when a filter changes and keeps them when only the sort changes', async () => {
+      let call = 0;
+      mocks.apiFetch.mockImplementation(async (path) => {
+        if (path.startsWith('/stock')) return respond([]);
+        call += 1;
+        return respond([row()], 1, totalsOf(call, call));
+      });
+      render(<ProductMovementsTab data={storable} isActive />);
+      expect(await screen.findByTestId('product-movements-total-value')).toHaveTextContent('+1');
+
+      await userEvent.click(screen.getByTestId('period-6m'));
+      await waitFor(() => expect(screen.getByTestId('product-movements-total-value')).toHaveTextContent('+2'));
+      expect(query(pageRequests()[1]).get('etgoTotals')).toBe('true');
+
+      // Sorting reloads the rows but the value on screen is that of the same filters (no skeleton in between).
+      const before = pageRequests().length;
+      await userEvent.click(screen.getByText('productMovementsWarehouse'));
+      await waitFor(() => expect(pageRequests().length).toBe(before + 1));
+      expect(query(pageRequests()[before]).get('_sortBy')).toContain('etgoWarehouse');
+      // That reload also asks for totals; the value is the one of the same filters, shown without a skeleton.
+      expect(screen.getByTestId('product-movements-total-value')).toHaveAttribute('aria-busy', 'false');
+    });
+
+    it('does not paint the total of a previous product, answered late, in the new one', async () => {
+      const resolvers = {};
+      mocks.apiFetch.mockImplementation((path) => {
+        if (path.startsWith('/stock')) return Promise.resolve(respond([]));
+        const id = query(path).get('parentId');
+        return new Promise((resolve) => { resolvers[id] = () => resolve(respond([row()], 1, totalsOf(id === 'pA' ? 111 : 222, 1))); });
+      });
+      const { rerender } = render(<ProductMovementsTab data={{ id: 'pA', productType: 'I', stocked: true }} isActive />);
+      await waitFor(() => expect(resolvers.pA).toBeDefined());
+      rerender(<ProductMovementsTab data={{ id: 'pB', productType: 'I', stocked: true }} isActive />);
+      await waitFor(() => expect(resolvers.pB).toBeDefined());
+
+      resolvers.pA();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(screen.getByTestId('product-movements-total-value')).toHaveAttribute('aria-busy', 'true');
+
+      resolvers.pB();
+      await waitFor(() => expect(screen.getByTestId('product-movements-total-value')).toHaveTextContent('+222'));
+      expect(screen.queryByText('+111')).toBeNull();
+    });
+  });
+
+  it.each([['en_US', enUS], ['es_ES', esES], ['es_AR', esAR]])('declares the period total keys in %s', (_locale, json) => {
+    for (const key of ['productMovementsTotalLabel', 'productMovementsTotalCountOne', 'productMovementsTotalCountOther']) {
+      expect(json.genericLabels[key]?.trim().length, key).toBeGreaterThan(0);
+    }
+    expect(json.genericLabels.productMovementsTotalCountOther).toContain('{count}');
+    expect(json.genericLabels.productMovementsTotalCountOne).toContain('{count}');
   });
 });

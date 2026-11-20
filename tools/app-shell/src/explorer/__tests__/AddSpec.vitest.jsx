@@ -23,14 +23,14 @@ vi.mock('@/lib/utils', () => ({
   cn: (...args) => args.filter(Boolean).join(' '),
 }));
 
-vi.mock('lucide-react', () => ({
-  Folder: (props) => <span data-testid="icon-folder" {...props} />,
-  AppWindow: (props) => <span data-testid="icon-window" {...props} />,
-  Cog: (props) => <span data-testid="icon-cog" {...props} />,
-  ChevronRight: (props) => <span data-testid="icon-chevron" {...props} />,
-  Search: (props) => <span data-testid="icon-search" {...props} />,
-  Loader2: (props) => <span data-testid="icon-loader" {...props} />,
-  X: (props) => <span data-testid="icon-x" {...props} />,
+vi.mock('@phosphor-icons/react', () => ({
+  FolderIcon: (props) => <span data-testid="icon-folder" {...props} />,
+  AppWindowIcon: (props) => <span data-testid="icon-window" {...props} />,
+  GearIcon: (props) => <span data-testid="icon-cog" {...props} />,
+  CaretRightIcon: (props) => <span data-testid="icon-chevron" {...props} />,
+  MagnifyingGlassIcon: (props) => <span data-testid="icon-search" {...props} />,
+  CircleNotchIcon: (props) => <span data-testid="icon-loader" {...props} />,
+  XIcon: (props) => <span data-testid="icon-x" {...props} />,
 }));
 
 // --- Imports ---

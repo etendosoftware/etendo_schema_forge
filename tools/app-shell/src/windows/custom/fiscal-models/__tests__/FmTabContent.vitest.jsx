@@ -5,14 +5,14 @@ import React from 'react';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-vi.mock('lucide-react', () => ({
-  ReceiptText: () => null,
-  TriangleAlert: (p) => <span data-testid="icon-warn" {...p} />,
-  OctagonAlert: (p) => <span data-testid="icon-block" {...p} />,
-  CircleCheck: (p) => <span data-testid="icon-check" {...p} />,
-  ChevronRight: (p) => <span {...p} />,
-  Download: (p) => <span {...p} />,
-  FileText: (p) => <span {...p} />,
+vi.mock('@phosphor-icons/react', () => ({
+  ReceiptIcon: () => null,
+  WarningIcon: (p) => <span data-testid="icon-warn" {...p} />,
+  WarningOctagonIcon: (p) => <span data-testid="icon-block" {...p} />,
+  CheckCircleIcon: (p) => <span data-testid="icon-check" {...p} />,
+  CaretRightIcon: (p) => <span {...p} />,
+  DownloadSimpleIcon: (p) => <span {...p} />,
+  FileTextIcon: (p) => <span {...p} />,
 }));
 
 vi.mock('../FmCommon.jsx', () => ({
@@ -342,6 +342,49 @@ describe('IncidentsTab', () => {
     const text = screen.getByText('fm.incidents.block_sub');
     expect(text.style.color).toBe('hsl(var(--destructive))');
     expect(screen.queryByText('fm.incidents.warn_sub')).not.toBeInTheDocument();
+  });
+
+  // ETP-5716 — the colour follows the severity of the rows; only the TEXT follows
+  // `gatingBlocking`, how many of the blocking rows really gate the file (default: all).
+  describe('gatingBlocking', () => {
+    const blockDecl = { incidents: { items: [{ origin: 'Box', severity: 'block', message: 'Broken' }] } };
+    const warnDecl = { incidents: { items: [{ origin: 'Box', severity: 'warn', message: 'Check this' }] } };
+
+    it('gatingBlocking > 0: the destructive "resolve before generating" banner', () => {
+      render(<IncidentsTab decl={blockDecl} blocking={2} warning={0} gatingBlocking={1} t={t} />);
+      expect(screen.getByText('fm.incidents.block_sub').style.color).toBe('hsl(var(--destructive))');
+      expect(screen.queryByText('fm.incidents.review_sub')).not.toBeInTheDocument();
+      expect(screen.queryByText('fm.incidents.warn_sub')).not.toBeInTheDocument();
+    });
+
+    it('gatingBlocking 0 with blocking-severity rows: still destructive, with "review before presenting"', () => {
+      render(<IncidentsTab decl={blockDecl} blocking={1} warning={0} gatingBlocking={0} t={t} />);
+      expect(screen.getByText('fm.incidents.review_sub').style.color).toBe('hsl(var(--destructive))');
+      expect(screen.queryByText('fm.incidents.block_sub')).not.toBeInTheDocument();
+      expect(screen.queryByText('fm.incidents.warn_sub')).not.toBeInTheDocument();
+    });
+
+    it('gatingBlocking 0 with blocking rows and warnings: the blocking rows still win over the amber banner', () => {
+      const decl = { incidents: { items: [...warnDecl.incidents.items, ...blockDecl.incidents.items] } };
+      render(<IncidentsTab decl={decl} blocking={1} warning={1} gatingBlocking={0} t={t} />);
+      expect(screen.getByText('fm.incidents.review_sub')).toBeInTheDocument();
+      expect(screen.queryByText('fm.incidents.warn_sub')).not.toBeInTheDocument();
+    });
+
+    it('only warnings: the amber banner whatever gatingBlocking says', () => {
+      render(<IncidentsTab decl={warnDecl} blocking={0} warning={1} gatingBlocking={0} t={t} />);
+      expect(screen.getByText('fm.incidents.warn_sub').style.color).toBe('var(--status-warning-fg)');
+      expect(screen.queryByText('fm.incidents.review_sub')).not.toBeInTheDocument();
+      expect(screen.queryByText('fm.incidents.block_sub')).not.toBeInTheDocument();
+    });
+
+    it('no incidents: no banner at all', () => {
+      render(<IncidentsTab decl={{ incidents: { items: [] } }} blocking={0} warning={0} gatingBlocking={0} t={t} />);
+      for (const key of ['fm.incidents.block_sub', 'fm.incidents.review_sub', 'fm.incidents.warn_sub']) {
+        expect(screen.queryByText(key)).not.toBeInTheDocument();
+      }
+      expect(document.body.textContent).toContain('fm.incidents.empty');
+    });
   });
 
   it('blocking wins over warnings: blocking + warnings shows the destructive banner', () => {

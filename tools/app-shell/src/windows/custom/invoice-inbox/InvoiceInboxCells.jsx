@@ -1,4 +1,10 @@
-import { Copy, FileText, Image as ImageIcon, Link2, Mail } from 'lucide-react';
+import {
+  CopyIcon,
+  FileTextIcon,
+  ImageIcon,
+  LinkSimpleIcon,
+  EnvelopeSimpleIcon,
+} from '@phosphor-icons/react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TruncatedText } from '@/components/ui/truncated-text';
 import { StatusTag } from '@/components/ui/status-tag';
@@ -7,6 +13,8 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { STATUS, isProcessingRow } from './invoiceInboxFilters.js';
 import { errorCodeLabelKey, statusLabelKey, STATUS_TONES } from './invoiceInboxMessages.js';
 import { isImageFileName } from './invoiceInboxUploadPolicy.js';
+import InvoiceInboxInvoiceLink from './InvoiceInboxInvoiceLink.jsx';
+import { rowCurrencyCode } from './invoiceInboxConfirmModel.js';
 
 const EMPTY = '—';
 const SUBLINE_CLASS = 'mt-1 text-xs leading-4';
@@ -25,8 +33,8 @@ function Shimmer({ width }) {
  * One line of cell text that ellipsises when the column is too narrow and then shows the full
  * value in a tooltip, on hover and on keyboard focus (`tabIndex` 0; the shared `TruncatedText`
  * only opens it when the text is really clipped). The tooltip is Radix's, so the trigger gets
- * `aria-describedby` while it is open. Row selection is unaffected: the checkbox owns it and a row
- * click does nothing in this window.
+ * `aria-describedby` while it is open. Row selection is unaffected: the checkbox owns it (a row
+ * click opens the review panel, ETP-6050).
  */
 function CellText({ text, className, testId }) {
   return <TruncatedText text={text} className={className} tabIndex={0} data-testid={testId} />;
@@ -57,7 +65,7 @@ export function formatReceived(raw, locale) {
  * height, so rows keep one height whatever the origin.
  */
 export function DocumentCell({ row, ui, locale }) {
-  const FileIcon = isImageFileName(row.fileName) ? ImageIcon : FileText;
+  const FileIcon = isImageFileName(row.fileName) ? ImageIcon : FileTextIcon;
   const byEmail = row.source === 'EMAIL';
   const received = formatReceived(row.created, locale);
   return (
@@ -74,7 +82,7 @@ export function DocumentCell({ row, ui, locale }) {
         <div className="flex h-4 items-center gap-1.5 whitespace-nowrap text-xs leading-4 text-muted-foreground">
           {byEmail && (
             <span className="inline-flex items-center gap-1.5" data-testid={`invoice-inbox-source-${row.id}`}>
-              <Mail className="h-3 w-3" aria-hidden="true" data-testid={`invoice-inbox-source-icon-${row.id}`} />
+              <EnvelopeSimpleIcon className="h-3 w-3" aria-hidden="true" data-testid={`invoice-inbox-source-icon-${row.id}`} />
               {ui('invoiceInboxSourceEmail')}
               {received && <span aria-hidden="true">·</span>}
             </span>
@@ -97,7 +105,7 @@ function VendorLines({ row, name, taxId, linked = false }) {
         data-testid="CellText__85f13c" />
       {taxId && (
         <div className="flex min-w-0 items-center gap-1 font-mono text-xs text-muted-foreground">
-          {linked && <Link2
+          {linked && <LinkSimpleIcon
             className="h-3 w-3 flex-none"
             aria-hidden="true"
             data-testid="Link2__85f13c" />}
@@ -147,7 +155,7 @@ export function NumberCell({ row, ui }) {
   if (isProcessingRow(row)) return <Shimmer width={80} data-testid="Shimmer__85f13c" />;
   const duplicate = row.duplicateOfInvoice && !SETTLED_STATUSES.has(row.status);
   const duplicateTitle = duplicate
-    ? ui('invoiceInboxPossibleDuplicate', { doc: row['duplicateOfInvoice$_identifier'] ?? '' })
+    ? ui('invoiceInboxPossibleDuplicate', { doc: row['duplicateOfInvoice$documentNo'] || row['duplicateOfInvoice$_identifier'] || '' })
     : null;
   return (
     <span className="whitespace-nowrap font-mono text-[13px]">
@@ -160,7 +168,7 @@ export function NumberCell({ row, ui }) {
           className="ml-1.5 inline-flex align-[-2px] text-status-warning-foreground"
           data-testid={`invoice-inbox-duplicate-${row.id}`}
         >
-          <Copy className="h-3.5 w-3.5" aria-hidden="true" data-testid="Copy__85f13c" />
+          <CopyIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="Copy__85f13c" />
         </span>
       )}
     </span>
@@ -173,11 +181,18 @@ export function InvoiceDateCell({ row, locale }) {
   return <span className="whitespace-nowrap">{formatCalendarDate(row.invoiceDate, locale)}</span>;
 }
 
-/** Total in the organization currency: the inbox row has no currency of its own yet. */
+/**
+ * Total in the document's own currency (the row's `currency`, ETP-6051); `currency` is the
+ * organization's, used only for a row that carries none (an older answer).
+ */
 export function TotalCell({ row, currency }) {
   if (isProcessingRow(row)) return <Shimmer width={64} data-testid="Shimmer__85f13c" />;
   if (row.grandTotalAmount == null) return <Muted data-testid="Muted__85f13c">{EMPTY}</Muted>;
-  return <span className="whitespace-nowrap font-semibold tabular-nums">{formatCurrency(currency, row.grandTotalAmount)}</span>;
+  return (
+    <span className="whitespace-nowrap font-semibold tabular-nums">
+      {formatCurrency(rowCurrencyCode(row) ?? currency, row.grandTotalAmount)}
+    </span>
+  );
 }
 
 /**
@@ -202,13 +217,19 @@ function StatusSubline({ row, ui, locale }) {
         data-testid="CellText__85f13c" />
     );
   }
-  if (row.status === STATUS.CONFIRMED && row['invoice$_identifier']) {
+  // The plain document number; the DAL identifier ("no - date - amount") only when it is absent.
+  const invoiceDoc = row['invoice$documentNo'] || row['invoice$_identifier'];
+  if (row.status === STATUS.CONFIRMED && invoiceDoc) {
+    // The document number and "Completada" as a link to the purchase invoice it created.
+    const text = ui('invoiceInboxConfirmedAs', { doc: invoiceDoc });
     return (
-      <CellText
-        text={ui('invoiceInboxConfirmedAs', { doc: row['invoice$_identifier'] })}
-        className={`${SUBLINE_CLASS} font-mono text-primary`}
+      <InvoiceInboxInvoiceLink
+        invoiceId={row.invoice}
+        className={`${SUBLINE_CLASS} block truncate font-mono text-primary hover:underline`}
         testId={`invoice-inbox-status-reason-${row.id}`}
-        data-testid="CellText__85f13c" />
+        data-testid="InvoiceInboxInvoiceLink__85f13c">
+        <span title={text}>{text}</span>
+      </InvoiceInboxInvoiceLink>
     );
   }
   const discardedDay = row.status === STATUS.DISCARDED ? formatDiscardedDay(row.discardedAt, locale) : '';

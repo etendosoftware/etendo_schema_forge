@@ -117,7 +117,9 @@ graph LR
   class LAYOUT,PROVIDER,SMTP hub
 ```
 
-**6 verified, 16 migrated, 24 total.** The account greens were opened in a real inbox on 2026-08-25:
+**6 verified, 16 migrated, 27 total** (the 25th to 27th — `portal-link-renewal`,
+`portal-quotation-decision-confirm`, `portal-quotation-decision-notice`, ETP-6209 — are described in
+§3.A and not yet verified in an inbox). The account greens were opened in a real inbox on 2026-08-25:
 the invitation (including the resend path), the password reset stating its true 30-minute window,
 and — from one run of a fresh admin through sign-up and onboarding — the welcome and the
 environment-ready notice. A second run, an invited operator accepting from scratch, confirmed the
@@ -193,19 +195,44 @@ Since F3 (2026-08-26) all render through `EmailLayout` (#7 and #8 added by ETP-5
 `email/render/messages/emails_{es_ES,en_US}.properties` (`document.subject`, `document.body`,
 `document.cta`, plus one `{contract}.documentType` key each) rather than in Java literals.
 
-**ETP-5267 — `sales-invoice-send` can carry a Business Partner portal link.** It is the only one of
-the six that overrides `resolveAdditionalParagraphHtml`, a hook added on
-`DefaultDocumentSendEmailContract` whose default is `Optional.empty()`. That default is the
-guarantee: **the other five emails are byte-identical to what they produced before the hook
-existed**, because there is nothing to append — not because each caller is careful. The extra
-paragraph renders between the body copy and the summary block, as an inline anchor rather than a
-second button, since `EmailContent` carries one call to action and it belongs to the document.
+**ETP-5267 / ETP-6209 — the sales document emails carry a customer portal link.**
+`sales-quotation-send`, `sales-order-send`, `goods-shipment-send` and `sales-invoice-send` (credit
+notes included) declare `portalDocumentKind()` on `DefaultDocumentSendEmailContract`, whose default
+is `Optional.empty()`. That default is the guarantee: **every other document email is
+byte-identical to what it produced before**, because it declares nothing. The base class only asks
+whether a kind was declared and never names a window. The extra paragraph renders between the body
+copy and the summary block, as an inline anchor rather than a second button, since `EmailContent`
+carries one call to action and it belongs to the document.
 
-Its copy is `document.portal.intro` / `document.portal.cta` in both catalogs. The paragraph appears
-only when the `bp-portal-link` flag resolves true for the **sending account** (see
-`com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` → *Per-account targeting*); when it does
-not, the send is unchanged **and no `etgo_portal_access` row is minted**, which is what keeps the
-always-deployed portal surface empty until someone is deliberately sending links.
+Its copy is `document.portal.intro` (with the link's validity in hours) / `document.portal.cta` in
+both catalogs. **Since ETP-6209 Part B, with a link the portal is the email's call-to-action
+button** ("Ver documento en el portal") **and the "Descargar documento" button is dropped** — the
+portal shows the same printable; the intro is a full sentence stating the validity. Without a link
+the email keeps the download button, byte-identical to before. The paragraph appears only when the `bp-portal-link` flag resolves true for the
+**sending account** (see `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` →
+*Per-account targeting*); when it does not, the send is unchanged **and no `etgo_portal_link` row is
+minted**. Each send mints its own link, valid 48 hours from that send; a link minted for an email
+that was throttled, refused as duplicate or failed never becomes valid.
+
+**`portal-link-renewal` (ETP-6209)** is a ninth GO email, outside the document family: opening an
+expired portal link emails a new one to the **To and CC of the original send** (never to whoever
+opened it). Copy: `portal-link-renewal.*` in both catalogs. It is refused for any caller outside
+`PortalRenewalScope`, and is recorded in the document's own send history, so it shows in the
+document's Emails card next to the original send. Contract: `contracts/PortalLinkRenewalEmailContract.java`;
+trigger: `POST /sws/portal/renew` (`com.etendoerp.go/src/com/etendoerp/go/portal/PortalLinkService.java`).
+
+**`portal-quotation-decision-confirm` and `portal-quotation-decision-notice` (ETP-6209 Part C)**
+are two more portal emails. The *confirm* email goes when a customer asks to accept / reject a
+quotation in the portal: only to the **first To of the original send** (never CC), it carries a
+single-use, never-expiring confirmation link (`/portal/decision/<token>`, the token's hash is the
+only thing stored, in `ETGO_PORTAL_DECISION`). Its button names the decision ("Confirmar rechazo" /
+"Confirmar aceptación") and is the confirmation itself: the landing page sends the confirm POST by
+script on open and shows the result; a bare GET of the link (a mail scanner) applies nothing. The *notice* goes to the user who sent the quotation
+(their ETGO_ACCOUNT email) once the customer confirmed. Copy: `portal-quotation-decision.*` in both
+catalogs; both refuse any caller outside `PortalDecisionScope` and file under the quotation's send
+history. Contracts: `contracts/PortalDecisionConfirmEmailContract.java`,
+`contracts/PortalDecisionNoticeEmailContract.java`; trigger: `POST /sws/portal/quotations/{id}/decision`
+and `POST /sws/portal/decisions/confirm` (`portal/PortalDecisionService.java`). Not yet verified in an inbox.
 
 > ⚠ **The default subject and body exist in two places.** When the operator sends without editing
 > anything, the backend composes the copy from the catalog above — but the modal shows the operator
@@ -366,7 +393,7 @@ recipients, subject, the operator's message and the signed download link are sto
 **per tenant**, under **client-level AD security**. The justification is narrow and worth keeping
 in view — an operator must be able to prove to their own customer what was sent, to whom and when,
 and a hash cannot do that. The scope is correspondingly narrow: only the eight document-send
-contracts opt in.
+contracts, `portal-link-renewal` and the two Part C quotation-decision emails (ETP-6209) opt in.
 
 - **Gate:** `EmailContract#logsSendHistory()` defaults to `false`.
   `DefaultDocumentSendEmailContract` overrides it to `true`, so the eight document-send contracts
@@ -375,12 +402,19 @@ contracts opt in.
   automatically. The **account/auth family** (`company-invitation`, `reset-password`,
   `password-changed`, `verify-email`, `login-alert`, `organization-joined`) inherits `false` and
   **never reaches the table** — those recipients are the platform's own users and that copy carries
-  single-use links.
+  single-use links. **`portal-link-renewal`** (ETP-6209) also opts in: a renewed customer portal link
+  is correspondence about the document, so it is filed under the document's own `RECORD_ID` and
+  spec (`getSpecName(EmailSendContext)`) and shows in its Emails card next to the original send.
 - **Write path:** `TransactionalEmailService#recordAudit` writes the history row immediately
   *before* the safety-store audit row, so both land in the same transaction and can never disagree.
   `DalEmailSendLogStore` writes **without** admin mode, which is what makes `AD_CLIENT_ID` /
   `AD_ORG_ID` / `CREATEDBY` the caller's real values — and incidentally closes the
-  null-`userId` gap §5.1 complains about, for these eight contracts.
+  null-`userId` gap §5.1 complains about, for the document sends. **One exception (ETP-6209):** a
+  send made from the System context — the portal link renewal, which runs with no tenant session —
+  would otherwise be filed under client `0`, where no window sees it. `DalEmailSendLogStore#setOwner`
+  files such a row under the tenant named by the command (`tenantId`) at organization `0` (`*`),
+  readable by every organization of that tenant; `CREATEDBY` is then the System user. Only a
+  System-context send that names a tenant takes this path.
 - **`MESSAGE_BODY` is the operator's text, not the rendered email.** What is stored is
   `EmailMessageEdits#getMessage()`, pre-escape. A send that used the catalog's default copy stores
   `null` there and keeps its `SUBJECT`.

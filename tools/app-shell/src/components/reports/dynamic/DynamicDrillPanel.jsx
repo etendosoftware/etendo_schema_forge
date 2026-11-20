@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, ExternalLink, Loader2 } from 'lucide-react';
+import { CaretRightIcon, ArrowSquareOutIcon, CircleNotchIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -42,7 +42,7 @@ function Status({ loading, error, errorCode, empty }) {
   const ui = useUI();
   const errorText = useErrorText(error, errorCode);
   if (errorText) return <p role="alert" className="text-sm text-destructive" data-testid="DynamicDrillPanel__error">{errorText}</p>;
-  if (loading && empty) return <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" data-testid="DynamicDrillPanel__loading" />;
+  if (loading && empty) return <CircleNotchIcon className="w-4 h-4 animate-spin text-muted-foreground" data-testid="DynamicDrillPanel__loading" />;
   if (empty) return <p className="text-sm text-muted-foreground" data-testid="DynamicDrillPanel__empty">{ui('noResults')}</p>;
   return null;
 }
@@ -193,7 +193,7 @@ function Entry({ params, locale, accountValue, session }) {
               onClick={openDocument}
               data-testid="DynamicDrillPanel__openDocument"
             >
-              <ExternalLink className="w-4 h-4" data-testid="ExternalLink__7ed12e" />{ui('dynamicReportOpenDocument')}
+              <ArrowSquareOutIcon className="w-4 h-4" data-testid="ExternalLink__7ed12e" />{ui('dynamicReportOpenDocument')}
             </Button>
           ) : (
             <p className="text-xs text-muted-foreground" data-testid="DynamicDrillPanel__noDocument">{ui('dynamicReportNoDocument')}</p>
@@ -210,13 +210,13 @@ function Entry({ params, locale, accountValue, session }) {
  * goes back to its step. An entry whose table has no window mapped ends the drill-down there (Q5).
  * Each step emits `report_drilldown` (ledger / entry timed, document when the tab opens).
  */
-export default function DynamicDrillPanel({ reportTitle, account, queryParams, session, canOpenEntry = true, onClose }) {
+export default function DynamicDrillPanel({ reportTitle, account, range = null, queryParams, session, canOpenEntry = true, onClose }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const [entry, setEntry] = useState(null);
   const [allLines, setAllLines] = useState(false);
   const dateText = (raw) => (raw ? formatCalendarDate(sqlDateDay(raw), locale.replace('_', '-')) : '');
-  const ledger = useMemo(() => account && ledgerParams(queryParams, account), [account, queryParams]);
+  const ledger = useMemo(() => account && ledgerParams(queryParams, account, range), [account, range, queryParams]);
   const entryQuery = useMemo(() => entry && entryParams(queryParams, entry.id), [entry, queryParams]);
   const close = () => { setEntry(null); setAllLines(false); onClose(); };
 
@@ -237,7 +237,7 @@ export default function DynamicDrillPanel({ reportTitle, account, queryParams, s
           <nav aria-label={ui('dynamicReportDrillPath')} className="flex flex-wrap items-center gap-1 text-xs">
             {crumbs.map((c, i) => (
               <span key={c.key} className="inline-flex items-center gap-1">
-                {i > 0 && <ChevronRight className="w-3 h-3" data-testid="ChevronRight__7ed12e" />}
+                {i > 0 && <CaretRightIcon className="w-3 h-3" data-testid="ChevronRight__7ed12e" />}
                 {c.go
                   ? <button type="button" className="hover:underline" onClick={c.go} data-testid={`DynamicDrillPanel__crumb-${c.key}`}>{c.label}</button>
                   : <span aria-current="page" data-testid={`DynamicDrillPanel__crumb-${c.key}`}>{c.label}</span>}

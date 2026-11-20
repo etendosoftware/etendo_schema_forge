@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, Loader2 } from 'lucide-react';
-import { useUI } from '@/i18n';
+import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ArrowsLeftRightIcon, FileTextIcon, CircleNotchIcon } from '@phosphor-icons/react';
+import { useLocaleSwitch, useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
@@ -22,12 +22,18 @@ import {
   DEFAULT_MOVEMENTS_PERIOD,
   MOVEMENTS_DEFAULT_SORT,
   MOVEMENTS_PAGE_SIZE,
+  MOVEMENTS_TABLE_MIN_HEIGHT,
+  buildAnyMovementQuery,
   buildMovementsQuery,
+  buildTypeLabelOrder,
+  extractMovementTotals,
   formatProcessTime,
   isMovementsSortKey,
   isStorableProduct,
+  isUnfilteredMovements,
   quantityTone,
   resolveMovementType,
+  resolveMovementsEmptyKind,
   shouldShowMovementsTab,
   signedQuantity,
 } from './productMovements';
@@ -40,7 +46,11 @@ import {
 // Opt-in presets of the period filter: they map 1:1 to the side panel's 3M / 6M (12M is a default one).
 const MOVEMENTS_EXTRA_PRESETS = ['last3m', 'last6m'];
 
-const GRID = 'grid grid-cols-[150px_minmax(220px,1.6fr)_minmax(140px,1fr)_100px_150px_130px] items-center gap-x-4';
+// `min-w-[994px]` is the real width of the grid: the column minimums (150 + 220 + 140 + 100 + 150 + 130 = 890)
+// + 5 gaps of `gap-x-4` (80) + the `px-3` of each row (24). It must stay equal to that sum: a smaller literal
+// lets the cells overflow the row box, so backgrounds and borders stop before the last column. Every row, the
+// sticky header and the period total use it, so they have the same width and align when the box scrolls sideways.
+const GRID = 'grid shrink-0 min-w-[994px] grid-cols-[150px_minmax(220px,1.6fr)_minmax(140px,1fr)_100px_150px_130px] items-center gap-x-4';
 const NEAR_BOTTOM_PX = 80;
 const SKELETON_ROWS = 6;
 
@@ -48,9 +58,10 @@ const SKELETON_ROWS = 6;
 // (Figma token map, ETP-3835) and the sign of a quantity uses the semantic colours the grid's
 // `signedDelta` cell uses, so a movement reads like any other signed quantity of the app.
 const TAG_VARIANT = { in: 'green', out: 'orange', neutral: 'neutral' };
+const TOTAL_NEGATIVE_FG = 'var(--quantity-negative-fg)';
 const SIGN_COLOR = {
   in: 'var(--status-success-fg)',
-  out: 'hsl(var(--destructive))',
+  out: 'var(--quantity-negative-fg)',
   neutral: 'hsl(var(--foreground))',
 };
 
@@ -72,13 +83,13 @@ function DocumentLink({ row, label, openInNewTab }) {
       type="button"
       onClick={open}
       data-testid="product-movements-doc-link"
-      className="group inline-flex items-center gap-1 text-xs font-medium text-[hsl(var(--foreground))]"
+      className="inline-flex shrink-0 items-center gap-1 rounded-sm text-xs text-[hsl(var(--foreground))] underline underline-offset-2 transition-colors hover:text-primary"
     >
-      <span className="border-b border-[hsl(var(--text-disabled))] transition-colors group-hover:border-[hsl(var(--foreground))]">{label}</span>
-      <ArrowUpRight
-        className="h-3.5 w-3.5"
+      <FileTextIcon
+        className="h-3.5 w-3.5 text-muted-foreground"
         aria-hidden="true"
-        data-testid="ArrowUpRight__763719" />
+        data-testid="FileText__763719" />
+      <span>{label}</span>
       <span className="sr-only">{openInNewTab}</span>
     </button>
   );
@@ -91,15 +102,15 @@ function MovementRow({ row, ui, currency }) {
   const hasDocument = row.etgoDocWindow && row.etgoDocHeaderId && row.etgoDocLabel;
 
   return (
-    <div role="row" className={`${GRID} border-b border-border/50 px-3 py-3 text-sm`} data-testid="product-movements-row">
-      {time ? (
-        <div role="cell" className="flex flex-col items-start gap-1">
-          <span className="font-medium tabular-nums">{formatCalendarDate(row.movementDate)}</span>
-          <span className="text-xs tabular-nums text-muted-foreground" data-testid="product-movements-time">{time}</span>
-        </div>
-      ) : <span role="cell" className="font-medium tabular-nums">{formatCalendarDate(row.movementDate)}</span>}
-      <div role="cell" className="flex flex-col items-start gap-1">
-        <Tag variant={TAG_VARIANT[tone]} data-testid="Tag__763719">{typeLabel}</Tag>
+    <div role="row" className={`${GRID} border-b border-border/50 px-3 py-2 text-sm`} data-testid="product-movements-row">
+      <div role="cell" className="flex items-baseline gap-2 whitespace-nowrap">
+        <span className="font-medium tabular-nums">{formatCalendarDate(row.movementDate)}</span>
+        {time ? <span className="text-xs tabular-nums text-muted-foreground" data-testid="product-movements-time">{time}</span> : null}
+      </div>
+      <div role="cell" className="flex min-w-0 flex-nowrap items-center gap-2 whitespace-nowrap">
+        <span className="min-w-0 truncate" title={typeLabel} data-testid="product-movements-type">
+          <Tag variant={TAG_VARIANT[tone]} data-testid="Tag__763719">{typeLabel}</Tag>
+        </span>
         {hasDocument ? <DocumentLink
           row={row}
           label={row.etgoDocLabel}
@@ -118,13 +129,320 @@ function MovementRow({ row, ui, currency }) {
   );
 }
 
-/** The empty state: the filters of the view (the period included) match none of the movements. */
-function EmptyMovements({ ui }) {
+/** Neutral for zero, green for a net entry, red for a net exit. */
+function totalColor(netQuantity) {
+  const tone = quantityTone(netQuantity);
+  if (tone === 'in') return SIGN_COLOR.in;
+  return tone === 'out' ? TOTAL_NEGATIVE_FG : SIGN_COLOR.neutral;
+}
+
+// Height the period total takes below the table box (py-2.5 + one 15px line + border), taken off the room the
+// box may use so the table and its total fit together in the column. Measured at about 41px; the extra 7px
+// is deliberate headroom for font scaling. It is also the scroll padding the box keeps at its bottom, so
+// keyboard focus and scrollIntoView clear the sticky total that overlays the box's lower edge.
+const TOTAL_ROW_RESERVE_PX = 48;
+
+/**
+ * Period total, OUTSIDE the table's scroll box and sticky at the bottom of the content column's scroller, so it
+ * is always on screen while the product page scrolls. It is the net quantity of ALL the movements the filters
+ * match (server side), under the Quantity column. `row` is what `resolveTotalRow` answers: hidden, or the
+ * totals (null while loading, a skeleton).
+ *
+ * Alignment with the table, which scrolls on its own: the box keeps `scrollbar-gutter: stable` and this row
+ * takes the same width as `scrollbarWidth` on its right, so both grids have the same width with or without
+ * rows overflowing. The inner grid is as wide as the table's content (`gridWidth` = the box's `scrollWidth`,
+ * NOT a literal: it also covers a window wider than the grid), so both have the same horizontal scroll
+ * range; sideways, the table box drives this row's `scrollLeft` (this row is `overflow-hidden`).
+ *
+ * Stacking: `z-40` puts it above the table's sticky header (`z-30`). At 1280x720 the table starts with less
+ * than one row of card left below it, so until the page is scrolled the header sits inside this row's band
+ * and a lower z-index would paint the total under it. Still below modals, drawers and popups (`z-50`+).
+ *
+ * Placement: a direct child of the tab root (after the table block), so its sticky range starts above the
+ * table. `-ml-2 -mr-4` is the same edge-to-edge bleed as the table block (coupled to Product's `pr-2` and
+ * DetailView's `p-2`, see index.jsx) and `-mt-3` cancels the root's `gap-3`, so at the end of the scroll the
+ * row sits directly under the table box.
+ *
+ * Bottom: `-bottom-2` is coupled to the `pb-2` of Product's content column (index.jsx). Sticky `bottom`
+ * is measured against the scroller's content box, so without the negative offset that padding would leave an
+ * 8px strip under this row through which the table rows show.
+ */
+const MovementsTotalRow = forwardRef(function MovementsTotalRow({ ui, row, scrollbarWidth, gridWidth, boxRef }, ref) {
+  const own = useRef(null);
+  const setRef = (node) => {
+    own.current = node;
+    if (typeof ref === 'function') ref(node);
+    else if (ref) ref.current = node;
+  };
+  // Follow the table's `scrollLeft` once the inner min-width of THIS commit is applied (measure -> commit
+  // width -> sync): on mount (the totals arrive after the rows) and whenever the grid or the scrollbar width
+  // changes, since a narrower grid makes the browser clamp this row's `scrollLeft` with no scroll event.
+  useLayoutEffect(() => {
+    if (own.current && boxRef?.current) own.current.scrollLeft = boxRef.current.scrollLeft;
+  }, [row.show, boxRef, gridWidth, scrollbarWidth]);
+  if (!row.show) return null;
+  const { totals } = row;
+  const count = totals?.count ?? 0;
+  const countLabel = ui(count === 1 ? 'productMovementsTotalCountOne' : 'productMovementsTotalCountOther', { count });
+  return (
+    <div
+      ref={setRef}
+      role="group"
+      aria-label={ui('productMovementsTotalLabel')}
+      className="sticky -bottom-2 z-40 -ml-2 -mr-4 -mt-3 overflow-hidden border-t border-border bg-[var(--surface-subtle)]"
+      style={{ paddingRight: scrollbarWidth }}
+      data-testid="product-movements-total">
+      <div className={`${GRID} px-3 py-2.5 text-sm`} style={gridWidth ? { minWidth: gridWidth } : undefined}>
+        <span className="col-span-3 flex items-baseline gap-2 whitespace-nowrap">
+          <span className="text-xs font-semibold">{ui('productMovementsTotalLabel')}</span>
+          {totals ? <span className="text-xs text-muted-foreground" data-testid="product-movements-total-count">{countLabel}</span> : null}
+        </span>
+        <span className="text-right text-[15px] font-bold tabular-nums" style={totals ? { color: totalColor(totals.netQuantity) } : undefined} aria-busy={!totals} data-testid="product-movements-total-value">
+          {totals ? signedQuantity(totals.netQuantity, formatStockQuantity) : <Skeleton className="ml-auto h-4 w-12" data-testid="Skeleton__763719" />}
+        </span>
+        <span className="col-span-2" aria-hidden="true" />
+      </div>
+    </div>
+  );
+});
+
+/** GET of one page; a non-2xx answer throws so the caller shows the error block. */
+async function fetchMovementsJson(apiFetch, path) {
+  const res = await apiFetch(path);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+/** Retry handler: a failed first load starts again (and re-asks the probe), a failed page asks for that same page again. */
+function retryMovements(state, setProbe, loadPage) {
+  return () => {
+    if (state.rows.length === 0) setProbe(null);
+    loadPage(state.rows.length);
+  };
+}
+
+/** The cached totals, only when they were computed for the filters on screen. */
+function totalsEntryFor(totals, key) {
+  return totals?.key === key ? totals : null;
+}
+
+/** Only a first page carries totals (the builder asks for them there only); a later page keeps what is there. */
+function totalsAfterPage(prev, { key, json, start }) {
+  return start === 0 ? { key, value: extractMovementTotals(json) } : prev;
+}
+
+/** What the total row shows: nothing (hidden), 'loading' (skeleton) or the totals of the current filters. */
+function resolveTotalRow({ entry, state, pageEmpty }) {
+  if (pageEmpty) return { show: false };
+  if (state.loading) return entry ? { show: Boolean(entry.value), totals: entry.value } : { show: true, totals: null };
+  if (state.rows.length === 0) return { show: false };
+  return { show: Boolean(entry?.value), totals: entry?.value ?? null };
+}
+
+/** The product has no movement at all: the design's empty state. */
+function NoMovementsYet({ ui }) {
+  return (
+    <div className="flex flex-col items-center gap-2 p-10 text-center" data-testid="product-movements-empty">
+      <ArrowsLeftRightIcon className="h-8 w-8 text-muted-foreground" aria-hidden="true" data-testid="ArrowLeftRight__763719" />
+      <p className="text-base font-semibold">{ui('noStockMovements')}</p>
+      <p className="max-w-md text-sm text-muted-foreground">{ui('productMovementsEmptyText')}</p>
+    </div>
+  );
+}
+
+/** The product has movements, but the filters of the view (the period included) match none of them. */
+function NoMovementsForFilters({ ui }) {
   return <p className="p-10 text-center text-sm text-muted-foreground" data-testid="product-movements-no-results">{ui('productMovementsNoResults')}</p>;
+}
+
+/** The first page finished loading without error and came back empty. */
+function isFirstPageEmpty(everActive, state) {
+  return everActive && !state.loading && !state.error && state.rows.length === 0;
+}
+
+/** The probe only runs under filters that are not the unfiltered ones, and only while nothing is cached. */
+function shouldProbe(filters, probeAnswer) {
+  return !isUnfilteredMovements(filters) && probeAnswer === undefined;
+}
+
+/** The pages of the old product still in flight are dropped by bumping the generation. */
+function useDropStalePagesOnProductChange(productId, generation) {
+  const lastProductId = useRef(productId);
+  useEffect(() => {
+    if (lastProductId.current === productId) return;
+    lastProductId.current = productId;
+    generation.current += 1;
+  }, [productId, generation]);
+}
+
+/** The cached probe answer, only when it belongs to the product on screen. */
+function probeAnswerFor(probe, productId) {
+  return probe && probe.productId === productId ? probe.answer : undefined;
+}
+
+const EMPTY_MOVEMENTS_STATE = { rows: [], loading: true, loadingMore: false, error: null, hasMore: false };
+
+/** A request went out: the first page starts from scratch, a later one keeps the rows and shows the footer loader. */
+function movementsStateOnRequest(prev, start) {
+  return start === 0 ? { ...EMPTY_MOVEMENTS_STATE } : { ...prev, loadingMore: true };
+}
+
+/** A page arrived: it replaces the rows (first page) or is appended to them. */
+function movementsStateOnPage(prev, page, start) {
+  return {
+    rows: start === 0 ? page : [...prev.rows, ...page],
+    loading: false,
+    loadingMore: false,
+    error: null,
+    hasMore: page.length === MOVEMENTS_PAGE_SIZE,
+  };
+}
+
+/** True when the scroll box is near its bottom and the next page can be asked for. */
+function shouldLoadNextPage(el, state) {
+  const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - NEAR_BOTTOM_PX;
+  return nearBottom && state.hasMore && !state.loading && !state.loadingMore;
+}
+
+function MovementsSkeleton() {
+  return Array.from({ length: SKELETON_ROWS }, (_, i) => (
+    <div key={i} aria-hidden="true" className={`${GRID} border-b border-border/50 px-3 py-2.5`} data-testid="product-movements-skeleton">
+      {Array.from({ length: 6 }, (__, j) => <Skeleton key={j} className="h-4 w-full" data-testid="Skeleton__763719" />)}
+    </div>
+  ));
+}
+
+function MovementsError({ ui, onRetry }) {
+  return (
+    <div className="flex flex-col items-center gap-3 p-6 text-center" role="alert" data-testid="product-movements-error">
+      <p className="text-sm text-destructive">{ui('productMovementsError')}</p>
+      {/* A failed first load starts again; a failed page asks for that same page again. */}
+      <Button type="button" variant="outline" size="sm" onClick={onRetry} data-testid="product-movements-retry">
+        {ui('retry')}
+      </Button>
+    </div>
+  );
+}
+
+const DIRECTION_OPTIONS = [['all', 'all'], ['in', 'productMovementsIn'], ['out', 'productMovementsOut']];
+
+/** One segment of the direction toggle. */
+function DirectionButton({ active, label, onSelect }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onSelect}
+      className={`h-8 rounded-lg px-3 text-sm transition-all${active ? ' shadow-sm' : ''}`}
+      style={active ? SEGMENT_ACTIVE : SEGMENT_IDLE}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** Clicking the sorted column flips its direction; any other column starts ascending. */
+function nextMovementsSort(prev, key) {
+  if (prev.key !== key) return { key, direction: 'asc' };
+  return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+}
+
+/** Sorts by `key` unless it is not a sortable column. */
+function requestMovementsSort(setSort, key) {
+  if (isMovementsSortKey(key)) setSort((prev) => nextMovementsSort(prev, key));
+}
+
+/** `aria-sort` of a header cell: a direction on the sorted column, 'none' on the others. */
+function ariaSortFor(sort, key) {
+  return sort.key === key ? ARIA_SORT[sort.direction] : 'none';
+}
+
+/** Distinct warehouses (id + name, sorted by name) found in the product's stock rows. */
+function warehouseOptionsFromStock(stockRows) {
+  const seen = new Map();
+  for (const stockRow of stockRows) {
+    if (stockRow.warehouse && !seen.has(stockRow.warehouse)) seen.set(stockRow.warehouse, stockRow['warehouse$_identifier'] ?? stockRow.warehouse);
+  }
+  return [...seen].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Loads the warehouses the product has stock in, once the tab has been shown. */
+function useWarehouseFilterOptions({ productId, storable, everActive, apiFetch, setWarehouses }) {
+  useEffect(() => {
+    if (!storable || !productId || !everActive) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch(`/stock?parentId=${encodeURIComponent(productId)}&_startRow=0&_endRow=100`);
+        if (!res.ok) return;
+        const options = warehouseOptionsFromStock(rowsOf(await res.json()));
+        if (!cancelled) setWarehouses(options);
+      } catch { /* without the list the filter just offers every warehouse */ }
+    })();
+    return () => { cancelled = true; };
+  }, [productId, storable, everActive, apiFetch, setWarehouses]);
+}
+
+/** Asks whether the product has ANY movement and stores the answer: 'any' | 'none' | 'failed'. */
+async function fetchAnyMovementAnswer(apiFetch, { productId, sort }) {
+  try {
+    const res = await apiFetch(buildAnyMovementQuery({ productId, sort }));
+    if (!res.ok) return 'failed';
+    return rowsOf(await res.json()).length > 0 ? 'any' : 'none';
+  } catch { /* falls back to the "no results for the filters" message */ }
+  return 'failed';
+}
+
+function useAnyMovementProbe({ needsProbe, productId, sort, apiFetch, setProbe }) {
+  useEffect(() => {
+    if (!needsProbe) return undefined;
+    let cancelled = false;
+    (async () => {
+      const answer = await fetchAnyMovementAnswer(apiFetch, { productId, sort });
+      if (!cancelled) setProbe({ productId, answer });
+    })();
+    return () => { cancelled = true; };
+  }, [needsProbe, productId, sort, apiFetch, setProbe]);
+}
+
+/** Direction toggle, period picker and warehouse select above the list. */
+function MovementsFilterBar({ ui, direction, onDirectionChange, dateRange, onDateRangeChange, warehouseId, onWarehouseChange, warehouses }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <div role="group" aria-label={ui('productMovementsDirection')} className="inline-flex h-10 items-center gap-1 rounded-xl p-1" style={SEGMENT_TRACK} data-testid="product-movements-direction">
+        {DIRECTION_OPTIONS.map(([value, labelKey]) => (
+          <DirectionButton
+            key={value}
+            active={direction === value}
+            label={ui(labelKey)}
+            onSelect={() => onDirectionChange(value)}
+            data-testid="DirectionButton__763719" />
+        ))}
+      </div>
+      <DateRangePopover
+        value={dateRange}
+        onChange={onDateRangeChange}
+        extraPresets={MOVEMENTS_EXTRA_PRESETS}
+        data-testid="DateRangePopover__763719" />
+      <Select
+        value={warehouseId ?? 'all'}
+        onValueChange={(value) => onWarehouseChange(value === 'all' ? null : value)}
+        data-testid="Select__763719">
+        <SelectTrigger className="w-[200px]" aria-label={ui('productMovementsWarehouse')} data-testid="product-movements-warehouse">
+          <SelectValue data-testid="SelectValue__763719" />
+        </SelectTrigger>
+        <SelectContent data-testid="SelectContent__763719">
+          <SelectItem value="all" data-testid="SelectItem__763719">{ui('productMovementsAllWarehouses')}</SelectItem>
+          {warehouses.map((w) => <SelectItem key={w.id} value={w.id} data-testid="SelectItem__763719">{w.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
 }
 
 export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisibilityChange }) {
   const ui = useUI();
+  const { locale } = useLocaleSwitch();
   const apiFetch = useApiFetch(apiBaseUrl);
   const currency = useCurrency() ?? 'USD';
   const productId = data?.id;
@@ -134,6 +452,8 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
   const visible = enabled && shouldShowMovementsTab(data);
   // Only a saved, stocked product has movements to read.
   const storable = enabled && isStorableProduct(data);
+  // Shown right now and stocked: the moment the data is wanted.
+  const activeAndStorable = Boolean(isActive && storable);
 
   const [direction, setDirection] = useState('all');
   const [dateRange, setDateRange] = useState(DEFAULT_MOVEMENTS_PERIOD);
@@ -143,9 +463,15 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
   const [state, setState] = useState({ rows: [], loading: true, loadingMore: false, error: null, hasMore: false });
   const [everActive, setEverActive] = useState(false);
   const generation = useRef(0);
+  // Answer of the "does the product have ANY movement" probe: { productId, answer: 'any' | 'none' | 'failed' }.
+  const [probe, setProbe] = useState(null);
+  // Period totals of the first page: { key, value }, `key` ties them to the product + filters they were
+  // computed for (a sort does not change it), `value` is null when the backend sent none.
+  const [totals, setTotals] = useState(null);
   // The tab's own scroll box is bounded by the room left in the content column (inline maxHeight wins
   // over the class, which only stays as the pre-measure fallback), so the page itself never scrolls.
-  const scrollBox = useRemainingHeight({ active: Boolean(isActive) });
+  const remaining = useRemainingHeight({ active: Boolean(isActive), minHeight: MOVEMENTS_TABLE_MIN_HEIGHT, bottomGap: 20 + TOTAL_ROW_RESERVE_PX });
+  const scrollBoxStyle = { ...remaining.style, minHeight: MOVEMENTS_TABLE_MIN_HEIGHT, scrollPaddingBottom: TOTAL_ROW_RESERVE_PX };
 
   // The tab survives a change of record, so nothing of the previous product may outlive it: its
   // warehouses and its warehouse filter (an option the new product may not have). The state is reset
@@ -156,24 +482,21 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
     setStateProductId(productId);
     setWarehouseId(null);
     setWarehouses([]);
-    setEverActive(Boolean(isActive && storable));
+    setEverActive(activeAndStorable);
+    setProbe(null);
+    setTotals(null);
     setState({ rows: [], loading: true, loadingMore: false, error: null, hasMore: false });
   }
 
   // Side effects of that change cannot run while rendering: the pages of the old product still in flight
   // are dropped by bumping the generation.
-  const lastProductId = useRef(productId);
-  useEffect(() => {
-    if (lastProductId.current === productId) return;
-    lastProductId.current = productId;
-    generation.current += 1;
-  }, [productId]);
+  useDropStalePagesOnProductChange(productId, generation);
 
   // The tab is mounted with the record and only hidden while another one is selected, so the data is
   // fetched from the first time it is shown, not from the mount.
   useEffect(() => {
-    if (isActive && storable) setEverActive(true);
-  }, [isActive, storable]);
+    if (activeAndStorable) setEverActive(true);
+  }, [activeAndStorable]);
 
   // A service, expense or resource has no stock: the tab hides itself.
   const visibilityRef = useRef(onVisibilityChange);
@@ -181,51 +504,35 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
   useEffect(() => { visibilityRef.current?.(visible); }, [visible]);
 
   // "Ver movimientos" (side panel): prefilters the period once, and tells the telemetry how the tab was opened.
-  const source = useMovementsPeriodRequest({ enabled: storable, isActive: Boolean(isActive && storable), onPeriod: setDateRange });
-  useProductMovementsTabTracking({ isActive: Boolean(isActive && storable), source });
+  const source = useMovementsPeriodRequest({ enabled: storable, isActive: activeAndStorable, onPeriod: setDateRange });
+  useProductMovementsTabTracking({ isActive: activeAndStorable, source });
 
   // Warehouses of the filter: the ones the product has stock in (the same source as the side panel).
-  useEffect(() => {
-    if (!storable || !productId || !everActive) return undefined;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await apiFetch(`/stock?parentId=${encodeURIComponent(productId)}&_startRow=0&_endRow=100`);
-        if (!res.ok) return;
-        const seen = new Map();
-        for (const stockRow of rowsOf(await res.json())) {
-          if (stockRow.warehouse && !seen.has(stockRow.warehouse)) seen.set(stockRow.warehouse, stockRow['warehouse$_identifier'] ?? stockRow.warehouse);
-        }
-        if (!cancelled) setWarehouses([...seen].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)));
-      } catch { /* without the list the filter just offers every warehouse */ }
-    })();
-    return () => { cancelled = true; };
-  }, [productId, storable, everActive, apiFetch]);
+  useWarehouseFilterOptions({ productId, storable, everActive, apiFetch, setWarehouses });
 
   const filters = useMemo(() => ({ direction, dateRange, warehouseId }), [direction, dateRange, warehouseId]);
 
+  // The Type column sorts by the label the user reads, in the active language: the order of the label
+  // buckets is recomputed per locale and travels with the request (a string, so the page loader only
+  // changes when the order does). Any other sort sends nothing.
+  const typeOrder = sort.key === 'type' ? buildTypeLabelOrder(ui, locale) : null;
+
+  const totalsKey = JSON.stringify([productId, direction, dateRange, warehouseId]);
+
   const loadPage = useCallback(async (start) => {
     const mine = ++generation.current;
-    setState((prev) => (start === 0
-      ? { rows: [], loading: true, loadingMore: false, error: null, hasMore: false }
-      : { ...prev, loadingMore: true }));
+    setState((prev) => movementsStateOnRequest(prev, start));
     try {
-      const res = await apiFetch(buildMovementsQuery({ productId, filters, sort, start }));
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const page = rowsOf(await res.json());
+      const json = await fetchMovementsJson(apiFetch, buildMovementsQuery({ productId, filters, sort, start, typeOrder, withTotals: true }));
+      const page = rowsOf(json);
       if (mine !== generation.current) return;
-      setState((prev) => ({
-        rows: start === 0 ? page : [...prev.rows, ...page],
-        loading: false,
-        loadingMore: false,
-        error: null,
-        hasMore: page.length === MOVEMENTS_PAGE_SIZE,
-      }));
+      setTotals((prev) => totalsAfterPage(prev, { key: totalsKey, json, start }));
+      setState((prev) => movementsStateOnPage(prev, page, start));
     } catch (error) {
       if (mine !== generation.current) return;
       setState((prev) => ({ ...prev, loading: false, loadingMore: false, error: error.message }));
     }
-  }, [apiFetch, productId, filters, sort]);
+  }, [apiFetch, productId, filters, sort, typeOrder, totalsKey]);
 
   // Any change of the view starts again from the first page.
   useEffect(() => {
@@ -233,23 +540,53 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
     loadPage(0);
   }, [storable, productId, everActive, loadPage]);
 
+  // The probe: only when the first page came back empty under filters that are not the unfiltered ones, and
+  // only once per product (a failure is cached too, so nothing retries in a loop). A change of filters or
+  // product cancels the one in flight, so a stale answer is never applied.
+  const pageEmpty = isFirstPageEmpty(everActive, state);
+  const probeAnswer = probeAnswerFor(probe, productId);
+  const needsProbe = storable && Boolean(productId) && pageEmpty && shouldProbe(filters, probeAnswer);
+  useAnyMovementProbe({ needsProbe, productId, sort, apiFetch, setProbe });
+
+  // The total row's DOM node: the table box's onScroll copies its `scrollLeft` here.
+  const totalRef = useRef(null);
+  // What the total row copies from the table box so both grids line up: the width of its vertical scrollbar
+  // (0 with overlay scrollbars), which the total row reserves, and the width of its content grid
+  // (`scrollWidth`). Re-measured after every render (rows loaded, filters) and whenever the box is resized
+  // (window, panel collapse).
+  const [boxMetrics, setBoxMetrics] = useState({ scrollbarWidth: 0, gridWidth: 0 });
+  const measureBox = useCallback(() => {
+    const el = remaining.ref.current;
+    if (!el) return;
+    const next = { scrollbarWidth: el.offsetWidth - el.clientWidth, gridWidth: el.scrollWidth };
+    setBoxMetrics((prev) => (prev.scrollbarWidth === next.scrollbarWidth && prev.gridWidth === next.gridWidth ? prev : next));
+  }, [remaining.ref]);
+  useLayoutEffect(measureBox);
+  useEffect(() => {
+    const el = remaining.ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measureBox);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [visible, storable, measureBox, remaining.ref]);
+
   const onScroll = (event) => {
     const el = event.currentTarget;
-    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - NEAR_BOTTOM_PX;
-    if (nearBottom && state.hasMore && !state.loading && !state.loadingMore) loadPage(state.rows.length);
+    if (totalRef.current) totalRef.current.scrollLeft = el.scrollLeft;
+    if (shouldLoadNextPage(el, state)) loadPage(state.rows.length);
   };
 
-  const toggleSort = (key) => {
-    if (!isMovementsSortKey(key)) return;
-    setSort((prev) => (prev.key === key ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: 'asc' }));
-  };
+  const toggleSort = (key) => requestMovementsSort(setSort, key);
 
   // Nothing to show while the product is unsaved (DetailView disables the tab, but a route state can
   // still open it) or not stocked.
   if (!visible || !storable) return null;
 
+  const emptyKind = resolveMovementsEmptyKind({ filters, probe: probeAnswer });
+  const totalRow = resolveTotalRow({ entry: totalsEntryFor(totals, totalsKey), state, pageEmpty });
+
   // `aria-sort` belongs on the header cell, and only the column the list is sorted by carries a direction.
-  const ariaSort = (key) => (sort.key === key ? ARIA_SORT[sort.direction] : 'none');
+  const ariaSort = (key) => ariaSortFor(sort, key);
 
   const header = (key, labelKey, align) => (
     <SortableHeaderLabel
@@ -264,52 +601,35 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
 
   return (
     <div className="flex flex-col gap-3" data-testid="product-movements-tab">
-      <div className="flex flex-wrap items-center gap-2">
-        <div role="group" aria-label={ui('productMovementsDirection')} className="inline-flex h-10 items-center gap-1 rounded-xl p-1" style={SEGMENT_TRACK} data-testid="product-movements-direction">
-          {[['all', 'all'], ['in', 'productMovementsIn'], ['out', 'productMovementsOut']].map(([value, labelKey]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={direction === value}
-              onClick={() => setDirection(value)}
-              className={`h-8 rounded-lg px-3 text-sm transition-all${direction === value ? ' shadow-sm' : ''}`}
-              style={direction === value ? SEGMENT_ACTIVE : SEGMENT_IDLE}
-            >
-              {ui(labelKey)}
-            </button>
-          ))}
-        </div>
-        <DateRangePopover
-          value={dateRange}
-          onChange={setDateRange}
-          extraPresets={MOVEMENTS_EXTRA_PRESETS}
-          data-testid="DateRangePopover__763719" />
-        <Select
-          value={warehouseId ?? 'all'}
-          onValueChange={(value) => setWarehouseId(value === 'all' ? null : value)}
-          data-testid="Select__763719">
-          <SelectTrigger className="w-[200px]" aria-label={ui('productMovementsWarehouse')} data-testid="product-movements-warehouse">
-            <SelectValue data-testid="SelectValue__763719" />
-          </SelectTrigger>
-          <SelectContent data-testid="SelectContent__763719">
-            <SelectItem value="all" data-testid="SelectItem__763719">{ui('productMovementsAllWarehouses')}</SelectItem>
-            {warehouses.map((w) => <SelectItem key={w.id} value={w.id} data-testid="SelectItem__763719">{w.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      <MovementsFilterBar
+        ui={ui}
+        direction={direction}
+        onDirectionChange={setDirection}
+        dateRange={dateRange}
+        onDateRangeChange={setDateRange}
+        warehouseId={warehouseId}
+        onWarehouseChange={setWarehouseId}
+        warehouses={warehouses}
+        data-testid="MovementsFilterBar__763719" />
 
+      {/* The table block bleeds edge to edge (same classes as the total row below). */}
+      <div className="-ml-2 -mr-4 flex flex-col" data-testid="product-movements-block">
       {/* A keyboard user must be able to focus the scrollable list to scroll it and load the next page. */}
       <div
         role="table"
         aria-label={ui('productMovements')}
         aria-busy={state.loading || state.loadingMore}
         tabIndex={0}
-        ref={scrollBox.ref}
-        style={scrollBox.style}
+        ref={remaining.ref}
+        style={scrollBoxStyle}
         // `relative` is load-bearing: the rows hold `sr-only` (position:absolute) spans, and an absolute box whose
         // containing block is OUTSIDE this scroll container is not clipped by it, so every loaded row kept adding
         // its static position to the content column's scrollable height (blank page after scrolling).
-        className="relative max-h-[calc(100vh-420px)] min-h-[200px] overflow-y-auto rounded-lg border border-border"
+        // ETP-5889: the block that wraps this box bleeds to the card edges like the document lines of a standard
+        // window (`-ml-2 -mr-4`: DetailView wraps a custom tab in `p-2` and Product's content column adds `pr-2`,
+        // index.jsx); the filter bar above keeps the 8px inset. `scrollbar-gutter: stable` keeps the grid width
+        // the same whether or not rows overflow, so the total row below can match it.
+        className="relative flex max-h-[calc(100vh-420px)] flex-col overflow-y-auto [scrollbar-gutter:stable]"
         onScroll={onScroll}
         data-testid="product-movements-scroll">
         <div role="row" className={`${GRID} sticky top-0 z-30 border-b border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground`}>
@@ -326,24 +646,17 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
           </span>
         </div>
 
-        {state.loading ? Array.from({ length: SKELETON_ROWS }, (_, i) => (
-          <div key={i} aria-hidden="true" className={`${GRID} border-b border-border/50 px-3 py-3`} data-testid="product-movements-skeleton">
-            {Array.from({ length: 6 }, (__, j) => <Skeleton key={j} className="h-4 w-full" data-testid="Skeleton__763719" />)}
-          </div>
-        )) : null}
+        {state.loading ? <MovementsSkeleton data-testid="MovementsSkeleton__763719" /> : null}
 
         {state.error ? (
-          <div className="flex flex-col items-center gap-3 p-6 text-center" role="alert" data-testid="product-movements-error">
-            <p className="text-sm text-destructive">{ui('productMovementsError')}</p>
-            {/* A failed first load starts again; a failed page asks for that same page again. */}
-            <Button type="button" variant="outline" size="sm" onClick={() => loadPage(state.rows.length)} data-testid="product-movements-retry">
-              {ui('retry')}
-            </Button>
-          </div>
+          <MovementsError
+            ui={ui}
+            onRetry={retryMovements(state, setProbe, loadPage)}
+            data-testid="MovementsError__763719" />
         ) : null}
 
-        {!state.loading && !state.error && state.rows.length === 0
-          ? <EmptyMovements ui={ui} data-testid="EmptyMovements__763719" /> : null}
+        {pageEmpty && emptyKind === 'none' ? <NoMovementsYet ui={ui} data-testid="NoMovementsYet__763719" /> : null}
+        {pageEmpty && emptyKind === 'filtered' ? <NoMovementsForFilters ui={ui} data-testid="NoMovementsForFilters__763719" /> : null}
 
         {state.rows.map((row) => <MovementRow
           key={row.id}
@@ -353,9 +666,22 @@ export default function ProductMovementsTab({ data, apiBaseUrl, isActive, onVisi
           data-testid="MovementRow__763719" />)}
 
         {state.loadingMore ? (
-          <div className="flex justify-center py-3"><Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__763719" /></div>
+          <div className="flex justify-center py-3"><CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__763719" /></div>
         ) : null}
+        </div>
       </div>
+
+      {/* A sibling of the block, not a child: a sticky element cannot leave its containing block, so inside the
+          block (whose top is the table's) it overflowed the card bottom whenever the table started within a
+          row's height of it. Here its range is the whole tab, filter bar included. */}
+      <MovementsTotalRow
+        ref={totalRef}
+        boxRef={remaining.ref}
+        ui={ui}
+        row={totalRow}
+        scrollbarWidth={boxMetrics.scrollbarWidth}
+        gridWidth={boxMetrics.gridWidth}
+        data-testid="MovementsTotalRow__763719" />
     </div>
   );
 }

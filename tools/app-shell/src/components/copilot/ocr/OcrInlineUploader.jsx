@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, Loader2, CheckCircle2, AlertCircle, X } from 'lucide-react';
+import {
+  UploadSimpleIcon,
+  CircleNotchIcon,
+  CheckCircleIcon,
+  WarningCircleIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 
 const LazyUploadedFileViewer = lazy(() => import('@/windows/custom/shared/UploadedFileViewer.jsx'));
 import { useUI } from '@/i18n';
@@ -216,7 +222,7 @@ export default function OcrInlineUploader({
       {file ? (
         <div className="flex min-h-0 flex-1 flex-col gap-2 rounded-xl border-2 border-dashed border-border-control bg-card p-3">
           <div className="flex items-center gap-2 text-xs">
-            <Upload
+            <UploadSimpleIcon
               className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
               data-testid="Upload__5fab8d" />
             <span className="truncate font-medium text-foreground">{file.name}</span>
@@ -230,7 +236,7 @@ export default function OcrInlineUploader({
               className="ml-auto text-muted-foreground hover:text-foreground disabled:opacity-50"
               aria-label={ui('cancel')}
             >
-              <X className="h-4 w-4" data-testid="X__5fab8d" />
+              <XIcon className="h-4 w-4" data-testid="X__5fab8d" />
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-hidden rounded-md bg-muted">
@@ -238,7 +244,7 @@ export default function OcrInlineUploader({
               <Suspense
                 fallback={(
                   <div className="flex h-full items-center justify-center text-muted-foreground">
-                    <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__5fab8d" />
+                    <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__5fab8d" />
                   </div>
                 )}
                 data-testid="Suspense__5fab8d">
@@ -272,7 +278,7 @@ export default function OcrInlineUploader({
           }`}
         >
           <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-border-control bg-card">
-            <Upload className="h-5 w-5 text-muted-foreground" data-testid="Upload__5fab8d" />
+            <UploadSimpleIcon className="h-5 w-5 text-muted-foreground" data-testid="Upload__5fab8d" />
           </div>
           <div className="text-sm font-medium text-foreground">
             {ui('ocrSidePanelDropTitle')}
@@ -288,19 +294,19 @@ export default function OcrInlineUploader({
           and before the gutter fix that also resized and redrew the PDF preview. */}
       {status === 'uploading' && (
         <div className="flex items-center gap-2 overflow-hidden text-xs text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" data-testid="Loader2__5fab8d" />
+          <CircleNotchIcon className="h-3 w-3 animate-spin" data-testid="Loader2__5fab8d" />
           {ui('ocrUploading')}
         </div>
       )}
       {(status === 'extracting' || applying) && (
         <div className="flex items-center gap-2 overflow-hidden text-xs text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" data-testid="Loader2__5fab8d" />
+          <CircleNotchIcon className="h-3 w-3 animate-spin" data-testid="Loader2__5fab8d" />
           {ui('ocrExtracting')}
         </div>
       )}
       {status === 'error' && (
         <div className="flex items-start gap-2 text-xs text-destructive">
-          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
+          <WarningCircleIcon className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
           <span>{ERROR_MESSAGE_KEYS[error] ? ui(ERROR_MESSAGE_KEYS[error]) : (error || ui('ocrFailed'))}</span>
           {file && RETRYABLE_ERRORS.has(error) && (
             <button
@@ -317,19 +323,19 @@ export default function OcrInlineUploader({
       {/* ETP-5654 — the blocking receiver-tax-id mismatch, inline like the extraction error. */}
       {result?.blocked && !applying && (
         <div className="flex items-start gap-2 text-xs text-destructive" data-testid="ocr-blocked-message">
-          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
+          <WarningCircleIcon className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
           <span>{result.blocked}</span>
         </div>
       )}
       {pickError && (
         <div role="alert" className="flex items-start gap-2 text-xs text-destructive">
-          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
+          <WarningCircleIcon className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
           <span>{pickError}</span>
         </div>
       )}
       {ocrConfig.status === 'error' && (
         <div className="flex items-start gap-2 text-xs text-destructive" data-testid="ocr-config-error">
-          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
+          <WarningCircleIcon className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
           <span>{ui('ocrConfigUnavailable')}</span>
           <button
             type="button"
@@ -345,7 +351,7 @@ export default function OcrInlineUploader({
           `result` behind and used to show the success check. */}
       {result?.committed && status === 'done' && !applying && (
         <div className="flex items-center gap-2 text-xs text-status-success-foreground">
-          <CheckCircle2 className="h-3 w-3" data-testid="CheckCircle2__5fab8d" />
+          <CheckCircleIcon className="h-3 w-3" data-testid="CheckCircle2__5fab8d" />
           {ui('ocrDone')}
           {result.linesCreated > 0 && ` · ${ui('ocrLinesCreated', { count: result.linesCreated })}`}
           {result.linesFailed > 0 && (

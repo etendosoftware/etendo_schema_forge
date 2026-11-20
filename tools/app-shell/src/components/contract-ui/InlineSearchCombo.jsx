@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Check } from 'lucide-react';
+import { CaretDownIcon, CheckIcon } from '@phosphor-icons/react';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { useUI } from '@/i18n';
@@ -404,6 +404,9 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           bottom: window.innerHeight - rect.top + 4,
           maxHeight,
           zIndex: 1000,
+          // Portaled to <body>: inside a modal Radix dialog (the invoice-inbox review drawer) body has
+          // `pointer-events: none`, so without this the options cannot be clicked (as CreatableSearchSelect).
+          pointerEvents: 'auto',
         }
       : {
           position: 'fixed',
@@ -414,6 +417,9 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           top: rect.bottom + 4,
           maxHeight,
           zIndex: 1000,
+          // Portaled to <body>: inside a modal Radix dialog (the invoice-inbox review drawer) body has
+          // `pointer-events: none`, so without this the options cannot be clicked (as CreatableSearchSelect).
+          pointerEvents: 'auto',
         };
     setDropdownStyle(style);
   }, [anchorRight]);
@@ -691,7 +697,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
         }}
         aria-label={`Toggle ${placeholder} options`}
       >
-        <ChevronDown className="h-4 w-4" data-testid={"ChevronDown__" + field.id} />
+        <CaretDownIcon className="h-4 w-4" data-testid={"ChevronDown__" + field.id} />
       </button>
       {open && (filtered.length > 0 || loadingFirstPage) && dropdownStyle && createPortal(
         <div
@@ -793,7 +799,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
                   onMouseEnter={() => setActiveIndex(index)}
                 >
                   {isSelected && (
-                    <Check
+                    <CheckIcon
                       aria-hidden="true"
                       className="h-4 w-4 shrink-0 text-primary"
                       data-testid={`inline-add-option-${field.key}-${opt.id}-selected-indicator`} />

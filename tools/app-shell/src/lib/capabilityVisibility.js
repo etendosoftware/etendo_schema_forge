@@ -48,6 +48,16 @@ export const PRODUCT_MOVEMENTS_CAPABILITY = 'productMovements';
  */
 export const INVOICE_INBOX_CAPABILITY = 'invoiceInbox';
 
+/**
+ * ETP-6148 — the capability that switches on SEPA remittances: the Remittance menu entry and page,
+ * and the SEPA mandate section of a contact. (There is no per-account switch: Bank accounts get the
+ * remittance payment methods when they are created, server-side.) Served by
+ * `SFWindowAccessMap` as `capabilities.sepaRemittances`: the backend evaluates the per-account
+ * feature flag `sepa-remittances` (the same evaluator that gates the remittance handlers) and the
+ * browser never does. Fails closed.
+ */
+export const SEPA_REMITTANCES_CAPABILITY = 'sepaRemittances';
+
 // The generic posting actions served by `DocumentPostingService` for every
 // postable document. A structural contract, not an entity name.
 const POSTING_ACTIONS = new Set(['post', 'unpost']);

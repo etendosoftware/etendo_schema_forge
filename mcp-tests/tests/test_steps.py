@@ -16,7 +16,7 @@ from pathlib import Path
 
 from runner.steps import StepError, parse_steps, resolve_refs, run_steps
 from runner.fixture import MARKER_RE
-from runner.suite import attempt_marker, interpolate, interpolate_args, load_suite, probe_tag
+from runner.suite import FILES_DIR, attempt_marker, interpolate, interpolate_args, load_suite, probe_tag
 
 
 def _suite(text: str) -> Path:
@@ -449,6 +449,93 @@ class SuiteV2Test(unittest.TestCase):
             expectEffect: { tool: t, args: {}, where: { a: 1 } }
         """
         self._rejects(v1, "where")
+
+
+    # ETP-6236: the routine of the "Etendo + routine" column.
+    ROUTINE = """
+        routine:
+          name: invoice-debt
+          description: Reads what an invoice still owes
+          params: { doc: { type: string, required: true, description: Document number } }
+          steps: [{ id: inv, tool: etendo_list, args: { filters: { documentNo: "$param.doc" } } }]
+"""
+
+    def test_a_routine_resolves_with_its_platform(self):
+        suite = self._load(V2.replace("        expectAnswer: [{ number: 121, tolerance: 0.01 }]\n",
+                                      "        expectAnswer: [{ number: 121, tolerance: 0.01 }]\n" + self.ROUTINE))
+        routine = suite.probes[0].for_platform("etendo-go").routine
+        self.assertEqual(routine.name, "invoice-debt")
+        self.assertEqual(routine.save_args(), {
+            "mode": "save", "name": "invoice-debt", "description": "Reads what an invoice still owes",
+            "steps": [{"id": "inv", "tool": "etendo_list",
+                       "args": {"filters": {"documentNo": "$param.doc"}}}],
+            "params": {"doc": {"type": "string", "required": True, "description": "Document number"}}})
+        self.assertIsNone(self._load(V2).probes[0].for_platform("etendo-go").routine)
+
+    def test_a_routine_is_etendo_only_and_well_formed(self):
+        holded = V2.replace(
+            '        notPossible: { kind: setup, reason: "no invoices", missingTools: [create_invoice] }\n',
+            "        expectAnswer: [{ number: 121, tolerance: 0.01 }]\n" + self.ROUTINE)
+        self._rejects(holded, "Etendo GO MCP feature")
+        anchor = "        expectAnswer: [{ number: 121, tolerance: 0.01 }]\n"
+        self._rejects(V2.replace(anchor, anchor + self.ROUTINE.replace("invoice-debt", "Invoice Debt")),
+                      "routine.name")
+        self._rejects(V2.replace(anchor, anchor + self.ROUTINE.replace(
+            "description: Reads what an invoice still owes", "description: ''")), "routine.description")
+
+    def test_a_probe_hands_the_agent_only_files_that_exist(self):
+        with_file = V2.replace("    category: query\n", "    category: query\n    files: [supplier-invoice-photo.jpeg]\n")
+        self.assertEqual(self._load(with_file).probes[0].files, ("supplier-invoice-photo.jpeg",))
+        self.assertEqual(self._load(V2).probes[0].files, ())
+        self._rejects(with_file.replace("supplier-invoice-photo.jpeg", "missing.jpeg"), "not a file name")
+        self._rejects(with_file.replace("supplier-invoice-photo.jpeg", "../suites/okr.yaml"), "not a file name")
+
+
+class UploadToolTest(unittest.TestCase):
+    """agent.upload_tool: PUTs a handed-over file's bytes to the URL the MCP gave (ETP-5850)."""
+
+    def setUp(self):
+        import http.server
+        import threading
+
+        received = self.received = []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_PUT(self):  # noqa: N802 - http.server API
+                received.append((self.headers["Content-Type"],
+                                 self.rfile.read(int(self.headers["Content-Length"]))))
+                self.send_response(201)
+                self.end_headers()
+                self.wfile.write(b'{"ok":true}')
+
+            def log_message(self, *_args):
+                pass
+
+        self.server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}/upload/token"
+        self.photo = FILES_DIR / "supplier-invoice-photo.jpeg"
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+    def _upload(self, file_name, url):
+        import asyncio
+
+        from runner.agent import upload_tool
+        tool = upload_tool({"supplier-invoice-photo.jpeg": self.photo})
+        return asyncio.run(tool.ainvoke({"file_name": file_name, "url": url}))
+
+    def test_it_puts_the_file_bytes_and_reports_the_status(self):
+        answer = self._upload("supplier-invoice-photo.jpeg", self.url)
+        self.assertTrue(answer.startswith("HTTP 201"), answer)
+        self.assertEqual(self.received, [("image/jpeg", self.photo.read_bytes())])
+
+    def test_a_file_the_agent_was_not_given_is_never_sent(self):
+        answer = self._upload("other.pdf", self.url)
+        self.assertIn("No file named", answer)
+        self.assertEqual(self.received, [])
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ vi.mock('@/components/contract-ui', () => ({
   EntityForm: () => <div data-testid="entity-form" />,
 }));
 
-vi.mock('lucide-react', () => {
+vi.mock('@phosphor-icons/react', () => {
   const isReserved = (prop) => typeof prop !== 'string' || prop === 'then' || prop === '__esModule';
   return new Proxy({}, {
     has: (_t, prop) => !isReserved(prop),

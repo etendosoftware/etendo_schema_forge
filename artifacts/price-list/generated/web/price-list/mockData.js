@@ -252,7 +252,7 @@ export const productPrice = [
     "product": "Laptop Pro 15",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 99.44,
     "algorithm": "Sample algorithm",
     "priceListId": "mock-priceList-001"
   },
@@ -261,7 +261,7 @@ export const productPrice = [
     "product": "USB-C Cable",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 96.94,
     "algorithm": "Sample algorithm",
     "priceListId": "mock-priceList-002"
   },
@@ -270,7 +270,7 @@ export const productPrice = [
     "product": "Wireless Mouse",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 12.48,
     "algorithm": "Sample algorithm",
     "priceListId": "mock-priceList-003"
   },
@@ -279,7 +279,7 @@ export const productPrice = [
     "product": "Mechanical Keyboard",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 96.31,
     "algorithm": "Sample algorithm",
     "priceListId": "mock-priceList-004"
   },
@@ -288,7 +288,7 @@ export const productPrice = [
     "product": "Monitor 27\"",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 31.27,
     "algorithm": "Sample algorithm",
     "priceListId": "mock-priceList-005"
   },
@@ -297,7 +297,7 @@ export const productPrice = [
     "product": "Webcam HD",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 76.52,
     "algorithm": "Sample algorithm",
     "priceListId": "mock-priceList-006"
   },
@@ -306,7 +306,7 @@ export const productPrice = [
     "product": "Headset Pro",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 2.66,
     "algorithm": "Sample algorithm",
     "priceListId": "mock-priceList-007"
   },
@@ -315,7 +315,7 @@ export const productPrice = [
     "product": "Docking Station",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 10.03,
     "algorithm": "Sample algorithm",
     "priceListId": "mock-priceList-008"
   },
@@ -324,7 +324,7 @@ export const productPrice = [
     "product": "SSD 1TB",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 93.97,
     "algorithm": "Sample algorithm",
     "priceListId": "mock-priceList-009"
   },
@@ -333,7 +333,7 @@ export const productPrice = [
     "product": "RAM 16GB",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 1.1,
     "algorithm": "Sample algorithm",
     "priceListId": "mock-priceList-010"
   },
@@ -342,7 +342,7 @@ export const productPrice = [
     "product": "Power Supply 750W",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 79.99,
     "algorithm": "Sample algorithm",
     "priceListId": "mock-priceList-011"
   },
@@ -351,7 +351,7 @@ export const productPrice = [
     "product": "Network Switch",
     "standardPrice": "Sample standardPrice",
     "listPrice": "Sample listPrice",
-    "cost": "Sample cost",
+    "cost": 53.61,
     "algorithm": "Sample algorithm",
     "priceListId": "mock-priceList-012"
   }

@@ -176,7 +176,7 @@
   },
   "entities": {
     "businessPartner": {
-      "agentPrompt": "A new contact has no billing preferences of its own: price list, payment terms, payment method, financial account and blocking, for sales and for purchases. The ones you send on create are saved; the others stay empty until you set them with etendo_update, as in the app.",
+      "agentPrompt": "A new contact has no billing preferences of its own: price list, payment terms, payment method, financial account and blocking, for sales and for purchases. The ones you send on create are saved; the others stay empty until you set them with etendo_update, as in the app. A link for the customer to see their quotations, orders, shipments and invoices is the customer portal link: run the action portalLink on the contact (etendo_action). The contact's record URL (recordUrlTemplate) only opens for users of the app, never give it to a customer.",
       "fields": {
         "tbaiIssimplifiedinv": {
           "visibility": "editable",
@@ -198,6 +198,24 @@
           "grid": false,
           "section": "principal",
           "label": "SII Key List"
+        },
+        "obsepadMandateIdentifier": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "section": "principal",
+          "label": "Mandate Identification",
+          "visibleWhenCapability": "sepaRemittances",
+          "_note": "ETP-6148 — customer SEPA mandate (OBSEPAD column). Rendered by the custom SepaMandateSection in ContactsFinancialPanel, not by the generated form. Behind the sepa-remittances flag, BusinessPartnerHandler defaults a blank value to the contact's taxID and drops the key from the write body while the flag is off."
+        },
+        "obsepadMandateDate": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false,
+          "section": "principal",
+          "label": "Mandate Date of Signature",
+          "visibleWhenCapability": "sepaRemittances",
+          "_note": "ETP-6148 — customer SEPA mandate signature date (OBSEPAD column). Rendered by SepaMandateSection. Behind the sepa-remittances flag, BusinessPartnerHandler defaults an empty value to the contact's creation date (today on create)."
         },
         "employee": {
           "visibility": "editable",
@@ -221,7 +239,11 @@
           "searchable": true,
           "section": "principal",
           "order": 2,
-          "publicApi": { "exposed": true, "name": "name", "required": true }
+          "publicApi": {
+            "exposed": true,
+            "name": "name",
+            "description": "Name of the contact. Required for a company (is_person false or omitted). For a person Etendo derives it from first_name and last_name: send none; a value other than first name + last name is refused."
+          }
         },
         "etgoFirstname": {
           "visibility": "editable",
@@ -229,7 +251,12 @@
           "grid": false,
           "section": "principal",
           "order": 4,
-          "required": true
+          "required": true,
+          "publicApi": {
+            "exposed": true,
+            "name": "firstName",
+            "description": "First name of a person. Required when is_person is true. Refused for a company, and on a create without is_person true."
+          }
         },
         "etgoLastname": {
           "visibility": "editable",
@@ -237,12 +264,22 @@
           "grid": false,
           "section": "principal",
           "order": 5,
-          "required": true
+          "required": true,
+          "publicApi": {
+            "exposed": true,
+            "name": "lastName",
+            "description": "Last name of a person. Required when is_person is true. Refused for a company, and on a create without is_person true."
+          }
         },
         "etgoIsperson": {
           "visibility": "editable",
           "form": false,
-          "grid": false
+          "grid": false,
+          "publicApi": {
+            "exposed": true,
+            "name": "isPerson",
+            "description": "true for a person, false for a company. A contact created without it is a company, so a create that sends first_name or last_name without is_person true is refused. A person sends first_name and last_name; a company sends name. Switching a contact to a company clears its first and last name."
+          }
         },
         "eTGOLocation": {
           "visibility": "readOnly",
@@ -275,7 +312,13 @@
           "required": true,
           "label": "Contact Category",
           "reference": "BusinessPartnerCategory",
-          "inputMode": "selector"
+          "inputMode": "selector",
+          "publicApi": {
+            "exposed": true,
+            "name": "category",
+            "lookup": true,
+            "description": "Category of the contact. When omitted on create, Etendo assigns the default category."
+          }
         },
         "description": {
           "visibility": "editable",
@@ -287,7 +330,11 @@
           "visibility": "editable",
           "section": "principal",
           "order": 7,
-          "publicApi": { "exposed": true, "name": "taxId" }
+          "publicApi": {
+            "exposed": true,
+            "name": "taxId",
+            "description": "Tax identification number. Etendo validates it for the kind in tax_id_key and refuses an invalid one."
+          }
         },
         "oBTIKVIESStatus": {
           "visibility": "readOnly",
@@ -300,6 +347,11 @@
         "oBTIKTaxIDKey": {
           "visibility": "editable",
           "order": 6,
+          "publicApi": {
+            "exposed": true,
+            "name": "taxIdKey",
+            "description": "Kind of tax id held in tax_id. When omitted, Etendo applies the default kind before it validates tax_id."
+          },
           "enumValues": [
             {
               "value": "1",
@@ -436,7 +488,12 @@
           "grid": true,
           "form": false,
           "section": "principal",
-          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.vendor.md"
+          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.vendor.md",
+          "publicApi": {
+            "exposed": true,
+            "name": "isVendor",
+            "description": "true when the contact can be used on purchase documents; a purchase order only accepts a vendor as its contact. When omitted on create, Etendo applies the default (false), or the type defined by the contact's category."
+          }
         },
         "purchasePricelist": {
           "visibility": "editable",
@@ -452,7 +509,8 @@
           "reference": "PaymentMethod",
           "inputMode": "selector",
           "section": "principal",
-          "displayLogic": "record.vendor"
+          "displayLogic": "record.vendor",
+          "publicApi": { "exposed": true, "lookup": { "context": { "FIN_ISRECEIPT": "N" } } }
         },
         "pOPaymentTerms": {
           "visibility": "editable",
@@ -483,7 +541,12 @@
           "grid": true,
           "form": false,
           "section": "principal",
-          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.customer.md"
+          "agentPrompt": "#REF#agent-prompts/contacts/business-partner.customer.md",
+          "publicApi": {
+            "exposed": true,
+            "name": "isCustomer",
+            "description": "true when the contact can be used on sales documents. When omitted on create, Etendo applies the default (true), or the type defined by the contact's category."
+          }
         },
         "priceList": {
           "visibility": "editable",
@@ -499,7 +562,8 @@
           "reference": "PaymentMethod",
           "inputMode": "selector",
           "section": "principal",
-          "displayLogic": "record.customer"
+          "displayLogic": "record.customer",
+          "publicApi": { "exposed": true, "lookup": { "context": { "FIN_ISRECEIPT": "Y" } } }
         },
         "paymentTerms": {
           "visibility": "editable",
@@ -815,6 +879,13 @@
         },
         "etgoWeb": {
           "visibility": "discarded"
+        },
+        "obsepadMandateIdentifier": {
+          "visibility": "discarded",
+          "_note": "ETP-6148 — the SEPA mandate is owned by the businessPartner entity, whose customization applies the sepa-remittances flag and defaults; same C_BPartner row, so it is not writable from this tab."
+        },
+        "obsepadMandateDate": {
+          "visibility": "discarded"
         }
       }
     },
@@ -828,6 +899,13 @@
         },
         "etgoWeb": {
           "visibility": "discarded"
+        },
+        "obsepadMandateIdentifier": {
+          "visibility": "discarded",
+          "_note": "ETP-6148 — the SEPA mandate is owned by the businessPartner entity, whose customization applies the sepa-remittances flag and defaults; same C_BPartner row, so it is not writable from this tab."
+        },
+        "obsepadMandateDate": {
+          "visibility": "discarded"
         }
       }
     },
@@ -840,6 +918,13 @@
           "visibility": "discarded"
         },
         "etgoWeb": {
+          "visibility": "discarded"
+        },
+        "obsepadMandateIdentifier": {
+          "visibility": "discarded",
+          "_note": "ETP-6148 — the SEPA mandate is owned by the businessPartner entity, whose customization applies the sepa-remittances flag and defaults; same C_BPartner row, so it is not writable from this tab."
+        },
+        "obsepadMandateDate": {
           "visibility": "discarded"
         }
       }

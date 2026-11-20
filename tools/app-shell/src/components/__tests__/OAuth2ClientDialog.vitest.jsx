@@ -9,10 +9,10 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('lucide-react', () => ({
-  Copy: (p) => <span {...p} />,
-  AlertTriangle: (p) => <span {...p} />,
-  Loader2: (p) => <span {...p} />,
+vi.mock('@phosphor-icons/react', () => ({
+  CopyIcon: (p) => <span {...p} />,
+  WarningIcon: (p) => <span {...p} />,
+  CircleNotchIcon: (p) => <span {...p} />,
 }));
 
 vi.mock('@/components/ui/dialog', () => ({

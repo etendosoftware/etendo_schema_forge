@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { UploadIcon } from '@/components/ui/custom-icons';
+import { UploadSimpleIcon } from '@phosphor-icons/react';
 import { buildAcceptAttribute, isFileTypeAllowed } from './attachmentPolicy';
 
 /*
@@ -163,7 +163,7 @@ export default function UploadDropzone({ onFiles, config = {}, disabled = false 
         disabled={disabled}
         className="flex items-center justify-center w-8 h-8 bg-card border border-border rounded-lg shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-muted/50 transition-colors disabled:opacity-50"
       >
-        <UploadIcon
+        <UploadSimpleIcon
           className="w-5 h-5 text-muted-foreground"
           data-testid="UploadIcon__d91a1b" />
       </button>

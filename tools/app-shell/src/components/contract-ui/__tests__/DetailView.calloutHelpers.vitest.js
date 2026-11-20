@@ -525,6 +525,185 @@ describe('applyCalloutFieldUpdates — ETP-4772 stale response guard', () => {
   });
 });
 
+// A callout update may be SUGGESTED (`{ value, suggested: true }`, e.g. the remittance name
+// proposed from the due date): it fills only a field the user has never touched in this form
+// session, including one the user cleared on purpose. Without the flag the value is FORCED and
+// keeps the previous rules. Contract: docs/neo-headless-extensibility.md, "Callout updates:
+// forced vs suggested values".
+describe('applyCalloutFieldUpdates — suggested vs forced values', () => {
+  function makeArgs(overrides = {}) {
+    return {
+      data: {},
+      triggerField: 'dueDate',
+      userTouchedRef: { current: new Set() },
+      appliedFields: new Map(),
+      hook: { handleChange: vi.fn() },
+      api: {},
+      catalogs: {},
+      ...overrides,
+    };
+  }
+
+  describe('suggested values', () => {
+    it('fills a pristine empty field', () => {
+      const a = makeArgs({ data: { name: '' } });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', suggested: true } }, a);
+      expect(a.appliedFields.get('name')).toBe('Remesa 2026-11-30');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('name', 'Remesa 2026-11-30', { origin: 'callout' });
+    });
+
+    it('replaces the value of a pristine field the user never edited', () => {
+      const a = makeArgs({ data: { name: 'Remesa 2026-11-15' } });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', suggested: true } }, a);
+      expect(a.appliedFields.get('name')).toBe('Remesa 2026-11-30');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('name', 'Remesa 2026-11-30', { origin: 'callout' });
+    });
+
+    it('bumps the field generation when it is applied to a pristine field', () => {
+      const fieldGenerationRef = { current: { name: 1 } };
+      const a = makeArgs({ dispatchSnapshot: { name: 1 }, fieldGenerationRef });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', suggested: true } }, a);
+      expect(a.appliedFields.get('name')).toBe('Remesa 2026-11-30');
+      expect(fieldGenerationRef.current.name).toBe(2);
+    });
+
+    it('skips a touched field that holds a value', () => {
+      const a = makeArgs({
+        data: { name: 'My remittance' },
+        userTouchedRef: { current: new Set(['name']) },
+      });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', suggested: true } }, a);
+      expect(a.appliedFields.has('name')).toBe(false);
+      expect(a.hook.handleChange).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['an empty string', ''],
+      ['null', null],
+      ['undefined', undefined],
+    ])('skips a touched field the user cleared to %s', (_label, cleared) => {
+      const a = makeArgs({
+        data: { name: cleared },
+        userTouchedRef: { current: new Set(['name']) },
+      });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', suggested: true } }, a);
+      expect(a.appliedFields.has('name')).toBe(false);
+      expect(a.hook.handleChange).not.toHaveBeenCalled();
+    });
+
+    it('skips a touched field even when it is the trigger field', () => {
+      const a = makeArgs({
+        triggerField: 'name',
+        data: { name: 'My remittance' },
+        userTouchedRef: { current: new Set(['name']) },
+      });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', suggested: true } }, a);
+      expect(a.appliedFields.has('name')).toBe(false);
+      expect(a.hook.handleChange).not.toHaveBeenCalled();
+    });
+
+    it('skips only the touched field and still applies the rest of the same response', () => {
+      const a = makeArgs({
+        data: { name: '', description: '' },
+        userTouchedRef: { current: new Set(['name']) },
+      });
+      applyCalloutFieldUpdates({
+        name: { value: 'Remesa 2026-11-30', suggested: true },
+        description: { value: 'Due 2026-11-30', suggested: true },
+      }, a);
+      expect(a.appliedFields.has('name')).toBe(false);
+      expect(a.appliedFields.get('description')).toBe('Due 2026-11-30');
+      expect(a.hook.handleChange).toHaveBeenCalledTimes(1);
+      expect(a.hook.handleChange).toHaveBeenCalledWith('description', 'Due 2026-11-30', { origin: 'callout' });
+    });
+
+    it('discards a stale suggested response for a pristine field before anything else', () => {
+      const fieldGenerationRef = { current: { name: 2 } };
+      const a = makeArgs({
+        data: { name: '' },
+        dispatchSnapshot: { name: 1 },
+        fieldGenerationRef,
+      });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', suggested: true } }, a);
+      expect(a.appliedFields.has('name')).toBe(false);
+      expect(a.hook.handleChange).not.toHaveBeenCalled();
+      expect(fieldGenerationRef.current.name).toBe(2);
+    });
+  });
+
+  describe('forced values (no suggested flag) keep the previous rules', () => {
+    it.each([
+      ['absent', {}],
+      ['false', { suggested: false }],
+    ])('refills a touched collateral field the user cleared (flag %s)', (_label, flag) => {
+      const a = makeArgs({
+        data: { name: '' },
+        userTouchedRef: { current: new Set(['name']) },
+      });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', ...flag } }, a);
+      expect(a.appliedFields.get('name')).toBe('Remesa 2026-11-30');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('name', 'Remesa 2026-11-30', { origin: 'callout' });
+    });
+
+    it('skips a touched collateral field while it holds a value', () => {
+      const a = makeArgs({
+        data: { name: 'My remittance' },
+        userTouchedRef: { current: new Set(['name']) },
+      });
+      applyCalloutFieldUpdates({ name: { value: 'Remesa 2026-11-30', suggested: false } }, a);
+      expect(a.appliedFields.has('name')).toBe(false);
+      expect(a.hook.handleChange).not.toHaveBeenCalled();
+    });
+
+    it('lets a touched trigger field win', () => {
+      const a = makeArgs({
+        triggerField: 'name',
+        data: { name: 'My remittance' },
+        userTouchedRef: { current: new Set(['name']) },
+      });
+      applyCalloutFieldUpdates({ name: { value: 'MY REMITTANCE' } }, a);
+      expect(a.appliedFields.get('name')).toBe('MY REMITTANCE');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('name', 'MY REMITTANCE', { origin: 'callout' });
+    });
+
+    it('re-applies the document-date cascade over a touched accounting date', () => {
+      const a = makeArgs({
+        triggerField: 'invoiceDate',
+        documentDateField: 'invoiceDate',
+        data: { accountingDate: '2026-11-01' },
+        userTouchedRef: { current: new Set(['accountingDate']) },
+      });
+      applyCalloutFieldUpdates({ accountingDate: { value: '2026-11-20' } }, a);
+      expect(a.appliedFields.get('accountingDate')).toBe('2026-11-20');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('accountingDate', '2026-11-20', { origin: 'callout' });
+    });
+
+    it('keeps a touched accounting date when another field triggered the callout', () => {
+      const a = makeArgs({
+        triggerField: 'businessPartner',
+        documentDateField: 'invoiceDate',
+        data: { accountingDate: '2026-11-01' },
+        userTouchedRef: { current: new Set(['accountingDate']) },
+      });
+      applyCalloutFieldUpdates({ accountingDate: { value: '2026-11-20' } }, a);
+      expect(a.appliedFields.has('accountingDate')).toBe(false);
+      expect(a.hook.handleChange).not.toHaveBeenCalled();
+    });
+
+    it('recalculates a touched exchange rate when the currency changes', () => {
+      const a = makeArgs({
+        triggerField: 'currency',
+        documentDateField: 'orderDate',
+        data: { eTGOCurrencyRate: 2.5 },
+        userTouchedRef: { current: new Set(['eTGOCurrencyRate']) },
+      });
+      applyCalloutFieldUpdates({ eTGOCurrencyRate: { value: 1.1 } }, a);
+      expect(a.appliedFields.get('eTGOCurrencyRate')).toBe(1.1);
+      expect(a.hook.handleChange).toHaveBeenCalledWith('eTGOCurrencyRate', 1.1, { origin: 'callout' });
+    });
+  });
+});
+
 describe('applyCalloutComboUpdates', () => {
   function makeArgs(overrides = {}) {
     return {

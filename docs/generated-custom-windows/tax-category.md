@@ -50,3 +50,14 @@ Applied the same combo used on the `tax` window to Tax Category:
 - `window.hideDelete: true` — disables the CRUD delete capability at the contract/API level (defense in depth).
 
 Generator support ships in `@etendosoftware/schema-forge-cli@0.3.6` (already installed). Regenerated via `make regen ONLY=tax-category SKIP_EXTRACT=1`. `artifacts/tax-category/generated/web/tax-category/TaxCategoryPage.jsx` now emits `hideCreate` and `hideDeleteButton` on `ListView`, `rowQuickActions={{"hideDeleteButton":true}}` on the list table, and `hideDeleteButton` on `DetailView`; `contract.json` exposes `apiPrediction.crud.taxCategory.delete: false`. `sf-validate-pipeline --scope=tax-category` reports 0 violations.
+
+## Public API — read-only `tax-category` — ETP-6174
+
+The public API publishes the window as `GET`/`LIST` only (`/api/v1/tax-category`), declared with
+`entities.taxCategory.publicApi.readOnly: true` in `decisions.json`. The window's category
+(`configuration`) is excluded by default; the window is published because it is listed in the
+generator's V1 allowlist. Every field is read-only (`out`); a write answers `404`. `tax.tax_category`
+links here.
+
+The window itself is unchanged: entity-level `publicApi` only affects the public API manifest.
+Contract: `docs/public-api.md` §3.

@@ -19,24 +19,24 @@ vi.mock('@/i18n', () => ({
 }));
 
 // ETP-5806 follow-up: the legacy-address banner renders a shared `CopyButton`
-// (`@/components/ui/copy-button.jsx`), which imports `Copy` from lucide-react in
+// (`@/components/ui/copy-button.jsx`), which imports `Copy` from @phosphor-icons/react in
 // addition to `Check`. The pre-ETP-5806 mock only listed the 5 icons this modal
 // imports directly and crashed the moment the banner mounted ("No 'Copy' export
-// is defined on the 'lucide-react' mock") — found while extending this suite for
+// is defined on the '@phosphor-icons/react' mock") — found while extending this suite for
 // ETP-5806 (uncaught exception on every test that reached `isLegacyAddress`).
 // ETP-5806 follow-up (round 2): the redesigned legacy banner and the resulting-address
-// preview badge also render `Info` and `Lock` directly from lucide-react — missing either
+// preview badge also render `Info` and `Lock` directly from @phosphor-icons/react — missing either
 // one crashes the whole suite the moment the component mounts ("No 'Info'/'Lock' export is
-// defined on the 'lucide-react' mock"), the same failure mode `Copy` had above.
-vi.mock('lucide-react', () => ({
-  X: (props) => <span data-testid="icon-x" {...props} />,
-  Loader2: (props) => <span data-testid="loader" {...props} />,
-  Search: (props) => <span data-testid="icon-search" {...props} />,
-  ChevronDown: (props) => <span data-testid="icon-chevron" {...props} />,
-  Check: (props) => <span data-testid="icon-check" {...props} />,
-  Copy: (props) => <span data-testid="icon-copy" {...props} />,
-  Info: (props) => <span data-testid="icon-info" {...props} />,
-  Lock: (props) => <span data-testid="icon-lock" {...props} />,
+// defined on the '@phosphor-icons/react' mock"), the same failure mode `Copy` had above.
+vi.mock('@phosphor-icons/react', () => ({
+  XIcon: (props) => <span data-testid="icon-x" {...props} />,
+  CircleNotchIcon: (props) => <span data-testid="loader" {...props} />,
+  MagnifyingGlassIcon: (props) => <span data-testid="icon-search" {...props} />,
+  CaretDownIcon: (props) => <span data-testid="icon-chevron" {...props} />,
+  CheckIcon: (props) => <span data-testid="icon-check" {...props} />,
+  CopyIcon: (props) => <span data-testid="icon-copy" {...props} />,
+  InfoIcon: (props) => <span data-testid="icon-info" {...props} />,
+  LockIcon: (props) => <span data-testid="icon-lock" {...props} />,
 }));
 
 vi.mock('sonner', () => ({
@@ -236,6 +236,23 @@ describe('LocationEditorModal', () => {
     renderModal();
     expect(saveButton()).toBeInTheDocument();
     expect(cancelButton()).toBeInTheDocument();
+  });
+
+  // CP-7 (ETP-5806 QA, Isa) — regression guard for the Save button's color. A previous
+  // round shipped a black/lime pattern on a misread Figma reference; it was corrected to
+  // the standard primary-action blue (matching InlineCreateModal's `inline-create-submit`).
+  // The button markup lives once in the Footer, unconditionally — same classes whether or
+  // not the legacy-address banner is showing — so this one assertion on a normal (no
+  // banner) create form guards both states; the second test below pins it explicitly for
+  // the legacy-banner-shown state too, so a future split of the two render paths cannot
+  // silently regress just one of them.
+  it('renders the Save button with the current blue classes, not the old black/lime set', () => {
+    renderModal();
+    const classList = saveButton().className;
+    expect(classList).toContain('border-primary');
+    expect(classList).toContain('bg-primary');
+    expect(classList).toContain('text-primary-foreground');
+    expect(classList).not.toMatch(/black|lime/i);
   });
 
   it('calls onClose when cancel button is clicked', () => {
@@ -776,7 +793,7 @@ describe('LocationEditorModal', () => {
 
   it('caps Street/Number/Building name inputs at their DB column lengths', () => {
     renderModal();
-    expect(streetNameInput()).toHaveAttribute('maxLength', '70');
+    expect(streetNameInput()).toHaveAttribute('maxLength', '60');
     expect(buildingNumberInput()).toHaveAttribute('maxLength', '16');
     expect(buildingNameInput()).toHaveAttribute('maxLength', '35');
   });
@@ -986,6 +1003,33 @@ describe('LocationEditorModal', () => {
       expect(banner).toHaveTextContent('Old Street 12, 3B');
     });
 
+    // CP-7 (ETP-5806 QA) — pins the Save button's blue classes specifically while the
+    // legacy-address banner IS showing, complementing the normal-state assertion above
+    // ("renders the Save button with the current blue classes..."). Both must hold: the
+    // button is declared once, unconditionally, in the Footer — but a future refactor
+    // that splits the banner-shown and normal render paths must not regress just one.
+    it('keeps the Save button on the current blue classes while the legacy-address banner is shown', async () => {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            response: { data: [{ id: 'loc-legacy-color', address: 'Old Street 12', country: 'ES', 'country$_identifier': 'Spain' }] },
+            items: [],
+            hasMore: false,
+          }),
+        }),
+      );
+
+      renderModal({ rowId: 'loc-legacy-color' });
+
+      await screen.findByTestId('location-legacy-address-banner');
+      const classList = saveButton().className;
+      expect(classList).toContain('border-primary');
+      expect(classList).toContain('bg-primary');
+      expect(classList).toContain('text-primary-foreground');
+      expect(classList).not.toMatch(/black|lime/i);
+    });
+
     it('does not show the banner when editing a record that already has structured fields', async () => {
       global.fetch = vi.fn(() =>
         Promise.resolve({
@@ -1062,6 +1106,34 @@ describe('LocationEditorModal', () => {
       expect(banner).toHaveTextContent('Calle OCR 99');
     });
 
+    // REWRITTEN (CP-7, ETP-5806 QA, Isa) — an earlier round read Figma's "Pop Up Alert"
+    // reference as showing a visible "Copiar" text button and asserted a text label. Isa
+    // confirmed the icon-only button (matching `CopyButton`'s only other call site,
+    // `CopyBlock`, which never passes `label`) was correct as-is — see `LegacyAddressLineRow`'s
+    // doc comment above. This test now guards the current, correct contract: no visible text
+    // label, only the icon, with the translated "copy" action exposed via `aria-label`/`title`
+    // for accessibility.
+    it('renders an icon-only copy button, with no visible text label', async () => {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            response: { data: [{ id: 'loc-legacy-label', address: 'Old Street 12', country: 'ES', 'country$_identifier': 'Spain' }] },
+            items: [],
+            hasMore: false,
+          }),
+        }),
+      );
+
+      renderModal({ rowId: 'loc-legacy-label' });
+
+      const copyBtn = await screen.findByTestId('location-legacy-banner-address1-copy');
+      // No visible text node — only the (mocked) icon, which renders with no text children.
+      expect(copyBtn).toHaveTextContent('');
+      expect(copyBtn).toHaveAttribute('aria-label', 'copy');
+      expect(copyBtn).toHaveAttribute('title', 'copy');
+    });
+
     // ETP-5806 follow-up round 2 — the single `location-legacy-address-copy` button was
     // replaced by one copy button PER old line (`location-legacy-banner-address1-copy` /
     // `-address2-copy`), each copying only its own line instead of the old joined
@@ -1123,10 +1195,13 @@ describe('LocationEditorModal', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Legacy-address banner — persistence and dismiss (ETP-5806 follow-up round 2)
+  // Legacy-address banner — persistence, and no dismiss control (ETP-5806 follow-up,
+  // CP-7 round — rewritten, test-reuse-policy.md point 2: the dismiss "X" tests below
+  // were replaced because the control itself was removed to match Figma's "Pop Up
+  // Alert" reference, which has no dismiss affordance on this banner.)
   // ---------------------------------------------------------------------------
 
-  describe('legacy-address banner — persistence and dismiss (ETP-5806 follow-up round 2)', () => {
+  describe('legacy-address banner — persistence and dismiss (ETP-5806 CP-7)', () => {
     function mockLegacyRecord(rowId = 'loc-legacy-persist') {
       global.fetch = vi.fn(() =>
         Promise.resolve({
@@ -1156,7 +1231,12 @@ describe('LocationEditorModal', () => {
       expect(screen.getByTestId('location-legacy-address-banner')).toBeInTheDocument();
     });
 
-    it('hides when the dismiss button is clicked', async () => {
+    // REWRITTEN (ETP-5806 CP-7, Isa) — an earlier round read Figma's "Pop Up Alert" reference
+    // as having no dismiss control and asserted the banner was NOT dismissable. Isa later
+    // confirmed the dismiss "X" should be there (see the component's doc comment above the
+    // banner); this test now guards the correct, current contract: the "X" exists and clicking
+    // it hides the banner for the current modal session.
+    it('lets the user dismiss the banner, hiding it for the current session', async () => {
       mockLegacyRecord();
       renderModal({ rowId: 'loc-legacy-persist' });
 
@@ -1167,19 +1247,35 @@ describe('LocationEditorModal', () => {
       expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
     });
 
-    it('reappears after the modal is reopened for the same record (dismiss does not persist)', async () => {
+    // Regression test for a bug fixed today (ETP-5806 QA, Isa, CP-7 follow-up): before the
+    // fix, `legacyBannerDismissed` was never reset, so dismissing the banner once suppressed
+    // the warning permanently across reopens of the SAME record even though nothing was
+    // saved. The fix resets `legacyBannerDismissed` to false on the same "Reset and load data
+    // on open" effect that reseeds `isLegacyAddress` (keyed on `open`).
+    it('shows the banner again after closing (Cancel) and reopening the same record, even though it was dismissed before closing', async () => {
       mockLegacyRecord();
-      const { rerender, props } = renderModal({ rowId: 'loc-legacy-persist' });
+      const baseProps = {
+        open: true,
+        onClose: vi.fn(),
+        onSaved: vi.fn(),
+        rowId: 'loc-legacy-persist',
+        bpId: 'bp-1',
+        apiBase: '/api/contacts',
+        token: 'tok',
+      };
+      const { rerender } = render(<LocationEditorModal {...baseProps} />);
 
       await screen.findByTestId('location-legacy-address-banner');
       fireEvent.click(screen.getByTestId('location-legacy-banner-dismiss'));
       expect(screen.queryByTestId('location-legacy-address-banner')).not.toBeInTheDocument();
 
-      // Close and reopen the same modal instance.
-      rerender(<LocationEditorModal {...props} open={false} />);
-      rerender(<LocationEditorModal {...props} open={true} />);
+      // Close the modal (Cancel) — the parent controls `open`.
+      rerender(<LocationEditorModal {...baseProps} open={false} />);
 
-      await screen.findByTestId('location-legacy-address-banner');
+      // Reopen for the SAME record — nothing was saved.
+      rerender(<LocationEditorModal {...baseProps} open={true} />);
+
+      expect(await screen.findByTestId('location-legacy-address-banner')).toBeInTheDocument();
     });
   });
 
@@ -2047,4 +2143,190 @@ describe('LocationEditorModal — structured-address-for-sepa flag OFF', () => {
     expect(capturedBody.buildingNumber).toBeNull();
     expect(capturedBody.buildingName).toBeNull();
   });
+});
+
+// ---------------------------------------------------------------------------
+// Keyboard handling — Escape closes, Enter saves (ETP-5806 QA, Isa — CP-9)
+// ---------------------------------------------------------------------------
+
+describe('LocationEditorModal — keyboard handling (ETP-5806 CP-9)', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [], hasMore: false }) }),
+    );
+    useCapabilitiesOn();
+  });
+
+  it('closes the modal when Escape is pressed', () => {
+    const onClose = vi.fn();
+    renderModal({ onClose });
+
+    fireEvent.keyDown(screen.getByTestId('location-modal'), { key: 'Escape' });
+
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('saves (via the same handleSave path as the Save button) when Enter is pressed with every mandatory field filled', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ items: [SPAIN_OPTION], hasMore: false }),
+      }),
+    );
+
+    renderModal();
+    await fillMandatoryFields();
+
+    fireEvent.keyDown(screen.getByTestId('location-modal'), { key: 'Enter' });
+
+    await vi.waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/locationAddress'),
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  it('does not save on Enter while mandatory fields are empty (same guard as clicking Save)', () => {
+    const onSaved = vi.fn();
+    renderModal({ onSaved });
+
+    fireEvent.keyDown(screen.getByTestId('location-modal'), { key: 'Enter' });
+
+    // No inline errors were shown on open, but `handleSave`'s own guard still refuses:
+    // Enter must not bypass the same `saveDisabled` check the Save button is gated on.
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('closes the open country picker on Escape instead of the whole modal', async () => {
+    const onClose = vi.fn();
+    renderModal({ onClose });
+
+    fireEvent.click(screen.getByTestId('location-field-country'));
+    // The picker's own heading ("countryLabel") also matches the field's own label text
+    // outside the picker, so target the picker by something unique to it instead.
+    await screen.findByPlaceholderText('countrySearchPlaceholder');
+
+    fireEvent.keyDown(screen.getByTestId('location-modal'), { key: 'Escape' });
+
+    expect(screen.queryByPlaceholderText('countrySearchPlaceholder')).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dynamic modal width (ETP-5806 follow-up round 3) — `modalMaxWidth` tracks the
+// measured pixel width of the wider preview pill instead of always paying for the
+// fixed 900 budget. jsdom does not implement canvas text measurement, so
+// `HTMLCanvasElement.prototype.getContext` is mocked here with a deterministic
+// per-character width so the clamp/measure logic itself can be exercised; the real
+// `canvas.measureText` call is exactly what `measurePreviewTextWidth` performs
+// (see the component's module-scope helper), only the measurement backend differs.
+// ---------------------------------------------------------------------------
+describe('LocationEditorModal — dynamic modal width (ETP-5806 follow-up round 3)', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [], hasMore: false }) }),
+    );
+    useCapabilitiesOn();
+  });
+
+  const CHAR_WIDTH_PX = 13; // chosen so a 60-char zero-space worst case clamps to the 900 ceiling
+    let measureTextMock;
+
+    beforeEach(() => {
+      measureTextMock = vi.fn((text) => ({ width: String(text ?? '').length * CHAR_WIDTH_PX }));
+      vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+        font: '',
+        measureText: measureTextMock,
+      });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      // `vi.restoreAllMocks()` above also restores the outer describe's `global.fetch`
+      // spy target, but `global.fetch` itself is a plain assignment (not a spy) in the
+      // outer `beforeEach`, so the next test's `beforeEach` still re-assigns it fresh.
+    });
+
+    /** The modal's card element — the direct child of the `location-modal` dialog whose
+     * inline `maxWidth` is `modalMaxWidth`. There is no dedicated `data-testid` for it. */
+    function modalCard() {
+      return screen.getByTestId('location-modal').firstElementChild;
+    }
+
+    function mockLegacyRecordWithLines(rowId, address, address2 = '') {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            response: { data: [{ id: rowId, address, address2, country: 'ES', 'country$_identifier': 'Spain' }] },
+            items: [],
+            hasMore: false,
+          }),
+        }),
+      );
+    }
+
+    it('clamps to the 560 floor for a short/typical address instead of defaulting to 900', async () => {
+      mockLegacyRecordWithLines('loc-width-short', 'Avenida Principal 100', '');
+      renderModal({ rowId: 'loc-width-short' });
+
+      await screen.findByTestId('location-resulting-address1');
+      expect(modalCard()).toHaveStyle({ maxWidth: '560px' });
+    });
+
+    it('drives the width up toward the 900 ceiling for a 60-char, zero-space Primera línea', async () => {
+      const worstCaseLine1 = 'W'.repeat(60);
+      mockLegacyRecordWithLines('loc-width-line1', worstCaseLine1, '');
+      renderModal({ rowId: 'loc-width-line1' });
+
+      expect((await screen.findByTestId('location-resulting-address1'))).toHaveTextContent(worstCaseLine1);
+      // 60 * 13 * 1.05 + 40 (pill chrome) + 64 (modal chrome) = 923.6 -> clamped to the 900 ceiling.
+      expect(modalCard()).toHaveStyle({ maxWidth: '900px' });
+      expect(measureTextMock).toHaveBeenCalledWith(worstCaseLine1);
+    });
+
+    it('also drives the width up for a long Segunda línea even when Primera línea is short (max-of-both-lines)', async () => {
+      const shortLine1 = 'Calle Corta';
+      const longLine2 = 'B'.repeat(60);
+      mockLegacyRecordWithLines('loc-width-line2', shortLine1, longLine2);
+      renderModal({ rowId: 'loc-width-line2' });
+
+      expect(await screen.findByTestId('location-resulting-address2')).toHaveTextContent(longLine2);
+      expect(modalCard()).toHaveStyle({ maxWidth: '900px' });
+      expect(measureTextMock).toHaveBeenCalledWith(longLine2);
+    });
+
+    it('never produces a width below 560 or above 900 regardless of input', async () => {
+      mockLegacyRecordWithLines('loc-width-clamp', 'X'.repeat(500), 'Y'.repeat(500));
+      renderModal({ rowId: 'loc-width-clamp' });
+
+      await screen.findByTestId('location-resulting-address1');
+      const width = parseInt(modalCard().style.maxWidth, 10);
+      expect(width).toBeGreaterThanOrEqual(560);
+      expect(width).toBeLessThanOrEqual(900);
+    });
+
+    it('does not attempt to measure anything and stays at the 560 floor when structuredAddressForSepa is off', () => {
+      useCapabilitiesOff();
+      renderModal();
+
+      expect(modalCard()).toHaveStyle({ maxWidth: '560px' });
+      expect(measureTextMock).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the 560 floor without throwing when the canvas 2D context is unavailable', async () => {
+      // Some privacy/extension configurations make `getContext('2d')` return null even though
+      // the canvas element itself exists — `measurePreviewTextWidth` must short-circuit to 0
+      // instead of calling `.font`/`.measureText` on a null context.
+      HTMLCanvasElement.prototype.getContext.mockReturnValue(null);
+      mockLegacyRecordWithLines('loc-width-no-ctx', 'W'.repeat(60), '');
+
+      expect(() => renderModal({ rowId: 'loc-width-no-ctx' })).not.toThrow();
+
+      await screen.findByTestId('location-resulting-address1');
+      expect(modalCard()).toHaveStyle({ maxWidth: '560px' });
+      expect(measureTextMock).not.toHaveBeenCalled();
+    });
 });

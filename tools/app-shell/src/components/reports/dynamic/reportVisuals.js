@@ -1,6 +1,8 @@
 /**
  * ETP-6080 — numbers behind the interactive report's visuals: the KPI strip and the magnitude bars.
  * Pure, so they are unit-tested apart from the components.
+ * ETP-6239: they read `amount` / `amount_ref` of rows from `rowsForMode` (reportColumns.js), i.e. the
+ * chosen comparison mode's `cells[0]` (the whole range), whatever the period columns on screen.
  */
 
 const topLevel = (rows) => {
@@ -64,6 +66,37 @@ export function kpiTrend(key, current, ref) {
   if (current == null || ref == null || current === ref) return null;
   const good = key === 'expenses' ? current < ref : current > ref;
   return good ? 'improves' : 'worsens';
+}
+
+/**
+ * The change of a KPI against the compared figure: points (`pp`) for a percentage, a relative `%`
+ * otherwise. null when there is nothing to show (a missing figure, no change, a zero reference).
+ */
+export function kpiDelta(value, refValue, percent) {
+  if (value == null || refValue == null || value === refValue) return null;
+  if (percent) return { amount: value - refValue, unit: 'pp' };
+  if (!refValue) return null;
+  return { amount: ((value - refValue) / Math.abs(refValue)) * 100, unit: '%' };
+}
+
+const KPI_IDS = ['income', 'expenses', 'result', 'margin'];
+
+/**
+ * The four headline cards as plain data, for the screen and for the PDF (which receives them in
+ * its render params): `{ id, percent, value, refValue, compare, delta, trend, up, tone }`. `delta`
+ * and `trend` are null without a comparison; `tone` ('positive' / 'negative' / null) is the edge
+ * of the result card.
+ */
+export function kpiCards(kpis, compare) {
+  return KPI_IDS.map((id) => {
+    const value = kpis.current[id];
+    const refValue = kpis.ref[id];
+    const percent = id === 'margin';
+    const delta = compare ? kpiDelta(value, refValue, percent) : null;
+    let tone = null;
+    if (id === 'result' && value) tone = value > 0 ? 'positive' : 'negative';
+    return { id, percent, value, refValue, compare: Boolean(compare), delta, trend: compare ? kpiTrend(id, value, refValue) : null, up: value > refValue, tone };
+  });
 }
 
 /**

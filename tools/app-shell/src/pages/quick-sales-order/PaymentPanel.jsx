@@ -1,8 +1,8 @@
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
-import { Banknote, CreditCard, ArrowRightLeft, ChevronUp } from 'lucide-react';
+import { MoneyIcon, CreditCardIcon, ArrowsLeftRightIcon, CaretUpIcon } from '@phosphor-icons/react';
 
-const ICONS = { Banknote, CreditCard, ArrowRightLeft };
+const ICONS = { Banknote: MoneyIcon, CreditCard: CreditCardIcon, ArrowRightLeft: ArrowsLeftRightIcon };
 
 export default function PaymentPanel({
   visible,
@@ -34,7 +34,7 @@ export default function PaymentPanel({
             onClick={onBack}
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
-            <ChevronUp className="h-3 w-3" data-testid="ChevronUp__e5e0c5" />
+            <CaretUpIcon className="h-3 w-3" data-testid="ChevronUp__e5e0c5" />
             {ui('qsoBackToCart')}
           </button>
         </div>
@@ -46,7 +46,7 @@ export default function PaymentPanel({
           </label>
           <div className="flex gap-2">
             {methods.map(m => {
-              const Icon = ICONS[m.icon] || Banknote;
+              const Icon = ICONS[m.icon] || MoneyIcon;
               const isActive = paymentMethod === m.id;
               return (
                 <button

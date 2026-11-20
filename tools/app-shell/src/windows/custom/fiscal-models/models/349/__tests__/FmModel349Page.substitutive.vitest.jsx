@@ -92,16 +92,8 @@ vi.mock('../../../../../../components/contract-ui/DocumentPreview.jsx', () => ({
   DocumentPreview: () => null,
 }));
 vi.mock('../../../fiscal-models.css', () => ({}));
-vi.mock('lucide-react', () => ({
-  Download: () => null, FileDown: () => null, CircleCheck: () => null, Search: () => null,
-  RefreshCw: () => null, Globe: () => null, Eye: () => null, MoreVertical: () => null,
-  ChevronDown: () => null, ChevronRight: () => null, Users: () => null, FileEdit: () => null,
-  Clock: () => null, TriangleAlert: () => null, Folder: () => null, ReceiptText: () => null,
-  Calculator: () => null, PenLine: () => null, ShieldAlert: () => null, Info: () => null,
-  OctagonAlert: () => null, ArrowLeft: () => null, Save: () => null, FileText: () => null,
-  Star: () => null, ArrowUpRight: () => null, Loader2: () => null, X: () => null, Check: () => null,
-  FileCheck: () => null,
-}));
+import { allIconsAs } from '@/test/iconMock.js';
+vi.mock('@phosphor-icons/react', async importOriginal => allIconsAs(() => null, importOriginal));
 
 import FmModel349Page from '../FmModel349Page.jsx';
 import { persistManualData, generate349File } from '../../../fiscalModelsUtils.js';

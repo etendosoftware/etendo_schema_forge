@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/contacts/ContactsFinancialPanel.jsx
 // ETP-5255 / ETP-5263 regression — the contacts credit panel must save SINGLE-FLIGHT.
 //
 // The bug: `creditLimit` had TWO independent routes into the same save — the number input's
@@ -23,9 +24,11 @@
 
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 
-vi.mock('lucide-react', () => ({
-  Minus: () => <span data-testid="icon-minus" />,
-  Plus: () => <span data-testid="icon-plus" />,
+vi.mock('@phosphor-icons/react', () => ({
+  MinusIcon: () => <span data-testid="icon-minus" />,
+  PlusIcon: () => <span data-testid="icon-plus" />,
+  ArrowUpIcon: () => <span data-testid="icon-arrow-up" />,
+  ArrowDownIcon: () => <span data-testid="icon-arrow-down" />,
 }));
 
 // Only the QA F-1 cases below reach `useEntity`, whose save path reports through toasts.
@@ -35,6 +38,7 @@ vi.mock('sonner', () => ({
 
 vi.mock('../BillingPreferencesForm', () => ({ default: () => <div data-testid="billing-form" /> }));
 vi.mock('../FiscalDefaultsSection', () => ({ default: () => <div data-testid="fiscal-defaults-section" /> }));
+vi.mock('../SepaMandateSection', () => ({ default: () => <div data-testid="sepa-mandate-section" /> }));
 
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import {

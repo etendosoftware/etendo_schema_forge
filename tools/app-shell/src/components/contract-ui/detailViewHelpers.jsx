@@ -3,7 +3,7 @@
  */
 import React, {useEffect, useRef, useState} from 'react';
 import {Button} from '@/components/ui/button.jsx';
-import {Trash2, X} from 'lucide-react';
+import { TrashIcon, XIcon } from '@phosphor-icons/react';
 import {toast} from 'sonner';
 import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
 import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
@@ -551,6 +551,21 @@ export function isRectificationCascadeTarget(key, triggerField) {
   return triggerField === 'transactionDocument' && RECTIFICATION_CASCADE_FIELDS.has(key);
 }
 
+/** True when a callout value actually carries something (neither `''` nor null/undefined). */
+function hasCalloutValue(value) {
+  return value !== '' && value != null;
+}
+
+/**
+ * ETP-6148 — a SUGGESTED value (`{ value, suggested: true }`, e.g. the remittance name proposed
+ * from the due date) only fills a field the user has never touched in this form session. Unlike
+ * the collateral guard in applyCalloutFieldUpdates, this skip does not require a current value:
+ * a field the user cleared on purpose stays empty. Forced (non-suggested) values are unaffected.
+ */
+function isSuggestionForTouchedField(entry, key, userTouchedRef) {
+  return entry?.suggested === true && userTouchedRef.current.has(key);
+}
+
 export function applyCalloutFieldUpdates(updates, ctx) {
   const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot, fieldGenerationRef, documentDateField } = ctx;
   for (const [key, entry] of Object.entries(updates)) {
@@ -561,13 +576,17 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     if (isStaleCalloutResponse(key, dispatchSnapshot, fieldGenerationRef)) {
       continue;
     }
+    // ETP-6148 — see isSuggestionForTouchedField. Forced values keep every rule below.
+    if (isSuggestionForTouchedField(entry, key, userTouchedRef)) {
+      continue;
+    }
     // Skip empty callout values if the field already has a non-empty value
     // (e.g., callout clears warehouse but defaults already set it)
     const currentVal = data[key];
-    const userHasValue = currentVal !== '' && currentVal != null;
+    const userHasValue = hasCalloutValue(currentVal);
     const isRateRecalc = isCurrencyRateRecalcTarget(key, triggerField, documentDateField);
     const isRectificationCascade = isRectificationCascadeTarget(key, triggerField);
-    if ((entry.value === '' || entry.value == null) && userHasValue && !isRateRecalc
+    if (!hasCalloutValue(entry.value) && userHasValue && !isRateRecalc
         && !isRectificationCascade) {
       continue;
     }
@@ -613,7 +632,7 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     //
     // The empty write itself is still applied above — only the generation is left
     // alone, so ETP-4772's protection of a real user edit is untouched.
-    if (entry.value !== '' && entry.value != null) {
+    if (hasCalloutValue(entry.value)) {
       bumpFieldGeneration(key, fieldGenerationRef);
     }
   }
@@ -1104,7 +1123,7 @@ export function renderDetailBulkActionBar({
             className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
             data-testid="detail-bulk-delete-button"
           >
-            <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__7c75ad" />
+            <TrashIcon className="h-3.5 w-3.5" data-testid="Trash2__7c75ad" />
           </button>
         )}
       </div>
@@ -2440,7 +2459,7 @@ function secondaryDetailSidebar(props) {
             onClick={props.onCloseDetailPanel}
             className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
         >
-          <X className="h-3.5 w-3.5" data-testid="X__fa3275" />
+          <XIcon className="h-3.5 w-3.5" data-testid="X__fa3275" />
         </button>
       </div>
       <props.st.Form
@@ -2480,7 +2499,7 @@ function secondaryDetailSidebar(props) {
                     onClick={props.onDeleteLine}
                     className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
                 >
-                  <Trash2 className="h-4 w-4" data-testid="Trash2__fa3275" />
+                  <TrashIcon className="h-4 w-4" data-testid="Trash2__fa3275" />
                   {props.deleteLabel}
                 </button>
             )}
@@ -2551,7 +2570,7 @@ function secondaryAddLineBar(props) {
               onClick={props.onDelete}
               className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
             >
-              <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
+              <TrashIcon className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
             </button>
           </SelectionToolbar>
       )}

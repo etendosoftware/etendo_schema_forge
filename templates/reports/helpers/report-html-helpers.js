@@ -237,6 +237,89 @@ export function createReportHelpers({ numberFormat } = {}) {
     return overrides[docbasetype] || translatedName;
   }
 
+
+  // ETP-6239 — period columns (the Columnas select of the interactive reports): read the
+  // engine's `meta.periods` / `meta.columnPages`, so they are canonical (template.hbs is also
+  // rendered server-side, which registers only this set). Mirrored in JSREPORT_HELPER_SOURCES.
+  //
+  // "sep 26" / "T3 26" ("Q3 26" in English), "*" when the bucket does not cover its whole month
+  // or quarter. Bucket 0 is the range total: its label is the caller's own "Total".
+  // shortcut: month names are fixed per language, not read from Intl (the jsreport container's
+  // ICU build is not guaranteed); upgrade when a third locale ships.
+  function periodLabel(period, columns, locale, totalLabel) {
+    if (!period) return '';
+    if (period.idx === 0) return totalLabel;
+    var months = {
+      es: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'],
+      en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    };
+    var lang = String(locale || 'en_US').slice(0, 2) === 'es' ? 'es' : 'en';
+    var parts = String(period.dateFrom).split('-');
+    var year = parts[0].slice(-2);
+    var month = Number(parts[1]) - 1;
+    var star = period.partial ? '*' : '';
+    if (columns === 'quarter') return (lang === 'es' ? 'T' : 'Q') + (Math.floor(month / 3) + 1) + ' ' + year + star;
+    return months[lang][month] + ' ' + year + star;
+  }
+
+  // Bucket order for Excel / CSV: the periods first, the range total (idx 0) last.
+  function periodOrder(periods) {
+    var all = (periods || []).map(function(p) { return p.idx; });
+    return all.filter(function(i) { return i !== 0; }).concat(all.filter(function(i) { return i === 0; }));
+  }
+
+  // The PDF pages with the range total last: the engine's pages hold idx 0 first, so flatten,
+  // move it to the end and cut again at the engine's page size.
+  function periodPages(columnPages, pageSize) {
+    // The engine's page size (meta.columnPageSize); a Handlebars call without it passes the options object.
+    var size = typeof pageSize === 'number' && pageSize > 0 ? pageSize : ((columnPages || [])[0] || []).length || 1;
+    var flat = [].concat.apply([], columnPages || []);
+    var ordered = flat.filter(function(i) { return i !== 0; }).concat(flat.filter(function(i) { return i === 0; }));
+    // At most 7 groups fit a landscape page at 8 pt with 12-character amounts (measured, ETP-6239): a
+    // no-comparison PDF asks for every group on one page, so cut it in as even pages as the cap allows.
+    size = Math.max(1, Math.ceil(ordered.length / Math.max(1, Math.ceil(ordered.length / Math.min(size, 7)))));
+    var pages = [];
+    for (var i = 0; i < ordered.length; i += size) pages.push(ordered.slice(i, i + size));
+    return pages;
+  }
+
+  // 'sly' / 'prev' when the render compares, '' otherwise (an unknown mode counts as none).
+  function periodMode(value) {
+    return value === 'sly' || value === 'prev' ? value : '';
+  }
+
+  // ETP-6239 — what a Comparado column is compared against, read from the SAME `periods` request
+  // param the engine was asked with (`from..to|slyFrom..slyTo|prevFrom..prevTo`, bucket 0 first,
+  // so tuple `idx` is bucket `idx`): the compared month / quarter as a short label ("ene 25",
+  // "T1 25" / "Q1 25"), or, for the range total and the Total grain, the compared dates
+  // (formatDateLocale: mm/dd/yyyy in en_US, dd/mm/yyyy otherwise, as the screen's chip). '' without a comparison.
+  function periodCompared(periodsParam, idx, mode, columns, locale) {
+    if (mode !== 'sly' && mode !== 'prev') return '';
+    var tuple = String(periodsParam || '').split(',')[idx];
+    var range = tuple && tuple.split('|')[mode === 'sly' ? 1 : 2];
+    var ends = range ? range.split('..') : [];
+    if (ends.length !== 2) return '';
+    if (idx !== 0 && (columns === 'month' || columns === 'quarter')) return periodLabel({ idx: 1, dateFrom: ends[0] }, columns, locale);
+    return formatDateLocale(ends[0], locale) + ' \u2013 ' + formatDateLocale(ends[1], locale);
+  }
+
+  // "Comparado (ene 25)" for the single header cell of Excel / CSV: the caption plus periodCompared.
+  function periodComparedHeader(caption, periodsParam, idx, mode, columns, locale) {
+    var against = periodCompared(periodsParam, idx, mode, columns, locale);
+    return against ? caption + ' (' + against + ')' : caption;
+  }
+
+  // A JSON string (a render param) as data for the template; null when it is missing or invalid.
+  function parseJson(value) {
+    if (typeof value !== 'string') return value && typeof value === 'object' ? value : null;
+    try { return JSON.parse(value); } catch (e) { return null; }
+  }
+
+  // Columns a group header row spans: Concepto plus every sub-column of the page's groups.
+  function periodSpan(groups, mode) {
+    return 1 + groups * (mode === 'sly' || mode === 'prev' ? 4 : 1);
+  }
+
   return {
     isGroupBreak,
     resetGroupTracking,
@@ -254,6 +337,14 @@ export function createReportHelpers({ numberFormat } = {}) {
     sumRowsByCategory,
     translateDocType,
     csvField,
+    periodLabel,
+    periodOrder,
+    periodPages,
+    periodMode,
+    periodSpan,
+    periodCompared,
+    periodComparedHeader,
+    parseJson,
   };
 }
 
@@ -493,6 +584,59 @@ const JSREPORT_HELPER_SOURCES = {
   while (i < s.length && triggers.indexOf(s.charAt(i)) < 0 && /[\\s\\uFEFF]/.test(s.charAt(i))) i++;
   if (i < s.length && triggers.indexOf(s.charAt(i)) >= 0) s = "'" + s;
   return /[",\\n\\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}`,
+  periodLabel: `function periodLabel(period, columns, locale, totalLabel) {
+  if (!period) return '';
+  if (period.idx === 0) return totalLabel;
+  var months = {
+    es: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'],
+    en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+  };
+  var lang = String(locale || 'en_US').slice(0, 2) === 'es' ? 'es' : 'en';
+  var parts = String(period.dateFrom).split('-');
+  var year = parts[0].slice(-2);
+  var month = Number(parts[1]) - 1;
+  var star = period.partial ? '*' : '';
+  if (columns === 'quarter') return (lang === 'es' ? 'T' : 'Q') + (Math.floor(month / 3) + 1) + ' ' + year + star;
+  return months[lang][month] + ' ' + year + star;
+}`,
+  periodOrder: `function periodOrder(periods) {
+  var all = (periods || []).map(function(p) { return p.idx; });
+  return all.filter(function(i) { return i !== 0; }).concat(all.filter(function(i) { return i === 0; }));
+}`,
+  periodPages: `function periodPages(columnPages, pageSize) {
+  var size = typeof pageSize === 'number' && pageSize > 0 ? pageSize : ((columnPages || [])[0] || []).length || 1;
+  var flat = [].concat.apply([], columnPages || []);
+  var ordered = flat.filter(function(i) { return i !== 0; }).concat(flat.filter(function(i) { return i === 0; }));
+  // At most 7 groups fit a landscape page at 8 pt with 12-character amounts (measured, ETP-6239): a
+  // no-comparison PDF asks for every group on one page, so cut it in as even pages as the cap allows.
+  size = Math.max(1, Math.ceil(ordered.length / Math.max(1, Math.ceil(ordered.length / Math.min(size, 7)))));
+  var pages = [];
+  for (var i = 0; i < ordered.length; i += size) pages.push(ordered.slice(i, i + size));
+  return pages;
+}`,
+  periodMode: `function periodMode(value) {
+  return value === 'sly' || value === 'prev' ? value : '';
+}`,
+  periodSpan: `function periodSpan(groups, mode) {
+  return 1 + groups * (mode === 'sly' || mode === 'prev' ? 4 : 1);
+}`,
+  periodCompared: `function periodCompared(periodsParam, idx, mode, columns, locale) {
+  if (mode !== 'sly' && mode !== 'prev') return '';
+  var tuple = String(periodsParam || '').split(',')[idx];
+  var range = tuple && tuple.split('|')[mode === 'sly' ? 1 : 2];
+  var ends = range ? range.split('..') : [];
+  if (ends.length !== 2) return '';
+  if (idx !== 0 && (columns === 'month' || columns === 'quarter')) return periodLabel({ idx: 1, dateFrom: ends[0] }, columns, locale);
+  return formatDateLocale(ends[0], locale) + ' \\u2013 ' + formatDateLocale(ends[1], locale);
+}`,
+  periodComparedHeader: `function periodComparedHeader(caption, periodsParam, idx, mode, columns, locale) {
+  var against = periodCompared(periodsParam, idx, mode, columns, locale);
+  return against ? caption + ' (' + against + ')' : caption;
+}`,
+  parseJson: `function parseJson(value) {
+  if (typeof value !== 'string') return value && typeof value === 'object' ? value : null;
+  try { return JSON.parse(value); } catch (e) { return null; }
 }`,
 };
 

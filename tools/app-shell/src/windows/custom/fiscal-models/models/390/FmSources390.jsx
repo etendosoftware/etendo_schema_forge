@@ -8,7 +8,18 @@
 // and paging happen on the backend: with a box filter, `totals.box` is the sum of every row's
 // contribution to that box, which equals the box value.
 import React, { useEffect, useRef, useState } from 'react';
-import { Download, Loader2, ReceiptText, Search, CircleAlert, CircleCheck, TriangleAlert, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import {
+  DownloadSimpleIcon,
+  CircleNotchIcon,
+  ReceiptIcon,
+  MagnifyingGlassIcon,
+  WarningCircleIcon,
+  CheckCircleIcon,
+  WarningIcon,
+  CaretLeftIcon,
+  CaretRightIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { toast } from 'sonner';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
@@ -34,13 +45,13 @@ function Pager({ page, pages, onPage, t }) {
   return (
     <div className="fm-390-sources__pager" data-testid="FmSources390__pager">
       <button type="button" className="fm-btn fm-btn--cancel-pill" disabled={page <= 1} onClick={() => onPage(page - 1)} data-testid="FmSources390__prev">
-        <ChevronLeft size={14} strokeWidth={1.75} data-testid="ChevronLeft__fmSources390" />
+        <CaretLeftIcon size={14} data-testid="ChevronLeft__fmSources390" />
         {t('fm.m390.pager.prev')}
       </button>
       <span data-testid="FmSources390__page">{t('fm.m390.sources.page', { page, pages })}</span>
       <button type="button" className="fm-btn fm-btn--cancel-pill" disabled={page >= pages} onClick={() => onPage(page + 1)} data-testid="FmSources390__next">
         {t('fm.m390.pager.next')}
-        <ChevronRight size={14} strokeWidth={1.75} data-testid="ChevronRight__fmSources390" />
+        <CaretRightIcon size={14} data-testid="ChevronRight__fmSources390" />
       </button>
     </div>
   );
@@ -148,7 +159,7 @@ export default function FmSources390({
     <div className="fm-390-sources" data-testid="FmSources390">
       <div className="fm-390-sources__toolbar">
         <div className="fm-390-search__field">
-          <Search size={14} strokeWidth={1.75} data-testid="Search__fmSources390" />
+          <MagnifyingGlassIcon size={14} data-testid="Search__fmSources390" />
           <input
             type="search"
             value={qDraft}
@@ -169,7 +180,7 @@ export default function FmSources390({
             data-testid="FmSources390__boxTag"
           >
             {t('fm.m390.sources.box_tag', { box: boxLabel(current.box) })}
-            <X size={12} strokeWidth={2} data-testid="X__fmSources390BoxTag" />
+            <XIcon size={12} data-testid="X__fmSources390BoxTag" />
           </button>
         )}
         <select
@@ -206,21 +217,21 @@ export default function FmSources390({
           data-testid="FmSources390__exportCsv"
         >
           {exporting
-            ? <Loader2 size={14} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__fmSources390Export" />
-            : <Download size={14} strokeWidth={1.75} data-testid="Download__fmSources390" />}
+            ? <CircleNotchIcon size={14} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__fmSources390Export" />
+            : <DownloadSimpleIcon size={14} data-testid="Download__fmSources390" />}
           {t('fm.m390.sources.export_csv')}
         </button>
       </div>
 
       {error && (
         <div className="fm-390-notices fm-390-notices--gutter">
-          <InfoBanner tone="danger" icon={CircleAlert} dismissible={false} role="alert" data-testid="FmSources390__error">{error}</InfoBanner>
+          <InfoBanner tone="danger" icon={WarningCircleIcon} dismissible={false} role="alert" data-testid="FmSources390__error">{error}</InfoBanner>
         </div>
       )}
 
       {!error && data && count === 0 && !hasSourcesFilter(current) ? (
         <EmptyState
-          icon={<ReceiptText size={28} strokeWidth={1.5} data-testid="ReceiptText__fmSources390" />}
+          icon={<ReceiptIcon size={28} data-testid="ReceiptText__fmSources390" />}
           title={t('fm.sources.empty')}
           sub={t('fm.m390.sources.empty_sub')}
           data-testid="FmSources390__empty" />
@@ -245,7 +256,7 @@ export default function FmSources390({
             <tbody>
               {loading && rows.length === 0 && (
                 <tr><td colSpan={colSpan} className="fm-390-sources__placeholder" data-testid="FmSources390__loading">
-                  <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__fmSources390" />
+                  <CircleNotchIcon size={16} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__fmSources390" />
                 </td></tr>
               )}
               {!loading && data && rows.length === 0 && (
@@ -287,12 +298,12 @@ export default function FmSources390({
         <div className="fm-390-notices fm-390-notices--gutter">
           {sameCents(boxTotal, boxValue ?? 0)
             ? (
-              <InfoBanner tone="success" icon={CircleCheck} dismissible={false} data-testid="FmSources390__boxMatch">
+              <InfoBanner tone="success" icon={CheckCircleIcon} dismissible={false} data-testid="FmSources390__boxMatch">
                 {t('fm.m390.sources.box_matches', { box: boxLabel(current.box), amount: formatAmount(parseAmount(boxValue ?? 0)) })}
               </InfoBanner>
             )
             : (
-              <InfoBanner tone="warning" icon={TriangleAlert} dismissible={false} role="status" data-testid="FmSources390__boxMismatch">
+              <InfoBanner tone="warning" icon={WarningIcon} dismissible={false} role="status" data-testid="FmSources390__boxMismatch">
                 {t('fm.m390.sources.box_mismatch', { box: boxLabel(current.box), amount: formatAmount(parseAmount(boxValue ?? 0)) })}
               </InfoBanner>
             )}

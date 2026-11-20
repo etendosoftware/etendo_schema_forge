@@ -131,6 +131,9 @@ export function useBankConnectionActions() {
       if (!res.ok) {
         const err = new Error(json?.error?.message || `HTTP ${res.status}`);
         err.status = json?.error?.status ?? res.status;
+        // ETP-6148 — the parsed body travels with the error so callers can translate by
+        // `messageKeys` (e.g. a 409 ETGO_RemittanceProvisioningConflict on createAndLink).
+        err.body = json;
         // ETP-6154 — a refusal can carry a stable code (e.g. BANK_SYNC_LOCK_UNAVAILABLE) that the
         // caller translates by identity rather than by its English prose.
         if (json?.error?.code) err.code = json.error.code;

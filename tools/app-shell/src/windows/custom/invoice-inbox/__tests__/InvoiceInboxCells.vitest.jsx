@@ -3,6 +3,8 @@
 // New file justification: InvoiceInboxPage.vitest.jsx renders the cells through a mocked DataTable and
 // an i18n stub that returns keys; these tests need the real Radix tooltip and the real locale texts.
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -10,7 +12,7 @@ import { join } from 'node:path';
 const { clipState } = vi.hoisted(() => ({ clipState: { clipped: true } }));
 
 import {
-  DocumentCell, NumberCell, StatusCell, VendorCell, formatReceived,
+  DocumentCell, NumberCell, StatusCell, VendorCell, TotalCell, formatReceived,
 } from '../InvoiceInboxCells.jsx';
 
 const localeDir = join(process.cwd(), 'src', 'locales');
@@ -107,6 +109,25 @@ describe('StatusCell — reason line per error code', () => {
     expect(reason).toHaveTextContent('FAC-77');
     expect(reason).toHaveTextContent('Completada');
     expect(reason).toHaveTextContent(/^FAC-77 · /);
+  });
+
+  it('CONFIRMED prefers the plain document number over the DAL identifier ("no - date - amount")', () => {
+    const row = { id: 'c1', status: 'CONFIRMED', 'invoice$documentNo': '10000007', 'invoice$_identifier': '10000007 - 2026-08-10 - 121.00' };
+    render(<StatusCell row={row} ui={uiEs} locale="es_ES" />);
+    const reason = screen.getByTestId('invoice-inbox-status-reason-c1');
+    expect(reason).toHaveTextContent(/^10000007 · Completada$/);
+    expect(reason).not.toHaveTextContent('2026-08-10');
+  });
+
+  it('CONFIRMED falls back to the identifier when documentNo is empty', () => {
+    const row = { id: 'c1', status: 'CONFIRMED', 'invoice$documentNo': '', 'invoice$_identifier': 'FAC-77' };
+    render(<StatusCell row={row} ui={uiEs} locale="es_ES" />);
+    expect(screen.getByTestId('invoice-inbox-status-reason-c1')).toHaveTextContent(/^FAC-77 · /);
+  });
+
+  it('CONFIRMED with only documentNo (no identifier) still shows the line', () => {
+    render(<StatusCell row={{ id: 'c1', status: 'CONFIRMED', 'invoice$documentNo': '55' }} ui={uiEs} locale="es_ES" />);
+    expect(screen.getByTestId('invoice-inbox-status-reason-c1')).toHaveTextContent(/^55 · /);
   });
 
   it('CONFIRMED without an invoice identifier shows no reason line', () => {
@@ -230,6 +251,29 @@ describe('NumberCell — duplicate icon', () => {
     expect(icon).toHaveAttribute('aria-label', expect.stringContaining('INV-9'));
     expect(within(icon).queryByRole('tooltip')).toBeNull();
   });
+
+  it('the duplicate tooltip and aria-label use the plain document number, not the identifier', () => {
+    const row = {
+      id: 'n1', status: 'READY', orderReference: 'F-1', duplicateOfInvoice: 'i1',
+      'duplicateOfInvoice$documentNo': '10000003', 'duplicateOfInvoice$_identifier': '10000003 - 2026-08-01 - 99.00',
+    };
+    render(<NumberCell row={row} ui={uiEn} />);
+    const icon = screen.getByTestId('invoice-inbox-duplicate-n1');
+    expect(icon).toHaveAttribute('title', expect.stringContaining('10000003'));
+    expect(icon.getAttribute('title')).not.toContain('2026-08-01');
+    expect(icon.getAttribute('aria-label')).not.toContain('2026-08-01');
+  });
+
+  it('the duplicate label falls back to the identifier when the document number is empty', () => {
+    const row = { id: 'n1', status: 'READY', orderReference: 'F-1', duplicateOfInvoice: 'i1', 'duplicateOfInvoice$documentNo': '', 'duplicateOfInvoice$_identifier': 'INV-9' };
+    render(<NumberCell row={row} ui={uiEn} />);
+    expect(screen.getByTestId('invoice-inbox-duplicate-n1')).toHaveAttribute('title', expect.stringContaining('INV-9'));
+  });
+
+  it('no duplicate icon on a settled row even with a document number', () => {
+    render(<NumberCell row={{ id: 'n1', status: 'CONFIRMED', orderReference: 'F-1', duplicateOfInvoice: 'i1', 'duplicateOfInvoice$documentNo': '1' }} ui={uiEn} />);
+    expect(screen.queryByTestId('invoice-inbox-duplicate-n1')).toBeNull();
+  });
 });
 
 describe('DocumentCell — origin line', () => {
@@ -273,5 +317,62 @@ describe('DocumentCell — origin line', () => {
     const emailLine = lineOf(b, 'e1');
     expect(uploadLine.className).toContain('h-4');
     expect(emailLine.className).toBe(uploadLine.className);
+  });
+});
+
+describe('TotalCell — the document currency (ETP-6051)', () => {
+  const text = () => document.body.textContent.replace(/\s+/g, ' ');
+  const money = (code, value) => formatCurrency(code, value).replace(/\s+/g, ' ');
+
+  it('formats in the row currency when the row carries one (ISO string, isoCode object)', () => {
+    const { unmount } = render(<TotalCell row={{ id: 't', status: 'READY', grandTotalAmount: 1234.5, currency: 'USD' }} currency="EUR" />);
+    expect(text()).toBe(money('USD', 1234.5));
+    expect(money('USD', 1234.5)).not.toBe(money('EUR', 1234.5));
+    unmount();
+    render(<TotalCell row={{ id: 't', status: 'READY', grandTotalAmount: 10, currency: { isoCode: 'GBP' } }} currency="EUR" />);
+    expect(text()).toBe(money('GBP', 10));
+  });
+
+  it('reads the currency identifier when the column is an id', () => {
+    render(<TotalCell row={{ id: 't', status: 'READY', grandTotalAmount: 10, currency: '100', 'currency$_identifier': 'GBP' }} currency="EUR" />);
+    expect(text()).toBe(money('GBP', 10));
+  });
+
+  it('falls back to the organization currency for a row with none', () => {
+    render(<TotalCell row={{ id: 't', status: 'READY', grandTotalAmount: 10 }} currency="EUR" />);
+    expect(text()).toBe(money('EUR', 10));
+  });
+
+  it('a missing amount shows a dash and a PROCESSING row no amount', () => {
+    const { unmount } = render(<TotalCell row={{ id: 't', status: 'READY' }} currency="EUR" />);
+    expect(text()).toBe('—');
+    unmount();
+    render(<TotalCell row={{ id: 't', status: 'PROCESSING', grandTotalAmount: 10 }} currency="EUR" />);
+    expect(text()).not.toContain('10');
+  });
+});
+
+describe('StatusCell — CONFIRMED links to its invoice (ETP-6051)', () => {
+  it('"{doc} · Completada" is a link to /purchase-invoice/{id}', () => {
+    const row = { id: 'c1', status: 'CONFIRMED', invoice: 'INV-ID-1', 'invoice$documentNo': '10000007' };
+    render(<MemoryRouter><StatusCell row={row} ui={uiEs} locale="es_ES" /></MemoryRouter>);
+    const link = screen.getByTestId('invoice-inbox-status-reason-c1');
+    expect(link.tagName).toBe('A');
+    expect(link).toHaveAttribute('href', '/purchase-invoice/INV-ID-1');
+    expect(link).toHaveTextContent('10000007 · Completada');
+  });
+
+  it('clicking the link does not open the review panel (the click does not reach the row)', () => {
+    const onRow = vi.fn();
+    const row = { id: 'c1', status: 'CONFIRMED', invoice: 'INV-ID-1', 'invoice$documentNo': '10000007' };
+    render(<MemoryRouter><div onClick={onRow}><StatusCell row={row} ui={uiEs} locale="es_ES" /></div></MemoryRouter>);
+    fireEvent.click(screen.getByTestId('invoice-inbox-status-reason-c1'));
+    expect(onRow).not.toHaveBeenCalled();
+  });
+
+  it('without the invoice id the line is plain text, not a link', () => {
+    render(<MemoryRouter><StatusCell row={{ id: 'c1', status: 'CONFIRMED', 'invoice$documentNo': '55' }} ui={uiEs} locale="es_ES" /></MemoryRouter>);
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByTestId('invoice-inbox-status-reason-c1')).toHaveTextContent('55 · Completada');
   });
 });

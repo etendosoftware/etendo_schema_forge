@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/CreatableSearchSelect.jsx
+// @covers tools/app-shell/src/components/contract-ui/EntityForm.jsx
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
@@ -18,6 +19,7 @@ vi.mock('@/lib/buildUrlWithParams.js', () => ({
 }));
 
 import { CreatableSearchSelect } from '../CreatableSearchSelect.jsx';
+import { buildOptionBadgeRenderer } from '../EntityForm.jsx';
 
 const OPTIONS = [
   { id: '1', name: 'Alpha' },
@@ -431,6 +433,32 @@ describe('CreatableSearchSelect — committed value on reopen (ETP-5903)', () =>
     expect(screen.getByTestId('option-contact-2-selected-indicator')).toBeInTheDocument();
     expect(screen.getByTestId('option-contact-2')).not.toHaveAttribute('data-highlighted');
     expect(screen.getByTestId('option-contact-1')).toHaveAttribute('aria-selected', 'false');
+  });
+
+  // ETP-6148 — a field with `optionBadge` draws its rows through EntityForm's
+  // buildOptionBadgeRenderer; the committed marking must survive the custom row content.
+  it('keeps the committed marking when the rows are drawn by an optionBadge renderOption', async () => {
+    const badged = { ...field, optionBadge: { field: 'ibanValid', equals: false, labelKey: 'noIban' } };
+    const options = OPTIONS.map((o, i) => ({ ...o, ibanValid: i !== 1 }));
+    render(
+      <CreatableSearchSelect
+        {...baseProps}
+        field={badged}
+        value="2"
+        displayValue={options.find(o => o.id === '2')?.name}
+        staticOptions={options}
+        renderOption={buildOptionBadgeRenderer(badged, (key) => key)}
+        onChange={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByTestId('field-contact-chip'));
+    await waitFor(() => expect(screen.getByTestId('options-contact')).toBeInTheDocument());
+    const committed = screen.getByTestId('option-contact-2');
+    expect(committed).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('option-contact-2-selected-indicator')).toBeInTheDocument();
+    expect(committed).toContainElement(screen.getByTestId('option-badge-contact-2'));
+    expect(screen.getByTestId('option-contact-1')).toHaveAttribute('aria-selected', 'false');
+    expect(screen.queryByTestId('option-badge-contact-1')).toBeNull();
   });
 
   it('ArrowDown moves to the option AFTER the committed one; the selection stays put', async () => {

@@ -70,11 +70,33 @@ Everything not listed here is forwarded to `fetch` untouched (`method`, `body`, 
 |---|---|
 | `on401: 'ignore'` | the endpoint's 401 is a domain answer, not an expired session — `lib/upgrade/api.js` maps it to its own `sessionExpired` code; a probe reads it as "feature unavailable". **"This file did not log out before the migration" is NOT a reason**: that was the defect, and applying it as a rule would opt every call site out of the fix. Today only five places use it: `InviteAcceptancePage` (pre-login, the 401 body carries the domain code), `ImportLinesModal` (a per-line loop that must not abort on one failure), `App.jsx`'s window-access map (fail-closed during hydration, where a logout would loop), `useDashboardData` (a failed widget degrades to `null`), and `lib/portal/portalApi.js` (the caller is a Business Partner with no session at all — a 401 means "this link is not valid", and routing it to the tenant logout would clear state for a session that never existed) |
 | `baseUrl: ''` | the URL is already complete, or points outside the base (`buildCreateUrl` returns a sibling path from the app root) |
-| `token` | a plain module was handed a specific token by its caller |
+| `token` | a plain module was handed a specific token by its caller. **It only ever becomes `Authorization` under the session's credential scheme**: in a browser holding an Etendo GO session the scheme is `cookie` and an explicit `token` is dropped silently (`credentialHeadersForToken`, app-shell-core). A credential that is not a GO session therefore rides its own header — the customer portal sends its link token as `X-Portal-Token` (`lib/portal/portalApi.js`, ETP-6209), which the scheme never touches |
 | `credentials` | overrides the default `'include'` |
 | `refreshVersion: false` | the call is a POST to an action endpoint (`/{spec}/{entity}/{id}/action/<name>`) that is a query in disguise — verified to NOT mutate the record it addresses. Skips the post-action re-read described below. Default `true`. See [Action endpoints re-read the record afterward](#action-endpoints-re-read-the-record-afterward-refreshversion-etp-5434) before setting this — the warning there is the important part |
 
 | `timeout` | ms to wait for a response before rejecting with a `NetworkError` (`reason: 'timeout'`). **Default: 60 s for a safe method (`GET`, `HEAD`, `OPTIONS`, or no method) and none for any other method.** An explicit value applies to any method; `0` disables it. Pass `timeout: 0` for a **long read** — see [Network failures and the timeout](#network-failures-and-the-timeout-etp-5424) |
+
+### A caller that belongs to no session (the customer portal, the support handoff)
+
+A client from `useApiFetch` or the ambient `apiFetch` is bound to the app's session identity: it
+captures the identity when the request leaves and, if the identity changed by the time the answer
+arrives, throws *"The request belongs to a superseded session."* and discards the answer — the
+right call for a tenant user whose session ended mid-request. It is the wrong call for a page
+that has no session at all: on a cold open the app's auth bootstrap resolves the identity
+(unknown, then anonymous) while that page's first requests are in flight, and a 200 the backend
+already committed is thrown away.
+
+Such a page builds its client OUTSIDE the session scope, still through the shared helper:
+`createApiFetch(baseUrl, () => null, null, null)` — the explicit `null` scope opts out of the
+ambient session, and the `null` logout handler means no 401 can log anybody out.
+
+| Caller | Client | Precedent |
+|---|---|---|
+| Customer portal (`/portal/*`, `/portal/decision/*`) | `usePortalApiFetch` (`lib/portal/usePortalApiFetch.js`) | ETP-6209: the decision landing showed "No pudimos aplicar tu decisión" for a decision the backend had applied |
+| Support handoff (`/support-access`) | `handoffFetch` (`lib/supportSession.js`) | the ticket was spent and the page read "no se pudo abrir el acceso" |
+
+Use it only for a page whose credential is not an app session. Anything a tenant user does keeps
+`useApiFetch`.
 
 ## Network failures and the timeout (ETP-5424)
 
@@ -342,9 +364,11 @@ refetches. The response itself is returned untouched, and without a `DataProvide
 returns the plain core client.
 
 A POST is not always a write: a URL whose **last** path segment is in `READ_ONLY_SUB_ENDPOINTS`
-— `evaluate-display` (fired on every record open) and `callout` (fired on field edits) — never
-invalidates anything (`isReadOnlySubEndpoint`). Without that rule a callout on a shipment field
-marked the sales order stale.
+— `evaluate-display` (fired on every record open), `callout` (fired on field edits) and
+`sifDefaults` (the `InvoiceSifStep` preview, fired when an invoice-creating modal opens) — never
+invalidates anything nor announces a record write (`isReadOnlySubEndpoint`). Without that rule a
+callout on a shipment field marked the sales order stale, and opening "Crear Factura" re-read the
+environment list.
 
 | A write to | Marks stale |
 |---|---|

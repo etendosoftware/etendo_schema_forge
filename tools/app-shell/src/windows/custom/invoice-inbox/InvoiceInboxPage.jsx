@@ -6,15 +6,19 @@ import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
 import { Button } from '@/components/ui/button';
-import { DEFAULT_FILTER, isProcessingRow, STATUS, workCount } from './invoiceInboxFilters.js';
+import { DEFAULT_FILTER, isConfirmableRow, isProcessingRow, STATUS, workCount } from './invoiceInboxFilters.js';
+import { confirmToastText, nextPendingRow, singleConfirmResult } from './invoiceInboxConfirmModel.js';
 import { fetchRowsByIdChunked } from './invoiceInboxApi.js';
 import { selectionWarnings, validateInboxSelection } from './invoiceInboxUploadPolicy.js';
 import { useInvoiceInboxList } from './useInvoiceInboxList.js';
 import { ITEM_REJECTED, ITEM_UNCONFIRMED, useInvoiceInboxUpload } from './useInvoiceInboxUpload.js';
 import { useInvoiceInboxUploadResult, useUploadLogKey } from './useInvoiceInboxUploadResult.js';
 import { discardToast, useInvoiceInboxDiscard } from './useInvoiceInboxDiscard.js';
+import { useInvoiceInboxConfirm } from './useInvoiceInboxConfirm.js';
 import { useProcessingRowsPoll } from './useProcessingRowsPoll.js';
+import { useInvoiceInboxReviewNav } from './useInvoiceInboxReviewNav.js';
 import { useInboxFileDrop } from './useInboxFileDrop.js';
+import { useInvoiceInboxOpenedTracking } from './useInvoiceInboxOpenedTracking.js';
 import InvoiceInboxDropZone, { InvoiceInboxFileInput } from './InvoiceInboxDropZone.jsx';
 import InvoiceInboxDragOverlay from './InvoiceInboxDragOverlay.jsx';
 import InvoiceInboxUploadTray from './InvoiceInboxUploadTray.jsx';
@@ -23,6 +27,10 @@ import InvoiceInboxToolbar from './InvoiceInboxToolbar.jsx';
 import InvoiceInboxTable from './InvoiceInboxTable.jsx';
 import InvoiceInboxSelectionBar from './InvoiceInboxSelectionBar.jsx';
 import InvoiceInboxDiscardDialog from './InvoiceInboxDiscardDialog.jsx';
+import InvoiceInboxConfirmDialog from './InvoiceInboxConfirmDialog.jsx';
+import InvoiceInboxReviewDrawer from './InvoiceInboxReviewDrawer.jsx';
+
+const NO_IDS = Object.freeze([]);
 
 /** Menu key of the window (`menu.json` label), also the favorites name. */
 export const INVOICE_INBOX_MENU_LABEL = 'Invoice Inbox';
@@ -107,7 +115,7 @@ function showDiscardToast(result, ui) {
 
 /**
  * The discard flow: which rows the confirmation is open for (the selection, or one row from its
- * hover trash), the batch, its toast, then `onDone` (clear the selection, reload list + counters).
+ * hover trash), the batch, its toast, then `onDone(result)` (clear the selection, reload list + counters).
  * The dialog stays open while the batch runs; an answer after leaving the page does nothing.
  */
 function useInboxDiscardFlow({ apiFetch, ui, mountedRef, onDone }) {
@@ -119,9 +127,68 @@ function useInboxDiscardFlow({ apiFetch, ui, mountedRef, onDone }) {
     if (!result || !mountedRef.current) return;
     showDiscardToast(result, ui);
     setTargets(null);
-    onDone();
+    onDone(result);
   }, [discard, targets, ui, mountedRef, onDone]);
   return { targets, open: setTargets, close, confirm, running };
+}
+
+/** Shows the outcome of a confirm run: invoices created (numbering), products created, failures. */
+function showConfirmToast(result, ui) {
+  if (!result.total) return;
+  const { tone, text } = confirmToastText(result, ui);
+  // `tone` is a sonner method name: success, warning or error.
+  toast[tone](text);
+}
+
+/**
+ * The batch confirm flow (ETP-6051): which rows the dialog is open for (the selection), the
+ * sequential run, its toast, then `onDone(result)` (clear the selection, reload list + counters).
+ * The dialog stays open, with the progress, while the run goes; an answer after leaving the page
+ * does nothing.
+ */
+function useInboxConfirmFlow({ apiFetch, ui, mountedRef, onDone }) {
+  const { confirm, running, progress } = useInvoiceInboxConfirm(apiFetch);
+  const [targets, setTargets] = useState(null);
+  const close = useCallback(() => setTargets(null), []);
+  const run = useCallback(async () => {
+    const result = await confirm(targets ?? []);
+    if (!result) return;
+    // The invoices exist whether or not the page is still here: the app-level toast needs no state.
+    showConfirmToast(result, ui);
+    if (!mountedRef.current) return;
+    setTargets(null);
+    onDone(result);
+  }, [confirm, targets, ui, mountedRef, onDone]);
+  return { targets, open: setTargets, close, run, running, progress };
+}
+
+/**
+ * After a confirm from the panel: moves to the next pending document of the current filter
+ * (`nextPendingRow` over the loaded rows); when there is none loaded and the server has more pages it
+ * LOADS the next page and looks again, and only when the list really ends does it call `onNone`.
+ * `start(confirmedId, followPanel)`: a confirm whose answer arrived after the user left that document
+ * (`followPanel` false) moves nothing.
+ */
+function useAdvanceAfterConfirm({ rows, hasMore, loading, loadError, loadMore, openId, goTo, onNone }) {
+  const [fromId, setFromId] = useState(null);
+  const start = useCallback((confirmedId, followPanel) => setFromId(followPanel ? confirmedId : null), []);
+  useEffect(() => {
+    if (!fromId) return;
+    // The panel was closed meanwhile: do not reopen it.
+    if (!openId) { setFromId(null); return; }
+    if (loading) return;
+    const next = nextPendingRow(rows, fromId);
+    if (next) {
+      setFromId(null);
+      goTo(next.id);
+    } else if (hasMore && !loadError) {
+      loadMore();
+    } else {
+      setFromId(null);
+      onNone();
+    }
+  }, [fromId, rows, hasMore, loading, loadError, loadMore, openId, goTo, onNone]);
+  return { start };
 }
 
 function emptyStateFor({ loadError, filterKey, counts, ui, onRetry }) {
@@ -142,13 +209,15 @@ function emptyStateFor({ loadError, filterKey, counts, ui, onRetry }) {
  * ETP-6049 — Invoice Inbox ("Bandeja de facturas"): upload supplier invoices (drop or pick, one
  * request per file) and follow them in a list filtered by status, with counters. Rows still being
  * read show placeholders and refresh themselves. Discard works from the batch bar and from each
- * row's hover trash, through one confirmation dialog. Opening a document (ETP-6050) and Confirm
- * (ETP-6051) are not part of this story: a row click does nothing, the row's edit and kebab are
- * inert and the bar's Confirm is disabled.
+ * row's hover trash, through one confirmation dialog. A row click or the row's pencil opens the
+ * review panel (ETP-6050, `InvoiceInboxReviewDrawer`). Confirm (ETP-6051) works from the batch bar
+ * (a dialog with the total per currency, then one request per document, one at a time) and from the
+ * review panel's footer (then the panel moves to the next pending document); the row's kebab is
+ * still inert.
  *
  * Guide: docs/generated-custom-windows/invoice-inbox.md.
  */
-export default function InvoiceInboxPage({ apiBaseUrl }) {
+export default function InvoiceInboxPage({ apiBaseUrl, token = null }) {
   const ui = useUI();
   // apiBaseUrl points to the spec (`/sws/neo/invoice-inbox`): list `/header`, upload `/upload`.
   const apiFetch = useApiFetch(apiBaseUrl);
@@ -158,6 +227,7 @@ export default function InvoiceInboxPage({ apiBaseUrl }) {
   const list = useInvoiceInboxList(apiFetch, filterKey);
   const [pollResetKey, setPollResetKey] = useState(0);
   useInboxPageMeta(list.counts);
+  useInvoiceInboxOpenedTracking();
 
   // ── Selection (owned by DataTable; mirrored here, cleared on a filter change) ──
   const [selectedRows, setSelectedRows] = useState([]);
@@ -210,15 +280,95 @@ export default function InvoiceInboxPage({ apiBaseUrl }) {
   const openPicker = useCallback(() => fileInputRef.current?.click(), []);
   const { dragging, dropProps } = useInboxFileDrop(handleFiles);
 
-  // ── Discard (batch bar and row trash) ──
-  const afterDiscard = useCallback(() => {
+  // ── Review panel (ETP-6050): which document is open and the previous / next walk ──
+  const { replaceRows, reloadCounts } = list;
+  // On close, re-read the rows the user opened (a review changes status, vendor, total…) and the
+  // counters. An answer after leaving the page is dropped.
+  const panelConfirmedRef = useRef(false);
+  const refreshReviewed = useCallback(async (ids) => {
+    // A document confirmed from the panel leaves its tab: reload the whole list, not just that row.
+    if (panelConfirmedRef.current) {
+      panelConfirmedRef.current = false;
+      refresh();
+      return;
+    }
+    try {
+      const fresh = await fetchRowsByIdChunked(apiFetch, ids);
+      if (!mountedRef.current) return;
+      replaceRows(fresh);
+      reloadCounts();
+    } catch {
+      // The rows keep what they showed; "Actualizar" reloads them.
+    }
+  }, [apiFetch, replaceRows, reloadCounts, refresh]);
+  const [confirmedIds, setConfirmedIds] = useState(NO_IDS);
+  const review = useInvoiceInboxReviewNav({
+    rows: list.rows,
+    hasMore: list.hasMore,
+    loading: list.loading,
+    loadError: list.loadError,
+    loadMore: list.loadMore,
+    onClosed: refreshReviewed,
+    serverTotal: list.counts?.[filterKey] ?? null,
+    skipIds: confirmedIds,
+  });
+  const panelOpen = review.openId !== null;
+  useEffect(() => { if (!panelOpen) setConfirmedIds((prev) => (prev.length ? NO_IDS : prev)); }, [panelOpen]);
+  const closeReview = review.close;
+
+  // ── Discard (batch bar, row trash and the review panel's footer) ──
+  // The panel closes only when the document open in it was actually discarded: a failed discard
+  // (or a batch that does not involve it) keeps it open. The list and counters always reload, so a
+  // failed row shows its real status.
+  const openReviewId = review.openId;
+  const afterDiscard = useCallback((result) => {
     clearSelection();
+    if (openReviewId && result?.ok?.includes(openReviewId)) closeReview({ silent: true });
     refresh();
-  }, [clearSelection, refresh]);
+  }, [clearSelection, closeReview, refresh, openReviewId]);
   const discardFlow = useInboxDiscardFlow({ apiFetch, ui, mountedRef, onDone: afterDiscard });
   const openDiscard = discardFlow.open;
   const discardSelected = useCallback(() => openDiscard(selectedRows), [openDiscard, selectedRows]);
   const discardRow = useCallback((row) => openDiscard([row]), [openDiscard]);
+  const openReview = review.open;
+
+  // ── Confirm (batch bar, and the review panel's footer) ──
+  const afterConfirm = useCallback(() => {
+    clearSelection();
+    refresh();
+  }, [clearSelection, refresh]);
+  const confirmFlow = useInboxConfirmFlow({ apiFetch, ui, mountedRef, onDone: afterConfirm });
+  const openConfirm = confirmFlow.open;
+  const confirmSelected = useCallback(() => openConfirm(selectedRows), [openConfirm, selectedRows]);
+  const canConfirmSelection = selectedRows.some(isConfirmableRow);
+  // From the panel: toast, then the next pending document of the current filter, or close.
+  const goToReview = review.goTo;
+  const rows = list.rows;
+  const finishPanelConfirm = useCallback(() => {
+    panelConfirmedRef.current = false;
+    closeReview({ silent: true });
+    clearSelection();
+    refresh();
+  }, [closeReview, clearSelection, refresh]);
+  const advance = useAdvanceAfterConfirm({
+    rows, hasMore: list.hasMore, loading: list.loading, loadError: list.loadError, loadMore: list.loadMore, openId: openReviewId,
+    goTo: goToReview, onNone: finishPanelConfirm,
+  });
+  const startAdvance = advance.start;
+  const afterPanelConfirm = useCallback((answer) => {
+    // The invoice exists whatever happened to the panel meanwhile: the toast always shows.
+    showConfirmToast(singleConfirmResult(answer), ui);
+    if (!mountedRef.current) return;
+    panelConfirmedRef.current = true;
+    setConfirmedIds((prev) => [...prev, answer.id]);
+    // Re-read the confirmed row now (cheap) so the list does not wait for the panel to close.
+    fetchRowsByIdChunked(apiFetch, [answer.id]).then((fresh) => {
+      if (!mountedRef.current) return;
+      replaceRows(fresh);
+      reloadCounts();
+    }).catch(() => { /* the full reload on close covers it */ });
+    startAdvance(answer.id, answer.id === openReviewId);
+  }, [ui, apiFetch, replaceRows, reloadCounts, startAdvance, openReviewId]);
 
   const emptyState = emptyStateFor({ loadError: list.loadError, filterKey, counts: list.counts, ui, onRetry: refresh });
 
@@ -266,6 +416,7 @@ export default function InvoiceInboxPage({ apiBaseUrl }) {
           onSelectionChange={onSelectionChange}
           clearSelectionTrigger={clearSelectionTrigger}
           onDiscardRow={discardRow}
+          onOpenRow={openReview}
           data-testid="InvoiceInboxTable__3ab259" />
         {list.hasMore && (
           <div className="flex justify-center py-4">
@@ -286,7 +437,18 @@ export default function InvoiceInboxPage({ apiBaseUrl }) {
         onClear={clearSelection}
         onDiscard={discardSelected}
         discarding={discardFlow.running}
+        onConfirm={confirmSelected}
+        canConfirm={canConfirmSelection}
+        confirming={confirmFlow.running}
         data-testid="InvoiceInboxSelectionBar__3ab259" />
+      <InvoiceInboxConfirmDialog
+        open={confirmFlow.targets !== null}
+        rows={confirmFlow.targets ?? []}
+        running={confirmFlow.running}
+        progress={confirmFlow.progress}
+        onConfirm={confirmFlow.run}
+        onClose={confirmFlow.close}
+        data-testid="InvoiceInboxConfirmDialog__3ab259" />
       <InvoiceInboxDiscardDialog
         open={discardFlow.targets !== null}
         count={discardFlow.targets?.length ?? 0}
@@ -294,6 +456,18 @@ export default function InvoiceInboxPage({ apiBaseUrl }) {
         onConfirm={discardFlow.confirm}
         onClose={discardFlow.close}
         data-testid="InvoiceInboxDiscardDialog__3ab259" />
+      <InvoiceInboxReviewDrawer
+        id={review.openId}
+        row={list.rows.find((row) => row.id === review.openId) ?? null}
+        nav={review}
+        apiFetch={apiFetch}
+        apiBaseUrl={apiBaseUrl}
+        token={token}
+        onClose={closeReview}
+        onDiscard={discardRow}
+        discarding={discardFlow.running}
+        onConfirmed={afterPanelConfirm}
+        data-testid="InvoiceInboxReviewDrawer__3ab259" />
       <InvoiceInboxDragOverlay visible={dragging} data-testid="InvoiceInboxDragOverlay__3ab259" />
     </div>
   );

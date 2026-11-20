@@ -4,18 +4,18 @@
 
 Sonar's Quality Gate only evaluates **new code**, so a PR can pass it while still
 lowering the project's **overall** coverage — typically by adding new source files
-with too few tests. This gate closes that gap: the GitHub `Sonar Build` check fails
-a pull request that would drop overall coverage, and `run-sonar.sh --compare-coverage`
+with too few tests. This gate closes that gap: the GitHub `Unit tests + Sonar + coverage`
+check fails a pull request that would drop overall coverage, and `run-sonar.sh --compare-coverage`
 applies the same rule to a local run. The pre-push no longer runs it (ETP-5695): it
 runs only the unit tests the change can affect (`make test-changed-coverage`), so its
 overall figure is partial by design; the comparison needs the whole suite, which the
-PR's `Tests` job runs.
+PR's unit tests + Sonar job runs.
 
-It mirrors Jenkins' "Compare Coverage Results" stage (`sonarUtils.compareCoverage`),
-so the local pre-push and CI apply the same rule. In this repo the rule, its
+It started as the rule of Jenkins' "Compare Coverage Results" stage
+(`sonarUtils.compareCoverage`), so a local run and CI apply the same rule. In this repo the rule, its
 default thresholds and its messages live in **one** script,
 `scripts/compare-sonar-coverage.js`, called by both `run-sonar.sh` and
-`.github/workflows/test.yml`. **Known duplicate:** `com.etendoerp.go/run-sonar.sh`
+`.github/actions/unit-tests-sonar` (the mini and full pipelines). **Known duplicate:** `com.etendoerp.go/run-sonar.sh`
 still carries its own Python copy of the rule and of the defaults; a threshold
 change must be made in both repos until that copy is removed.
 
@@ -54,7 +54,7 @@ fluctuation on an otherwise-identical commit no longer flips the gate.
 | `node` not on `PATH` | ❌ block, with a readable message (`run-sonar.sh` checks before calling the script) |
 
 The table describes a local run (`--context push`, the default). In the GitHub
-`Sonar Build` job (`--context ci`) the thresholds and messages are the same, minus
+unit tests + Sonar job (`--context ci`) the thresholds and messages are the same, minus
 the push-only hints, but a gate that cannot be evaluated **fails** instead of
 skipping: unreadable current coverage, a missing `.scannerwork/report-task.txt`,
 or an analysis that Sonar reports `FAILED`/`CANCELED` or does not process within
@@ -90,8 +90,7 @@ in `scripts/compare-sonar-coverage.js` instead. See **Agent Guardrails** in `CLA
 ## Where it runs
 
 - **`etendo_schema_forge` / `run-sonar.sh`** and **`com.etendoerp.go` / `run-sonar.sh`** — `--compare-coverage` for a local run on demand. Neither repo's pre-push passes it any more (ETP-5695): both run a subset of the tests (schema_forge the selection of `scripts/select-tests.js`, go the database-free `goTestUnit`), so the overall figure would always drop.
-- **GitHub `Sonar Build`** — the `sonar` job of `.github/workflows/test.yml` runs `scripts/compare-sonar-coverage.js --context ci` after the scan on every pull request (current = the PR analysis, `pullRequest=<number>`; base = the PR's target branch, `github.base_ref`). See below.
-- **Jenkins** — `sonarUtils.compareCoverage` (shared pipeline library) applies the same tolerance + minimum on the CI side, so local and CI agree.
+- **GitHub Actions** — `.github/actions/unit-tests-sonar` runs `scripts/compare-sonar-coverage.js --context ci --check-quality-gate` after the scan on every pull request (current = the PR analysis, `pullRequest=<number>`; base = the PR's target branch, `github.base_ref`), in the job `Mini Pipeline: Unit tests + Sonar + coverage` on PRs into `develop` and `Unit tests + Sonar + coverage` on PRs into `main`. See below.
 
 ## Where the coverage data is produced
 
@@ -102,76 +101,63 @@ dependencies (no `.env`, no database) and produces:
 - `coverage/merged-lcov.info` — the Node test-runner LCOVs plus Vitest's, merged by `scripts/merge-lcov.js`;
 - `test-results/*.xml` — one JUnit report per suite (`cli`, `scripts`, `appshell-node`, `artifacts`, `vitest`).
 
-Two CI jobs run it today, and a third consumes its output:
+One job runs it and analyzes its output (ETP-6375), the composite action
+`.github/actions/unit-tests-sonar`, the same work com.etendoerp.go's
+`Go tests + Sonar + coverage` does:
 
-| Job | Trigger | What happens to the outputs |
+| Where | Check name | Trigger |
 |---|---|---|
-| Jenkins `Node Tests` stage (`etendo-go/schemaforge/Jenkinsfile` in the separate `com.etendoerp.jenkins.pipelines` repo) | Its `GenericTrigger` fires on push to `main`, on the daily cut (PRs `mergeblock/*` → `main`) and on PRs `hotfix/*` → `main`. PRs into `develop` and pushes to `develop` do **not** trigger it (ETP-5886) | Feeds the `SonarQube Analysis` (branch analysis) and `Compare Coverage Results` stages |
-| GitHub Action `Tests` (`.github/workflows/test.yml`), job `test` | `pull_request` (opened / synchronize / reopened) and push to `main` / `develop` | JUnit published as the "Test Results" check; both files uploaded as the `unit-coverage` workflow artifact (7-day retention) |
-| GitHub Action `Tests`, job `sonar` (check name `Sonar Build`) | Same triggers, runs after `test` | Downloads `unit-coverage` (only when `test` succeeded) and runs the SonarQube scan, which reads `coverage/merged-lcov.info` via `sonar-project.properties` |
+| `mini-pipeline.yml` | `Mini Pipeline: Unit tests + Sonar + coverage` (required on `develop`) | PRs into `develop`, pushes to `develop` |
+| `full-pipeline.yml` | `Unit tests + Sonar + coverage` (required on `main`) | PRs `mergeblock/*` and `hotfix/*` into `main`, pushes to `main` |
 
-The Action checks out the PR **head** commit (`github.event.pull_request.head.sha`),
-the same sha Jenkins analyzes, not the merge ref, so its `unit-coverage` artifact is
-interchangeable with Jenkins' own output. Because it tests the head sha rather
-than the merge ref, the `Tests` check does not cover integration with the base
-branch. A consumer must only use `unit-coverage` from a run whose conclusion is
-`success` for that head sha: on failure the artifact may be partial or lack
-`coverage/merged-lcov.info`. This is the first step of moving the slow
-Jenkins `Node Tests` stage off Jenkins (ETP-5678): once the Action's timing is
-measured, Jenkins can download `unit-coverage` instead of re-running the suites.
-Until then both run.
+In that job, in order: `npm install`, `make test-ci-coverage`, the app-shell build,
+the "Test Results" check (JUnit) and the `unit-coverage` artifact; then, **only when
+all of that passed**, the SonarQube scan (it reads `coverage/merged-lcov.info` via
+`sonar-project.properties`) and, on a PR, the comparison and the quality gate. A
+failing test fails the job before the scan, so Sonar never gets a partial LCOV and a
+push never writes a 0% baseline. The job checks out the PR **head** commit, not the
+merge ref, so it does not cover the integration with the base branch. The action itself
+comes from the run's own commit (a second, sparse checkout into `.ci-actions`), so a PR
+head older than the action still runs it; when that head's script predates
+`--check-quality-gate`, the job compares the coverage alone and warns that the gate was
+not read (ETP-6387).
 
-The `Sonar Build` check (a required status check on `develop`) is the `sonar` job
-of `test.yml`: it runs after `test` (`needs: test`; on a PR it always runs unless
-the run is cancelled, on a push only when `test` succeeded) and downloads `unit-coverage` only when `test` succeeded, so Sonar is
-never fed a partial LCOV. PR analyses, and the branch analyses of pushes to
-`develop` / `main`, therefore carry real coverage on SonarQube. When `test` fails,
-a PR still gets the required check — scanned without coverage and **failed** (see
-the end of this section) — but a push to
-`develop` / `main` is not scanned at all, so a 0% branch baseline is never written
-for `run-sonar.sh --compare-coverage` to compare against. Because the scan waits
-for `test`, the required `Sonar Build` check (and then `SonarQube Code Analysis`)
-reports only after `test` finishes (about 22 minutes on the first run) — a
-deliberate trade-off for real coverage. The job replaces the former
-`.github/workflows/sonar-scan.yml`, which scanned with no coverage at all; that
-workflow's branch-push analyses of `feature/**`, `epic/**`, `release/**` and
-`master` were dropped on purpose: those branches are no longer analyzed on push,
-nothing consumed those analyses and they never carried coverage.
-Sending coverage cannot fail the Sonar quality gate itself: its `new_coverage`
-condition is `< 0`.
+Pushes keep the bases current: a push to `develop` runs the mini pipeline job (a
+branch analysis of `develop`, no comparison); a push to `main` that merges a cut the
+full pipeline already validated runs only `Sonar with the cut coverage`, a branch
+analysis of `main` with the cut PR run's `unit-coverage`. Any other push to `main`
+runs the full job.
 
-After the scan, on pull requests whose `test` job succeeded, the same job runs the
-coverage-decrease rule against the PR's target branch and fails with the current
-%, the base % and the threshold when coverage drops. This applies to **every** PR,
-`feature/*` included — which until now only had the bypassable pre-push check —
-and since `Sonar Build` is a required check on `develop`, a coverage drop now
-blocks the merge. Pushes to `develop` / `main` are not compared (there is no other
-branch to compare against), as in Jenkins: the `Compare Coverage Results` stage of
-`etendo-go/schemaforge/Jenkinsfile` (`com.etendoerp.jenkins.pipelines` repo) skips
-when `compareBranch == SCHEMA_FORGE_BRANCH`, i.e. on pushes to `develop` / `main`.
+The two names differ on purpose: a cut PR's head is `develop`'s head, which also
+carries the mini pipeline check of its push to `develop`. That one never compares
+coverage, so it must never meet `main`'s required check. Sending coverage cannot fail
+the Sonar quality gate itself: its `new_coverage` condition is `< 0`.
+
+After the scan, on pull requests, the job runs the coverage-decrease rule against the
+PR's target branch and fails with the current %, the base % and the threshold when
+coverage drops, then reads the quality gate of the same analysis
+(`--check-quality-gate`, ETP-6374) and fails when it is `ERROR`, listing the failed
+conditions. This applies to **every** PR, `feature/*` included, and the check is
+required on `develop` and `main`, so a coverage drop or a failed gate blocks the
+merge. Pushes are not compared: there is no other branch to compare against.
 
 The base is the **latest** analysis of the target branch, while the PR is measured
 at its head commit. On a long-lived branch, a `COVERAGE DECREASED` can therefore
 come from `develop` having moved on (new tests landed there) rather than from the
 PR itself: merge `develop` into the branch and push again before adding tests.
 
-When `test` fails (or is cancelled or skipped) on a pull request, `Sonar Build`
-fails closed: the job still runs and scans, the comparison step is skipped, and
-its last step, `Fail when the tests did not succeed`, exits 1 with an `::error`
-annotation naming the `test` result. A PR with failing tests therefore cannot get
-a green required check from this job, whether or not the `Tests` check itself is
-required. A push to `develop` / `main` whose `test` fails is still not scanned.
-
 ### Workflow hardening
 
 - **Permissions** are least-privilege: `contents: read` at the top level; the
-  `test` job adds `packages: read` (npm install from GitHub Packages) and
-  `checks: write` (the dorny reporter's "Test Results" check); the `sonar` job
-  has `contents: read` only (Sonar decorates PRs through its own GitHub App, not
-  `GITHUB_TOKEN`).
+  unit tests + Sonar job adds `packages: read` (npm install from GitHub Packages)
+  and `checks: write` (the dorny reporter's "Test Results" check). Sonar decorates
+  PRs through its own GitHub App, not `GITHUB_TOKEN`.
+- **Scanner timeouts** come from the organization variables `SONAR_SOCKET_TIMEOUT` and
+  `SONAR_RESPONSE_TIMEOUT` (seconds; unset, 60), passed as `sonar.scanner.socketTimeout` and
+  `sonar.scanner.responseTimeout` to every scan (ETP-6390). Raise them when SonarQube is slow and
+  an upload fails with `SocketTimeoutException` while every test passed.
 - **The scan action is pinned** to a full commit sha with its release as a
   comment (`sonarsource/sonarqube-scan-action@<sha> # vX.Y.Z`), never `@master`.
 - **Concurrency** groups a PR by its number (a new push cancels the stale run) and
-  every push to `develop` / `main` by its sha, so no push run — running or
-  pending — is ever cancelled or replaced, and each sha keeps its own
-  `unit-coverage` artifact.
+  every push to `develop` / `main` by its sha, so no push run, running or
+  pending, is ever cancelled or replaced.

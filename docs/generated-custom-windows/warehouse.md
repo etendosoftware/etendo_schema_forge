@@ -27,7 +27,7 @@ The list uses `WarehouseCustomTable` in place of the default generated table. Co
 |--------|----------|
 | **Name** | Bold, `font-semibold`, color `#121217` |
 | **Identifier** (Search Key) | Pill badge: `bg-[#F5F7F9]`, rounded-lg, `text-xs`, color `#3F3F50` |
-| **Location** | Resolved from `locationAddress$_identifier`, falls back to raw `locationAddress`. Not sortable. |
+| **Location** | Resolved from `locationAddress$_identifier`, falls back to raw `locationAddress`. The resolved identifier is sanitized through `sanitizeDashJoinedIdentifier` (`tools/app-shell/src/lib/locationAddress.js`, shared with Contacts' `eTGOLocation` column) before render, so an empty address segment (e.g. no building name) no longer shows as a double dash (`"Calle Mayor -  - Madrid"` → `"Calle Mayor - Madrid"`); a genuinely short non-empty segment is never dropped. Not sortable. |
 | **Products** | Dynamic count cell (`WarehouseProductCountCell`): fetches storageBins then binContents per warehouse row, aggregates via `aggregateProducts`, displays count of products with `qty != 0` (includes negative stock, excludes exact zero — see "Stock filtering semantics" below). Shows `—` while loading or on error. Not sortable. |
 
 Print and Link buttons are hidden (`hidePrint`, `hideLink`). The sort and refresh toolbar icons are the default `ListView` icons, same as `/sales-order` (ETP-5601). The list toolbar inherits the generic `ListView` padding (8 px, 56 px bar) with no window-level override (ETP-5603); the table uses 8 px padding (`tablePaddingX="px-2"`, etc.).
@@ -161,7 +161,7 @@ Calls `onCount(products.length)` after load so the tab strip can display a count
 
 ### Transactions tab
 
-Registered as secondary tab with key `productTransactions`, label `warehouseTransactionsTab`, panel `WarehouseTransactionsTable`. The `productTransactions` entity in `decisions.json` declares `javaQualifier: "productTransactionsHandler"`, which routes NEO Headless through the `ProductTransactionsHandler` NeoHandler bean. That handler joins `M_Transaction` to its source line and header, injecting three fields onto each transaction row:
+Registered as secondary tab with key `productTransactions`, label `warehouseTransactionsTab`, panel `WarehouseTransactionsTable`. The `productTransactions` entity is bound to its customization with `@NeoExtension(spec = "warehouse", entity = "productTransactions")` on `WarehouseProductTransactionsHandler` (no `javaQualifier` in `decisions.json`), which routes NEO Headless through the shared `ProductTransactionsHandler` logic. That handler joins `M_Transaction` to its source line and header, injecting three fields onto each transaction row:
 
 - `etgoDocHeaderId` — ID of the source document header
 - `etgoDocWindow` — slug of the GO window that handles that document type
@@ -360,7 +360,7 @@ Regenerated via `make regen ONLY=warehouse`; `sf-validate-pipeline --scope=wareh
 - `tools/app-shell/src/lib/clientSort.js` / `tools/app-shell/src/hooks/useClientSort.js` — shared client-side sort mechanism (also used by the financial-account Movimientos/Reconciliaciones/Extractos tabs); `initialSort` + the one-shot first-click override added for ETP-5083.
 - `tools/app-shell/src/windows/custom/warehouse/useWarehouseStock.js` — shared data fetch hook (bins → binContents + productTransactions, UOM resolution).
 - `tools/app-shell/src/windows/custom/warehouse/warehouseUtils.js` — `aggregateProducts` helper. Returns all aggregated rows unfiltered; each consumer (`WarehouseProductsTab.jsx`, `WarehouseCustomTable.jsx` with `!= 0`, `WarehouseSummary.jsx` with `> 0`) applies its own qty predicate — see "Stock filtering semantics".
-- `artifacts/warehouse/decisions.json` — field visibility, form layout (4 cols), discarded fields, `javaQualifier` + `readOnly: true` for the productTransactions entity, `secondaryTabs.accounting` + `entities.accounting.hideDelete` (ETP-4565).
+- `artifacts/warehouse/decisions.json` — field visibility, form layout (4 cols), discarded fields, `readOnly: true` for the productTransactions entity, `secondaryTabs.accounting` + `entities.accounting.hideDelete` (ETP-4565).
 - `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js` — regression guard: `entities.accounting.hideDelete` must be `true`.
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/warehouseUtils.test.js` / `warehouseUtils.vitest.js` — unit tests for `aggregateProducts` (cross-bin summation, UOM resolution, numeric coercion; no longer filters by qty).
 - `tools/app-shell/src/windows/custom/warehouse/__tests__/WarehouseProductsTab.vitest.jsx` — regression guard: list keeps negative-stock rows, hides exact-zero.

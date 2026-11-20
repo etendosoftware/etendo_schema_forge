@@ -75,7 +75,7 @@ This window should let a user create, review, confirm, and manage sales orders f
 - Payment child-entity names: `paymentPlan` and `paymentDetails` are intentionally removed from `decisions.json → excludedEntities`, so the spec push registers them in `ETGO_SF_ENTITY`. Any caller must use these camelCase contract names — not the AD display names `Payment Plan` / `Payment Details`; NEO Headless registers entities by their contract name, so `fetchChild('sales-order', 'Payment Plan', …)` returns `404 Entity not found in spec`. Since ETP-5527 the related-documents definition no longer reads these entities (payments are not related documents).
 - Fulfillment and invoicing reactions: once the order is in `CO`, the topbar always shows two progress badges next to the document-status pill — Delivered (`qtyDelivered / qtyOrdered` across order lines) and Invoiced (the order's `eTGOInvoiceStatus`, re-read from the header get-by-id (`GET <spec>/header/<id>`) on mount and on every ``sales-order:document-created`` event, falling back to the `eTGOInvoiceStatus` of the record the page already holds when that re-read fails. It is the same stored computed column (`EM_ETGO_Invoice_Status`, `ETGO_GET_ORDER_INVOICE_STATUS`, quantity based, synchronous refresh) the list grid shows, so the grid and the detail can no longer disagree (ETP-5729: the badge used to divide completed invoices' `grandTotalAmount` by the order's, amounts with tax, which read e.g. 71% where the grid read 75%). The badge does not compute the percentage itself). Each badge renders the localized label (`Entregado` / `Facturado`) followed by the rounded integer percent (`Math.round(pct × 100)%`), e.g. `Entregado 20%`. The badge tone reuses the same `TONE_STYLES` palette as the Document Status pill, rendered by the shared `ProgressFieldBadge` (`tools/app-shell/src/windows/custom/shared/ProgressFieldBadge.jsx`), computed on the ROUNDED percent (0% neutral, 1-99% neutral, 100% success) via `getProgressTone` (`tools/app-shell/src/lib/progressTone.js`): green (`success`, `#EEFBF4` / `#17663A`) at 100%, gray (`neutral`, `#F5F7F9` / `#3F3F50`) at 0% and while partially complete (1-99%; the partial state is conveyed by the ring, not by the tone). Each badge also shows a 16px `ProgressRing` (shared, `components/contract-ui/ProgressRing.jsx`) to the left of the text, passed to the pill through `DocumentStatusPill`'s `icon` prop: track only at 0%, a partial arc in the badge text colour at 1-99%, a full green ring (`--status-done-badge`) at 100%. Draft shipment and invoice navigation pills are not shown in the topbar; related downstream documents are accessible via the Related Documents tab instead.
 - **Progress badges rendering:** the Delivered and Invoiced badges are rendered through the shared `ProgressFieldBadge` (`tools/app-shell/src/windows/custom/shared/ProgressFieldBadge.jsx`, a `DocumentStatusPill` whose tone icon is replaced by a `ProgressRing` via the `icon` prop; it renders only when `documentStatus === 'CO'`). The tone follows the ROUNDED percent via `getProgressTone`: 0% neutral, 1-99% neutral, 100% success (so 99.8% shows `100%` in green and 0.4% shows `0%` in gray). Single label `<Label> <N>%` (e.g. `Entregado 20%`), from `artifacts/sales-order/custom/OrderDraftChips.jsx` (`data-testid="order-progress-badge"` preserved).
-- Related-document dependencies: the related-documents tab resolves the originating quotation from the header, shipments by `salesOrder`, and invoices via `listInvoices`. Payments are deliberately not related documents (ETP-5527). If none exist, the UI explicitly shows `No related documents`.
+- Related-document dependencies: the related-documents tab resolves the originating quotation from the header, shipments by `salesOrder`, and invoices via `listInvoices` — leaving out the rows flagged `isRectificative` (ETP-6002, QA criterion: a Pedido never shows a factura rectificativa; a rectificative copies the order lines of the invoice it corrects, so it used to appear). Payments are deliberately not related documents (ETP-5527). If none exist, the UI explicitly shows `No related documents`.
 - Linked quotation status pill: the quotation chip in the related-documents tab renders the source quotation as `CA` ("Closed - Order Created" / "Cerrado - Pedido creado"), matching the status the standard Etendo `ConvertQuotationIntoOrder` process sets when an order is generated from a quotation. The chip's title (`Quotation #<docNo>`) and status label both resolve through `useUI()` against the `quotationDoc` and `statusOrderCreated` keys, so the user sees a localised badge instead of the raw English text. The same i18n path covers the other chip kinds (`shipmentDoc`, `invoiceDoc`, `paymentDoc`) and the rest of the status code map (`CO`, `DR`, `VO`, `CL`, `RPPC`, `RPR`, `PWNC`, `RDNC`).
 - Send Email recipient resolution: the Send Email modal (`SendDocumentModal`) pre-fills the `Para` field by fetching `GET /sws/neo/contacts/businessPartner/{businessPartner}` when the modal opens, reading `etgoEmail` (`C_BPartner.EM_Etgo_Email`) from the contacts spec. The field is left empty if no email is registered for the business partner. Sending posts only the contract command to the backend `sales-order-send` email contract; the backend resolves the final recipient and builds the default document payload (`document_type`, `document_number`, and `download_link`) instead of accepting recipient/template/provider fields from the browser. The modal title uses `useMenuLabel()` so it renders in the active UI language (e.g. "Factura de Venta" in Spanish instead of "Invoice").
 - Send Email editable subject/message (ETP-4717): the `Asunto` (subject, auto-derived as `${documentType} #${documentNo} — ${bpName}`) and `Mensaje` fields in the Send Email modal are editable text inputs, not read-only display fields. If the user leaves both untouched, the outgoing command is byte-identical to the legacy payload (no `messageEdits` key is sent). If either is changed, `SendDocumentModal` sends `messageEdits: { subject, message }` alongside the existing `recipientEdits`, and the backend `sales-order-send` contract applies the override when composing the email.
@@ -123,7 +123,7 @@ The MCP publishes `createShipment`, `createDraftInvoice` and `cloneRecord` for t
 9. On a completed order with related records, open `Related Documents` and confirm quotation, shipment, and invoice chips navigate to the expected records, and that no payment chip is listed even when the order has payments. Verify the quotation chip shows the green `Closed - Order Created` / `Cerrado - Pedido creado` pill (regression: the chip used to render `Completed` / `Confirmado` because the status was hardcoded to `CO`).
 10. On a completed order **without linked documents** (no invoices, no shipments), open the three-dot menu and confirm `Reactivate Order` appears (no `Cancel` — cancellation is handled by a dedicated header button). Click it and verify the order transitions back to `DR`, editable fields become writable, and a `sonner` toast notification appears with the message `Document reactivated` / `Documento reactivado` (i18n key `reactivated`). On a completed order **with** a linked invoice or shipment, open the three-dot menu and verify `Reactivate Order` is **not visible** — the `hasLinkedDocuments` backend flag must hide the action before the user can even attempt it.
 11. In the list view, select two or more completed orders and verify the bulk document-action button — labeled `Procesar` since ETP-5302 — appears in the selection bar with `Reactivar` (`RE`) offered in its dropdown. Mix one draft row into the selection and verify the button disappears. Trigger the bulk action with one valid and one invoice-linked order and verify the failure summary lists the rejected document while the valid one reactivates.
-12. In the list view, select two or more completed orders. Verify a kebab (three-dot) button appears as the first item of the bulk-action group, just before `Procesar` (the button was named `Confirmar` before ETP-5302). Open the kebab and confirm the two items `Crear facturas` and `Crear albaranes` are listed. Trigger each one and verify an invoice (in **Confirmado**, not Borrador — ETP-5381) and a draft shipment are created per selected order, and the resulting toast reads `PROCESO EJECUTADO: N registros procesados correctamente y 0 registros fallidos`. Then add one draft order to the selection and trigger either menu item: the toast must downgrade to a warning showing the per-order failure for the non-completed row while the completed orders still produce their documents. **ETP-5302:** the page must **not** reload — scroll down a long list, apply a filter, run the menu item, and confirm the filter and scroll position survive while only the rows refetch and the toast appears immediately. The same applies to the `Procesar` button beside the kebab, whose dialog confirm button now reads **Aceptar** / **Accept** rather than "Completado".
+12. In the list view, select two or more completed orders. Verify a kebab (three-dot) button appears as the first item of the bulk-action group, just before `Procesar` (the button was named `Confirmar` before ETP-5302). Open the kebab and confirm the two items `Crear facturas` and `Crear albaranes` are listed. Trigger each one and verify an invoice (in **Confirmado**, not Borrador — ETP-5381) and a draft shipment are created per selected order, and the resulting toast reads `Proceso ejecutado: N registros procesados correctamente y 0 con error.` (sentence case since ETP-6286). Then add one draft order to the selection and trigger either menu item: the toast must downgrade to a warning showing the per-order failure for the non-completed row while the completed orders still produce their documents. **ETP-5302:** the page must **not** reload — scroll down a long list, apply a filter, run the menu item, and confirm the filter and scroll position survive while only the rows refetch and the toast appears immediately. The same applies to the `Procesar` button beside the kebab, whose dialog confirm button now reads **Aceptar** / **Accept** rather than "Completado".
 13. Re-run either menu item on the same selection without first completing the freshly created documents. **The two halves behave differently.** For `Crear albaranes` (still a draft flow), each order reports back as failed with the client-side `Pedido {documentNo} ya tiene un albarán en borrador` message and no duplicate draft is created; complete one of those drafts (so its status moves to `CO` while leaving pending qty on the order) and trigger the item again — that order must succeed. For `Crear facturas` there is no client-side probe (ETP-5828): the generated invoice is already `CO` (ETP-5381), so the request reaches the backend, which rejects it with the "no pending lines" **400** once the order is fully invoiced. Verify no duplicate invoice is produced either way. Then create a draft sales invoice by hand and import part of an order into it (Importar desde pedido): the order shows «Generar factura» again, and both the detail button and `Crear facturas` create an invoice with only what is left (net of the draft), carrying the order's global discount as a %. Import the rest of the order into that draft too: the button disappears and `Crear facturas` fails for that order with «La factura borrador FV… ya cubre lo que queda por facturar…».
 14. On a draft order, open the confirm modal and check both `Create shipment` and `Create invoice`. From the browser console, override `window.fetch` to return a 500 for the `createDraftInvoice` request (or `createShipment` for the inverse case) and confirm. Verify the first request that succeeded actually created its document, the second one displays the localised error, and the modal stays open. Retry from the same modal without removing the override and verify (a) the already-completed step's card is green, locked, and shows "Already created" / "Ya creado" and (b) no duplicate shipment is created — the network tab must NOT show a second `documentAction=CO` (no `@AlreadyPosted@` 400) nor a second `createShipment` request. Restore the original `fetch` and confirm again: only the previously-failed step runs, and the result modal lists both documents (shipment from the first attempt + invoice from the retry, or vice-versa) with their document numbers. Verify the same flow with locale switched to Spanish to make sure `soAlreadyCreated` is translated.
 15. Open an existing sales order that has linked payments and open its Related Documents tab while watching the network tab: no `paymentPlan` request is issued and no payment is listed (payments are not related documents since ETP-5527).
@@ -839,6 +839,51 @@ The printed order uses the organization's saved design (variant, color, font, te
 
 `businessPartner.agentPrompt`: names can repeat; agents tell partners apart by reading `searchKey` and `taxID` from `contacts/businessPartner` with an `id in [...]` filter. Feedback M-191.
 
+## Public API — complete action — ETP-6157
+
+`decisions.json` opts the window into the public API's `complete` action
+(`window.publicApi.actions: ["complete"]`), so the manifest (`public-api/base.v1.json`) declares
+`POST /api/v1/sales-order/{id}/actions/complete`. It is the only action the window publishes. The gateway sends
+`{"docAction": "CO"}` to `POST /sws/neo/sales-order/header/{id}/action/documentAction`, the same document action as
+the window's confirm button, and answers the order re-read with `document_status` `CO`.
+
+- The API key needs `public-api:process`; a key without it gets `403`.
+- The order needs a payment method, which it inherits from its contact's `payment_method` when it is created;
+  without one Etendo refuses with `422 business_rule`. A contact created through the API has none: the caller
+  looks one up and sets it first (see "Public API — payment-method lookup" below).
+- Completing an order that is already `CO` answers `200` with `meta.alreadyApplied: true` and runs nothing.
+- A `PATCH` or `DELETE` on the completed order answers `422`; no public action reopens or voids it.
+
+Evidence: `gateway/e2e/support/orders.ts` (`complete action`), shared by the sales and purchase order flows.
+Contract: `docs/public-api.md` §4.2.1.
+
+## Public API — payment-method lookup — ETP-6160
+
+`decisions.json` declares a lookup on the header's `paymentMethod`
+(`publicApi.lookup: { "context": { "IsSOTrx": "Y" } }`), so the manifest publishes
+`GET /api/v1/sales-order/lookups/payment_method`. It lists the tenant's active payment methods, the same list the app
+offers, as `{ type: "payment-method", id, attributes: { label } }`, with `filter[search]` and
+`page[number]` / `page[size]`. The gateway calls `GET /sws/neo/sales-order/header/selectors/paymentMethod` with
+`IsSOTrx=Y` fixed; a caller's own parameters are refused with `400`. The context is forwarded to the field's
+selector; whether it narrows the list depends on that field's validation rule, as in the app. Integrators must not
+rely on the list being filtered by sales or purchase.
+
+An integrator with no id known beforehand completes an order this way: `GET /api/v1/contacts/lookups/payment_method`,
+`PATCH` the contact's `payment_method` (with `If-Match`), create the order (it inherits the value), then
+`POST /api/v1/sales-order/{id}/actions/complete`. Setting `payment_method` on the order directly, with an id from this
+window's lookup, works too.
+
+Evidence: `gateway/e2e/support/orders.ts` (`complete action`). Contract: `docs/public-api.md` §4.2.2.
+
+## Public API V1 warehouse selection
+
+The public API exposes this order and its lines, including the header's `complete` action.
+Choose the warehouse with `GET /api/v1/sales-order/lookups/warehouse` and send the selected id as
+`data.attributes.warehouse` when creating the order. The field is optional: if it is omitted,
+Etendo assigns a warehouse when the order is created. There is no `relationships.warehouse`,
+because the warehouse collection is outside V1. Partial updates can omit an unchanged
+warehouse. Document-state validation remains with the runtime, as in the app.
+
 ## Fiscal data step before the invoice is created — ETP-6179
 
 - **Confirmar** with *Crear factura* ticked (`ConfirmModal` in `OrderCreateInvoice.jsx`) and
@@ -848,17 +893,27 @@ The printed order uses the organization's saved design (variant, color, font, te
   SII key the customer's own default key when it declares one, else `F1`.
 - The list's bulk "Crear facturas" (`BulkOrderMoreMenu`, ONE invoice per selected order) reads the
   `sifDefaults` preview of every completed selected order first. Whenever a fiscal system is active
-  it shows the fiscal data READ-ONLY (`InvoiceSifStepModal` in `readOnly` mode) with the notice "All
+  it shows ONE EDITABLE set of fiscal data for every invoice of the run (`BulkInvoiceSifStepModal`),
+  with the same red `*` and the same blocked confirm as the single-record step, and the notice "All
   invoices will be created with this fiscal information for submission to <systems>. To use
-  different values on an invoice, create it individually." (`invoiceSifStep.bulkNotice`). A field
-  with the same value for every order shows it; a field that differs shows "Según cada cliente"
-  (`invoiceSifStep.variesPerCustomer`) for the SII key — customers with their own key, the only
-  realistic difference in GO, where a client has one organization and one fiscal system — and
-  "Según cada pedido" (`invoiceSifStep.variesPerOrder`) for anything else (e.g. an order created in
-  Classic with its own SII description or operation date). Confirm creates the invoices, each POST
-  sending its OWN order's preview values as `sifFields`; Cancel creates nothing. Editing per
-  invoice only happens in the individual flow.
-- When no system is active, or a preview cannot be read, no summary is shown and the run goes on as
+  different values on an invoice, create it individually." (`invoiceSifStep.bulkNotice`). The
+  values chosen there go to ALL the invoices; editing per invoice only happens in the individual
+  flow.
+  - A field with the same value for every order shows it. A field that differs starts empty with
+    the note "Según cada cliente" (`invoiceSifStep.variesPerCustomer`) for the SII key — customers
+    with their own key, the only realistic difference in GO — or "Según cada pedido"
+    (`invoiceSifStep.variesPerOrder`) for anything else (e.g. an order created in Classic with its
+    own SII description or operation date). Left untouched, each invoice keeps its own value; once
+    the user picks one, it goes to every invoice. An untouched differing field counts as filled,
+    unless it is mandatory and one order has it empty: then the user must set it.
+  - If an order of the run produces a rectificative, the rectification codes (SII motive,
+    TicketBAI code, VERI*FACTU R1–R5 type) are shown empty with `*` and must be chosen; they are
+    sent to the rectificative invoices only, never to the ordinary ones of the same run. In a run
+    that mixes both kinds those fields read "(solo facturas rectificativas)" and VERI*FACTU's type
+    appears twice, once per kind.
+  - Confirm creates the invoices, each POST sending the chosen values as its `sifFields` (plus its
+    own value for any differing field left untouched); Cancel or × creates nothing.
+- When no system is active, or a preview cannot be read, no step is shown and the run goes on as
   before: each invoice gets its own backend defaults.
 
 The step is shared (`tools/app-shell/src/windows/custom/shared/InvoiceSifStep.jsx`) and built
@@ -871,4 +926,13 @@ its invoice because of a fiscal problem. The values travel as `sifFields` in the
 body; the backend validates them with the same per-system rule as the invoice's own completion
 (`RectificationFiscalCodeGuard`, 422 `ETGO_InvoiceRectificationCodeRequired`). If the preview cannot
 be loaded the flow continues without the step: the backend applies the same defaults anyway.
+The mandatory fields of the step carry the red `*` and keep the primary button disabled while
+empty (SII *Tipo factura* and *Descripción SII*; VERI*FACTU *Tipo de factura*, *Descripción de la
+operación* and, with VERI*FACTU active, *Fecha operación*; on a rectificative also each system's
+rectification code, which order flows never preselect — only a customer return's preview comes with `R1`). The rule is shared with the invoices' SIF tab:
+`docs/ui-customization.md` §21b.
 Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. The header `eTGOCurrencyRate` (`EM_ETGO_Currency_Rate`) is now `decimal` in the contract (`tsType: number`).

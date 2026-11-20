@@ -547,7 +547,7 @@ git commit -m "feat: classify {windowName} schema fields and rules"
 
 # 3. Push and create PR targeting develop
 git push -u origin feature/classify-{windowName}
-gh pr create --base develop --title "feat: classify {windowName} schema and rules" --body "$(cat <<'PREOF'
+gh pr create --assignee @me --base develop --title "feat: classify {windowName} schema and rules" --body "$(cat <<'PREOF'
 ## Summary
 - Classify {N} fields across {M} entities for {WindowName}
 - {K} rules curated ({kept} Keep, {omitted} Omit)

@@ -162,7 +162,7 @@ test.describe('Tenant upgrade — cookie session scheme', () => {
 
   test('a different pending plan requires explicit replacement before the selected monthly checkout opens', async ({ page }) => {
     await installEnvironmentsMock(page, [CURRENT_ENV]);
-    await installPlansMock(page, [{ ...PRODUCTIVE_PLAN, secondMonthFree: true }]);
+    await installPlansMock(page, [{ ...PRODUCTIVE_PLAN, freeTrialDays: 30 }]);
     const requests = [];
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));

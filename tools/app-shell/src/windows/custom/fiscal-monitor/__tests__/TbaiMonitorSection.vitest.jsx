@@ -15,7 +15,7 @@ const stableToggleRow = vi.fn();
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
-vi.mock('lucide-react', () => ({}));
+vi.mock('@phosphor-icons/react', () => ({}));
 vi.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ checked, onChange }) => <input type="checkbox" checked={!!checked} onChange={onChange ?? (() => {})} />,
 }));

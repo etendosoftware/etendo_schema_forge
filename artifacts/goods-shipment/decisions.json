@@ -293,7 +293,6 @@
     },
     "lines": {
       "name": "goodsShipmentLine",
-      "javaQualifier": "goodsShipmentLineHandler",
       "fields": {
         "lineNo": {
           "visibility": "system"

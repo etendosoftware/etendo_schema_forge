@@ -10,10 +10,10 @@ vi.mock('@/i18n', () => ({
 }));
 // ETP-5584 — FmBoxes303 renders the app's Radix Select; drive it as a native <select>.
 vi.mock('@/components/ui/select', () => import('../../../__tests__/testUtils/nativeSelectMock.jsx'));
-vi.mock('lucide-react', () => ({
-  TrendingUp: () => null,
-  TrendingDown: () => null,
-  Pencil: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  TrendUpIcon: () => null,
+  TrendDownIcon: () => null,
+  PencilSimpleIcon: () => null,
 }));
 vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
   // Forwards `disabled` straight through, matching the real CheckboxField

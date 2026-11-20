@@ -5,10 +5,11 @@ import { DateField } from '@/components/ui/date-field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FIELD_HEIGHT, ROW_GAP_Y, LABEL_GAP } from '@/components/ui/formDensity';
 import { PillToggle } from '@/components/PillToggle';
-import { ArrowUpRight, Loader2, Search } from 'lucide-react';
+import { ArrowUpRightIcon, CircleNotchIcon, MagnifyingGlassIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
 import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast } from '@/lib/numericValidation.js';
+import { dateFieldToastId, getDateFieldError } from '@/lib/dateFieldValidation.js';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { NUMERIC_FIELD_TYPES, TWO_DECIMAL_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
 import { getContactsTextFieldError, getContactsTaxIdError, filterContactsInputValue } from './contactsFieldValidation.js';
@@ -23,6 +24,7 @@ import ProductSearchDrawer from './ProductSearchDrawer.jsx';
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { committedItemFromRow } from './selectorSelection.js';
 import { CreateContactContext } from './CreateContactContext.js';
+import { FieldCreateContext } from './FieldCreateContext.js';
 import { PartnerAddressPicker } from './PartnerAddressPicker.jsx';
 import { CurrencyRatePicker, resolveRateDateField } from './CurrencyRatePicker.jsx';
 import PrefixedInput from './PrefixedInput.jsx';
@@ -144,7 +146,7 @@ function PopupSearchInput({ field, value, displayValue, onChange, label, selecto
         {...(displayText ? {} : { 'data-placeholder': '' })}
         className={`w-full ${FIELD_HEIGHT} text-sm rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] hover:bg-[hsl(var(--field-hover))] ring-2 ring-transparent focus:ring-primary focus:outline-none`}
       >
-        <Search
+        <MagnifyingGlassIcon
           className="h-4 w-4 text-muted-foreground shrink-0"
           data-testid={"Search__" + field.id} />
         {displayText ? (
@@ -303,7 +305,7 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
         <SelectValue
           placeholder={selectPlaceholder}
           data-testid={"SelectValue__" + field.id} />
-        {loading && <Loader2
+        {loading && <CircleNotchIcon
           className="h-4 w-4 text-muted-foreground animate-spin ml-auto mr-1"
           data-testid={"Loader2__" + field.id} />}
       </SelectTrigger>
@@ -334,7 +336,7 @@ function LookupFormField({ field, value, displayValue, row, selectorUrl, selecto
         onClick={() => setOpen(true)}
         className={`w-full flex items-center gap-2 ${FIELD_HEIGHT} rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-sm text-left shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] hover:bg-[hsl(var(--field-hover))] ring-2 ring-transparent focus:ring-primary focus:outline-none`}
       >
-        <Search
+        <MagnifyingGlassIcon
           className="h-4 w-4 text-muted-foreground shrink-0"
           data-testid={"Search__" + field.id} />
         {display ? (
@@ -525,6 +527,31 @@ function formatReadOnlyDisplayValue(f, isReadOnly, rawDisplayValue) {
     return rawDisplayValue;
   }
     return parseFloat(Number(rawDisplayValue).toFixed(10));
+}
+
+/**
+ * ETP-6148 — `optionBadge` (decisions.json, on a selector field): a `renderOption` for
+ * CreatableSearchSelect that appends a small neutral badge (`ui(labelKey)`) to every option whose
+ * selector item has `item[field] === equals` (e.g. remittance's Cuenta: «Sin IBAN» when
+ * `ibanValid` is false). Returns undefined without the option, so the default row renders.
+ */
+export function buildOptionBadgeRenderer(f, ui) {
+  const badge = f?.optionBadge;
+  if (!badge?.field || !badge?.labelKey) return undefined;
+  const text = ui(badge.labelKey);
+  return (opt) => (
+    <span className="inline-flex min-w-0 items-center gap-2">
+      <span className="truncate">{opt.labelPrefix && `${opt.labelPrefix} - `}{opt.name}</span>
+      {opt?.[badge.field] === badge.equals && (
+        <span
+          className="shrink-0 rounded-full border border-[hsl(var(--border-subtle))] bg-muted px-2 py-0.5 text-xs font-medium text-[hsl(var(--muted-foreground))]"
+          data-testid={`option-badge-${f.key}-${opt.id}`}
+        >
+          {text}
+        </span>
+      )}
+    </span>
+  );
 }
 
 function buildSearchSelectorUrl(apiBaseUrl, entity, f, apiSelectorEntry) {
@@ -804,14 +831,38 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
  * box, bounded by the field's `min` / `max`). Not combined with `calloutOn: 'blur'`, whose
  * deferred input wins.
  */
+/**
+ * ETP-6148 — the values the date fields with a `minDate` had when the current record was
+ * first rendered, so the `minDate` check only refuses a NEW value: an existing record
+ * whose date is already in the past keeps opening and saving its other fields. Re-captured
+ * whenever the record id changes; a new record (no id) has no loaded values.
+ */
+function useLoadedMinDateValues(data, fields) {
+  const ref = useRef({ id: undefined, values: {} });
+  const id = data?.id;
+  if (ref.current.id !== id) {
+    const values = {};
+    if (id) {
+      for (const f of fields) {
+        if (f.type === 'date' && f.minDate) values[f.key] = data?.[f.key];
+      }
+    }
+    ref.current = { id, values };
+  }
+  return ref.current.values;
+}
+
 export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false, trailing, renderAsFragment = false, navigate, initialRows, documentDateField, variant = 'default', gap }) {
   const compact = variant === 'compact';
   const t = useLabel(labelOverrides ?? api?.labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();
   const { locale } = useLocaleSwitch();
+  const loadedMinDateValues = useLoadedMinDateValues(data, fields);
   const effectiveSelectorContext = useMemo(() => selectorContext ?? {}, [selectorContext]);
   const capabilities = useCapabilitiesSafe();
+  // A custom window's own create modal for a selector field (FieldCreateContext); null = none.
+  const fieldCreateCtx = React.useContext(FieldCreateContext);
   const visibleBaseFields = fields.filter(f => !excludeFields.includes(f.key));
   let displayFields;
   if (section) {
@@ -944,7 +995,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
             className={`${FIELD_HEIGHT} inline-flex w-full items-center justify-between gap-1 rounded-md border border-border-subtle bg-card px-3 text-left text-sm text-foreground underline decoration-[hsl(var(--border-control))] underline-offset-4 hover:decoration-[hsl(var(--foreground))]`}
             data-testid={`fk-link-${f.key}`}>
             <span className="truncate">{displayValue}</span>
-            <ArrowUpRight className="h-3 w-3 shrink-0" data-testid="ArrowUpRight__a8d626" />
+            <ArrowUpRightIcon className="h-3 w-3 shrink-0" data-testid="ArrowUpRight__a8d626" />
           </button>
         ) : (
           <Input
@@ -982,11 +1033,20 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
       token,
       emptyOptionLabel: resolveUiKey(ui, f.emptyOptionLabelKey),
       serverSearch: true,
+      // ETP-6148 — decisions.json `optionBadge`: undefined (the default row) for every other field.
+      renderOption: buildOptionBadgeRenderer(f, ui),
     };
     const canCreate = !!(f.allowCreate && f.createSpec && f.createEntity && apiBaseUrl);
     const createTitle = f.createTitleKey
       ? resolveUiKey(ui, f.createTitleKey)
       : (resolveUiKey(ui, f.createLabelKey) ?? '');
+    // A window-provided create modal (FieldCreateContext), only when the generic one is not set.
+    const customCreate = !canCreate ? fieldCreateCtx?.[f.key] : null;
+    const customCreateProps = customCreate ? {
+      createLabel: customCreate.label,
+      // onOpen's callback receives `{ id, name }`; CreatableSearchSelect's onCreated `(id, name)`.
+      onCreateRequest: (query, onCreated) => customCreate.onOpen(query, (opt) => onCreated(opt.id, opt.name)),
+    } : {};
     return (
       <div key={f.key} className={LABEL_GAP}>
         <Label
@@ -1006,7 +1066,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
             namePlaceholder={resolveUiKey(ui, f.createNamePlaceholderKey)}
             data-testid="InlineCreateSelector__a8d626" />
         ) : (
-          <CreatableSearchSelect {...commonProps} data-testid="CreatableSearchSelect__a8d626" />
+          <CreatableSearchSelect {...commonProps} {...customCreateProps} data-testid="CreatableSearchSelect__a8d626" />
         )}
       </div>
     );
@@ -1248,6 +1308,20 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   };
 
   // Date field (DateField wrapper).
+  // ETP-6148 — `minDate` feedback. DateField (app-shell-core) disables earlier days and
+  // refuses an earlier typed date itself, reporting it through `onMinDateRejected`; a value
+  // that does reach onChange (an older core without `minDate`, or a pasted value) is checked
+  // on commit too. DateField commits through onChange right before its onBlur, so the
+  // committed value is checked here rather than off the stale `data`. Same stable toast id as
+  // the useEntity save gate, so commit-then-Save shows one toast.
+  const validateDateOnCommit = (f, iso) => {
+    const err = getDateFieldError(f, iso, loadedMinDateValues[f.key], { locale });
+    if (!err) return;
+    const toastId = dateFieldToastId(f.key);
+    toast.error(ui(err.key, err.params), { id: toastId });
+    trackSaveBlockToast(toastId);
+  };
+
   const renderDateField = (f, label, isReadOnly) => (
     <div key={f.key} className={LABEL_GAP}>
       <Label
@@ -1261,10 +1335,15 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         name={f.key}
         data-testid={`field-${f.key}`}
         value={data?.[f.key] ?? ''}
-        onChange={(iso) => onChange?.(f.key, iso, f.column)}
+        onChange={(iso) => {
+          validateDateOnCommit(f, iso);
+          onChange?.(f.key, iso, f.column);
+        }}
         onBlur={() => onFieldBlur?.(f.key)}
         disabled={isReadOnly || savingField === f.key}
         required={f.required && !isReadOnly}
+        minDate={f.minDate}
+        onMinDateRejected={(iso) => validateDateOnCommit(f, iso)}
       />
     </div>
   );
