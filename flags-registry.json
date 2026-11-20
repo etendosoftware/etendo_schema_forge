@@ -209,15 +209,6 @@
           ]
         },
         {
-          "id": "cross-repository-score-rollup",
-          "kind": "open",
-          "note": "The current flag-debt registry scores Schema Forge paths and cannot attribute Core and NEO ownership directly. The debt remains visible through this feature entry, but the score is not a complete three-repository measure until the registry rollup work lands.",
-          "refs": [
-            "ETP-4697 — Split flags-registry into per-repo registries with rollup scoring",
-            "docs/flag-debt.md — multi-repository registry limitation"
-          ]
-        },
-        {
           "id": "core-contribution-for-resolve-dependent-entity",
           "kind": "open",
           "note": "The unit spec for the shared resolution logic, packages/app-shell-core/src/lib/import/__tests__/resolveDependentEntity.test.js, lives in schema_forge_core and used to be declared here as a ../ path that scored present or pending depending on a sibling checkout being on disk. A v3 registry cannot reach it, so it is no longer declared here. Therefore that test is unscored until schema_forge_core's flags-registry.json carries a contribution for this feature id.",
@@ -239,7 +230,8 @@
             "note": "Pending real import coverage for existing, new, repeated, ambiguous, invalid, and legacy categories."
           }
         ]
-      }
+      },
+      "$deferredItemsComment": "CLOSED by ETP-4697 — `cross-repository-score-rollup` (kind: open) is retired, not deleted quietly: `make flag-debt-rollup` now merges the per-repo registries by feature id before scoring. What it recorded as still missing — core's side of this feature — is tracked by `core-contribution-for-resolve-dependent-entity`, which is charged until schema_forge_core's registry carries a contribution for this id."
     },
     {
       "id": "acct-process-monitor",

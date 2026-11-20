@@ -258,7 +258,7 @@ sf-flag-debt --rollup flags-registry.json ../schema_forge_core/flags-registry.js
 The rollup merges entries **by feature id** — one header plus its contributions — and only then
 scores the merged feature. It never sums per-repo scores: the flat spec penalties
 (`+5` unit, `+8` e2e) belong to the feature, so a feature with pending specs in two repos pays
-once, not twice. Touch points are scanned in every repo with the union of the symbols, owned
+once, not twice. Touch points are scanned in every repo with the header's symbols plus that repo's own contribution symbols (a contribution's symbols are never searched in another repo), owned
 paths applying per repo; lifecycle comes from the header; open items are the header's plus every
 contribution's.
 
