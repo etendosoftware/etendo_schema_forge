@@ -65,9 +65,10 @@ export function docUrl(location) {
 }
 
 function stripHtml(html) {
-  const div = document.createElement('div');
-  div.innerHTML = html || '';
-  return div.textContent || '';
+  // ETP-4561 — DOMParser builds an inert document: unlike `div.innerHTML` on a detached
+  // element it never fetches <img src> nor fires onerror handlers from the doc content.
+  const doc = new DOMParser().parseFromString(html || '', 'text/html');
+  return doc.body.textContent || '';
 }
 
 function titleCase(segment) {

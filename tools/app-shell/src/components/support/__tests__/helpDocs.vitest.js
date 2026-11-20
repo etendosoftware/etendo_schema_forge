@@ -184,3 +184,13 @@ describe('helpDocs', () => {
     });
   });
 });
+
+describe('helpDocs searchHelpDocs — hostile doc text (ETP-4561)', () => {
+  it('strips tags without executing handlers or loading resources', () => {
+    window.__xss = undefined;
+    const docs = [{ location: 'a/', title: 'A', text: '<img src=x onerror="window.__xss=1">hello <b>world</b>' }];
+    const results = searchHelpDocs(docs, 'hello world');
+    expect(window.__xss).toBeUndefined();
+    expect(JSON.stringify(results)).not.toContain('<img');
+  });
+});
