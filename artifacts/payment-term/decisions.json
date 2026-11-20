@@ -4,6 +4,7 @@
   "window": {
     "category": "settings",
     "name": "Payment Term",
+    "breadcrumb": "Treasury / Payment Term",
     "detailEntity": null,
     "layoutType": "list-modal",
     "templateConfig": {

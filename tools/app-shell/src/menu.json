@@ -249,7 +249,8 @@
           "label": "Stock Report",
           "favname": "Inventory Stock Report",
           "hidden": true,
-          "reportId": "inventory-stock-report"
+          "reportId": "inventory-stock-report",
+          "path": "report-viewer?category=inventory&report=inventory-stock-report"
         }
       ]
     },
@@ -280,9 +281,9 @@
       ]
     },
     {
-      "group": "Finance",
-      "icon": "Building2",
-      "section": "Finance",
+      "group": "Treasury",
+      "icon": "Wallet",
+      "section": "Treasury",
       "items": [
         {
           "name": "payment-in",
@@ -303,19 +304,56 @@
           "windowId": "94EAA455D2644E04AB25D93BE5157B6D"
         },
         {
-          "name": "remittance",
-          "label": "Remittance",
-          "favname": "Remittance",
-          "accessWindowId": "FF8080812E71F7C7012E71FD0499001B",
-          "capability": "sepaRemittances"
-        },
-        {
           "name": "match-rule",
           "label": "Match Rule",
           "favname": "Match Rule",
           "hidden": true,
           "routeOnly": true,
           "windowId": "24963D64E83B4543A7F6BD248CF944EE"
+        },
+        {
+          "name": "report-viewer-treasury",
+          "label": "Reports",
+          "favname": "Treasury Reports",
+          "path": "report-viewer?category=treasury",
+          "accessWindowId": "D647D118F5014D00AF47A636B2CD0DD3",
+          "requiresGroupReport": true
+        },
+        {
+          "name": "payment-term",
+          "label": "Payment Term",
+          "favname": "Payment Term",
+          "windowId": "141"
+        },
+        {
+          "name": "aging-receivable",
+          "label": "Aging Report (Receivables)",
+          "favname": "Aging Report (Receivables)",
+          "hidden": true,
+          "reportId": "aging-receivable",
+          "path": "report-viewer?category=treasury&report=aging-receivable"
+        },
+        {
+          "name": "aging-payable",
+          "label": "Aging Report (Payables)",
+          "favname": "Aging Report (Payables)",
+          "hidden": true,
+          "reportId": "aging-payable",
+          "path": "report-viewer?category=treasury&report=aging-payable"
+        }
+      ]
+    },
+    {
+      "group": "Finance",
+      "icon": "Building2",
+      "section": "Finance",
+      "items": [
+        {
+          "name": "remittance",
+          "label": "Remittance",
+          "favname": "Remittance",
+          "accessWindowId": "FF8080812E71F7C7012E71FD0499001B",
+          "capability": "sepaRemittances"
         },
         {
           "name": "chart-of-accounts",
@@ -451,56 +489,48 @@
           "label": "Tax Report",
           "favname": "Tax Report",
           "hidden": true,
-          "reportId": "tax-report"
-        },
-        {
-          "name": "aging-receivable",
-          "label": "Aging Report (Receivables)",
-          "favname": "Aging Report (Receivables)",
-          "hidden": true,
-          "reportId": "aging-receivable"
-        },
-        {
-          "name": "aging-payable",
-          "label": "Aging Report (Payables)",
-          "favname": "Aging Report (Payables)",
-          "hidden": true,
-          "reportId": "aging-payable"
+          "reportId": "tax-report",
+          "path": "report-viewer?category=finance&report=tax-report"
         },
         {
           "name": "balance-sheet",
           "label": "Balance Sheet",
           "favname": "Balance Sheet",
           "hidden": true,
-          "reportId": "balance-sheet"
+          "reportId": "balance-sheet",
+          "path": "report-viewer?category=finance&report=balance-sheet"
         },
         {
           "name": "profit-loss",
           "label": "Profit & Loss",
           "favname": "Profit & Loss",
           "hidden": true,
-          "reportId": "profit-loss"
+          "reportId": "profit-loss",
+          "path": "report-viewer?category=finance&report=profit-loss"
         },
         {
           "name": "report-general-ledger",
           "label": "General Ledger",
           "favname": "General Ledger",
           "hidden": true,
-          "reportId": "report-general-ledger"
+          "reportId": "report-general-ledger",
+          "path": "report-viewer?category=finance&report=report-general-ledger"
         },
         {
           "name": "report-journal-entries",
           "label": "Journal Entries",
           "favname": "Journal Entries",
           "hidden": true,
-          "reportId": "report-journal-entries"
+          "reportId": "report-journal-entries",
+          "path": "report-viewer?category=finance&report=report-journal-entries"
         },
         {
           "name": "report-trial-balance",
           "label": "Trial Balance",
           "favname": "Trial Balance",
           "hidden": true,
-          "reportId": "report-trial-balance"
+          "reportId": "report-trial-balance",
+          "path": "report-viewer?category=finance&report=report-trial-balance"
         }
       ]
     },
@@ -532,12 +562,6 @@
           "label": "Document Sequence",
           "favname": "Document Sequence",
           "windowId": "112"
-        },
-        {
-          "name": "payment-term",
-          "label": "Payment Term",
-          "favname": "Payment Term",
-          "windowId": "141"
         },
         {
           "name": "business-partner-category",

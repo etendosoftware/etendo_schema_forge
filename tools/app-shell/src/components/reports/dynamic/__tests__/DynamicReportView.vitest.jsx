@@ -39,6 +39,7 @@ vi.mock('@/pages/ReportViewerPage.jsx', () => ({
 
 import DynamicReportView from '../DynamicReportView.jsx';
 import DynamicReportBalance from '../DynamicReportBalance.jsx';
+import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { LEDGER_LINE_CAP } from '../drillDown.js';
 
 const REPORT = {
@@ -138,6 +139,30 @@ beforeEach(() => {
   globalThis.URL.revokeObjectURL = vi.fn();
 });
 afterEach(() => vi.useRealTimers());
+
+// The first breadcrumb level names the report's own category (Tesorería for the aging reports),
+// Finance when the contract has none. The category → label mapping itself is unit-tested in
+// components/reports/__tests__/reportCategories.vitest.js.
+describe('DynamicReportView — breadcrumb', () => {
+  const lastBreadcrumb = () => useSetPageMeta.mock.calls.map(([meta]) => meta).filter((m) => m?.breadcrumb).at(-1).breadcrumb;
+
+  beforeEach(() => useSetPageMeta.mockClear());
+
+  it.each([
+    ['treasury', 'Treasury', '/report-viewer?category=treasury'],
+    ['finance', 'Finance', '/report-viewer?category=finance'],
+    [undefined, 'Finance', '/report-viewer?category=finance'],
+    ['no-such-category', 'Finance', '/report-viewer?category=no-such-category'],
+  ])('category %j: first level %s, Reports links to %s', async (category, label, href) => {
+    renderView({ report: { ...REPORT, category } });
+    await waitFor(() => expect(queries()).toHaveLength(1));
+    expect(lastBreadcrumb()).toEqual([
+      { label },
+      { label: 'Reports', href },
+      { label: 'Pérdidas y Ganancias' },
+    ]);
+  });
+});
 
 describe('DynamicReportView — opening (§19)', () => {
   it('opens on the fiscal year that contains today, with the schema and org, and never sends a year', async () => {

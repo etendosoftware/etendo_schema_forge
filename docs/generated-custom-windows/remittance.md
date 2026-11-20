@@ -43,8 +43,8 @@ capability `sepaRemittances` (`SEPA_REMITTANCES_CAPABILITY` in `lib/capabilityVi
 The Financiero role template gets the window through `TemplateRoleWindowAccess`.
 
 Wiring:
-- **Menu** (`menu.json`): group Finance (Finanzas / Tesorería), right after Cuentas
-  (`financial-account`). Item `remittance`, label `Remittance` (menu label «Remesas» in Spanish),
+- **Menu** (`menu.json`): group Finance (Finanzas), first item of the group (Cuentas, Cobro and
+  Pago moved to the Tesorería group in ETP-6389; Remesas stayed in Finanzas). Item `remittance`, label `Remittance` (menu label «Remesas» in Spanish),
   `accessWindowId: "FF8080812E71F7C7012E71FD0499001B"`, `capability: "sepaRemittances"`. The
   sidebar shows it only when both are granted. The reviewed navigation baseline
   (`windows/__tests__/navigationExpectations.js`) lists it with the same two gates.
@@ -883,7 +883,7 @@ These need a new column, which the scope rules out, or a later task. None was in
 - `agent-prompts/remittance/spec.md`.
 - `cli/config/regen-windows.json` (entry `remittance`).
 - `tools/app-shell/src/windows/custom/remittance/index.jsx` (route guard), `windows/registry.js`
-  (`customLoaders.remittance`), `menu.json` (Finance, after `financial-account`).
+  (`customLoaders.remittance`), `menu.json` (Finance, first item).
 - `tools/app-shell/src/lib/statusToneOverride.js` (per-column status tones).
 - `artifacts/remittance/custom/RemittanceBottomPanel.jsx`, `SelectDueItemsModal.jsx` and
   `remittanceDueItemsApi.js` («Seleccionar desde factura»), on the generic
@@ -946,8 +946,8 @@ Prerequisites: the `sepa-remittances` flag on, the spec pushed, and at least one
 valid IBAN created while the flag was on (so it has the remittance payment methods).
 
 1. With the flag off, there is no menu entry, `/remittance` shows the access-denied screen, and
-   `GET /sws/neo/remittance/remittance` answers 403. With the flag on, «Remesas» appears in
-   Finanzas right after Cuentas. A role without the Remittance window grant sees neither the entry
+   `GET /sws/neo/remittance/remittance` answers 403. With the flag on, «Remesas» appears as the
+   first entry of Finanzas. A role without the Remittance window grant sees neither the entry
    nor the page.
 2. The list shows Fecha, Tipo de remesa, Nombre, Cuenta, Fecha de cargo/abono and Estado. Every
    column sorts and appears in "Filtro por condicionales".

@@ -12,7 +12,7 @@ import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Finance / Accounts';
+const breadcrumb = 'Treasury / Accounts';
 
 
 // @sf-generated-start summary:account
