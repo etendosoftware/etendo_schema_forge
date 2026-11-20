@@ -1,10 +1,10 @@
 name: CloudFront security headers
 
 # ETP-4573 (ADR-0002 D1). Manual only; each environment is an explicit choice.
-#   policy   create/update the account-global policy. ALWAYS runs in the reviewed
+#   policy   create/update the account-global policy named by `policy`. ALWAYS runs in the reviewed
 #            `production-cloudfront` environment, whatever environment is selected.
-#   apply    attach the policy to every behavior of ONE distribution.
-#   verify   read-only check of every behavior.
+#   apply    attach the policy to the behaviors of ONE distribution (`paths`, default: every behavior).
+#   verify   read-only check of those behaviors.
 #   rollback restore the policy ids from the snapshot artifact of an earlier apply run.
 on:
   workflow_dispatch:
@@ -37,6 +37,16 @@ on:
         required: false
         default: false
         type: boolean
+      policy:
+        description: 'policy file name (default: etendo-go-security-headers-v1)'
+        required: false
+        default: 'etendo-go-security-headers-v1'
+        type: string
+      paths:
+        description: 'apply/verify: comma-separated behaviors (default or path patterns); empty = all'
+        required: false
+        default: ''
+        type: string
       snapshot_run_id:
         description: 'rollback only: run id of the apply run that uploaded cf-snapshot-<env>-<run_id>'
         required: false
@@ -73,8 +83,10 @@ jobs:
       - name: Create or update the policy
         env:
           DRY_RUN: ${{ inputs.dry_run }}
+          POLICY: ${{ inputs.policy }}
+          CSP_CONNECT_ORIGINS: ${{ vars.CSP_CONNECT_ORIGINS }}
         run: |
-          ARGS=()
+          ARGS=(--policy "$POLICY")
           if [[ "$DRY_RUN" == "true" ]]; then ARGS+=(--dry-run); fi
           node scripts/cloudfront-security-headers.mjs policy "${ARGS[@]}"
 
@@ -139,30 +151,48 @@ jobs:
           github-token: ${{ github.token }}
           path: cf-snapshot-in
 
+      - name: Refuse v2 policies on experimental (HSTS gate)
+        if: inputs.environment == 'experimental' && inputs.action == 'apply' && inputs.dry_run == false && endsWith(inputs.policy, '-v2')
+        run: |
+          echo "v2 policies would introduce includeSubDomains; preload on experimental, which serves no HSTS today." >&2
+          echo "Attach the HTTPS inventory to ETP-4574 and lift this gate first (docs/ops/cloudfront-security-headers.md)." >&2
+          exit 1
+
       - name: Run
         env:
           DIST: ${{ steps.target.outputs.id }}
           ACTION: ${{ inputs.action }}
           DRY_RUN: ${{ inputs.dry_run }}
           REPLACE_EXISTING: ${{ inputs.replace_existing }}
+          POLICY: ${{ inputs.policy }}
+          PATHS: ${{ inputs.paths }}
+          CSP_CONNECT_ORIGINS: ${{ vars.CSP_CONNECT_ORIGINS }}
         run: |
+          SEL=(--policy "$POLICY")
+          if [[ -n "$PATHS" ]]; then SEL+=(--paths "$PATHS"); fi
           case "$ACTION" in
             apply)
-              ARGS=(--snapshot-dir cf-snapshots)
+              ARGS=(--snapshot-dir cf-snapshots "${SEL[@]}")
               if [[ "$DRY_RUN" == "true" ]]; then ARGS+=(--dry-run); fi
               if [[ "$REPLACE_EXISTING" == "true" ]]; then ARGS+=(--replace-existing); fi
               node scripts/cloudfront-security-headers.mjs apply --distribution "$DIST" "${ARGS[@]}" ;;
             verify)
-              node scripts/cloudfront-security-headers.mjs verify --distribution "$DIST" ;;
+              node scripts/cloudfront-security-headers.mjs verify --distribution "$DIST" "${SEL[@]}" ;;
             rollback)
               node scripts/cloudfront-security-headers.mjs rollback --distribution "$DIST" --snapshot-dir cf-snapshot-in ;;
           esac
 
-      - name: Verify every behavior
+      - name: Verify the selected behaviors
         if: inputs.action == 'apply' && inputs.dry_run == false
         env:
           DIST: ${{ steps.target.outputs.id }}
-        run: node scripts/cloudfront-security-headers.mjs verify --distribution "$DIST"
+          POLICY: ${{ inputs.policy }}
+          PATHS: ${{ inputs.paths }}
+          CSP_CONNECT_ORIGINS: ${{ vars.CSP_CONNECT_ORIGINS }}
+        run: |
+          SEL=(--policy "$POLICY")
+          if [[ -n "$PATHS" ]]; then SEL+=(--paths "$PATHS"); fi
+          node scripts/cloudfront-security-headers.mjs verify --distribution "$DIST" "${SEL[@]}"
 
       - name: Upload pre-change snapshot
         if: always() && inputs.action == 'apply'

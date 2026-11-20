@@ -1,0 +1,22 @@
+{
+  "Comment": "Etendo Go edge security headers v2 for HTML documents: enforced CSP, XFO DENY, no-store (ETP-4574, ADR-0002). CSP_CONNECT_ORIGINS is rendered at load time and fails closed.",
+  "Name": "etendo-go-security-headers-v2",
+  "SecurityHeadersConfig": {
+    "ContentSecurityPolicy": {
+      "Override": true,
+      "ContentSecurityPolicy": "default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' blob: data:; frame-src 'self' blob:; connect-src 'self' https://dataplane.rum.eu-west-3.amazonaws.com {{CSP_CONNECT_ORIGINS}}; upgrade-insecure-requests; report-uri /sws/go/csp-report; report-to csp-endpoint"
+    },
+    "StrictTransportSecurity": { "Override": true, "IncludeSubdomains": true, "Preload": true, "AccessControlMaxAgeSec": 31536000 },
+    "ContentTypeOptions": { "Override": true },
+    "FrameOptions": { "Override": true, "FrameOption": "DENY" },
+    "ReferrerPolicy": { "Override": true, "ReferrerPolicy": "strict-origin-when-cross-origin" }
+  },
+  "CustomHeadersConfig": {
+    "Quantity": 3,
+    "Items": [
+      { "Header": "Cache-Control", "Value": "no-cache, no-store, must-revalidate", "Override": true },
+      { "Header": "Permissions-Policy", "Value": "camera=(), geolocation=(), microphone=()", "Override": true },
+      { "Header": "Reporting-Endpoints", "Value": "csp-endpoint=\"/sws/go/csp-report\"", "Override": true }
+    ]
+  }
+}

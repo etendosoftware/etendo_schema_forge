@@ -75,3 +75,62 @@ Manual equivalent: `node scripts/cloudfront-security-headers.mjs rollback --dist
 
 Attach the red-then-green test run, and real `policy --dry-run`, `apply --dry-run` and `verify` output
 for each environment. The fake-AWS unit tests alone do not meet the acceptance criteria.
+
+## Enforcing CSP (ETP-4574, Delivery 3/3)
+
+Two new policies, versioned next to v1 (v1 stays untouched and attached until the switch):
+
+| Policy | Attach to | Contents |
+|---|---|---|
+| `etendo-go-security-headers-v2` | `default` and the other document behaviors | **Enforced** `Content-Security-Policy` (baseline from `com.etendoerp.go` `docs/security/csp-report-only.json` + `upgrade-insecure-requests`, still reporting to `/sws/go/csp-report`), HSTS unchanged, `nosniff`, `X-Frame-Options: DENY`, Referrer-Policy, Permissions-Policy, `Reporting-Endpoints`, `Cache-Control: no-cache, no-store, must-revalidate` |
+| `etendo-go-assets-headers-v2` | the content-hashed asset behavior (e.g. `/assets/*`) | same hardening headers, **no CSP**, `Cache-Control: public, max-age=31536000, immutable` |
+
+- `X-Frame-Options` goes `SAMEORIGIN` → `DENY`: the CSP already carries `frame-ancestors 'none'`, so modern browsers
+  already refuse self-framing; DENY only aligns legacy browsers.
+- HSTS keeps the live value (`max-age=31536000; includeSubDomains; preload`). **Do not widen or newly
+  submit to the preload list** until the `*.etendo.cloud` HTTPS inventory is attached to the ticket (ADR-0002 D5).
+- `connect-src` deployment origins (Sentry/GlitchTip host from `VITE_SENTRY_DSN`) come from the GitHub variable
+  `CSP_CONNECT_ORIGINS` (space/comma separated https origins). The policy is account-global and shared by the
+  three distributions, so the variable must hold **the union of the origins every environment needs and be set to the
+  identical value in all four GitHub Environments** (`production-cloudfront`, `production-cloudfront-readonly`,
+  `staging-cloudfront`, `experimental-cloudfront`). A different value anywhere renders a different policy and `apply`/`verify`
+  fail with "drift". Missing or invalid values fail the run; the placeholder is never emitted.
+- Mixpanel, if enabled, must be measured in the Report-Only soak and added to that variable first.
+
+### HSTS gate for experimental
+
+Production and staging already serve `max-age=31536000; includeSubDomains; preload`, so v2 widens nothing there. **Experimental
+serves no HSTS today**: attaching v2 would introduce `includeSubDomains; preload` there for the first time. Do not attach v2
+to experimental (and `verify-security-headers.mjs` skips it unless `--env experimental` is passed) until the HTTPS
+inventory of `*.etendo.cloud` is attached to the ticket, or experimental gets an HSTS-scoped policy variant and the
+approved scope is recorded. The workflow enforces this: a non-dry-run `apply` of a `-v2` policy on
+`experimental` fails until the "Refuse v2 policies on experimental" step is removed. Whether `etendo.cloud` is on the HSTS preload list is an open question.
+
+### Rollout order (staging → production; experimental only after the HSTS gate)
+
+1. Confirm the Report-Only soak (ETP-4572) shows no `UNEXPECTED` violations in the critical journeys.
+2. `policy` with `policy=etendo-go-security-headers-v2`, then `policy=etendo-go-assets-headers-v2` (dry run first).
+3. `apply` dry-run, then real, with `policy=etendo-go-assets-headers-v2 paths=/assets/*`, then with
+   `policy=etendo-go-security-headers-v2 paths=<every other behavior from the dry-run plan>`
+   (`replace_existing=true`, the behaviors still carry v1). Each run uploads its own snapshot artifact.
+   **Error responses:** confirm the distribution's custom error response mapping (SPA fallback 403/404 → `/index.html`)
+   does not make a missing `/assets/*` file get the assets policy, or give the error response a non-immutable error TTL.
+   Only really content-hashed files may match the asset path pattern; `sw.js`, the manifest and favicons must stay on the document policy.
+4. `CSP_CONNECT_ORIGINS=<origins> node scripts/verify-security-headers.mjs --env <env> --asset /assets/<hashed file>`
+   asserts exact values (each header exactly once) on the document, a hashed asset, an SPA error response and a **missing
+   asset** (which must not be `immutable`/long-lived); default hosts are production and staging.
+5. Run the Playwright journeys (password login, Google SSO, telemetry, attachment download/preview, OCR, errors)
+   and check the collector for new violations.
+
+### Rollback drill (required before production)
+
+A snapshot restores the policy id of **all** behaviors to their state when that apply ran. With two applies
+(A = assets, B = HTML), roll back **the oldest snapshot alone (A), or the newest first (B, then A)**. Rolling back A and
+then B leaves `/assets/*` on the assets policy (immutable caching) because B was taken after A. Confirm with
+`verify-security-headers.mjs` that the CSP is gone and v1 is back, then re-apply. Attach the staging drill output to the
+ticket. Rollback to Report-Only is the same operation.
+
+### Evidence still to be produced (not possible from the repository)
+
+Live `policy`/`apply` dry-run output, the rollback drill, the soak result and the HTTPS inventory
+(including whether `etendo.cloud` is on the preload list) require AWS and deployed environments.
