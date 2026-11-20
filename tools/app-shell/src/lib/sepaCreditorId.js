@@ -12,7 +12,7 @@
  * a `mod 97 == 1` test, exactly as the backend does.
  */
 
-const CI_FORMAT = /^[A-Z]{2}[0-9]{2}[A-Z0-9]{3}[A-Z0-9]{1,28}$/;
+const CI_FORMAT = /^[A-Z]{2}\d{2}[A-Z\d]{3}[A-Z\d]{1,28}$/;
 
 /** Reason codes, named after the backend's message keys. */
 export const SEPA_CREDITOR_ID_ERRORS = Object.freeze({
@@ -37,7 +37,7 @@ export function computeCreditorCheckDigits(country, nationalId) {
   const rearranged = `${nationalId}${country}00`;
   let remainder = 0;
   for (const ch of rearranged) {
-    const digits = /[0-9]/.test(ch) ? ch : String(ch.charCodeAt(0) - 55);
+    const digits = /\d/.test(ch) ? ch : String(ch.charCodeAt(0) - 55);
     for (const d of digits) remainder = (remainder * 10 + (d.charCodeAt(0) - 48)) % 97;
   }
   const check = 98 - remainder;

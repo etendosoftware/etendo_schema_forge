@@ -185,6 +185,45 @@ export default function ActionChoiceModal({
 
   const hasSummary = Array.isArray(summaryColumns) && summaryColumns.length > 0;
 
+  const renderChoiceSection = () => {
+    if (noOptions) return null;
+    if (singleOption) {
+      return (
+        <div style={choiceGroupStyle}>
+          {question && <p style={questionStyle}>{question}</p>}
+          <StaticOptionCard
+            option={singleOption}
+            descriptionId={descriptionId}
+            data-testid="StaticOptionCard__6f7a22" />
+        </div>
+      );
+    }
+    return (
+      <div style={choiceGroupStyle}>
+        <p id={questionId} style={questionStyle}>{question}</p>
+        <div
+          role="radiogroup"
+          aria-labelledby={questionId}
+          className="flex flex-col sm:flex-row"
+          style={cardsRowStyle}
+          onKeyDown={handleRadioKeyDown}
+        >
+          {options.map((option) => (
+            <OptionCard
+              key={option.id}
+              option={option}
+              selected={option.id === selectedId}
+              disabled={loading}
+              buttonRef={(el) => { optionRefs.current[option.id] = el; }}
+              onSelect={() => setSelectedId(option.id)}
+              data-testid="OptionCard__6f7a22" />
+          ))}
+        </div>
+      </div>
+    );
+  };
+  const choiceSection = renderChoiceSection();
+
   return (
     <div onClick={cancelUnlessLoading} style={overlayStyle}>
       <div
@@ -223,37 +262,7 @@ export default function ActionChoiceModal({
           )}
 
           <div style={sectionStyle}>
-            {noOptions ? null : singleOption ? (
-              <div style={choiceGroupStyle}>
-                {question && <p style={questionStyle}>{question}</p>}
-                <StaticOptionCard
-                  option={singleOption}
-                  descriptionId={descriptionId}
-                  data-testid="StaticOptionCard__6f7a22" />
-              </div>
-            ) : (
-            <div style={choiceGroupStyle}>
-              <p id={questionId} style={questionStyle}>{question}</p>
-              <div
-                role="radiogroup"
-                aria-labelledby={questionId}
-                className="flex flex-col sm:flex-row"
-                style={cardsRowStyle}
-                onKeyDown={handleRadioKeyDown}
-              >
-                {options.map((option) => (
-                  <OptionCard
-                    key={option.id}
-                    option={option}
-                    selected={option.id === selectedId}
-                    disabled={loading}
-                    buttonRef={(el) => { optionRefs.current[option.id] = el; }}
-                    onSelect={() => setSelectedId(option.id)}
-                    data-testid="OptionCard__6f7a22" />
-                ))}
-              </div>
-            </div>
-            )}
+            {choiceSection}
 
             {extraContent}
 
