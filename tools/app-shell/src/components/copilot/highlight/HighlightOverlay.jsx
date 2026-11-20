@@ -7,9 +7,21 @@ import { positionHighlightNote } from './highlightTarget.js';
 
 const RING_PADDING = 4;
 
+const CONTROL_CLASS = 'rounded px-2 py-1 text-xs font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-40';
+
 function readRect(element) {
   const rect = element.getBoundingClientRect();
   return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
+}
+
+/**
+ * The arrow shortcuts are bound on `window`, so they must never steal a key
+ * from whatever the user is actually typing in: inside a text field or a
+ * combobox the arrows move the caret or the selection, and that always wins.
+ */
+function isEditableTarget(node) {
+  if (!node || typeof node.closest !== 'function') return false;
+  return Boolean(node.closest('input, textarea, select, [contenteditable="true"], [role="combobox"], [role="listbox"]'));
 }
 
 /**
@@ -24,7 +36,9 @@ function readRect(element) {
  */
 export function HighlightOverlay() {
   const ui = useUI();
-  const { element, note, clearHighlight } = useHighlight();
+  const {
+    element, note, stepIndex, stepCount, hasNext, hasPrevious, next, previous, clearHighlight,
+  } = useHighlight();
   const [rect, setRect] = useState(null);
   const [noteBox, setNoteBox] = useState({ width: 0, height: 0 });
   const noteRef = useRef(null);
@@ -58,23 +72,43 @@ export function HighlightOverlay() {
     const node = noteRef.current;
     if (!node) return;
     const { width, height } = node.getBoundingClientRect();
-    setNoteBox(previous => (previous.width === width && previous.height === height
-      ? previous
+    setNoteBox(current => (current.width === width && current.height === height
+      ? current
       : { width, height }));
-  }, [note, rect]);
+    // stepIndex/stepCount matter because the footer changes the popover height
+    // even when the note text happens to be identical between two steps.
+  }, [note, rect, stepIndex, stepCount]);
 
   useEffect(() => {
     if (!element) return undefined;
     const onKeyDown = event => {
-      if (event.key === 'Escape') clearHighlight();
+      if (event.key === 'Escape') {
+        clearHighlight();
+        return;
+      }
+      // Arrows only, and only while a script is running: Enter is deliberately
+      // NOT bound — the overlay lives for the whole session, and hijacking
+      // Enter would swallow form submits happening underneath it.
+      if (stepCount <= 1 || event.defaultPrevented || isEditableTarget(event.target)) return;
+      if (event.key === 'ArrowRight' && hasNext) {
+        event.preventDefault();
+        next();
+      } else if (event.key === 'ArrowLeft' && hasPrevious) {
+        event.preventDefault();
+        previous();
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [element, clearHighlight]);
+  }, [element, clearHighlight, stepCount, hasNext, hasPrevious, next, previous]);
 
   if (!element || !rect || typeof document === 'undefined') return null;
 
-  const notePosition = note
+  // A script always shows the popover, even for a step the model left without
+  // a note: the navigation controls are the only way out of it.
+  const isScript = stepCount > 1;
+  const showNote = Boolean(note) || isScript;
+  const notePosition = showNote
     ? positionHighlightNote(rect, noteBox, { width: window.innerWidth, height: window.innerHeight })
     : null;
 
@@ -91,7 +125,7 @@ export function HighlightOverlay() {
           height: rect.height + RING_PADDING * 2,
         }}
       />
-      {note ? (
+      {showNote ? (
         <div
           ref={noteRef}
           role="status"
@@ -102,6 +136,32 @@ export function HighlightOverlay() {
           style={{ top: notePosition.top, left: notePosition.left }}
         >
           {note}
+          {isScript ? (
+            <div className="mt-2 flex items-center justify-between gap-3 border-t border-border pt-2">
+              <span data-testid="copilot-highlight-progress" className="text-xs text-muted-foreground">
+                {ui('walkthroughStepCounter', { current: stepIndex + 1, total: stepCount })}
+              </span>
+              <span className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={previous}
+                  disabled={!hasPrevious}
+                  data-testid="copilot-highlight-previous"
+                  className={CONTROL_CLASS}
+                >
+                  {ui('walkthroughPrevious')}
+                </button>
+                <button
+                  type="button"
+                  onClick={hasNext ? next : clearHighlight}
+                  data-testid="copilot-highlight-next"
+                  className={CONTROL_CLASS}
+                >
+                  {hasNext ? ui('walkthroughNext') : ui('walkthroughFinish')}
+                </button>
+              </span>
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={clearHighlight}

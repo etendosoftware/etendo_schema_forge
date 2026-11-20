@@ -19,7 +19,13 @@ vi.mock('@/auth/useLogout.js', () => ({ useLogout: () => vi.fn() }));
 vi.mock('react-router-dom', () => ({
   Outlet: () => <div data-testid="outlet">Outlet</div>,
   useLocation: () => ({ pathname: '/sales-order/123' }),
+  // WalkthroughProvider (app-shell-core) mounts inside AppLayout and calls
+  // useNavigate() to jump to a flow's route.
+  useNavigate: () => vi.fn(),
   useSearchParams: vi.fn(() => [new URLSearchParams(), vi.fn()]),
+  // HighlightProvider gates its route-change reset on this (ETP-5211): it only
+  // mounts the useLocation() watcher when a Router is actually present.
+  useInRouterContext: () => true,
 }));
 vi.mock('@/hooks/useRoleMenu.js', () => ({ useRoleMenu: vi.fn(() => null) }));
 vi.mock('@/lib/flags/useAccountIdentity.js', () => ({ useAccountIdentity: vi.fn() }));
