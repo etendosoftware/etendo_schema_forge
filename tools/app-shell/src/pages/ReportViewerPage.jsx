@@ -1113,12 +1113,13 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
 /**
  * The message of a failed render. The org and report access checks (ETP-6080) answer
  * `ORG_ACCESS_DENIED` / `REPORT_ACCESS_DENIED` with an
- * English text, so those codes are shown translated; anything else keeps the server's message.
+ * English text (and a query past the statement timeout, `REPORT_TIMEOUT`, ETP-6146), so those codes are shown translated; anything else keeps the server's message.
  */
 async function renderErrorMessage(res, ui) {
   const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
   if (data?.code === 'ORG_ACCESS_DENIED') return ui('reportErrorOrgAccess');
   if (data?.code === 'REPORT_ACCESS_DENIED') return ui('reportErrorReportAccess');
+  if (data?.code === 'REPORT_TIMEOUT') return ui('reportErrorTimeout');
   return data?.error || `Render failed: ${res.status}`;
 }
 

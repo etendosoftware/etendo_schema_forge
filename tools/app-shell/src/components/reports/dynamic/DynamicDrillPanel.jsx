@@ -23,7 +23,7 @@ function useErrorText(error, errorCode) {
   const ui = useUI();
   if (!error) return null;
   if (errorCode === 'network') return error;
-  const keys = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess' };
+  const keys = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess', report_timeout: 'reportErrorTimeout' };
   return ui(keys[errorCode] || 'dynamicReportErrorGeneric');
 }
 

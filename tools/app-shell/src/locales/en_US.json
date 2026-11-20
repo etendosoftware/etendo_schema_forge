@@ -26888,6 +26888,7 @@
     "dynamicReportCollapseRow": "Collapse {name}",
     "reportErrorOrgAccess": "You do not have access to this organization.",
     "reportErrorReportAccess": "You do not have access to this report.",
+    "reportErrorTimeout": "The report took too long to load. Narrow the period or the filters and try again.",
     "reportErrorPeriodRangeTooLong": "The period range is too long for this format. Choose a shorter range or fewer periods.",
     "reportErrorInvalidPeriods": "The periods requested are not valid. Review the dates and try again.",
     "dynamicReportErrorReversedDates": "The \"From\" date is after the \"To\" date.",
