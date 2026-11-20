@@ -301,6 +301,16 @@ describe('the support session reported by /me', () => {
     expect(globalThis.fetch.mock.calls[0][0]).toMatch(new RegExp(`${ACCOUNT_ENDPOINT}$`));
   });
 
+  it('hands the whole account it read to onAccount, and survives a listener that throws', async () => {
+    const account = { id: 'A1', firstKeyAction: { action: 'product', at: '2026-11-02T09:30:00Z' }, supportSession: null };
+    globalThis.fetch = vi.fn().mockResolvedValue(jsonResponse(account));
+    const onAccount = vi.fn();
+
+    expect(await fetchSupportSession({ onAccount })).toBeNull();
+    expect(onAccount).toHaveBeenCalledWith(account);
+    expect(await fetchSupportSession({ onAccount: () => { throw new Error('listener'); } })).toBeNull();
+  });
+
   it('rejects when /me cannot be read, so the caller keeps the mode it has', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(jsonResponse({}, { status: 500 }));
     await expect(fetchSupportSession()).rejects.toThrow();

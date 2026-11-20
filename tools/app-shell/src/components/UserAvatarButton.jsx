@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { BuildingsIcon, CaretRightIcon, RocketLaunchIcon, SignOutIcon, UserIcon } from '@phosphor-icons/react';
+import { BuildingsIcon, CaretRightIcon, CookieIcon, RocketLaunchIcon, SignOutIcon, UserIcon } from '@phosphor-icons/react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n/index.js';
@@ -15,6 +15,7 @@ import { useFeatureFlag, MY_COMPANIES_PAGE } from '@/lib/flags';
 import { ADMIN_NAME_I18N_KEY, resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
 import { useSupportSession } from '@/hooks/useSupportSession.js';
 import { LanguageMenuSection } from '@/components/LanguageMenuSection.jsx';
+import { isGtmInstalled, showCookieBanner } from '@/lib/marketing/gtm.js';
 
 
 /**
@@ -166,6 +167,17 @@ export function UserAvatarButton({ expanded = false }) {
                 {ui('account')}
               </DropdownMenuItem>
             </>
+          )}
+          {/* ETP-6363 — reopens HubSpot's cookie banner (loaded by GTM), so the choice can be
+              changed. Only where GTM is loaded: elsewhere there is no banner to reopen. */}
+          {isGtmInstalled() && (
+            <DropdownMenuItem
+              onSelect={() => showCookieBanner()}
+              data-testid="menu-cookie-settings"
+            >
+              <CookieIcon className="h-3.5 w-3.5 mr-2" data-testid="Cookie__menu-cookie-settings" />
+              {ui('cookieSettings')}
+            </DropdownMenuItem>
           )}
           <DropdownMenuItem
             onClick={logout}
