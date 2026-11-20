@@ -927,7 +927,7 @@ ETP-6247: `eTARAutomaticprocess` became `readOnly`, so the push opened its `ETGO
 `7F6A3B65CE804149AE7C87D6E905CF3D` (`ISINCLUDED`/`ISREADONLY` Y, already pushed and exported). NEO
 serves the key only for `RemittanceStatusBanner`; «Reactivar» is gated on `remittanceStatus`.
 
-ETP-6247: the AD declares the Classic callout `REM_Remittance_SepaDefaults` on
+ETP-6247: the AD declares the Classic callout `RemittanceSepaDefaultsCallout` on
 `FIN_Financial_Account_ID`, so the contract lists it on `financialAccount` (plus its `rule-declared`
 test). It changes nothing in GO and needs no push: the SPA posts a callout for every ID-valued
 change anyway (it never reads the contract's `callout`), and `RemittanceHeaderHandler` answers

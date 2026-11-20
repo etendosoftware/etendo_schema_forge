@@ -307,14 +307,14 @@
           "grid": false,
           "form": false,
           "required": false,
-          "reason": "ETP-6247 — REM_REMITTANCE.CREDITOR_IDENTIFIER: the remittance's own SEPA creditor identifier (AT-02), the one its file carries. Writable on create and update while not processed so the custom block can preload it (the account's, else the one computed from the organization) and save it with the general «Guardar»; RemittanceHeaderWrites normalizes and validates it (ETGO_SepaCreditorId* keys), collections only, never written to the account. A blank one is ignored: RemittanceHeaderWrites proposes the account's valid one on create and when the account changes or the type switches between collection and payment (the Classic form gets it from the REM_Remittance_SepaDefaults callout), and confirm keeps the organization's computed one as the copy. REM_REMITTANCE_TRG no longer defaults it: it only freezes it once the remittance is processed. form:false: the custom block owns it."
+          "reason": "ETP-6247 — REM_REMITTANCE.CREDITOR_IDENTIFIER: the remittance's own SEPA creditor identifier (AT-02), the one its file carries. Writable on create and update while not processed so the custom block can preload it (the account's, else the one computed from the organization) and save it with the general «Guardar»; RemittanceHeaderWrites normalizes and validates it (ETGO_SepaCreditorId* keys), collections only, never written to the account. A blank one is ignored: RemittanceHeaderWrites proposes the account's valid one on create and when the account changes or the type switches between collection and payment (the Classic form gets it from the RemittanceSepaDefaultsCallout callout), and confirm keeps the organization's computed one as the copy. REM_REMITTANCE_TRG no longer defaults it: it only freezes it once the remittance is processed. form:false: the custom block owns it."
         },
         "directDebitScheme": {
           "visibility": "editable",
           "grid": false,
           "form": false,
           "required": false,
-          "reason": "ETP-6247 — REM_REMITTANCE.DD_SCHEME: CORE | B2B, only for collection remittances (default CORE, set by RemittanceHeaderWrites on the create of a collection, and by the REM_Remittance_SepaDefaults callout in the Classic form; REM_REMITTANCE_TRG only freezes it once processed). Writable while the remittance is not processed (RemittanceHeaderWrites normalizes it, 422 ETGO_RemittanceSchemeInvalid / ETGO_RemittanceOptionsCollectionOnly); the SEPA file carries it in LclInstrm/Cd. form:false: the custom «Opciones avanzadas» block owns it."
+          "reason": "ETP-6247 — REM_REMITTANCE.DD_SCHEME: CORE | B2B, only for collection remittances (default CORE, set by RemittanceHeaderWrites on the create of a collection, and by the RemittanceSepaDefaultsCallout callout in the Classic form; REM_REMITTANCE_TRG only freezes it once processed). Writable while the remittance is not processed (RemittanceHeaderWrites normalizes it, 422 ETGO_RemittanceSchemeInvalid / ETGO_RemittanceOptionsCollectionOnly); the SEPA file carries it in LclInstrm/Cd. form:false: the custom «Opciones avanzadas» block owns it."
         },
         "financed": {
           "visibility": "editable",
@@ -328,7 +328,7 @@
           "grid": false,
           "form": false,
           "required": false,
-          "reason": "ETP-6247 — REM_REMITTANCE.IBAN: the remittance's own IBAN, proposed from the account by RemittanceHeaderWrites on create and when the account changes or the type switches between collection and payment (the Classic form gets it from the REM_Remittance_SepaDefaults callout; REM_REMITTANCE_TRG only freezes it once processed), and the one its SEPA file always carries. Writable on create and update so the custom «Datos para el fichero SEPA» block can send the IBAN typed for THIS remittance before its first save (RemittanceHeaderWrites normalizes and validates it, 422 ETGO_RemittanceIbanInvalid); never written to the account. form:false keeps it out of the generic form: the custom block owns it."
+          "reason": "ETP-6247 — REM_REMITTANCE.IBAN: the remittance's own IBAN, proposed from the account by RemittanceHeaderWrites on create and when the account changes or the type switches between collection and payment (the Classic form gets it from the RemittanceSepaDefaultsCallout callout; REM_REMITTANCE_TRG only freezes it once processed), and the one its SEPA file always carries. Writable on create and update so the custom «Datos para el fichero SEPA» block can send the IBAN typed for THIS remittance before its first save (RemittanceHeaderWrites normalizes and validates it, 422 ETGO_RemittanceIbanInvalid); never written to the account. form:false keeps it out of the generic form: the custom block owns it."
         },
         "eTARAutomaticprocess": {
           "visibility": "readOnly",

@@ -1,8 +1,8 @@
 {
-  "version": "0.33.0",
+  "version": "0.34.0",
   "generatedAt": "2026-11-05T18:53:39.346Z",
-  "updatedAt": "2026-11-19T20:36:13.554Z",
-  "checksum": "3126d17db1f9fd58",
+  "updatedAt": "2026-11-20T14:33:53.778Z",
+  "checksum": "2fec8101e5fbb436",
   "frontendContract": {
     "window": {
       "id": "FF8080812E71F7C7012E71FD0499001B",
@@ -376,7 +376,7 @@
               "maxLength": 32
             },
             "callout": {
-              "className": "org.openbravo.module.remittance.ad_callouts.REM_Remittance_SepaDefaults"
+              "className": "org.openbravo.module.remittance.ad_callouts.RemittanceSepaDefaultsCallout"
             },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
@@ -2915,13 +2915,6 @@
         "description": "Rule 'REM_Remittance-REM_Remittance_Type_ID-readOnlyLogic' (readOnlyLogic) should be declared"
       },
       {
-        "id": "t-rule-declared-REM-Remittance-SepaDefaults-FIN-Financial-Account-ID",
-        "category": "rule-declared",
-        "rule": "REM_Remittance_SepaDefaults_FIN_Financial_Account_ID",
-        "runner": "node",
-        "description": "Rule 'REM_Remittance_SepaDefaults_FIN_Financial_Account_ID' (callout) should be declared"
-      },
-      {
         "id": "t-rule-declared-REM-Remittance-SinglePayment-readOnlyLogic",
         "category": "rule-declared",
         "rule": "REM_Remittance-SinglePayment-readOnlyLogic",
@@ -3067,6 +3060,13 @@
         "rule": "remittance-Settled-Undo-displayLogic",
         "runner": "node",
         "description": "Rule 'remittance-Settled-Undo-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-RemittanceSepaDefaultsCallout-FIN-Financial-Account-ID",
+        "category": "rule-declared",
+        "rule": "RemittanceSepaDefaultsCallout_FIN_Financial_Account_ID",
+        "runner": "node",
+        "description": "Rule 'RemittanceSepaDefaultsCallout_FIN_Financial_Account_ID' (callout) should be declared"
       },
       {
         "id": "t-rule-declared-Select-Invoices-and-Orders",

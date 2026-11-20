@@ -160298,7 +160298,7 @@
       ]
     },
     "71ffdfc8865e7daf652e4f855e18d8bb6126fff59ba2b01e651989778533de54": {
-      "checksum": "7b6090e36e728cf418403426180c43b21c394e49d591d3cf036143679e367d3b",
+      "checksum": "5572a2212b594da5a3d70930db0c83167405f758dd7b7242619f2f00317f808a",
       "params": [
         "FF8080812E71F7C7012E71FD0499001B"
       ],
@@ -160629,7 +160629,7 @@
           "ad_tab_id": "FF8080812E71F7C7012E71FE49BB0021",
           "ad_val_rule_id": null,
           "ad_window_id": "FF8080812E71F7C7012E71FD0499001B",
-          "callout_class": "org.openbravo.module.remittance.ad_callouts.REM_Remittance_SepaDefaults",
+          "callout_class": "org.openbravo.module.remittance.ad_callouts.RemittanceSepaDefaultsCallout",
           "columnname": "FIN_Financial_Account_ID",
           "defaultvalue": null,
           "displaylogic": null,
