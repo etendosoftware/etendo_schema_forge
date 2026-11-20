@@ -7,6 +7,7 @@ import {
 import { RowExpandToggle } from '@/components/contract-ui/RowExpandToggle.jsx';
 import { ListModalRowActions } from '@/components/contract-ui/ListModalRowActions.jsx';
 import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
+import { ROW_LIFT_SHADOW, ROW_LIFT_HOVER_NO_BORDERS } from '@/components/contract-ui/rowVisuals.js';
 import { OriginBadge, RateStatusBadge, CurrencySymbolChip } from './ConversionRateBadges.jsx';
 import { formatRate } from './conversionRatesFormat.js';
 import {
@@ -119,10 +120,22 @@ function RatesHeader({ entry, orgIso, ui }) {
   );
 }
 
+/**
+ * A rate row: the shared "Fila" lift of the app's lists (DataTable `lift-always`, the document
+ * lines) — transparent at rest; on hover an opaque card background, Shadows/lg raised over the
+ * next row and no separators — on every row, automatic or manual. Only a manual row adds the
+ * hover Modificar / Eliminar of `ListModalRowActions` (the Condiciones de pago row actions).
+ */
+const RATE_ROW = [
+  'group/row relative transition-none hover:z-10 hover:bg-card [--row-hover-bg:hsl(var(--card))]',
+  ROW_LIFT_SHADOW,
+  ROW_LIFT_HOVER_NO_BORDERS,
+].join(' ');
+
 function RateRow({ row, symbol, orgSymbol, onEdit, onDelete, deleting, ui }) {
   const validTo = displayValidTo(row);
   return (
-    <TableRow className="group/row" data-testid={`convrate-row-${row.id}`}>
+    <TableRow className={RATE_ROW} data-testid={`convrate-row-${row.id}`}>
       <TableCell className="w-10" data-testid="TableCell__convrate-indent" />
       <TableCell data-testid="TableCell__convrate-from">{formatWallClock(row.validFromDate)}</TableCell>
       <TableCell className={validTo ? undefined : 'text-muted-foreground'} data-testid="TableCell__convrate-to">{validTo ?? '—'}</TableCell>
