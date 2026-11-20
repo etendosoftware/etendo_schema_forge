@@ -1,0 +1,21 @@
+{
+  "Comment": "Etendo Go edge security headers v1 (ETP-4573, ADR-0002). Source of truth: this file.",
+  "Name": "etendo-go-security-headers-v1",
+  "SecurityHeadersConfig": {
+    "StrictTransportSecurity": {
+      "Override": true,
+      "IncludeSubdomains": true,
+      "Preload": true,
+      "AccessControlMaxAgeSec": 31536000
+    },
+    "ContentTypeOptions": { "Override": true },
+    "FrameOptions": { "Override": true, "FrameOption": "SAMEORIGIN" },
+    "ReferrerPolicy": { "Override": true, "ReferrerPolicy": "strict-origin-when-cross-origin" }
+  },
+  "CustomHeadersConfig": {
+    "Quantity": 1,
+    "Items": [
+      { "Header": "Permissions-Policy", "Value": "camera=(), geolocation=(), microphone=()", "Override": true }
+    ]
+  }
+}

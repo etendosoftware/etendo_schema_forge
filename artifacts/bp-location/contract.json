@@ -1,8 +1,8 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-03-06T17:20:29.904Z",
-  "updatedAt": "2026-10-28T17:46:02.435Z",
-  "checksum": "54c7a59a58729028",
+  "updatedAt": "2026-11-19T18:11:50.944Z",
+  "checksum": "9097000327311078",
   "frontendContract": {
     "window": {
       "id": "121",
@@ -179,7 +179,7 @@
             "seq": 10,
             "validation": {
               "required": true,
-              "maxLength": 70
+              "maxLength": 60
             }
           }
         ],

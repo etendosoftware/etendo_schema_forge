@@ -4,6 +4,9 @@ import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 
+// ETP-5466 — Mixpanel only emits from a production host.
+const PROD_HOST = 'app.etendo.software';
+
 // ETP-4578 H4b — what Mixpanel actually puts on the wire.
 //
 // The core's adapter is unit-tested with a fake SDK. This drives the REAL mixpanel-browser
@@ -90,6 +93,7 @@ describe('real Mixpanel requests (ETP-4578 H4b)', () => {
       document.cookie = `mp_${PROJECT_TOKEN}_mixpanel=${encodeURIComponent(JSON.stringify(persisted))}; path=/; domain=.etendo.cloud`;
     }
     const provider = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: PROJECT_TOKEN,
       storage: { getItem: () => '1', setItem() {} },
