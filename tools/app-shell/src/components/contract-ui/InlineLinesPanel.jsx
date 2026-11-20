@@ -38,7 +38,7 @@ import { GridViewControls } from './GridViewControls.jsx';
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from './GridColumnHeaderControls.jsx';
 import { ACTION_SLOT_WIDTH_PX, resolveTrailingColumn } from '@/lib/linesActionSlot.js';
 import { registerLinesScrollHost, unregisterLinesScrollHost, useLinesAddRowDraft } from '@/lib/linesScrollHost.js';
-import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
+import { getFieldError, getNativeInputProps } from '@/lib/coreValidation.js';
 import { getContactsTextFieldError } from './contactsFieldValidation.js';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { NUMERIC_FIELD_TYPES, TWO_DECIMAL_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
@@ -1177,13 +1177,16 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
   // friendly toast — see backendErrors.js's fieldTooLong matcher) for any value that reaches the
   // server some other way (paste beyond the limit is still trimmed by the browser's native
   // maxLength enforcement, so this covers that path too).
+  const nativeProps = getNativeInputProps(col);
   return (
     <Input
       ref={inputRef}
       data-testid={`field-${col.key}`}
       type="text"
       defaultValue={value ?? ''}
-      maxLength={editTextMaxLength(col.maxLength, value)}
+      maxLength={editTextMaxLength(nativeProps.maxLength, value)}
+      inputMode={nativeProps.inputMode}
+      aria-invalid={isInvalid ? true : undefined}
       onBlur={(e) => onCommit(e.target.value)}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
@@ -1627,13 +1630,13 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     // toast the specific error, and block the PATCH. Empty is valid (not required);
     // a later valid re-commit clears the flag via setInvalidCell(null). ETP-5031
     // added the website check (previously missing here) and the Contacts gate.
-    const formatError = getEmailFieldError(col, value)
-      ?? getPhoneFieldError(col, value)
-      ?? getWebsiteFieldError(col, value);
-    if (formatError !== null) {
+    // ETP-4557: shared core validator; an unchanged legacy value is not re-validated, a changed
+    // one always is.
+    const coreError = getFieldError(col, value, { hasPrevious: true, previous: row[col.key] });
+    if (coreError !== null) {
       hasValidationErrorRef.current = true;
       setInvalidCell({ rowId: row.id, colKey: col.key });
-      toast.error(ui(formatError));
+      toast.error(ui(coreError.key, coreError.params));
       return;
     }
     const contactsError = getContactsTextFieldError(specName, col, value);

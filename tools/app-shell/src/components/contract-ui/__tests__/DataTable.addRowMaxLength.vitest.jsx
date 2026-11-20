@@ -7,7 +7,7 @@
  *
  * Mirrors the DataTable.inlineAdd.vitest.jsx mock setup.
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -47,13 +47,13 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import { DataTable } from '../DataTable.jsx';
 
-function renderAddRow(fields) {
+function renderAddRow(fields, onAdd = vi.fn()) {
   const columns = fields.map((f) => ({ key: f.key, label: f.label ?? f.key, type: f.type }));
   return render(
     <DataTable
       columns={columns}
       data={[]}
-      addRow={{ active: true, fields, onAdd: vi.fn(), onCancel: vi.fn(), catalogs: {} }}
+      addRow={{ active: true, fields, onAdd, onCancel: vi.fn(), catalogs: {} }}
       selectable={false}
     />,
   );
@@ -85,5 +85,33 @@ describe('DataTable inline add-row — text maxLength (ETP-5323)', () => {
 
     expect(input.value.length).toBeLessThanOrEqual(10);
     expect(input.value).toBe('This descr');
+  });
+});
+
+describe('DataTable inline add-row — shared core validator (ETP-4557)', () => {
+  it('applies a declared validation.maxLength and the inferred inputMode', () => {
+    renderAddRow([
+      { key: 'etgoEmail', column: 'EM_Etgo_Email', label: 'Email', type: 'string', validation: { maxLength: 40 } },
+    ]);
+    const input = screen.getByTestId('inline-add-field-etgoEmail');
+    expect(input).toHaveAttribute('maxlength', '40');
+    expect(input).toHaveAttribute('inputmode', 'email');
+  });
+
+  it('blocks the add request for an invalid value, flags the input, and saves after a correction', async () => {
+    const onAdd = vi.fn(() => Promise.resolve(true));
+    renderAddRow([
+      { key: 'etgoEmail', column: 'EM_Etgo_Email', label: 'Email', type: 'string' },
+    ], onAdd);
+    const input = screen.getByTestId('inline-add-field-etgoEmail');
+    fireEvent.change(input, { target: { value: 'not-an-email' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByTestId('inline-add-field-etgoEmail')).toHaveAttribute('aria-invalid', 'true'));
+    expect(onAdd).not.toHaveBeenCalled();
+
+    const fresh = screen.getByTestId('inline-add-field-etgoEmail');
+    fireEvent.change(fresh, { target: { value: 'ok@acme.com' } });
+    fireEvent.keyDown(fresh, { key: 'Enter' });
+    await waitFor(() => expect(onAdd).toHaveBeenCalled());
   });
 });

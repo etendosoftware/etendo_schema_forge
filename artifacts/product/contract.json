@@ -1,8 +1,8 @@
 {
   "version": "0.19.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-11-19T12:49:27.047Z",
-  "checksum": "45c97970723c27fc",
+  "updatedAt": "2026-11-20T13:08:08.801Z",
+  "checksum": "3355ee489ee0019b",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -129,7 +129,10 @@
             "required": true,
             "example": "SKU-1001",
             "column": "Value",
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "target": "name",
@@ -141,7 +144,10 @@
             "example": "Tornillo hexagonal M8",
             "exampleKey": "importExampleProductName",
             "column": "Name",
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "target": "description",
@@ -2739,7 +2745,10 @@
             "required": true,
             "example": "SKU-1001",
             "column": "Value",
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "target": "name",
@@ -2751,7 +2760,10 @@
             "example": "Tornillo hexagonal M8",
             "exampleKey": "importExampleProductName",
             "column": "Name",
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "target": "description",

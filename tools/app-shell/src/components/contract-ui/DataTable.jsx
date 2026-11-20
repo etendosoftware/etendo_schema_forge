@@ -36,7 +36,7 @@ import { CELL_RENDERERS, renderNeutralTagCell } from './DataTable.cellRenderers.
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from './GridColumnHeaderControls.jsx';
 import { tagColumnsFromAux } from '@/lib/auxReference.js';
 import { resolveColumnLink, resolveFkNavigation } from './fkNavigation.js';
-import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
+import { getFieldError, getNativeInputProps } from '@/lib/coreValidation.js';
 import { getContactsTextFieldError, filterContactsInputValue } from './contactsFieldValidation.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
@@ -962,14 +962,11 @@ function isBelowMin(f, valuesRef) {
 // uniform call site. ETP-5031 added the website check (previously missing here
 // even though the form already validated it) and the Contacts text-field gate.
 function getFieldFormatError(f, valuesRef, specName) {
-  const v = valuesRef.current[f.key];
-  const emailErr = getEmailFieldError(f, v);
-  if (emailErr) return { key: emailErr, params: {} };
-  const phoneErr = getPhoneFieldError(f, v);
-  if (phoneErr) return { key: phoneErr, params: {} };
-  const websiteErr = getWebsiteFieldError(f, v);
-  if (websiteErr) return { key: websiteErr, params: {} };
-  return getContactsTextFieldError(specName, f, v);
+  // ETP-4557: the shared core validator decides (email/phone/website/length/min/max/enum). The
+  // Contacts-only checks stay as the window's own extra layer until their limits are declared.
+  const core = getFieldError(f, valuesRef.current[f.key]);
+  if (core) return { key: core.key, params: core.params };
+  return getContactsTextFieldError(specName, f, valuesRef.current[f.key]);
 }
 
 function buildSelectorUrl(apiBaseUrl, entity, field) {
@@ -1145,6 +1142,7 @@ function renderInputCell({
     const raw = filterContactsInputValue(specName, field, e.target.value);
     handleFieldChange(field.key, raw);
   };
+  const nativeProps = getNativeInputProps(field);
   return (
     <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
       <input
@@ -1159,7 +1157,8 @@ function renderInputCell({
         // ETP-5323 — same hard stop as InlineLinesPanel's edit-mode text cell, applied to the
         // add-row's own text input so a brand-new line's Description can't be typed past its
         // AD column length either (e.g. C_OrderLine/C_InvoiceLine.Description, 2000 chars).
-        maxLength={field.maxLength}
+        {...nativeProps}
+        aria-invalid={invalidFields.has(field.key) ? true : undefined}
         className={`w-full h-8 text-sm rounded-md border bg-card px-2 focus:ring-2 focus:outline-none${invalidFields.has(field.key) ? ' border-destructive focus:ring-destructive' : ' border-input focus:ring-primary'}`}
       />
     </TableCell>
@@ -1591,11 +1590,16 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
         setTimeout(() => firstInputRef.current?.focus({ preventScroll: true }), 0);
         return true;
       } finally {
-        inflightRef.current = null;
         setIsSaving(false);
       }
     })();
     inflightRef.current = run;
+    // Cleared AFTER it is assigned: a submit that fails validation settles synchronously, and
+    // clearing it from inside the async body left a stale resolved promise that every later
+    // submit (the corrected value) was deduped against.
+    run.finally(() => {
+      if (inflightRef.current === run) inflightRef.current = null;
+    });
     return run;
   }, [data, fields, onAdd, onCancel, ui, buildEmpty]);
 

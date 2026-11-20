@@ -426,6 +426,7 @@
         },
         "etgoPhone": {
           "visibility": "editable",
+          "maxLength": 15,
           "form": true,
           "grid": true,
           "label": "Phone",

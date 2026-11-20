@@ -260,6 +260,17 @@ describe('buildCompletedLineFieldUpdateHandler — backend failure', () => {
     expect(args.hook.handleUpdateChild).not.toHaveBeenCalled();
   });
 
+  it('maps a structured validation code to the localized message and never shows the raw one (ETP-4557)', async () => {
+    const body = { error: { message: 'ERROR: duplicate key org.hibernate.Foo', fieldErrors: [{ field: 'project', code: 'MAX_LENGTH', max: 5 }] } };
+    const res = { ok: false, status: 400, json: async () => body, clone() { return { json: async () => body }; } };
+    mockApiFetch.mockResolvedValue(res);
+    const args = makeArgs({ ui: (key, params) => `${key}:${params?.maxLength ?? ''}` });
+    const handler = buildCompletedLineFieldUpdateHandler(args);
+    await expect(handler(ROW, 'project', 'PRJ-NEW', {})).rejects.toMatchObject({ userNotified: true });
+    expect(toast.error).toHaveBeenCalledWith('fieldMaxLengthError:5');
+    expect(args.extractErrorMessage).not.toHaveBeenCalled();
+  });
+
   it('falls back to the networkError key when the backend message is empty', async () => {
     mockApiFetch.mockResolvedValue(errResponse(500));
     const handler = buildCompletedLineFieldUpdateHandler(makeArgs({ extractErrorMessage: vi.fn().mockResolvedValue('') }));

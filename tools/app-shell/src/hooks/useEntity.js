@@ -24,6 +24,7 @@ import {
     CONTACTS_TAX_ID_FIELD,
     CONTACTS_TAX_ID_KEY_FIELD,
 } from '@/components/contract-ui/contactsFieldValidation.js';
+import { getFirstViolation, mapBackendFieldErrors, safeBackendMessage } from '@/lib/coreValidation.js';
 import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
 import { dateFieldToastId, getDateFieldError } from '@/lib/dateFieldValidation.js';
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
@@ -93,9 +94,18 @@ function pickReadableError(node, code) {
 }
 
 /**
- * Extract a human-readable error message from a NEO Headless error response.
+ * Extract a human-readable error message from a NEO Headless error response. Every caller (form
+ * save, inline grid add/edit, completed-line update, secondary tabs) goes through this wrapper, so
+ * a message that looks like SQL, a stack or another internal detail is never shown (ETP-4557).
+ * @param {Response} res failed response.
+ * @param {Function} [ui] translator; without it the English generic fallback is used.
+ * @returns {Promise<string>} message safe to display.
  */
 export async function extractErrorMessage(res, ui) {
+    return safeBackendMessage(await extractRawErrorMessage(res, ui), ui);
+}
+
+async function extractRawErrorMessage(res, ui) {
     // Declared outside the try block (and thus outside the `data = await res.json()`
     // call that can throw for non-JSON bodies, e.g. an HTML error page) so the final
     // fallback below — `translate('error', 'Error')` — stays in scope even when
@@ -647,16 +657,37 @@ export function getInvalidFormatFields(fields, editing, getError) {
         .map(f => f.key);
 }
 
-// Email/website format collectors — thin, named wrappers over the generic
+// ETP-4557 — generic save gate over the shared core validator. `loaded` (the record as loaded,
+// null on create) enables the documented legacy policy: a value equal to the loaded one is never
+// re-validated, a changed value always is.
+/**
+ * Generic save gate over the shared core validator.
+ * @param {Array} fields registered form fields to validate (create: all; edit: changed ones).
+ * @param {object} editing current record values.
+ * @param {object|null} loaded the record as loaded, or null on create. A value equal to the loaded
+ *   one is skipped (legacy policy); a changed value is always validated.
+ * @returns {{key:string, errorKey:string, errorParams:object, code:string}|null} first violation.
+ */
+export function getCoreFieldViolation(fields, editing, loaded) {
+    const isReadOnly = getReadOnly(editing);
+    const isVisible = getVisible(editing);
+    const candidates = fields.filter(f => !isReadOnly(f) && isVisible(f));
+    return getFirstViolation(candidates, editing, { loaded });
+}
+
+// Email/website/phone format collectors — thin, named wrappers over the generic
 // getInvalidFormatFields so each format keeps its own testable entry point.
+/** @deprecated ETP-4557 — unused by the save gate; remove with the recipientEdits heuristics. */
 export function getInvalidEmailFields(fields, editing) {
     return getInvalidFormatFields(fields, editing, getEmailFieldError);
 }
 
+/** @deprecated ETP-4557 — unused by the save gate; remove with the recipientEdits heuristics. */
 export function getInvalidWebsiteFields(fields, editing) {
     return getInvalidFormatFields(fields, editing, getWebsiteFieldError);
 }
 
+/** @deprecated ETP-4557 — unused by the save gate; remove with the recipientEdits heuristics. */
 export function getInvalidPhoneFields(fields, editing) {
     return getInvalidFormatFields(fields, editing, getPhoneFieldError);
 }
@@ -1155,11 +1186,13 @@ export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveEr
     // the UI can highlight the missing fields. Falls back to the regular error
     // extraction for any other error shape.
     let backendFieldErrors = null;
+    let structuredBody = null;
     let staleConflict = false;
     let messageKeys;
     try {
         const cloned = res.clone();
         const body = await cloned.json();
+        structuredBody = body;
         const errCode = body?.error?.code;
         const errFields = body?.error?.fields;
         if (errCode === 'MISSING_REQUIRED_FIELDS' && Array.isArray(errFields)) {
@@ -1201,6 +1234,20 @@ export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveEr
                 : {}),
         });
         return;
+    }
+    // ETP-4557: structured validation codes map onto the offending inputs, localized. Only
+    // recognised codes are shown; the raw backend message (SQL, stack, internals) never is.
+    if (!backendFieldErrors && structuredBody) {
+        const mapped = mapBackendFieldErrors(structuredBody);
+        if (Object.keys(mapped).length > 0) {
+            backendFieldErrors = {};
+            for (const [k, d] of Object.entries(mapped)) backendFieldErrors[k] = ui(d.key, d.params);
+            setFieldErrors(backendFieldErrors);
+            const generic = ui('fieldInvalidValue');
+            setSaveError(generic);
+            toast.error(generic);
+            return;
+        }
     }
     if (backendFieldErrors) {
         setFieldErrors(backendFieldErrors);
@@ -2211,6 +2258,20 @@ export function useEntity(entity, childEntity, {
         });
     }, []);
 
+    // ETP-4557: set (message) or clear (null) the inline error of ONE field — used by the form's
+    // blur validation so blur and save show the same inline error under the same input.
+    const setFieldError = useCallback((key, message) => {
+        setFieldErrors(prev => {
+            if (!message) {
+                if (!prev || !prev[key]) return prev;
+                const next = { ...prev };
+                delete next[key];
+                return next;
+            }
+            return prev?.[key] === message ? prev : { ...prev, [key]: message };
+        });
+    }, []);
+
     // ETP-3894: EntityForm calls this on mount/update with its visible fields and a stable
     // formId. Passing fields=null on unmount removes that form's entry so stale fields
     // (e.g. conditionally hidden blocks) don't pollute the validation set.
@@ -2380,17 +2441,26 @@ export function useEntity(entity, childEntity, {
                 contactsTaxIdViolation.errorParams,
             );
         }
-        const invalidEmails = getInvalidEmailFields(changedFormFields, clampedEditing);
-        if (invalidEmails.length > 0) {
-            return reportInvalidFormatField('sendModalInvalidEmail', ui, setSaveError, setIsSaving);
-        }
-        const invalidWebsites = getInvalidWebsiteFields(changedFormFields, clampedEditing);
-        if (invalidWebsites.length > 0) {
-            return reportInvalidFormatField('websiteInsecureUrl', ui, setSaveError, setIsSaving);
-        }
-        const invalidPhones = getInvalidPhoneFields(changedFormFields, clampedEditing);
-        if (invalidPhones.length > 0) {
-            return reportInvalidFormatField('phoneInvalidChars', ui, setSaveError, setIsSaving);
+        // ETP-4557: email/website/phone/length/min/max/enum all decided by the shared core
+        // validator (lib/coreValidation.js) — the same engine the grids and the import use.
+        // Create: EVERY registered field is validated ("a new record is fully validated"). Edit:
+        // only fields changed this session, skipping values equal to the loaded record's.
+        const coreViolation = isNew
+            ? getCoreFieldViolation(allFormFields, clampedEditing, null)
+            : getCoreFieldViolation(changedFormFields, clampedEditing, selected);
+        if (coreViolation) {
+            // Inline: the error sits under the offending input (aria-invalid / aria-describedby via
+            // getNativeInputProps) and is cleared by the next edit of that field. The toast
+            // below is the summary.
+            setFieldErrors({ [coreViolation.key]: ui(coreViolation.errorKey, coreViolation.errorParams) });
+            return reportInvalidFormatField(
+                coreViolation.errorKey,
+                ui,
+                setSaveError,
+                setIsSaving,
+                `core-field-${coreViolation.key}`,
+                coreViolation.errorParams,
+            );
         }
         const url = getUrl(isNew, apiBaseUrl, entity, clampedEditing);
         // Use PATCH for existing records (partial update), POST for new
@@ -2984,7 +3054,7 @@ export function useEntity(entity, childEntity, {
         blockingCondition, completionSignal,
         isDirtyHeader, dirtyHeaderFieldKeys, hasUserHeaderEdits,
         isValid, missingRequired, missingRequiredFields,
-        fieldErrors, registerFields,
+        fieldErrors, setFieldError, registerFields,
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,
         handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved, applyPersistedFields,
         refresh, fetchById, fetchChildren, fetchChildDefaults, loadMore, refreshHeaderTotals, clearUserChangedKey,

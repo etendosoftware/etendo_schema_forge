@@ -1,8 +1,8 @@
 {
   "version": "0.14.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-11-18T20:02:10.276Z",
-  "checksum": "328c708fc989d926",
+  "updatedAt": "2026-11-20T03:30:25.117Z",
+  "checksum": "0058ed56f684ec17",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -180,7 +180,10 @@
             "example": "Distribuciones García S.L.",
             "exampleKey": "importExampleContactName",
             "column": "Name",
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "target": "etgoIsperson",
@@ -261,7 +264,10 @@
             "example": "María",
             "labelKey": "importHeaderFirstName",
             "column": "EM_Etgo_Firstname",
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "target": "etgoLastname",
@@ -273,7 +279,10 @@
             "required": false,
             "example": "García",
             "column": "EM_Etgo_Lastname",
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "target": "etgoEmail",
@@ -287,7 +296,10 @@
             "example": "info@distribucionesgarcia.es",
             "column": "EM_Etgo_Email",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "target": "etgoPhone",
@@ -299,7 +311,10 @@
             "example": "910 000 001",
             "column": "EM_Etgo_Phone",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 15
+            }
           },
           {
             "target": "etgoWeb",
@@ -314,7 +329,10 @@
             "example": "distribucionesgarcia.es",
             "column": "EM_Etgo_Web",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "target": "oBTIKTaxIDKey",
@@ -348,7 +366,10 @@
             "required": true,
             "example": "B12345674",
             "column": "TaxID",
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "target": "email",
@@ -361,7 +382,10 @@
             "headerScope": "contact",
             "column": "Email",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "target": "firstName",
@@ -374,7 +398,10 @@
             "labelKey": "importHeaderFirstName",
             "column": "Firstname",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "target": "lastName",
@@ -386,7 +413,10 @@
             "headerScope": "contact",
             "column": "Lastname",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "target": "phone",
@@ -398,7 +428,10 @@
             "headerScope": "contact",
             "column": "Phone",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "target": "position",
@@ -411,7 +444,10 @@
             "headerScope": "contact",
             "column": "Title",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "required": false,
@@ -868,7 +904,7 @@
             "form": true,
             "section": "principal",
             "validation": {
-              "maxLength": 60
+              "maxLength": 15
             },
             "publicApi": {
               "exposed": true,
@@ -5662,7 +5698,10 @@
             "example": "Distribuciones García S.L.",
             "exampleKey": "importExampleContactName",
             "column": "Name",
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "target": "etgoIsperson",
@@ -5743,7 +5782,10 @@
             "example": "María",
             "labelKey": "importHeaderFirstName",
             "column": "EM_Etgo_Firstname",
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "target": "etgoLastname",
@@ -5755,7 +5797,10 @@
             "required": false,
             "example": "García",
             "column": "EM_Etgo_Lastname",
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "target": "etgoEmail",
@@ -5769,7 +5814,10 @@
             "example": "info@distribucionesgarcia.es",
             "column": "EM_Etgo_Email",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "target": "etgoPhone",
@@ -5781,7 +5829,10 @@
             "example": "910 000 001",
             "column": "EM_Etgo_Phone",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 15
+            }
           },
           {
             "target": "etgoWeb",
@@ -5796,7 +5847,10 @@
             "example": "distribucionesgarcia.es",
             "column": "EM_Etgo_Web",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "target": "oBTIKTaxIDKey",
@@ -5830,7 +5884,10 @@
             "required": true,
             "example": "B12345674",
             "column": "TaxID",
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 20
+            }
           },
           {
             "target": "email",
@@ -5843,7 +5900,10 @@
             "headerScope": "contact",
             "column": "Email",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 255
+            }
           },
           {
             "target": "firstName",
@@ -5856,7 +5916,10 @@
             "labelKey": "importHeaderFirstName",
             "column": "Firstname",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "target": "lastName",
@@ -5868,7 +5931,10 @@
             "headerScope": "contact",
             "column": "Lastname",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 60
+            }
           },
           {
             "target": "phone",
@@ -5880,7 +5946,10 @@
             "headerScope": "contact",
             "column": "Phone",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "target": "position",
@@ -5893,7 +5962,10 @@
             "headerScope": "contact",
             "column": "Title",
             "required": false,
-            "type": "string"
+            "type": "string",
+            "validation": {
+              "maxLength": 40
+            }
           },
           {
             "required": false,
