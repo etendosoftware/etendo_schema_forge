@@ -116,7 +116,11 @@ all of that passed**, the SonarQube scan (it reads `coverage/merged-lcov.info` v
 `sonar-project.properties`) and, on a PR, the comparison and the quality gate. A
 failing test fails the job before the scan, so Sonar never gets a partial LCOV and a
 push never writes a 0% baseline. The job checks out the PR **head** commit, not the
-merge ref, so it does not cover the integration with the base branch.
+merge ref, so it does not cover the integration with the base branch. The action itself
+comes from the run's own commit (a second, sparse checkout into `.ci-actions`), so a PR
+head older than the action still runs it; when that head's script predates
+`--check-quality-gate`, the job compares the coverage alone and warns that the gate was
+not read (ETP-6387).
 
 Pushes keep the bases current: a push to `develop` runs the mini pipeline job (a
 branch analysis of `develop`, no comparison); a push to `main` that merges a cut the
@@ -148,6 +152,10 @@ PR itself: merge `develop` into the branch and push again before adding tests.
   unit tests + Sonar job adds `packages: read` (npm install from GitHub Packages)
   and `checks: write` (the dorny reporter's "Test Results" check). Sonar decorates
   PRs through its own GitHub App, not `GITHUB_TOKEN`.
+- **Scanner timeouts** come from the organization variables `SONAR_SOCKET_TIMEOUT` and
+  `SONAR_RESPONSE_TIMEOUT` (seconds; unset, 60), passed as `sonar.scanner.socketTimeout` and
+  `sonar.scanner.responseTimeout` to every scan (ETP-6390). Raise them when SonarQube is slow and
+  an upload fails with `SocketTimeoutException` while every test passed.
 - **The scan action is pinned** to a full commit sha with its release as a
   comment (`sonarsource/sonarqube-scan-action@<sha> # vX.Y.Z`), never `@master`.
 - **Concurrency** groups a PR by its number (a new push cancels the stale run) and

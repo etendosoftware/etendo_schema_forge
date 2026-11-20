@@ -101,6 +101,9 @@ fija. Se itera; todavía **no son pruebas de la suite**.
 | 63 | `e-contact-without-type` | Registrar un contacto que no es cliente ni proveedor: se rechaza (KR2.2) | Contactos | 📄 | no |
 | 64 | `e-portal-link-without-email` | Link del portal de un cliente sin email: no hay link (KR2.2) | Contactos, Portal | 📄 | no |
 | 65 | `e-profit-by-month-long-range` | PyG mes a mes de 30 meses: el límite de 24 y cómo lo resuelve el agente (KR2.2) | Informes | 📄 | no |
+| 66 | `e-invoice-inbox-confirm` | Pedir que pase a compras un documento de la bandeja: lo hace una persona en la app (KR2.2) | Bandeja de facturas | 📄 | no |
+| 67 | `e-payment-term-out-of-range` | Condición de pago de 400 días: el rango es 0 a 365 y el contacto no se toca (KR2.2) | Contactos, Condiciones de pago | 📄 | no |
+| 68 | `e-remittance-cash-account` | Remesa en la cuenta Caja, que no admite remesas (KR2.2) | Remesas | 📄 | no |
 | | **Errores y negativas** | | | | |
 | 39 | `e-unknown-document` | Documento que no existe | Factura | 📄 | sí |
 | 40 | ~~`e-invalid-write`~~ | Cantidad negativa — **retirada del KR** (Etendo la acepta por diseño) | Pedido | 📄 | — |

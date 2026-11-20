@@ -61,7 +61,7 @@ describe.each([
   // never read, so any of them is an unexpected request here.
   // `lines` (optional): the availableOrderLines rows of each order, by order id; by default one
   // line of 1 × 100.
-  function renderModal({ orders, importRes = ok({ importedCount: 1 }), ordersRes, ordersError, lines = {} }) {
+  function renderModal({ orders, importRes = ok({ importedCount: 1 }), ordersRes, ordersError, lines = {}, invLines = [] }) {
     mockApiFetch.mockImplementation(async (url, opts) => {
       if (url.endsWith('/action/availableOrders')) {
         if (ordersError) throw ordersError;
@@ -71,7 +71,7 @@ describe.each([
           currency: 'EUR', globalDiscount: o.pct, date: '2026-10-30', pendingLines: o.pendingLines ?? 1, amount: 100,
         })));
       }
-      if (url.includes(`/${invoiceSpec}/lines?parentId=`)) return ok([]);
+      if (url.includes(`/${invoiceSpec}/lines?parentId=`)) return ok(invLines);
       if (url.endsWith(`/${invoiceSpec}/header/inv-1`)) return ok([{ currency: 'EUR', etgoTotalDiscount: 0 }]);
       if (url.endsWith('/action/availableOrderLines')) {
         const docId = JSON.parse(opts.body).orderId;
@@ -112,9 +112,8 @@ describe.each([
     opts?.method === 'PATCH' || (opts?.method === 'POST' && !url.includes('/action/'))));
 
   // ETP-6099 — the lines load only when an order is opened, so the popup hides at open, from the
-  // availableOrders row, an order whose remaining lines are all on this invoice. It asks `detail`,
-  // under which the server leaves those lines out of pendingLines (pending is quantity-based, so a
-  // line partly on this invoice still has some left); such an order comes at 0 and is not shown.
+  // availableOrders row, an order with nothing left to import (pendingLines 0). Pending is
+  // quantity-based (QA UI-7): a line partly on this invoice still has some left and keeps it listed.
   it('lists with detail and the server rule, and hides at open an order with nothing selectable', async () => {
     renderModal({ orders: [{ id: 'SO-A', pct: 0 }, { id: 'SO-B', pct: 0, pendingLines: 0 }] });
     expect(await screen.findByText('SO-A')).toBeInTheDocument();
@@ -167,6 +166,22 @@ describe.each([
     expect(note).toHaveAttribute('title', 'inDraftInvoiceOne:{"documentNo":"FV1000002"}');
     expect(note.className).toContain('line-clamp-2');
     expect(note.className).not.toContain('truncate');
+  });
+
+  // QA UI-7 — a line already partly on THIS invoice stays selectable for the rest and says how
+  // much is here (it used to be greyed «ya importado» whatever its pending).
+  it('a line partly on this invoice stays selectable and says how much is already here', async () => {
+    const partly = [{ id: 'A-1', lineNo: 10, 'product$_identifier': 'Agua', pendingQuantity: 1, unitPrice: 100 }];
+    renderModal({
+      orders: [{ id: 'SO-A', pct: 0 }], lines: { 'SO-A': partly },
+      invLines: [{ id: 'il-1', salesOrderLine: 'A-1', invoicedQuantity: 2 }],
+    });
+    fireEvent.click(await screen.findByText('SO-A'));
+    const note = await screen.findByTestId('ImportLinesModal__lineNote');
+    expect(note).toHaveTextContent('partlyInThisInvoice:{"quantity":"2"}');
+    expect(screen.queryByTestId('ImportLinesModal__importedNote')).toBeNull();
+    fireEvent.click(screen.getByTestId('ImportLinesModal__lineRow'));
+    expect(screen.getByTestId('ImportLinesModal__lineRow')).toHaveAttribute('data-selected', 'true');
   });
 
   // QA OBS-2 — a line another draft holds only PART of stays selectable and says so.

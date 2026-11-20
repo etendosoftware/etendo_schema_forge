@@ -11,14 +11,15 @@ import {
 import { orderLineApiKey } from '../../../_test-support/contractApiKey.js';
 import { listAll, listLines, newestCreatedFirst } from '../../../../tools/app-shell/src/windows/custom/shared/importActionClient.js';
 import { pricingContextOf } from '../../../../tools/app-shell/src/windows/custom/shared/invoiceImportPricing.js';
+import { draftDocumentsOf } from '../../../../tools/app-shell/src/windows/custom/shared/inOutImport.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const { helpers, source: src } = loadCustomModule(
   join(__dirname, '..', 'ImportFromGoodsReceiptModal.jsx'),
-  { moduleApiFetch: apiFetchToGlobalFetch, listAll, listLines, pricingContextOf, newestCreatedFirst },
+  { moduleApiFetch: apiFetchToGlobalFetch, listAll, listLines, pricingContextOf, newestCreatedFirst, draftDocumentsOf },
 );
-const { fetchDocuments, fetchLines, buildLineBody } = helpers;
+const { fetchDocuments, fetchLines, buildLineBody, describeReceiptLine } = helpers;
 
 const ORDER_LINE_FK = orderLineApiKey('purchase-invoice');
 
@@ -34,7 +35,7 @@ describe('ImportFromGoodsReceiptModal — source shape', () => {
   });
 
   it('lists goods receipts through the invoice availableReceipts action, covered ones included', () => {
-    assert.match(src, /action: 'availableReceipts', params: \{ \.\.\.CLASSIC_PENDING, includeCovered: true, detail: true \}/);
+    assert.match(src, /action: 'availableReceipts', params: \{ includeCovered: true, detail: true \}/);
     assert.match(src, /eagerLoadLines=\{false\}/);
     assert.match(src, /isDocumentCovered=\{isReceiptCovered\}/);
   });
@@ -49,7 +50,7 @@ describe('ImportFromGoodsReceiptModal — source shape', () => {
   });
 
   it('reads receipt lines on expand through availableReceiptLines and prices on expand and at import', () => {
-    assert.match(src, /action: 'availableReceiptLines', params: \{ \.\.\.CLASSIC_PENDING, receiptId: docId, includeCovered: true, detail: true \}/);
+    assert.match(src, /action: 'availableReceiptLines', params: \{ receiptId: docId, includeCovered: true, detail: true \}/);
     assert.match(src, /const fetchLines[\s\S]*resolveLinePrice/);
     assert.match(src, /const buildLineBody[\s\S]*resolveLinePrice/);
   });
@@ -87,14 +88,14 @@ function installFetch({ receipts = [], receiptLines = [], invoiceHeader = {}, or
   const candidates = receipts.filter(r => r.documentStatus === 'CO' && r.businessPartner === bpId && r.invoiced !== true);
   globalThis.fetch = mock.fn(async (url, options) => {
     if (url.endsWith('/action/availableReceipts')) {
-      // Product decision: the popup keeps the pre-ETP-6099 pending rule (no draft deduction).
-      assert.equal(JSON.parse(options.body).pendingBasis, 'classic');
+      // ETP-5828 QA UI-8: the server's default pending rule (drafts deducted), no `pendingBasis`.
+      assert.equal(JSON.parse(options.body).pendingBasis, undefined);
       const listed = listNothing ? [] : candidates.filter(r => !invoiceHeader.currency || currencyOf(r) === invoiceHeader.currency);
       return { ok: true, json: async () => ({ response: { hasMore: false, data: listed.map(r => ({ ...r, date: r.movementDate, pendingLines: 1 })) } }) };
     }
     if (url.endsWith('/action/availableReceiptLines')) {
       assert.equal(JSON.parse(options.body).includeCovered, true);
-      assert.equal(JSON.parse(options.body).pendingBasis, 'classic');
+      assert.equal(JSON.parse(options.body).pendingBasis, undefined);
       return mockRes(true, receiptLines);
     }
     if (url.includes('/goods-receipt/goodsReceipt?criteria=')) {
@@ -259,10 +260,10 @@ describe('ImportFromGoodsReceiptModal — lines shown on expand', () => {
     return fetchLines({ base: '/b', headers: {}, docId: 'r1', sharedContext: { invoiceId: 'inv1' } });
   };
 
-  // Classic pending (as before ETP-6099): the full movement quantity, whatever draft invoices hold.
-  it('offers the full received quantity and carries the order line under the spec key and its discount', async () => {
-    const [line] = await linesOf([row()]);
-    assert.equal(line._maxQty, 5);
+  // ETP-5828 QA UI-8: what the server says is left (draft invoices deducted), as the sales sibling.
+  it('offers the server pending and carries the order line under the spec key and its discount', async () => {
+    const [line] = await linesOf([row({ pendingQuantity: 3 })]);
+    assert.equal(line._maxQty, 3);
     assert.equal(line._alreadyImported, false);
     assert.equal(line[ORDER_LINE_FK], 'ol1');
     assert.equal(line._orderDiscount, 10);
@@ -272,7 +273,9 @@ describe('ImportFromGoodsReceiptModal — lines shown on expand', () => {
 
   const cases = [
     { name: 'a line this invoice already holds is greyed at its received quantity', over: { importedHere: true, pendingQuantity: 0 }, imported: true, max: 5 },
-    { name: 'a line invoiced elsewhere is still offered on the purchase side', over: { invoicedElsewhere: true }, imported: false, max: 5 },
+    // Review B1: the server's pending already deducts other invoices, so a line invoiced elsewhere
+    // only in part stays selectable for what is left.
+    { name: 'a line partly invoiced elsewhere stays selectable for its pending', over: { invoicedElsewhere: true, pendingQuantity: 6 }, imported: false, max: 6 },
     { name: 'a line with nothing left is greyed', over: { pendingQuantity: 0 }, imported: true, max: 5 },
   ];
   for (const c of cases) {
@@ -282,6 +285,19 @@ describe('ImportFromGoodsReceiptModal — lines shown on expand', () => {
       assert.equal(line._maxQty, c.max);
     });
   }
+
+  // ETP-5828 — a line other draft invoices took (`inDraftDocuments`) is greyed and names them.
+  it('names the other draft invoices holding a line taken by them', async () => {
+    const ui = (key, params) => `${key}:${JSON.stringify(params)}`;
+    const [one, many] = await linesOf([
+      row({ id: 'rl1', pendingQuantity: 0, inDraftDocuments: ['FC1000020'] }),
+      row({ id: 'rl2', pendingQuantity: 0, inDraftDocuments: ['FC1', 'FC2'] }),
+    ]);
+    assert.equal(one._alreadyImported, true);
+    assert.equal(describeReceiptLine(one, { imported: true }, ui), 'inDraftInvoiceOne:{"documentNo":"FC1000020"}');
+    assert.equal(describeReceiptLine(many, { imported: true }, ui), 'inDraftInvoiceMany:{"documentNos":"FC1, FC2"}');
+    assert.equal(describeReceiptLine({ ...one, importedHere: true }, { imported: true }, ui), null); // «ya importado»
+  });
 });
 
 describe('ImportFromGoodsReceiptModal — buildLineBody order line FK (ETP-5381)', () => {
