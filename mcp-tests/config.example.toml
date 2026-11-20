@@ -15,32 +15,26 @@ name = "openai"
 # Verbatim gateway model id — route prefix and slash included, never translated
 # to a vendor-native id. A Gemini model behind an OpenAI-compatible API is what
 # satisfies D8 (the default is deliberately not Anthropic).
-# The route that runs end to end today. Not Anthropic, so D8 holds.
-model = "openai/gpt-5.2"
-
-# GEMINI IS A DEAD END ON THIS GATEWAY as of 2026-09-14 — verified against the
-# live endpoint under TWO different API keys, on different projects:
-#   * `vertex_ai/*` (incl. gemini-3.6-flash, gemini-5.8-flash): 403
-#     BILLING_DISABLED on project #etendo (aiplatform.googleapis.com). The
-#     second key did NOT unblock it, so it is a project-level billing gap, not
-#     a credential one.
-#   * `gemini/*` and the unprefixed `gemini-3.6-flash` (the only live spelling
-#     of 3.6 flash; `gemini/gemini-3.6-flash` has no healthy deployment):
-#     answer plain chat fine and handle structured output fine, but ALWAYS fail
-#     the multi-turn TOOL LOOP against this MCP with
-#       "The referenced name `BusinessPartner/<id>` in
-#        function_response.response does not match to a display_name in
-#        function_response.parts"
-#     — a LiteLLM -> Gemini translation defect on tool RESULTS, triggered by the
-#     `$ref` that etendo_selectors returns. Auth is not the blocker.
-# To try it anyway, without editing this file:
-#     make mcp-test MODEL=gemini-3.6-flash
+#
+# THE OKR MEASUREMENT MODEL. Every KR2.1 / KR2.2 run since ETP-5848 (2026-11)
+# uses gemini/gemini-3.8-flash, so keep it for anything that may end up in a
+# KPI: a run with another model is not comparable with the rest, and
+# etendo-kpis' `kr21:load` refuses it (ETP-5850). Pilots too: a test piloted
+# with another model can pass or fail differently in the measurement.
+#
+# Other routes, for experiments only (`make mcp-test MODEL=<id>`):
+#   * openai/gpt-5.2 runs the Etendo GO MCP, but the gateway refuses more than
+#     128 tools per request, and Holded's MCP exposes ~388: it cannot run Holded.
+#   * The 2026-09-14 Gemini tool-loop defect
+#     (findings/2026-09-14-ref-key-breaks-every-gemini-model.md) no longer
+#     reproduces with gemini-3.8-flash on this gateway.
+model = "gemini/gemini-3.8-flash"
 
 # A hostname, not a secret, so it lives here by value.
 base_url = "https://llm.etendo.software/v1"
 
 # NEVER the key itself — only the name of the variable holding it.
-api_key_env = "OPENAI_API_KEY"
+api_key_env = "ETENDO_PROXY_API_KEY"
 
 temperature = 0
 

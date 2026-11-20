@@ -1,0 +1,174 @@
+name: CloudFront security headers
+
+# ETP-4573 (ADR-0002 D1). Manual only; each environment is an explicit choice.
+#   policy   create/update the account-global policy. ALWAYS runs in the reviewed
+#            `production-cloudfront` environment, whatever environment is selected.
+#   apply    attach the policy to every behavior of ONE distribution.
+#   verify   read-only check of every behavior.
+#   rollback restore the policy ids from the snapshot artifact of an earlier apply run.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment (ignored by the policy action)'
+        required: true
+        type: choice
+        options:
+          - production
+          - staging
+          - experimental
+      action:
+        description: 'policy (gated), apply, verify or rollback'
+        required: true
+        default: verify
+        type: choice
+        options:
+          - verify
+          - apply
+          - policy
+          - rollback
+      dry_run:
+        description: 'apply and policy: plan without writing'
+        required: false
+        default: true
+        type: boolean
+      replace_existing:
+        description: 'apply only: replace a different ResponseHeadersPolicyId already on a behavior'
+        required: false
+        default: false
+        type: boolean
+      snapshot_run_id:
+        description: 'rollback only: run id of the apply run that uploaded cf-snapshot-<env>-<run_id>'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  policy:
+    name: policy (account-global)
+    if: inputs.action == 'policy'
+    runs-on: ubuntu-latest
+    environment: production-cloudfront
+    concurrency:
+      group: cloudfront-security-headers-policy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GITHUB_ENVIRONMENT: production-cloudfront
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume:        ${{ vars.FRONT_RELEASE_ROLE_ARN }}
+          role-session-name:     cf-policy-${{ github.run_id }}
+          aws-access-key-id:     ${{ vars.FRONT_RELEASE_ROLE_ARN == '' && secrets.AWS_ACCESS_KEY_ID || '' }}
+          aws-secret-access-key: ${{ vars.FRONT_RELEASE_ROLE_ARN == '' && secrets.AWS_SECRET_ACCESS_KEY || '' }}
+          aws-region:            ${{ vars.AWS_REGION }}
+      - name: Create or update the policy
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          ARGS=()
+          if [[ "$DRY_RUN" == "true" ]]; then ARGS+=(--dry-run); fi
+          node scripts/cloudfront-security-headers.mjs policy "${ARGS[@]}"
+
+  headers:
+    name: ${{ inputs.action }} (${{ inputs.environment }})
+    if: inputs.action != 'policy'
+    runs-on: ubuntu-latest
+    # Production writes need the reviewed environment; staging/experimental have their own.
+    environment: ${{ inputs.environment == 'production' && (inputs.action == 'verify' || (inputs.action == 'apply' && inputs.dry_run)) && 'production-cloudfront-readonly' || format('{0}-cloudfront', inputs.environment) }}
+    concurrency:
+      group: cloudfront-security-headers-${{ inputs.environment }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Resolve distribution
+        id: target
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          CF_PRODUCTION: ${{ vars.CF_DISTRIBUTION_PRODUCTION }}
+          CF_STAGING: ${{ vars.CF_DISTRIBUTION_STAGING }}
+          CF_EXPERIMENTAL: ${{ vars.CF_DISTRIBUTION_EXPERIMENTAL }}
+        run: |
+          case "$ENVIRONMENT" in
+            production)   ID="$CF_PRODUCTION" ;;
+            staging)      ID="$CF_STAGING" ;;
+            experimental) ID="$CF_EXPERIMENTAL" ;;
+            *) echo "::error::unknown environment"; exit 1 ;;
+          esac
+          if [[ -z "$ID" ]]; then echo "::error::CF_DISTRIBUTION_* variable not set for $ENVIRONMENT"; exit 1; fi
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume:        ${{ vars.FRONT_RELEASE_ROLE_ARN }}
+          role-session-name:     cf-headers-${{ github.run_id }}
+          aws-access-key-id:     ${{ vars.FRONT_RELEASE_ROLE_ARN == '' && secrets.AWS_ACCESS_KEY_ID || '' }}
+          aws-secret-access-key: ${{ vars.FRONT_RELEASE_ROLE_ARN == '' && secrets.AWS_SECRET_ACCESS_KEY || '' }}
+          aws-region:            ${{ vars.AWS_REGION }}
+
+      - name: Validate snapshot run id
+        if: inputs.action == 'rollback'
+        env:
+          RUN_ID: ${{ inputs.snapshot_run_id }}
+        run: |
+          if [[ ! "$RUN_ID" =~ ^[0-9]+$ ]]; then echo "::error::snapshot_run_id must be a numeric run id"; exit 1; fi
+      - name: Fetch snapshot artifact
+        if: inputs.action == 'rollback'
+        uses: actions/download-artifact@v4
+        with:
+          name: cf-snapshot-${{ inputs.environment }}-${{ inputs.snapshot_run_id }}
+          run-id: ${{ inputs.snapshot_run_id }}
+          github-token: ${{ github.token }}
+          path: cf-snapshot-in
+
+      - name: Run
+        env:
+          DIST: ${{ steps.target.outputs.id }}
+          ACTION: ${{ inputs.action }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          REPLACE_EXISTING: ${{ inputs.replace_existing }}
+        run: |
+          case "$ACTION" in
+            apply)
+              ARGS=(--snapshot-dir cf-snapshots)
+              if [[ "$DRY_RUN" == "true" ]]; then ARGS+=(--dry-run); fi
+              if [[ "$REPLACE_EXISTING" == "true" ]]; then ARGS+=(--replace-existing); fi
+              node scripts/cloudfront-security-headers.mjs apply --distribution "$DIST" "${ARGS[@]}" ;;
+            verify)
+              node scripts/cloudfront-security-headers.mjs verify --distribution "$DIST" ;;
+            rollback)
+              node scripts/cloudfront-security-headers.mjs rollback --distribution "$DIST" --snapshot-dir cf-snapshot-in ;;
+          esac
+
+      - name: Verify every behavior
+        if: inputs.action == 'apply' && inputs.dry_run == false
+        env:
+          DIST: ${{ steps.target.outputs.id }}
+        run: node scripts/cloudfront-security-headers.mjs verify --distribution "$DIST"
+
+      - name: Upload pre-change snapshot
+        if: always() && inputs.action == 'apply'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cf-snapshot-${{ inputs.environment }}-${{ github.run_id }}
+          path: cf-snapshots/
+          if-no-files-found: ignore
+          retention-days: 90
