@@ -16262,6 +16262,9 @@
     "Finance": {
       "label": "Finance"
     },
+    "Treasury": {
+      "label": "Treasury"
+    },
     "General": {
       "label": "General"
     },
@@ -17579,7 +17582,7 @@
     "forceAppRefresh": "Force app refresh",
     "newPayment": "New payment",
     "paymentRecordedLocally": "Payment recorded locally — it will sync when the endpoint is available",
-    "financeCollections": "Finance · Collections",
+    "treasuryCollections": "Treasury · Collections",
     "activity": "Activity",
     "closeActivityPanel": "Close activity panel",
     "paymentCreated": "Payment created",
@@ -19262,7 +19265,6 @@
     "statusPaymentMade": "Payment Made",
     "statusWithdrawnNotCleared": "Withdrawn not Cleared",
     "statusDepositedNotCleared": "Deposited not Cleared",
-    "financeMenuLabel": "Finances",
     "financeAccountsPageTitle": "Accounts",
     "financeAccountsSearchPlaceholder": "Search account…",
     "financeAccountsFilterAll": "All accounts",
@@ -22643,6 +22645,7 @@
     "docNo": "Doc No",
     "documentNo": "Document No",
     "finance": "Finance",
+    "treasury": "Treasury",
     "settings": "Settings",
     "settingsDescription": "Manage your session context. Changing role or organization will re-authenticate your session.",
     "currentSession": "Current Session",
@@ -28008,6 +28011,9 @@
     },
     "Finance Reports": {
       "label": "Finance Reports"
+    },
+    "Treasury Reports": {
+      "label": "Treasury Reports"
     },
     "Production Management": {
       "label": "Production Management"

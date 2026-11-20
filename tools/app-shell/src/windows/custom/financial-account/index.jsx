@@ -550,7 +550,8 @@ export function FinancialAccountDetail({ recordId }) {
       titleExtra: account ? (
         <SyncStatusInline account={account} syncing={false} data-testid="SyncStatusInline__f7dbb3" />
       ) : null,
-      breadcrumb: `${ui('financeMenuLabel')} / ${ui('financeAccountsPageTitle')} / ${accountName}`,
+      // ETP-6389 — Cuentas lives under Tesorería: same label as the sidebar group.
+      breadcrumb: `${ui('treasury')} / ${ui('financeAccountsPageTitle')} / ${accountName}`,
     },
     [accountName, account?.type, account?.bankConnected, account?.bankConnectionPending, account?.lastSyncDate],
   );

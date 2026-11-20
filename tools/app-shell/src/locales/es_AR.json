@@ -16251,6 +16251,9 @@
     "Finance": {
       "label": "Finanzas"
     },
+    "Treasury": {
+      "label": "Tesorería"
+    },
     "Inventory": {
       "label": "Inventario"
     },
@@ -17574,7 +17577,7 @@
     "forceAppRefresh": "Forzar actualización de la app",
     "newPayment": "Nuevo pago",
     "paymentRecordedLocally": "Pago registrado localmente — se sincronizará cuando el endpoint esté disponible",
-    "financeCollections": "Finanzas · Cobros",
+    "treasuryCollections": "Tesorería · Cobros",
     "activity": "Actividad",
     "closeActivityPanel": "Cerrar panel de actividad",
     "paymentCreated": "Cobro creado",
@@ -18831,7 +18834,6 @@
     "statusPaymentMade": "Pago realizado",
     "statusWithdrawnNotCleared": "Retirado sin liquidar",
     "statusDepositedNotCleared": "Depositado sin liquidar",
-    "financeMenuLabel": "Finanzas",
     "financeAccountsPageTitle": "Cuentas",
     "financeAccountsSearchPlaceholder": "Buscar cuenta…",
     "financeAccountsFilterAll": "Todas las cuentas",
@@ -21746,6 +21748,7 @@
     "docNo": "Nº doc.",
     "documentNo": "Nº documento",
     "finance": "Finanzas",
+    "treasury": "Tesorería",
     "settings": "Configuración",
     "settingsDescription": "Gestiona el contexto de tu sesión. Cambiar el rol u organización volverá a autenticar tu sesión.",
     "currentSession": "Sesión actual",
@@ -23565,6 +23568,24 @@
     "Trial Balance": {
       "label": "Balance sumas y saldos"
     },
+    "Aging Report (Receivables)": {
+      "label": "Informe Antigüedad de Cobros"
+    },
+    "Aging Report (Payables)": {
+      "label": "Informe Antigüedad de Pagos"
+    },
+    "Balance Sheet": {
+      "label": "Balance de Situación"
+    },
+    "Profit & Loss": {
+      "label": "Pérdidas y Ganancias"
+    },
+    "General Ledger": {
+      "label": "Libro Mayor"
+    },
+    "Journal Entries": {
+      "label": "Diario de Asientos"
+    },
     "Create All Price Lists": {
       "label": "Actualizar tarifas"
     },
@@ -23591,6 +23612,9 @@
     },
     "Finance Reports": {
       "label": "Informes de Finanzas"
+    },
+    "Treasury Reports": {
+      "label": "Informes de Tesorería"
     },
     "Payment Tracker": {
       "label": "Seguimiento cobros-pagos"

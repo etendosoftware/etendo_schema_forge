@@ -56,6 +56,7 @@ import {
   ChartLineUp,
   Receipt,
   Bank,
+  Wallet,
   Package,
   Briefcase,
   Users,
@@ -93,6 +94,7 @@ const ICON_MAP = {
   TrendingUp:     ChartLineUp,
   Receipt,
   Building2:      Bank,
+  Wallet,
   Package,
   Briefcase,
   Users,
@@ -215,10 +217,30 @@ function CollapsedGroupPopover({
   );
 }
 
+/**
+ * Whether the current location belongs to a menu item.
+ *
+ * A plain target (`payment-in`) matches its own path and anything below it
+ * (`payment-in/<id>`). A target with a query string (`report-viewer?category=treasury`)
+ * matches when the pathname is the same and every query param of the target is present in
+ * the current URL with the same value — extra params are allowed, so an open report
+ * (`report-viewer?category=treasury&report=aging-payable`) still highlights its Informes
+ * entry (ETP-6389).
+ */
 function matchesItem(item, currentPath, currentFull) {
   const target = item.path || item.name;
-  if (target.includes('?')) {
-    return currentFull === target;
+  const queryIdx = target.indexOf('?');
+  if (queryIdx !== -1) {
+    const targetPath = target.slice(0, queryIdx);
+    const currentQueryIdx = currentFull.indexOf('?');
+    const fullPath = currentQueryIdx === -1 ? currentFull : currentFull.slice(0, currentQueryIdx);
+    if (fullPath !== targetPath) return false;
+    const targetParams = new URLSearchParams(target.slice(queryIdx + 1));
+    const currentParams = new URLSearchParams(currentQueryIdx === -1 ? '' : currentFull.slice(currentQueryIdx + 1));
+    for (const [key, value] of targetParams) {
+      if (currentParams.get(key) !== value) return false;
+    }
+    return true;
   }
   return currentPath === target || currentPath.startsWith(target + '/');
 }

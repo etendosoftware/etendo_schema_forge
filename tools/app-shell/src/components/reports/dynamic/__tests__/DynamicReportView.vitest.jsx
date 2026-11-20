@@ -6,6 +6,7 @@
 // @covers tools/app-shell/src/components/reports/dynamic/useAccountSplit.js
 // @covers tools/app-shell/src/components/reports/dynamic/DynamicDrillPanel.jsx
 // @covers tools/app-shell/src/components/reports/dynamic/reportTelemetry.js
+// @covers tools/app-shell/src/components/reports/reportCategories.js
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { clearSessionIdentity, setSessionIdentity } from '@/lib/sessionIdentity.js';
 
@@ -36,6 +37,8 @@ vi.mock('@/pages/ReportViewerPage.jsx', () => ({
 }));
 
 import DynamicReportView from '../DynamicReportView.jsx';
+import { useSetPageMeta } from '@/components/layout/PageMetaContext';
+import { CATEGORY_LABELS, reportCategoryMenuKey } from '@/components/reports/reportCategories.js';
 import { LEDGER_LINE_CAP } from '../drillDown.js';
 
 const REPORT = {
@@ -135,6 +138,52 @@ beforeEach(() => {
   globalThis.URL.revokeObjectURL = vi.fn();
 });
 afterEach(() => vi.useRealTimers());
+
+// The first breadcrumb level names the report's own category (Tesorería for the aging reports),
+// through the same menu key as the sidebar group; Finance when the contract has none.
+describe('reportCategoryMenuKey / CATEGORY_LABELS', () => {
+  it.each([
+    ['treasury', 'Treasury'],
+    ['finance', 'Finance'],
+    ['inventory', 'Inventory'],
+    ['purchases', 'Purchases'],
+    ['sales', 'Sales'],
+    ['other', 'Other'],
+  ])('%s maps to the menu key %s', (category, key) => {
+    expect(reportCategoryMenuKey(category, 'Finance')).toBe(key);
+  });
+
+  it.each([undefined, null, '', 'no-such-category'])('falls back for %j', (category) => {
+    expect(reportCategoryMenuKey(category, 'Finance')).toBe('Finance');
+    expect(reportCategoryMenuKey(category)).toBeNull();
+  });
+
+  it('labels Tesorería in Spanish and cannot be mutated', () => {
+    expect(CATEGORY_LABELS.treasury).toEqual({ en: 'Treasury', es: 'Tesorería' });
+    expect(Object.isFrozen(CATEGORY_LABELS)).toBe(true);
+  });
+});
+
+describe('DynamicReportView — breadcrumb', () => {
+  const lastBreadcrumb = () => useSetPageMeta.mock.calls.map(([meta]) => meta).filter((m) => m?.breadcrumb).at(-1).breadcrumb;
+
+  beforeEach(() => useSetPageMeta.mockClear());
+
+  it.each([
+    ['treasury', 'Treasury', '/report-viewer?category=treasury'],
+    ['finance', 'Finance', '/report-viewer?category=finance'],
+    [undefined, 'Finance', '/report-viewer?category=finance'],
+    ['no-such-category', 'Finance', '/report-viewer?category=no-such-category'],
+  ])('category %j: first level %s, Reports links to %s', async (category, label, href) => {
+    renderView({ report: { ...REPORT, category } });
+    await waitFor(() => expect(queries()).toHaveLength(1));
+    expect(lastBreadcrumb()).toEqual([
+      { label },
+      { label: 'Reports', href },
+      { label: 'Pérdidas y Ganancias' },
+    ]);
+  });
+});
 
 describe('DynamicReportView — opening (§19)', () => {
   it('opens on the fiscal year that contains today, with the schema and org, and never sends a year', async () => {
