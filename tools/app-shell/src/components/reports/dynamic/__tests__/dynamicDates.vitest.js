@@ -230,6 +230,10 @@ describe('balance at a date (ETP-6083)', () => {
   it('compares one day: the same date a year back, and the close of the fiscal year before', () => {
     expect(priorFiscalYearEnd(FY, '2026-11-20')).toBe('2026-03-31');
     expect(priorFiscalYearEnd(FY, '2025-11-20')).toBeNull();
+    // Beyond the defined calendar: the latest year's month and day (a 04-01 calendar closes on 31 March), not 31 December.
+    expect(priorFiscalYearEnd(FY, '2028-11-20')).toBe('2028-03-31');
+    expect(priorFiscalYearEnd(FY, '2028-02-10')).toBe('2027-03-31');
+    expect(priorFiscalYearEnd([], '2028-02-10')).toBe('2027-12-31');
     expect(compareDates(RULES, '2026-11-20')).toEqual({ sly: '2025-11-20', prev: '2026-03-31' });
     expect(compareDates(RULES, '2024-02-29').sly).toBe('2023-02-28');
     expect(comparedRanges({ dateFrom: '2026-04-01', dateTo: '2026-11-20' }, 'total', RULES)).toEqual({

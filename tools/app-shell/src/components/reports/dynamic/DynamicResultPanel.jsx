@@ -73,7 +73,7 @@ export default function DynamicResultPanel({ info, years = [], state, pickers = 
             <ArrowSquareOutIcon className="w-4 h-4" data-testid="ExternalLink__result" />{ui('dynamicReportOpenPnl')}
           </a>
           {onOpenLedger && info && (
-            <Button variant="ghost" className="h-9 text-sm" onClick={() => onOpenLedger(info.row, info.range, info.amount)} data-testid="DynamicResultPanel__openLedger">
+            <Button variant="ghost" className="h-9 text-sm" onClick={() => onOpenLedger(info.row, info.range, parts?.posted ?? null)} data-testid="DynamicResultPanel__openLedger">
               {ui('dynamicReportResultPostedLedger')}
             </Button>
           )}

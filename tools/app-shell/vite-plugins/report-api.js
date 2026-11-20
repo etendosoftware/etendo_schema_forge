@@ -22,8 +22,7 @@ import { loadReportCli } from './report-cli.js';
 // every static import here always has. See report-cli.js / design id 455
 // ("Local verification of the plugin") and tasks id 458 (WU3.1/WU3.2).
 const { REPORT_UI_STRINGS, pickLabel, buildContractLabels } = await loadReportCli('report-i18n');
-// balanceFields (ETP-6083) is absent from a published core that predates it: the balance check is then simply not shipped.
-const { resolveGrouping, buildNestedGroups, buildAccountReportTree, buildRenderAccountTree, buildRenderChartTree, foldOpeningBalance, foldAggregateRows, balanceFields = null } =
+const { resolveGrouping, buildNestedGroups, buildAccountReportTree, buildRenderAccountTree, buildRenderChartTree, foldOpeningBalance, foldAggregateRows } =
   await loadReportCli('report-grouping');
 const { applyPlaceholders } = await loadReportCli('report-sql');
 const { filterAndTransformParams } = await loadReportCli('report-filters');
@@ -842,11 +841,6 @@ export default function reportApiPlugin(options = {}) {
             } else if (contract.sql?.operandsQuery !== undefined && Array.isArray(rows)) {
               rows = buildRenderAccountTree(rows, operandRows, params, contract,
                 result.periodRows ? { periodRows: result.periodRows, spec: result.periodSpec, compareMode: normalizeCompareMode(params.compareMode) } : null);
-            }
-
-            // ETP-6083: a contract with `balanceCheck` ships `meta.balance` / `meta.balanceRef` (rides `chartMeta`), as the report-server does.
-            if (balanceFields && contract.balanceCheck && Array.isArray(rows)) {
-              chartMeta = { ...chartMeta, ...balanceFields(contract, rows, { periods: Boolean(result.periodRows), compare: params.compareTo === 'true' }) };
             }
 
             // Handle groupBy parameter: find the dimension param whose groupByValue matches and

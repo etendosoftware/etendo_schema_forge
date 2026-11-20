@@ -9,7 +9,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import Handlebars from 'handlebars';
 import { registerReportHelpers, buildJsreportHelpersString } from '../../../templates/reports/helpers/report-html-helpers.js';
@@ -1235,56 +1234,5 @@ describe('balance-sheet template.hbs — "as of" header and period columns (ETP-
     const span = Number(/<tr class="group-header">\s*<td colspan="(\d+)">/.exec(html)[1]);
     assert.equal(span, 1 + 4 * PERIODS.length);
     assert.match(html, /<td class="cell-amount">5,00<\/td>/, 'the sly cell amount');
-  });
-});
-
-// ── ETP-6083: the dev plugin ships the balance check in the render meta, like the report-server ─────────────────
-//
-// The render route reads a SQL report from Postgres (org check included), so it cannot run in this DB-free suite:
-// the wiring is pinned from the source, and the core function it calls is driven for real (when the core has it).
-
-const { balanceFields } = await (await import('../vite-plugins/report-cli.js')).loadReportCli('report-grouping');
-
-describe('report-api render — meta.balance wiring (ETP-6083)', () => {
-  const PLUGIN_SRC = readFileSync(fileURLToPath(new URL('../vite-plugins/report-api.js', import.meta.url)), 'utf8');
-
-  it('a core that predates balanceFields still loads: it is destructured with a null default', () => {
-    assert.match(PLUGIN_SRC, /foldAggregateRows, balanceFields = null \}\s*=\s*await loadReportCli\('report-grouping'\)/);
-  });
-
-  it('adds the block to the render meta only when the core has it, the contract opts in and the rows are an array', () => {
-    assert.match(PLUGIN_SRC, /if \(balanceFields && contract\.balanceCheck && Array\.isArray\(rows\)\) \{\s*chartMeta = \{ \.\.\.chartMeta, \.\.\.balanceFields\(contract, rows, \{ periods: Boolean\(result\.periodRows\), compare: params\.compareTo === 'true' \}\) \};/);
-  });
-
-  it('the block rides chartMeta into the template/jsreport meta', () => {
-    assert.match(PLUGIN_SRC, /\.\.\.neoMeta, \.\.\.chartMeta, \.\.\.buildPeriodMeta/);
-  });
-
-  it('only a contract that opts in declares balanceCheck', () => {
-    assert.equal(CONTRACT.balanceCheck, true);
-    assert.equal(PL_CONTRACT.balanceCheck, undefined);
-  });
-
-  const skip = typeof balanceFields === 'function' ? false : 'the installed core predates balanceFields (run with LOCAL_CORE=1)';
-  const cell = (amount, sly, prev) => ({ amount, sly: { amount: sly }, prev: { amount: prev } });
-  const PROWS = [
-    { node_id: 'A', parentId: null, group: ACTIVO, amount: 100, cells: [cell(100, 80, 60)] },
-    { node_id: 'a1', parentId: 'A', group: ACTIVO, amount: 100, cells: [cell(100, 80, 60)] },
-    { node_id: 'P', parentId: null, group: PASIVO, amount: 100, cells: [cell(100, 70, 60)] },
-  ];
-
-  it('the period answer: balance from the current column, balanceRef from the sly / prev ones', { skip }, () => {
-    const meta = balanceFields(CONTRACT, PROWS, { periods: true, compare: false });
-    assert.deepEqual(meta.balance, { balanced: true, activo: 100, pnPasivo: 100, diff: 0 });
-    assert.deepEqual(meta.balanceRef.sly, { balanced: false, activo: 80, pnPasivo: 70, diff: 10 });
-    assert.equal(meta.balanceRef.prev.balanced, true);
-  });
-
-  it('a contract without balanceCheck (profit-loss) gets no block', { skip }, () => {
-    assert.deepEqual(balanceFields(PL_CONTRACT, PROWS, { periods: true }), {});
-  });
-
-  it('not exactly two root groups: the block is null, never a crash', { skip }, () => {
-    assert.equal(balanceFields(CONTRACT, PROWS.slice(0, 2), { periods: true }).balance, null);
   });
 });

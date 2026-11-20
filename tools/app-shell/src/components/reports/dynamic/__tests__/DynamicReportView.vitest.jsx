@@ -1945,6 +1945,16 @@ describe('DynamicReportView — Balance Sheet (ETP-6083)', () => {
       expect(queriesTo('report-general-ledger')[0]).toMatchObject({ dateFrom: '2026-09-15', dateTo: '2026-11-03' });
     });
 
+    it('the amount cell of the current column honours Desde too, not only the account name', async () => {
+      ledgerAnswer = () => lines([LINE], -500);
+      renderBs();
+      await waitFor(() => expect(ids()).toContain('213'));
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2026-09-15' } });
+      fireEvent.click((await openNode('213')).getAllByTestId('DynamicReportTable__cellLedger')[0]);
+      await waitFor(() => expect(queriesTo('report-general-ledger')).toHaveLength(1));
+      expect(queriesTo('report-general-ledger')[0]).toMatchObject({ dateFrom: '2026-09-15', dateTo: '2026-11-03' });
+    });
+
     it('a compared cell opens the ledger up to its one-day date, from the start of that fiscal year', async () => {
       ledgerAnswer = () => lines([LINE], -500);
       renderBs();
@@ -2009,6 +2019,8 @@ describe('DynamicReportView — Balance Sheet (ETP-6083)', () => {
       await waitFor(() => expect(queriesTo('report-general-ledger')).toHaveLength(1));
       expect(queriesTo('report-general-ledger')[0]).toMatchObject({ accountId: '129', dateTo: '2026-11-03' });
       await waitFor(() => expect(screen.queryByTestId('DynamicResultPanel')).toBeNull());
+      // The ledger holds only the posted part (0): its closing is compared with that, not with the 37.504 the row shows.
+      expect(await screen.findByTestId('DynamicDrillPanel__closingCheck')).toHaveTextContent('dynamicReportClosingMatches');
     });
 
     it('without access to the General Ledger the panel still opens, but has no ledger button', async () => {

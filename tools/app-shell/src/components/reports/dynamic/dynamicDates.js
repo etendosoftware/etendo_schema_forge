@@ -165,11 +165,21 @@ export function compareDates(rules, day) {
   return { sly: sly?.to ?? null, prev: prev?.to ?? null };
 }
 
-/** The fiscal year-end before the year containing `day`: the previous year's close. Without a calendar, 31 December of last year. */
+/**
+ * The fiscal year-end before the year containing `day`: the previous year's close. A date beyond the defined calendar follows
+ * the latest known year's month and day (a 04-01 calendar closes on 31 March); with no calendar at all, 31 December.
+ */
 export function priorFiscalYearEnd(years, day) {
   const year = yearContaining(years, day);
-  if (!year) return `${Number(day.slice(0, 4)) - 1}-12-31`;
-  return lastCompletedYearEnd(years, year.startDate);
+  if (year) return lastCompletedYearEnd(years, year.startDate);
+  const known = (years || []).map((y) => y.endDate).filter(Boolean).sort().pop();
+  if (!known) return `${Number(day.slice(0, 4)) - 1}-12-31`;
+  const [y0, m, d] = parts(known);
+  const isLast = d === lastDay(y0, m);
+  const onYear = (y) => iso(y, m, isLast ? lastDay(y, m) : d);
+  const y = Number(day.slice(0, 4));
+  const closing = onYear(y) >= day ? onYear(y) : onYear(y + 1);
+  return onYear(Number(closing.slice(0, 4)) - 1);
 }
 
 function dateRanges(rules, day) {

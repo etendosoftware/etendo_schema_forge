@@ -19,8 +19,9 @@ import { useReportQuery } from './useReportQuery.js';
 import { useReportPanelCollapsed } from './useReportPanelCollapsed.js';
 import { useReportDefaults } from './useReportDefaults.js';
 import { useAccountSplit } from './useAccountSplit.js';
+import { useBalanceAtDate } from './useBalanceAtDate.js';
 import { REPORT_EVENTS, filterTypeOf, useReportTelemetry } from './reportTelemetry.js';
-import { compareDates, compareRulesOf, endShortcutDate, fiscalYearStart, ledgerStartFor, matchingEndShortcut, matchingShortcut, matchingYear, openingPeriod, periodBuckets, pickedYearPeriod, serializePeriods, shortcutPeriod } from './dynamicDates.js';
+import { endShortcutDate, matchingShortcut, matchingYear, openingPeriod, periodBuckets, pickedYearPeriod, serializePeriods, shortcutPeriod } from './dynamicDates.js';
 import { modeHiddenCount, periodLimit, exportTooLong as isExportTooLong, columnModel, modeOf, rowsForMode } from './reportColumns.js';
 import { readReportUrlState, reportOffers, urlStateSpec, writeReportUrlState } from './reportUrlState.js';
 import { useRestoredPickerNames } from './useRestoredPickerNames.js';
@@ -87,7 +88,6 @@ function buildChips({ state, ui, label, fmt, orgName, multiOrg, reference, split
   ].filter(Boolean);
 }
 
-const COMPARE_LABEL_KEYS = { sameDateLastYear: 'dynamicReportSameDateLastYear', previousFiscalYearClose: 'dynamicReportPreviousFiscalYearClose' };
 const CHIP_KEYS = { bPartnerId: 'bp', productId: 'product' };
 const isOn = (value) => value === true || value === 'true';
 
@@ -306,8 +306,9 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   // ETP-6239: every request carries both compared ranges and the most periods any mode shows, so the comparison is a display choice, not a request.
   // ETP-6083: a report whose Desde is the ledger start asks for the balance at Hasta from the start of its fiscal year, whatever
   // Desde says (the amounts never depend on it): changing Desde sends no request, it only moves where the ledger drill starts.
-  const rules = useMemo(() => compareRulesOf(compareModes, defaults.years), [compareModes, defaults.years]);
-  const queryFrom = ledgerStart && state.dateTo ? fiscalYearStart(defaults.years, state.dateTo) : state.dateFrom;
+  const fmt = (d) => (d ? formatCalendarDate(d, locale.replace('_', '-')) : '');
+  const atDate = useBalanceAtDate({ ledgerStart, endShortcuts, compareModes, years: defaults.years, state, today, fmt, ui });
+  const { rules, queryFrom, withLedgerStart } = atDate;
   const range = useMemo(() => ({ dateFrom: queryFrom, dateTo: state.dateTo }), [queryFrom, state.dateTo]);
   const hasRange = Boolean(queryFrom && state.dateTo && queryFrom <= state.dateTo);
   const plan = useMemo(
@@ -363,14 +364,6 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   }, [panel.collapsed]);
   // A user's change: marked for report_filter_applied. The defaults and "Limpiar filtros" are not.
   // The comparison sends no request, so there is no result to time: it is emitted here, like `setLevel`.
-  // ETP-6083: Desde (the ledger start) stays inside the fiscal year of Hasta; moving Hasta to another year brings it to that year's start.
-  const withLedgerStart = (patch) => {
-    if (!ledgerStart || !('dateTo' in patch || 'dateFrom' in patch)) return patch;
-    const dateTo = patch.dateTo ?? state.dateTo;
-    const yearChanged = fiscalYearStart(defaults.years, dateTo) !== fiscalYearStart(defaults.years, state.dateTo);
-    const wanted = 'dateFrom' in patch ? patch.dateFrom : (yearChanged ? '' : state.dateFrom);
-    return { ...patch, dateFrom: ledgerStartFor(defaults.years, wanted, dateTo) };
-  };
   const userChange = (rawPatch) => {
     const patch = withLedgerStart(rawPatch);
     // D8: picking Mes/Trimestre hides the panel for this session only (nothing is saved).
@@ -425,11 +418,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const [drill, setDrill] = useState(null); // { row, range, clicked }: the account whose ledger is open, the cell's range (null = the view's period) and the amount clicked
   const openLedger = useCallback((row, cellRange, clicked) => setDrill({ row: drillRowOf(row), range: cellRange, clicked }), []);
   // ETP-6083: the ledger of a balance reads from the ledger start (Desde, inside the fiscal year of the cell's date) to that date.
-  const drillRange = useMemo(() => {
-    if (!drill || !ledgerStart) return drill?.range ?? null;
-    const to = drill.range?.to ?? state.dateTo;
-    return { from: ledgerStartFor(defaults.years, drill.range ? '' : state.dateFrom, to), to };
-  }, [drill, ledgerStart, defaults.years, state.dateFrom, state.dateTo]);
+  const drillRange = useMemo(() => atDate.drillRange(drill), [atDate, drill]);
   // ETP-6083: the income-summary row's explanation: { row, pos, which, range }.
   const [resultInfo, setResultInfo] = useState(null);
   const openResult = useCallback((row, cell) => {
@@ -439,7 +428,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   }, [telemetry.emit]);
   const { splits, toggle: toggleSplit } = useAccountSplit(report.id, queryParams, state.splitBy, { locale });
 
-  const shortcut = endShortcuts ? matchingEndShortcut(state.dateTo, endShortcuts, today, defaults.years) : matchingShortcut(state, defaults.years, today);
+  const shortcut = endShortcuts ? atDate.shortcut : matchingShortcut(state, defaults.years, today);
   const onShortcut = (kind) => {
     if (endShortcuts) {
       const dateTo = endShortcutDate(kind, today, defaults.years);
@@ -488,16 +477,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
     setExporting(null);
   };
 
-  const fmt = (d) => (d ? formatCalendarDate(d, locale.replace('_', '-')) : '');
   const chips = buildChips({ state, ui, label, fmt, orgName, multiOrg, reference, splitDimensions, pickers, groupByOptions, asOf: ledgerStart });
-  // ETP-6083: the comparison names the date it compares with, from the contract's modes (a one-day balance), else the P&L's period ones.
-  const compareOptions = rules ? [
-    ['', ui('dynamicReportNoComparison')],
-    ...[['sly', 'same-last-year'], ['prev', 'previous']].flatMap(([mode, value]) => {
-      const key = COMPARE_LABEL_KEYS[rules.modes[mode]];
-      return key ? [[value, ui(key, { date: fmt(state.dateTo ? compareDates(rules, state.dateTo)[mode] : '') })]] : [];
-    }),
-  ] : null;
   // D8: with any dimension filter or an account range the debits and credits of the shown accounts need not balance.
   const partialFilters = pickers.some(({ name }) => Boolean(state[name]));
   // Opening balances carry no product (ETP-6083): with a product filter the balance of a closed year loses its prior years.
@@ -544,9 +524,9 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
           splitDimensions={splitDimensions}
           levelOptions={levelOptions}
           endShortcuts={endShortcuts}
-          endShortcutDates={Object.fromEntries((endShortcuts ?? []).map((k) => [k, endShortcutDate(k, today, defaults.years)]))}
+          endShortcutDates={atDate.endShortcutDates}
           ledgerStart={ledgerStart}
-          compareOptions={compareOptions}
+          compareOptions={atDate.compareOptions}
           label={label}
           sectionLabel={sectionLabel}
           noFiscalYear={Boolean(opening?.noFiscalYear)}
