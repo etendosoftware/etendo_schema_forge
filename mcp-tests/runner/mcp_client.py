@@ -796,6 +796,12 @@ def extract_rows(payload: Any) -> list[Any]:
                         f"raise the page size"
                     )
                 return rows
+        # ETP-5850: a single-record read is one row — `{"data": {...}}` (etendo_get) or the record
+        # itself, as Holded's get_contact answers. A `where` over it checks that record.
+        if isinstance(payload.get("data"), dict):
+            return [payload["data"]]
+        if "id" in payload:
+            return [payload]
     keys = sorted(payload) if isinstance(payload, dict) else type(payload).__name__
     raise VerificationError(f"cannot read rows out of payload {keys}")
 

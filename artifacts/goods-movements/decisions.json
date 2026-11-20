@@ -94,6 +94,7 @@
   },
   "entities": {
     "header": {
+      "agentPrompt": "Movements between warehouses or bins only. For everything that moved for one product (receipts, shipments, inventories, consumptions and these movements together), list spec product, entity transactions, with parentId = the product id.",
       "name": "movement",
       "javaQualifier": "goodsMovementsHeaderHandler",
       "fields": {

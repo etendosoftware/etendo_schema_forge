@@ -29,6 +29,18 @@ inputs:
     description: Organization variable COVERAGE_TOLERANCE; empty keeps the script's default.
     required: false
     default: ''
+  sonar_socket_timeout:
+    description: >-
+      sonar.scanner.socketTimeout in seconds (organization variable SONAR_SOCKET_TIMEOUT): the longest
+      the scanner waits between two packets, as when it uploads the report. Empty keeps 60.
+    required: false
+    default: ''
+  sonar_response_timeout:
+    description: >-
+      sonar.scanner.responseTimeout in seconds (organization variable SONAR_RESPONSE_TIMEOUT): the
+      longest the scanner waits for the server's answer. Empty keeps 60.
+    required: false
+    default: ''
   retention_days:
     description: Days the unit-coverage artifact is kept (a validated push to main reads it from the PR run).
     required: false
@@ -83,12 +95,18 @@ runs:
     # From here on only when every step above passed: a failed test already fails the job.
     # A pull request analysis on a PR, a branch analysis on a push (the base the next PRs compare
     # against).
+    # ETP-6390: the timeouts come from organization variables, so a slow SonarQube (a report upload
+    # cut at 60 s on 2026-11-19) is handled by raising them, without a PR.
     - name: Sonar analysis
       uses: sonarsource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
       env:
         SONAR_SCANNER_OPTS: "-Xmx4096m"
         SONAR_TOKEN: ${{ inputs.sonar_token }}
         SONAR_HOST_URL: ${{ inputs.sonar_host_url }}
+      with:
+        args: >-
+          -Dsonar.scanner.socketTimeout=${{ inputs.sonar_socket_timeout || '60' }}
+          -Dsonar.scanner.responseTimeout=${{ inputs.sonar_response_timeout || '60' }}
 
     # Fails the job when the coverage is below the minimum, more than the tolerance below the target
     # branch, or cannot be evaluated (--context ci), and when this analysis's quality gate failed
@@ -103,7 +121,17 @@ runs:
         BASE_BRANCH: ${{ github.base_ref }}
         COVERAGE_MINIMUM: ${{ inputs.coverage_minimum }}
         COVERAGE_TOLERANCE: ${{ inputs.coverage_tolerance }}
-      run: >-
-        node scripts/compare-sonar-coverage.js --context ci
-        --pull-request "$PR_NUMBER" --base-branch "$BASE_BRANCH"
-        --report-task .scannerwork/report-task.txt --check-quality-gate
+      # The script is the PR head's, which can predate --check-quality-gate (ETP-6374): a main into
+      # develop back-merge, a branch that never merged develop. Then compare the coverage alone and
+      # say the gate was not read (ETP-6387, as com.etendoerp.go's ETP-6326).
+      run: |
+        gate=--check-quality-gate
+        if ! grep -q -- "--check-quality-gate" scripts/compare-sonar-coverage.js; then
+          gate=
+          msg="The checked-out compare-sonar-coverage.js predates --check-quality-gate: quality gate not read here."
+          echo "::warning::$msg"
+          echo "> $msg" >> "$GITHUB_STEP_SUMMARY"
+        fi
+        node scripts/compare-sonar-coverage.js --context ci \
+          --pull-request "$PR_NUMBER" --base-branch "$BASE_BRANCH" \
+          --report-task .scannerwork/report-task.txt $gate
