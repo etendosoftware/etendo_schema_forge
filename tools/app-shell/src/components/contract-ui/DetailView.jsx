@@ -293,7 +293,7 @@ export function DetailView({
   // the secondary/outline look instead of competing as a second primary button.
   hasExternalPrimaryAction = false, primarySave = false, // ETP-5600 primarySave: existing-record Save keeps the primary look (saveActions.jsx)
   statusFieldLabel = null,
-  statusEnumLabels = null,
+  statusEnumLabels = null, statusEnumVariants = null, // statusEnumVariants: per-code pill tones (the status field's enumVariants)
   salesTheme = false,
   sidebarContent: sidebarContentProp = null,
   othersLabel = null,
@@ -1948,7 +1948,10 @@ export function DetailView({
 
   const saveActionParams = {
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
-    ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, saveBusy,
+    ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls,
+    saveBusy,
+    // ETP-6233: Save stays disabled (no spinner) while a header process runs; a save would wait on it anyway.
+    processRunning: hook.runningProcess != null,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
     setShowProcessingModal, saveGate, hasExternalPrimaryAction, primarySave, onlySaveButton: onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode),
   };
@@ -1978,7 +1981,7 @@ export function DetailView({
       {/* Content card with rounded top-left corner */}
       <div className={`flex-1 flex flex-col ${contentBg} rounded-tl-2xl overflow-hidden min-h-0`}>
         {/* Action bar: Cancel + status | actions + save */}
-        {embedded ? renderEmbeddedStatusPill(statusField, data, statusEnumLabels) : (
+        {embedded ? renderEmbeddedStatusPill(statusField, data, statusEnumLabels, statusEnumVariants) : (
         <div className={getLinesToolbarClassName()}>
           <div className="flex items-center gap-2">
             <DetailCancelButton
@@ -1989,7 +1992,7 @@ export function DetailView({
             {statusField && data[statusField] != null && !WINDOW_HIDE_STATUS_PILL_FOR[windowName]?.has(data[statusField]) && (
               <DocumentStatusPill
                 status={data[statusField]}
-                enumLabels={statusEnumLabels}
+                enumLabels={statusEnumLabels} enumVariants={statusEnumVariants}
                 prefix={resolveStatusPrefix(statusFieldLabel, ui)}
                 data-testid="DocumentStatusPill__fa3275" />
             )}
@@ -2102,7 +2105,7 @@ export function DetailView({
                       variant={getProcessButtonVariant(p)}
                       size="default"
                       className={`${btnClass} ${saveBtnCls}`.trim()}
-                      disabled={isRunning}
+                      disabled={isRunning || hook.isSaving}
                       onClick={async () => {
                         for (const g of (p.requiresFieldMax ?? [])) {
                           const condOk = !g.conditionalOnField || data?.[g.conditionalOnField] === g.conditionalValue;
@@ -2203,7 +2206,7 @@ export function DetailView({
         {renderProcessConfirmModal(
           confirmProcess,
           processConfirmModal,
-          async () => { await hook.handleProcess?.(confirmProcess); setConfirmProcess(null); },
+          async () => { if ((await hook.handleProcess?.(confirmProcess)) !== false) setConfirmProcess(null); },
           () => setConfirmProcess(null),
           data,
           apiBaseUrl,

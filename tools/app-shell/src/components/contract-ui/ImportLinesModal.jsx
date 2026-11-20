@@ -160,8 +160,6 @@ export default function ImportLinesModal({
                          // lines not needed (for eagerLoadLines={false}); all hidden → allImportedMessageKey
   getDocumentTotal,      // (doc) => number | null: the row total while the document's lines are NOT
                          // loaded; once loaded (or null/undefined, or no prop) the sum of its lines
-  countLinesInFooter = false, // true: the footer reads «1 línea seleccionada» / «N líneas
-                              // seleccionadas»; false keeps the generic «N Seleccionados»
   describeLine,          // (line, { imported }) => string | null: the note under a line's product
                          // (e.g. the draft invoice holding it). On a greyed-out line null/absent
                          // keeps the default («ya importado», or the line's draft shipments); on a
@@ -473,16 +471,13 @@ export default function ImportLinesModal({
   const selectionSize = selected.size;
   const importDisabled = selected.size === 0 || importing;
 
-  // ETP-5828 (QA UI-6) — with `countLinesInFooter` (the order popups) the footer counts the
-  // selected LINES in the singular or the plural: «1 línea seleccionada», «2 líneas seleccionadas».
-  // Every other popup keeps the generic «N Seleccionados».
+  // ETP-5651 — every import popup (order, invoice, shipment) counts the selected LINES in the
+  // footer, singular or plural: «1 línea seleccionada», «2 líneas seleccionadas».
   const renderLinesCount = () => {
     const one = selectionSize === 1;
     return (
       <>
-        <strong className="font-semibold">
-          {ui(one ? 'importLinesSelectedCountOne' : 'importLinesSelectedCountMany', { count: selectionSize })}
-        </strong>
+        {ui(one ? 'importLinesSelectedCountOne' : 'importLinesSelectedCountMany', { count: selectionSize })}
         {' '}{ui(one ? 'importLinesSelectedSuffixOne' : 'importLinesSelectedSuffixMany')}
       </>
     );
@@ -493,7 +488,7 @@ export default function ImportLinesModal({
     return (
       <>
         <CheckCircleIcon size={20} aria-hidden="true" className={cn('shrink-0', ICON_COLOR)} data-testid="CircleCheck__b0ad7a" />
-        <span>{countLinesInFooter ? renderLinesCount() : ui('selected', { count: selectionSize })}</span>
+        <span>{renderLinesCount()}</span>
       </>
     );
   };
@@ -857,7 +852,7 @@ export default function ImportLinesModal({
               type="button"
               onClick={onClose}
               data-testid="ImportLinesModal__cancel"
-              className={cn(PILL_BASE, 'border bg-card text-foreground hover:bg-muted', CONTROL_BORDER, SHADOW_XS)}
+              className={cn(PILL_BASE, 'bg-transparent text-foreground hover:bg-muted')}
             >
               {ui('cancel')}
             </button>
@@ -866,7 +861,8 @@ export default function ImportLinesModal({
               onClick={handleImport}
               disabled={importDisabled}
               data-testid="ImportLinesModal__import"
-              className={cn(PILL_BASE, 'bg-primary text-primary-foreground enabled:hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/40')}
+              // ETP-5651 (Figma): black while enabled, grey while nothing is selected.
+              className={cn(PILL_BASE, 'bg-foreground text-background enabled:hover:bg-foreground/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground')}
             >
               {importing ? ui('importing') : ui(importButtonKey, { count: selectionSize > 0 ? ` (${selectionSize})` : '' })}
             </button>

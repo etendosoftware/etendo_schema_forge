@@ -47,12 +47,17 @@ export function splitCompactRuns(fields) {
  *
  * Purely presentational: the host (`ListModalWindow`) owns the form state, the validation and
  * the save, exactly as for the default modal.
+ *
+ * `readOnly` (a read-only role) turns it into a view: every field is disabled, the Save pill is
+ * not rendered and the outline pill reads "Close", alone at the right of the footer.
  */
 export function ListModalCompactDialog({
   open, onClose, title, subtitle, fields, entity, formData, onFieldChange,
-  api, token, apiBaseUrl, formError, onSubmit, submitDisabled, submitting, submitLabel, ui,
+  api, token, apiBaseUrl, formError, onSubmit, submitDisabled, submitting, submitLabel,
+  readOnly = false, ui,
 }) {
   const runs = splitCompactRuns(fields);
+  const footerAlign = readOnly ? 'justify-end' : 'justify-between';
   return (
     <Dialog
       open={open}
@@ -89,6 +94,7 @@ export function ListModalCompactDialog({
               cols={1}
               gap={run.checkbox ? CHECKBOX_GAP : FIELD_GAP}
               variant="compact"
+              readOnly={readOnly}
               data-testid="EntityForm__c0a1d4" />
           ))}
           {formError && (
@@ -101,24 +107,26 @@ export function ListModalCompactDialog({
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-3 px-7 py-3">
+        <div className={`flex items-center ${footerAlign} gap-3 px-7 py-3`}>
           <button
             type="button"
             onClick={onClose}
             disabled={submitting}
             data-testid="list-modal-cancel"
             className={CANCEL_PILL}>
-            {ui('cancel')}
+            {readOnly ? ui('close') : ui('cancel')}
           </button>
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={submitDisabled}
-            data-testid="list-modal-submit"
-            className={SAVE_PILL}>
-            <FloppyDiskIcon className="h-5 w-5" aria-hidden="true" data-testid="Save__c0a1d4" />
-            {submitting ? ui('saving') : submitLabel}
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={onSubmit}
+              disabled={submitDisabled}
+              data-testid="list-modal-submit"
+              className={SAVE_PILL}>
+              <FloppyDiskIcon className="h-5 w-5" aria-hidden="true" data-testid="Save__c0a1d4" />
+              {submitting ? ui('saving') : submitLabel}
+            </button>
+          )}
         </div>
 
         {/* Last in the DOM so the dialog's initial focus lands on the first field, not here.

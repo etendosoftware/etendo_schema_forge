@@ -2,7 +2,7 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:bpLocation
 const fields = [
-  { key: 'streetName', column: 'EM_OBSEPA_StrtNm', type: 'text', label: 'EM_OBSEPA_StrtNm', required: true, section: 'principal', maxLength: 70 },
+  { key: 'streetName', column: 'EM_OBSEPA_StrtNm', type: 'text', label: 'EM_OBSEPA_StrtNm', required: true, section: 'principal', maxLength: 60 },
   { key: 'buildingNumber', column: 'EM_OBSEPA_BldgNb', type: 'text', label: 'EM_OBSEPA_BldgNb', required: true, section: 'principal', maxLength: 16 },
   { key: 'buildingName', column: 'EM_OBSEPA_BldgNm', type: 'text', label: 'EM_OBSEPA_BldgNm', section: 'principal', maxLength: 35 },
   { key: 'addressLine1', column: 'Address1', type: 'text', label: 'Address Line 1', readOnly: true, section: 'principal', maxLength: 60 },

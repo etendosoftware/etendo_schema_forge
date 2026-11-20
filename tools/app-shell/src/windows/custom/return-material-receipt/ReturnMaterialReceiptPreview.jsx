@@ -7,6 +7,7 @@ import { useReturnReceiptPdf } from './useReturnReceiptPdf.js';
 import { downloadBlobAsFile } from '../shared/pdfUtils.js';
 import { buildReturnPreviewContent } from '../shared/preview-cards/buildReturnPreviewContent.jsx';
 import { SALES_RELATED_DOCS } from '@/components/related-documents/salesRelatedDocs.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUrl, windowName, onClose, onEdit, readOnly = false }) {
   const ui = useUI();
@@ -41,7 +42,7 @@ export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUr
   // the grid row quick-action's `emailAction.visibleWhen` gate in index.jsx and the
   // pattern used by every other document preview (e.g. GoodsShipmentPreview).
   // ETP-5205 — Solo-Lectura tier: Send is a write (mail + PDF attachment), Download stays.
-  const isSendable = receipt.documentStatus === 'CO' && !readOnly;
+  const isSendable = isCompletedStatus(receipt.documentStatus) && !readOnly;
 
   const handleDownload = () => {
     if (!pdfBlob) return;

@@ -25,6 +25,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useHasCapability, useAuth } from '@/auth/AuthContext.jsx';
+import { SEPA_REMITTANCES_CAPABILITY } from '@/lib/capabilityVisibility.js';
+import SepaCreditorIdSection from './SepaCreditorIdSection.jsx';
+import { useAccountCreditorId } from './useAccountCreditorId.js';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 import { useBankConnectionActions, launchSaltEdgePopup } from '@/hooks/useBankConnectionActions';
 import { useFinancialAccountAccounting } from '@/hooks/useFinancialAccountAccounting.js';
@@ -303,7 +306,7 @@ async function copyIbanToClipboard(account, ui) {
  * the Accounting tab's accounting configuration (ETP-4530) in one go.
  */
 async function persistAccountEdits({
-  account, fields, settings, reconciliation, glItemDifference, accounting, updateAccount,
+  account, fields, settings, reconciliation, glItemDifference, accounting, creditorId, updateAccount,
   saveImportSettings, saveAccountingConfiguration,
 }) {
   const updates = {};
@@ -347,6 +350,11 @@ async function persistAccountEdits({
         : null;
     });
     await saveAccountingConfiguration(account.id, payload);
+  }
+  // ETP-6247: the SEPA creditor identifier is saved last, only when it changed and is not empty (the
+  // backend cannot delete a saved one; an emptied value blocks the save instead, see useAccountCreditorId).
+  if (creditorId?.dirty) {
+    await creditorId.save();
   }
 }
 
@@ -1246,6 +1254,10 @@ export function EditAccountModal({
   // loads, so it can flip false → true shortly after the modal mounts, or true → false mid-session
   // on a role switch — both handled by the reset effect below.
   const canSeeAccounting = useHasCapability('showAccountingFields');
+  // ETP-6247 — the «Remesas» section: the sepaRemittances capability AND a Bank account (the pending
+  // Type selection). The creditor identifier is one more field of this form, saved with «Guardar cambios».
+  const sepaCapable = useHasCapability(SEPA_REMITTANCES_CAPABILITY);
+  const creditorId = useAccountCreditorId({ open, account, capable: sepaCapable, active: fields.isBankType, ui });
   const [editTab, setEditTab] = useState(() => initialEditTab());
   const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false);
   const [confirmDeleteConnectionOpen, setConfirmDeleteConnectionOpen] = useState(false);
@@ -1285,7 +1297,7 @@ export function EditAccountModal({
   const reauthMessage = buildReauthMessage(bankConnection.status, locale, ui);
   const reauthTone = buildReauthTone(bankConnection.status);
   const dirty = fields.nameDirty || fields.typeDirty || fields.ibanDirty || fields.currencyDirty
-    || fields.countryDirty || fields.swiftDirty
+    || fields.countryDirty || fields.swiftDirty || creditorId.dirty
     || bankConnection.settingsDirty || (!isCash && recon.dirty) || glItemDifference.dirty
     || accounting.dirty;
   // What makes the form unsavable, independently of whether anything changed. Split out of
@@ -1295,7 +1307,7 @@ export function EditAccountModal({
     || (fields.typeEditable && fields.type === '')
     || (fields.currencyEditable && fields.currencyId === '')
     || recon.amountToleranceInvalid || bankConnection.rangeInvalid
-    || bankConnection.requiredMissing;
+    || bankConnection.requiredMissing || creditorId.blocked;
   const canSave = dirty && !saving && !saveBlocked;
   const busy = saving || bankConnection.busy;
 
@@ -1312,6 +1324,7 @@ export function EditAccountModal({
         reconciliation: isCash ? null : recon,
         glItemDifference,
         accounting,
+        creditorId,
         updateAccount,
         saveImportSettings,
         saveAccountingConfiguration,
@@ -1329,6 +1342,10 @@ export function EditAccountModal({
     // discriminator; the status is not.
     if (err.code === 'stale_record' || err.body?.error === 'stale_record') {
       setError(ui('financeAccountsEditStaleRecord'));
+    } else if (err.creditorIdMessage) {
+      // ETP-6247: the creditor identifier was refused; its message is already translated (it can name
+      // the check digits the server expects), so the generic backend-error mapping must not touch it.
+      toast.error(err.creditorIdMessage);
     } else if (isDuplicateConflict(err.status, err.code) && !hasMappedMessageKey(extractBackendMessageKeys(err.body))) {
       // ETP-6148: a code-less 409 that names a translated message (ETGO_RemittanceProvisioningConflict)
       // is not a duplicate name; it falls through to the translated toast below.
@@ -1483,6 +1500,8 @@ export function EditAccountModal({
                     data-testid="ReconciliationSettingsSection__73027d" />
                 </>
               ) : null}
+
+              <SepaCreditorIdSection ui={ui} creditorId={creditorId} disabled={busy} data-testid="SepaCreditorIdSection__73027d" />
 
               <GlItemDifferenceSection
                 ui={ui}

@@ -1,6 +1,7 @@
 import { getProgressTone } from '@/lib/progressTone';
 import DocumentStatusPill from '@/components/contract-ui/DocumentStatusPill';
 import ProgressRing from '@/components/contract-ui/ProgressRing';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 /**
  * Header progress badge backed by a 0..100 percentage field (delivered, received,
@@ -15,7 +16,7 @@ export default function ProgressFieldBadge({ value, label, testId, documentStatu
   const raw = Number(value);
   if (!Number.isFinite(raw)) return null;
   const percent = Math.round(Math.max(0, Math.min(100, raw)));
-  if (documentStatus !== 'CO' && !(showWhenPositive && percent > 0)) return null;
+  if (!isCompletedStatus(documentStatus) && !(showWhenPositive && percent > 0)) return null;
 
   return (
     <DocumentStatusPill

@@ -42,8 +42,18 @@ jobs:
           # The whole history: Sonar's blame and new-code detection need it.
           fetch-depth: 0
 
+      # ETP-6387: the action comes from this run's own commit (the merge ref on a PR), not from the
+      # PR head checked out above: a head older than the action (the main into develop back-merge,
+      # a branch that never merged develop) would not have it. Tests and scripts stay the head's.
+      - name: Checkout the unit tests action
+        uses: actions/checkout@v4
+        with:
+          path: .ci-actions
+          sparse-checkout: .github/actions
+          persist-credentials: false
+
       - name: Unit tests + Sonar + coverage
-        uses: ./.github/actions/unit-tests-sonar
+        uses: ./.ci-actions/.github/actions/unit-tests-sonar
         with:
           npm_token: ${{ secrets.GITHUB_TOKEN }}
           sonar_token: ${{ secrets.SONAR_TOKEN }}
@@ -51,6 +61,8 @@ jobs:
           sonar_read_token: ${{ secrets.SONAR_READ_TOKEN }}
           coverage_minimum: ${{ vars.COVERAGE_MINIMUM }}
           coverage_tolerance: ${{ vars.COVERAGE_TOLERANCE }}
+          sonar_socket_timeout: ${{ vars.SONAR_SOCKET_TIMEOUT }}
+          sonar_response_timeout: ${{ vars.SONAR_RESPONSE_TIMEOUT }}
 
   mocked:
     name: Mocked E2E

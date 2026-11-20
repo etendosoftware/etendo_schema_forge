@@ -12,6 +12,7 @@ import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
 import { SALES_RELATED_DOCS } from '@/components/related-documents';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
+import { isDraftStatus } from '../../../lib/docStatus.js';
 
 // Statuses that mean the quotation is no longer editable
 
@@ -102,7 +103,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig below; lets
   // useQuotationPdf skip the jsreport round-trip and serve the marked attachment
   // directly when one already exists, instead of regenerating on every open.
-  const pdfCacheConfig = { tableName: 'C_Order', storeCondition: quotation?.documentStatus !== 'DR', recordUpdated: quotation?.updated ?? null };
+  const pdfCacheConfig = { tableName: 'C_Order', storeCondition: !isDraftStatus(quotation?.documentStatus), recordUpdated: quotation?.updated ?? null };
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useQuotationPdf(
     quotation?.id,
     apiBaseUrl,
@@ -113,11 +114,11 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
 
   if (!quotation) return null;
 
-  const isDraft = quotation.documentStatus === 'DR';
+  const isDraft = isDraftStatus(quotation.documentStatus);
   // ETP-4717 — Send is available from "Bajo evaluación" (UE) onward, not
   // while still Draft (DR). Matches the Grid row quick-action and Form-view
   // topbar gates.
-  const isSendable = quotation.documentStatus !== 'DR';
+  const isSendable = !isDraftStatus(quotation.documentStatus);
   // ETP-5205 — Solo-Lectura tier: Send is a write (mail + PDF attachment), Download stays.
   const canSend = isSendable && !readOnly;
 

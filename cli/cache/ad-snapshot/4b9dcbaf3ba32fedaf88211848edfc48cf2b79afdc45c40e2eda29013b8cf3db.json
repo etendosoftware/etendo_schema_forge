@@ -1527,11 +1527,18 @@
       ]
     },
     "71ffdfc8865e7daf652e4f855e18d8bb6126fff59ba2b01e651989778533de54": {
-      "checksum": "27be61739bf7fc9be2ed8befe85c6a29acc4cc59ce675f2b4ea59ea0c1daf05e",
+      "checksum": "1fddfa729af3317e786af760d9ded0244234feb85a1fb8c0fdf20f8f6a1085a6",
       "params": [
         "FF8080812E71F7C7012E71FD0499001B"
       ],
       "rows": [
+        {
+          "ad_callout_id": "5A23D8F90E11453B9C493CD7644A96CB",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "classname": "org.openbravo.module.remittance.ad_callouts.RemittanceSepaDefaultsCallout",
+          "columnname": "FIN_Financial_Account_ID",
+          "name": "RemittanceSepaDefaultsCallout"
+        },
         {
           "ad_callout_id": "FF8080812ECEBED5012ECED1344F000D",
           "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",

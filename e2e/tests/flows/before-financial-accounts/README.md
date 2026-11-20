@@ -22,4 +22,8 @@ Rules for this folder:
   after login. It changes nothing; when the tenant already has an account (a
   local run reusing `.auth-credentials.json`) the report carries a
   `fresh-tenant` annotation saying the case was not exercised.
+- A spec here provisions its own master data and never relies on what another spec
+  left behind: the tenant also has no contacts yet. It calls `ensureCustomerSetup(page)`
+  (sales-helpers.js) after login for the customer, and the product helpers for the
+  products. Both are API-only and never create a financial account.
 - Do not rename this folder to anything that sorts after `finance/`.
