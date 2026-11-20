@@ -30,6 +30,8 @@ export function ledgerParams(queryParams, row, range = null, { atDate = false } 
   // A dimension row narrows the ledger to its own contact / product / project / cost centre.
   const dimensionParam = DIMENSION_PARAMS[groupBy];
   if (row.isDimension && row.dimension_id && dimensionParam) params[dimensionParam] = row.dimension_id;
+  // ETP-6083: a folded row reads its hidden accounts as a code range (no single account id).
+  if (row.foldedRange) Object.assign(params, { accountId: '', fromAccountId: row.foldedRange.from, toAccountId: row.foldedRange.to });
   return params;
 }
 
@@ -46,11 +48,11 @@ export function drillRowOf(row) {
   return { ...row, node_id: row.account_id ?? row.node_id, value: row.account_value ?? row.value };
 }
 
-/** A row whose ledger can open: an account with no sub-accounts (dimension children don't count), or a dimension row that has a value. */
+/** A row whose ledger can open: an account with no sub-accounts (dimension children don't count) or a folded row (its hidden accounts' range), or a dimension row that has a value. */
 export function canDrill(row) {
   if (row.isFormula || !(row.account_value ?? row.value)) return false;
   if (row.isDimension) return Boolean(row.dimension_id);
-  return !row.hasChildren || Boolean(row.hasDimensionChildren);
+  return !row.hasChildren || Boolean(row.hasDimensionChildren) || Boolean(row.foldedRange);
 }
 
 /**

@@ -111,5 +111,6 @@ describe('drillDown — chart-tree rows (ETP-6084)', () => {
     expect(canDrill({ account_value: '430', isDimension: true, dimension_id: 'B7' })).toBe(true);
     expect(canDrill({ account_value: '430', isDimension: true, dimension_id: '' })).toBe(false);
     expect(canDrill({ name: 'x' })).toBe(false);
+    expect(canDrill({ value: '70', hasChildren: true, foldedRange: { from: '700', to: '709' } })).toBe(true);
   });
 });

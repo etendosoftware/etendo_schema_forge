@@ -21,7 +21,7 @@ import { useReportDefaults } from './useReportDefaults.js';
 import { useAccountSplit } from './useAccountSplit.js';
 import { useBalanceAtDate } from './useBalanceAtDate.js';
 import { REPORT_EVENTS, filterTypeOf, useReportTelemetry } from './reportTelemetry.js';
-import { endShortcutDate, matchingShortcut, matchingYear, openingPeriod, periodBuckets, pickedYearPeriod, serializePeriods, shortcutPeriod } from './dynamicDates.js';
+import { endShortcutDate, ledgerStartFor, matchingShortcut, matchingYear, openingPeriod, periodBuckets, pickedYearPeriod, serializePeriods, shortcutPeriod } from './dynamicDates.js';
 import { modeHiddenCount, periodLimit, exportTooLong as isExportTooLong, columnModel, modeOf, rowsForMode } from './reportColumns.js';
 import { readReportUrlState, reportOffers, urlStateSpec, writeReportUrlState } from './reportUrlState.js';
 import { useRestoredPickerNames } from './useRestoredPickerNames.js';
@@ -309,6 +309,14 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const fmt = useCallback((d) => (d ? formatCalendarDate(d, locale.replace('_', '-')) : ''), [locale]);
   const atDate = useBalanceAtDate({ ledgerStart, endShortcuts, compareModes, years: defaults.years, state, today, fmt, ui });
   const { rules, queryFrom, withLedgerStart } = atDate;
+  // A deep link's Desde is clamped like an edit is, once the fiscal years are known (they load after the first render).
+  useEffect(() => {
+    if (!ledgerStart || defaults.loading) return;
+    setState((s) => {
+      const from = s.dateFrom && s.dateTo ? ledgerStartFor(defaults.years, s.dateFrom, s.dateTo) : s.dateFrom;
+      return from === s.dateFrom ? s : { ...s, dateFrom: from };
+    });
+  }, [ledgerStart, defaults.loading, defaults.years]);
   const range = useMemo(() => ({ dateFrom: queryFrom, dateTo: state.dateTo }), [queryFrom, state.dateTo]);
   const hasRange = Boolean(queryFrom && state.dateTo && queryFrom <= state.dateTo);
   const plan = useMemo(
@@ -402,7 +410,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const expandedSet = useMemo(() => foldExpansion(rows, fold, state.level, { nested: chartTree, maxIndent }), [rows, fold, state.level, chartTree, maxIndent]);
   const levelHidden = useMemo(() => (chartTree && fold.base === 'level' ? levelHiddenIds(rows, state.level) : null), [chartTree, fold.base, rows, state.level]);
   const kpis = useMemo(() => (RESULT_REPORT_IDS.has(report.id) ? reportKpis(rows) : null), [report.id, rows]);
-  const shown = useMemo(() => visibleRows(rows, expandedSet, levelHidden), [rows, expandedSet, levelHidden]);
+  const shown = useMemo(() => visibleRows(rows, expandedSet, levelHidden, { foldedSummary: ledgerStart }), [rows, expandedSet, levelHidden, ledgerStart]);
   const refold = (base) => setFold({ base, flipped: new Set() });
   const toggleRow = (id) => {
     groupToggled(expandedSet.has(id) ? 'collapse' : 'expand');

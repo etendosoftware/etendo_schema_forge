@@ -1815,6 +1815,11 @@ describe('DynamicReportView — Balance Sheet (ETP-6083)', () => {
       expect(bsQueries()).toHaveLength(1);
     });
 
+    it('a deep link with a Desde outside the fiscal year of Hasta shows it clamped, like an edit', async () => {
+      renderBs({ search: 'dateFrom=2025-03-01&dateTo=2026-11-03' });
+      await waitFor(() => expect(screen.getByTestId('DynamicReportPanel__dateFrom')).toHaveValue('2026-07-01'));
+    });
+
     it('offers Grupo / Epígrafe / Cuenta / Subcuenta and hides the legacy-only Epígrafe and Desglose', async () => {
       renderBs();
       await waitFor(() => expect(bsQueries()).toHaveLength(1));
@@ -2050,6 +2055,48 @@ describe('DynamicReportView — Balance Sheet (ETP-6083)', () => {
       await screen.findByTestId('DynamicResultPanel');
       expect(screen.getByTestId('DynamicResultPanel__onTheFly')).toHaveTextContent('24.811,00');
       expect(screen.getByTestId('DynamicResultPanel__posted')).toHaveTextContent('0,00');
+    });
+  });
+
+  describe('folded rows (ETP-6083: sub-accounts hidden by Cuenta / Epígrafe / Grupo)', () => {
+    // 129 and 213 are parents at the default level: their leaf accounts (12901000 carries the result) are hidden.
+    const FOLDED_ROWS = [
+      BS_ROWS[0], BS_ROWS[1],
+      row({ node_id: '213', parentId: 'A2', elementlevel: 'C', value: '213', name: 'Maquinaria', sign: 'D', group: 'Activo' }, ONE_DAY(1000, 900, 800)),
+      row({ node_id: '2130', parentId: '213', elementlevel: 'S', value: '21300', name: 'Maquinaria a', sign: 'D', group: 'Activo' }, ONE_DAY(600, 500, 400)),
+      row({ node_id: '2131', parentId: '213', elementlevel: 'S', value: '21310', name: 'Maquinaria b', sign: 'D', group: 'Activo' }, ONE_DAY(400, 400, 400)),
+      BS_ROWS[4], BS_ROWS[5],
+      row({ node_id: '129', parentId: 'P2', elementlevel: 'C', value: '129', name: 'Resultados del ejercicio', sign: 'C', group: 'Pasivo' }, ONE_DAY(37504, 24811, 20000)),
+      row({ node_id: '12901', parentId: '129', elementlevel: 'S', value: '12901000', name: 'Resumen', sign: 'C', group: 'Pasivo', result: { onTheFly: 37504, posted: 0 } }, RESULT_CELL),
+    ];
+    beforeEach(() => { queryAnswer = (params) => json({ kind: 'tree', periods: [{ idx: 0, dateFrom: params.dateFrom, dateTo: params.dateTo, partial: false }], hiddenCount: 0, rows: FOLDED_ROWS, balance: BALANCED }); });
+
+    it('a folded row whose hidden account carries the result opens the result panel, at every fold level', async () => {
+      renderBs();
+      for (const level of ['C', 'P', 'G']) {
+        fireEvent.change(screen.getByTestId('DynamicReportPanel__level'), { target: { value: level } });
+        const id = { C: '129', P: 'P2', G: 'P1' }[level];
+        fireEvent.click((await openNode(id)).getByTestId('DynamicReportTable__ledger'));
+        await screen.findByTestId('DynamicResultPanel');
+        expect(screen.getByTestId('DynamicResultPanel__onTheFly')).toHaveTextContent('37.504,00');
+        expect(screen.getByTestId('DynamicResultPanel__posted')).toHaveTextContent('0,00');
+        expect(screen.getByTestId('DynamicResultPanel__total')).toHaveTextContent('37.504,00');
+        fireEvent.keyDown(screen.getByTestId('DynamicResultPanel'), { key: 'Escape' });
+        await waitFor(() => expect(screen.queryByTestId('DynamicResultPanel')).toBeNull());
+      }
+    });
+
+    it('a folded account opens the ledger of its sub-accounts as a code range', async () => {
+      ledgerAnswer = () => ({ kind: 'rows', rows: [], openingRows: [] });
+      renderBs();
+      fireEvent.click((await openNode('213')).getByTestId('DynamicReportTable__ledger'));
+      await waitFor(() => expect(queriesTo('report-general-ledger')).toHaveLength(1));
+      expect(queriesTo('report-general-ledger')[0]).toMatchObject({ accountId: '', fromAccountId: '21300', toAccountId: '21310', dateTo: '2026-11-03' });
+    });
+
+    it('a heading with no account under it stays plain text', async () => {
+      renderBs();
+      expect((await openNode('A1')).queryByTestId('DynamicReportTable__ledger')).toBeNull();
     });
   });
 

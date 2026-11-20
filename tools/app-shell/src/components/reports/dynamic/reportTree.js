@@ -126,8 +126,9 @@ export function foldExpansion(rows, { base, flipped }, level, opts) {
   return out;
 }
 
-/** The rows to show, in order, each with `depth` (0 = top), `hasChildren` and `hasDimensionChildren`. `hidden` (levelHiddenIds) rows are skipped. */
-export function visibleRows(rows, expanded, hidden = null) {
+/** The rows to show, in order, each with `depth` (0 = top), `hasChildren` and `hasDimensionChildren`. `hidden` (levelHiddenIds) rows are skipped.
+ * `foldedSummary` (a balance AT A DATE) lets a closed row stand for its hidden accounts (ledger range, aggregated `result`). */
+export function visibleRows(rows, expanded, hidden = null, { foldedSummary = false } = {}) {
   const parents = parentIds(rows);
   const dimensionParents = dimensionParentIds(rows);
   const shown = new Map(); // node_id → depth, for rows that are listed
@@ -142,7 +143,54 @@ export function visibleRows(rows, expanded, hidden = null) {
     shown.set(r.node_id, depth);
     out.push({ ...r, depth, hasChildren: parents.has(r.node_id), hasDimensionChildren: dimensionParents.has(r.node_id) });
   }
-  return out;
+  return foldedSummary ? foldedSummaries(out, rows, expanded) : out;
+}
+
+const sumOf = (list, pick) => list.reduce((s, r) => s + (Number(pick(r)) || 0), 0);
+const anyOf = (list, pick) => list.some((r) => pick(r) != null);
+
+/** The `{onTheFly, posted}` of a folded row's cell: the descendants' on-the-fly parts added up, the rest of the amount is posted. */
+function foldedPart(list, amount, pick) {
+  if (amount == null || !anyOf(list, pick)) return null;
+  const onTheFly = sumOf(list, pick);
+  return { onTheFly, posted: Number(amount) - onTheFly };
+}
+
+/** ETP-6083: the `result` of a folded row, from the descendants that carry one (same shape the core puts on a row and on `cells[i]`). */
+function foldedResult(row, withResult) {
+  const parts = foldedPart(withResult, row.amount, (d) => d.result?.onTheFly);
+  if (!parts) return null;
+  const cells = (row.cells || []).map((cell, i) => {
+    const at = (key) => (d) => (key ? d.cells?.[i]?.result?.[key]?.onTheFly : d.cells?.[i]?.result?.onTheFly);
+    const own = foldedPart(withResult, cell.amount, at(null));
+    if (!own) return cell;
+    const sly = foldedPart(withResult, cell.sly?.amount, at('sly'));
+    const prev = foldedPart(withResult, cell.prev?.amount, at('prev'));
+    return { ...cell, result: { ...own, ...(sly && { sly }), ...(prev && { prev }) } };
+  });
+  return { result: parts, cells: row.cells ? cells : row.cells };
+}
+
+/**
+ * ETP-6083: a row the fold closes hides its sub-accounts, so on its own it could neither open a ledger nor explain a `result`
+ * those sub-accounts carry. Such a row gets `foldedRange` (the code range of its hidden accounts: the ledger reads several accounts
+ * as a range) and, when a hidden account carries a `result`, that result aggregated. Structural: no account is named.
+ */
+function foldedSummaries(out, rows, expanded) {
+  const children = new Map();
+  for (const r of rows || []) if (r.parentId != null) children.set(r.parentId, [...(children.get(r.parentId) || []), r]);
+  return out.map((row) => {
+    if (!row.hasChildren || expanded.has(row.node_id)) return row;
+    const hidden = [];
+    const walk = (id) => (children.get(id) || []).forEach((c) => { hidden.push(c); walk(c.node_id); });
+    walk(row.node_id);
+    // Only leaf accounts hold postings: a summary row's own code (a heading) is not an account and would widen the range.
+    const accounts = hidden.filter((r) => !children.has(r.node_id) && !r.isDimension && !r.isFormula && (r.account_value ?? r.value));
+    if (!accounts.length) return row;
+    const codes = accounts.map((r) => String(r.account_value ?? r.value)).sort();
+    const withResult = hidden.filter((r) => r.result);
+    return { ...row, foldedRange: { from: codes[0], to: codes[codes.length - 1] }, ...(withResult.length && foldedResult(row, withResult)) };
+  });
 }
 
 /**

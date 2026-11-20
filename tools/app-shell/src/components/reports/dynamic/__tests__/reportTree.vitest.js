@@ -124,4 +124,22 @@ describe('expansionForLevel with maxIndent', () => {
   it('without maxIndent the E/C/D/S rank logic is unchanged', () => {
     expect([...expansionForLevel(TREE, 'C')].sort()).toEqual(['G1', 'P1']);
   });
+
+  it('a closed row gets the code range of its hidden leaf accounts and the aggregated result they carry', () => {
+    const rows = [
+      { node_id: 'H', parentId: null, elementlevel: 'E', value: 'A.I', amount: 100 },
+      { node_id: 'P', parentId: 'H', elementlevel: 'C', value: '12', amount: 100 },
+      { node_id: 'L1', parentId: 'P', elementlevel: 'S', value: '12900', amount: 60, result: { onTheFly: 30, posted: 30 } },
+      { node_id: 'L2', parentId: 'P', elementlevel: 'S', value: '12100', amount: 40 },
+    ];
+    const opt = { foldedSummary: true };
+    const [h, p] = [visibleRows(rows, new Set(), null, opt), visibleRows(rows, new Set(['H']), null, opt)];
+    expect(visibleRows(rows, new Set())[0].foldedRange).toBeUndefined(); // off by default
+    expect(h).toHaveLength(1);
+    expect(h[0].foldedRange).toEqual({ from: '12100', to: '12900' });
+    expect(h[0].result).toEqual({ onTheFly: 30, posted: 70 }); // posted = what is left of the amount
+    expect(p[1].foldedRange).toEqual({ from: '12100', to: '12900' });
+    expect(visibleRows(rows, expandAll(rows), null, opt).some((r) => r.foldedRange)).toBe(false);
+    expect(visibleRows(rows, expandAll(rows), null, opt)[2].result).toEqual({ onTheFly: 30, posted: 30 }); // an open leaf keeps its own
+  });
 });
