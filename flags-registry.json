@@ -2168,8 +2168,34 @@
       ]
     },
     {
+      "id": "dynamic-balance-reports",
+      "description": "Interactive Balance Sheet (ETP-6083) and Trial Balance / Sumas y Saldos (ETP-6084) on the dynamic report engine, rolled out apart from the Profit & Loss (dynamic-reports). Off: both reports open today's viewer. Visual gating only, like dynamic-reports: the /query route and the /render org check are not gated.",
+      "owner": "Gremiger",
+      "jira": "ETP-6083",
+      "created": "2026-11-20",
+      "flag": {
+        "key": "dynamic-balance-reports",
+        "defaultValue": false,
+        "ttl": "2027-03-31",
+        "ttlNote": "PLACEHOLDER: same horizon as dynamic-reports; the owner sets the real date when rollout starts.",
+        "symbols": [
+          "dynamic-balance-reports",
+          "DYNAMIC_BALANCE_REPORTS",
+          "REPORT_FLAG",
+          "useDynamicReportFlags"
+        ]
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/components/reports/dynamic/dynamicReports.js"
+        ],
+        "backend": []
+      },
+      "$pathsComment": "Shares the dynamic view with dynamic-reports (owned there); this flag only decides which reports open it. Toggle points: dynamicReports.js REPORT_FLAG and ReportViewerPage.jsx useDynamicReportFlags."
+    },
+    {
       "id": "dynamic-reports",
-      "description": "Interactive accounting reports (Profit & Loss first; Balance Sheet and Trial Balance join when their stories land): the report applies each filter change on its own, folds and expands the account tree, compares periods with variation columns, splits an account by organization / contact / product and drills down to the ledger, the entry and the document in a side panel. Data comes from POST /api/reports/:id/query, which runs the report contract's SQL and checks the role's organization access on its own. Visual gating only: off, ReportViewerPage renders today's viewer unchanged; the /query route and the /render org check are not gated by this flag.",
+      "description": "Interactive accounting reports (Profit & Loss; the Balance Sheet and the Trial Balance moved to their own flag, dynamic-balance-reports, ETP-6083): the report applies each filter change on its own, folds and expands the account tree, compares periods with variation columns, splits an account by organization / contact / product and drills down to the ledger, the entry and the document in a side panel. Data comes from POST /api/reports/:id/query, which runs the report contract's SQL and checks the role's organization access on its own. Visual gating only: off, ReportViewerPage renders today's viewer unchanged; the /query route and the /render org check are not gated by this flag.",
       "owner": "Gremiger",
       "jira": "ETP-6080",
       "created": "2026-11-03",

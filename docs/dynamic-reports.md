@@ -1,6 +1,6 @@
 # Dynamic (interactive) reports — engine notes
 
-`DynamicReportView` (`tools/app-shell/src/components/reports/dynamic/`) is the shared interactive view of every report in `DYNAMIC_REPORT_IDS`, behind the `dynamic-reports` flag. Report-specific behaviour is documented per window (`docs/generated-custom-windows/<report>.md`); what is true for all of them lives here.
+`DynamicReportView` (`tools/app-shell/src/components/reports/dynamic/`) is the shared interactive view of every report in `DYNAMIC_REPORT_IDS`, behind a flag: Profit & Loss on `dynamic-reports`, Balance Sheet and Trial Balance on `dynamic-balance-reports` (`REPORT_FLAG` in `dynamicReports.js`, ETP-6083). Report-specific behaviour is documented per window (`docs/generated-custom-windows/<report>.md`); what is true for all of them lives here.
 
 ## How a report joins the engine (ETP-6084)
 

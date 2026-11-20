@@ -11,14 +11,14 @@ import { t } from '../../helpers/i18n.js';
 // @covers artifacts/report-trial-balance/report-contract.json
 
 /**
- * Trial Balance (Sumas y Saldos), interactive chart-tree view (flag `dynamic-reports`, mocked).
+ * Trial Balance (Sumas y Saldos), interactive chart-tree view (flag `dynamic-balance-reports`, mocked).
  *
  * Sibling of `dynamic-profit-loss.mocked.spec.js`: same flag, same server requirements and the same
  * route-installing pattern (the flag is fixed when Vite starts, so the tests skip themselves unless
  * the server was started with it):
  *
- *   VITE_FEATURE_FLAGS='{"dynamic-reports":true}' npx vite --port 3105
- *   E2E_USE_MOCK=1 BASE_URL=http://localhost:3105 E2E_DYNAMIC_REPORTS_FLAG=on \
+ *   VITE_FEATURE_FLAGS='{"dynamic-balance-reports":true}' npx vite --port 3105
+ *   E2E_USE_MOCK=1 BASE_URL=http://localhost:3105 E2E_DYNAMIC_BALANCE_REPORTS_FLAG=on \
  *     npx playwright test tests/flows/accounting/dynamic-trial-balance.mocked.spec.js --project=mocked
  *
  * Pins what only shows end to end: the four amount columns with TOTALES and the balanced check,
@@ -26,7 +26,7 @@ import { t } from '../../helpers/i18n.js';
  * credit with "compare movements"), the leaf drill into the General Ledger, and the export body.
  */
 
-const FLAG_ON = process.env.E2E_DYNAMIC_REPORTS_FLAG === 'on';
+const FLAG_ON = process.env.E2E_DYNAMIC_BALANCE_REPORTS_FLAG === 'on';
 const REPORT = '/report-viewer?report=report-trial-balance';
 const FIELDS = ['opening', 'debit', 'credit', 'closing'];
 
@@ -111,7 +111,7 @@ async function installMocks(page) {
 
 test.describe('Trial Balance — interactive view (ETP-6084)', () => {
   test.beforeEach(async ({ page }) => {
-    test.skip(!FLAG_ON, 'needs VITE_FEATURE_FLAGS={"dynamic-reports":true} and E2E_DYNAMIC_REPORTS_FLAG=on');
+    test.skip(!FLAG_ON, 'needs VITE_FEATURE_FLAGS={"dynamic-balance-reports":true} and E2E_DYNAMIC_BALANCE_REPORTS_FLAG=on');
     await login(page);
   });
 

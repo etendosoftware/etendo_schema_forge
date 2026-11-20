@@ -13,14 +13,14 @@ import { t } from '../../helpers/i18n.js';
 // @covers artifacts/balance-sheet/report-contract.json
 
 /**
- * Balance Sheet, interactive view (flag `dynamic-reports`, mocked).
+ * Balance Sheet, interactive view (flag `dynamic-balance-reports`, mocked).
  *
  * Third sibling of `dynamic-profit-loss.mocked.spec.js` and `dynamic-trial-balance.mocked.spec.js`: same
  * flag, same server requirements, same route-installing pattern (the flag is fixed when Vite starts, so the
  * tests skip themselves unless the server was started with it):
  *
- *   VITE_FEATURE_FLAGS='{"dynamic-reports":true}' npx vite --port 3105
- *   E2E_USE_MOCK=1 BASE_URL=http://localhost:3105 E2E_DYNAMIC_REPORTS_FLAG=on \
+ *   VITE_FEATURE_FLAGS='{"dynamic-balance-reports":true}' npx vite --port 3105
+ *   E2E_USE_MOCK=1 BASE_URL=http://localhost:3105 E2E_DYNAMIC_BALANCE_REPORTS_FLAG=on \
  *     npx playwright test tests/flows/accounting/dynamic-balance-sheet.mocked.spec.js --project=mocked
  *
  * The page clock is fixed (3 November 2026, fiscal years = calendar years) so the end-date shortcuts and the
@@ -29,7 +29,7 @@ import { t } from '../../helpers/i18n.js';
  * by Grupo, an account's ledger closing on the amount clicked, and the 129 result panel with its P&L link.
  */
 
-const FLAG_ON = process.env.E2E_DYNAMIC_REPORTS_FLAG === 'on';
+const FLAG_ON = process.env.E2E_DYNAMIC_BALANCE_REPORTS_FLAG === 'on';
 const REPORT = '/report-viewer?report=balance-sheet';
 const TODAY = new Date(2026, 10, 3, 12);
 
@@ -108,7 +108,7 @@ async function installMocks(page) {
 
 test.describe('Balance Sheet — interactive view (ETP-6083)', () => {
   test.beforeEach(async ({ page }) => {
-    test.skip(!FLAG_ON, 'needs VITE_FEATURE_FLAGS={"dynamic-reports":true} and E2E_DYNAMIC_REPORTS_FLAG=on');
+    test.skip(!FLAG_ON, 'needs VITE_FEATURE_FLAGS={"dynamic-balance-reports":true} and E2E_DYNAMIC_BALANCE_REPORTS_FLAG=on');
     await page.clock.setFixedTime(TODAY);
     await login(page);
   });
