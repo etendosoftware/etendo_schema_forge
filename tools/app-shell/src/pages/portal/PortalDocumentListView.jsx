@@ -10,6 +10,7 @@ import {
   PortalCountChip, PortalDate, PortalDesktopHeader, PortalDocumentStatus, PortalMain,
   PortalMoney, PortalRowBadge, PortalSearchPill,
   PORTAL_ROW_FOCUS, PortalInvoiceTypeBadge,
+  PortalCreatedWithTile,
 } from './PortalBits.jsx';
 import {
   PORTAL_KIND_GROUPS, PORTAL_KIND_META, documentLabelKey, initialPortalRange, quotationValidity,
@@ -205,6 +206,9 @@ export default function PortalDocumentListView({
             <PortalCountChip count={totalCount} data-testid="PortalCountChip__c7f7d2" />
           </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            {/* Etendo link left of the other controls, as on the Inicio bar (provisional until
+                the mobile design arrives). */}
+            <PortalCreatedWithTile data-testid="PortalCreatedWithTile__c7f7d2" />
             <PortalCustomer identity={identity} variant="avatar" data-testid="PortalCustomer__c7f7d2" />
           </div>
         </div>
