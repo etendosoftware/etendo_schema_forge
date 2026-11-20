@@ -135,7 +135,13 @@ async function clickAndExpectAction(page, trigger, actionPattern, label) {
   );
   await trigger.click();
   const resp = await respPromise;
-  const text = await resp.text().catch(() => '');
+  // Bounded: when the page does not read a `Cache-Control: no-store` response (every NEO JSON
+  // response since ETP-4571), Chromium never reports it finished and `resp.text()` neither
+  // resolves nor rejects.
+  const text = await Promise.race([
+    resp.text().catch(() => ''),
+    new Promise((resolve) => { setTimeout(() => resolve(''), 10_000); }),
+  ]);
   expect(resp.status(), `${label} should succeed — response: ${text.slice(0, 300)}`).toBeLessThan(400);
   expect(text,
     `[ETP-4567] ${label} must not answer "No pending lines to invoice"`,
