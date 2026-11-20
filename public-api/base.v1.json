@@ -876,7 +876,7 @@
       },
       "source": {
         "artifact": "conversion-rates",
-        "contractVersion": "0.7.0",
+        "contractVersion": "0.8.0",
         "backendEntity": true
       }
     },
