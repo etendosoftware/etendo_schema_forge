@@ -8,6 +8,9 @@ vi.mock('@/i18n', () => ({ useUI: () => mockUi }));
 
 import { render, screen } from '@testing-library/react';
 import RemittanceStatusBanner, { remittanceStatusBanner } from '@generated/remittance/custom/RemittanceStatusBanner.jsx';
+import enUS from '@/locales/en_US.json';
+import esES from '@/locales/es_ES.json';
+import esAR from '@/locales/es_AR.json';
 
 // The container class InfoBanner gives each tone (components/InfoBanner.jsx → TONES).
 const TONE_CLASS = {
@@ -20,6 +23,7 @@ const TONE_CLASS = {
 const CASES = [
   ['PE', 'info', 'remittanceBannerPending'],
   ['PR', 'info', 'remittanceBannerProcessed'],
+  ['SB', 'info', 'remittanceBannerSent'],
   ['CT', 'success', 'remittanceBannerCollected'],
   ['PT', 'success', 'remittanceBannerPaid'],
   ['CP', 'warning', 'remittanceBannerPartiallyCollected'],
@@ -68,5 +72,44 @@ describe('RemittanceStatusBanner', () => {
     }
     expect(remittanceStatusBanner('XX')).toBeNull();
     expect(remittanceStatusBanner(undefined)).toBeNull();
+  });
+});
+
+// ETP-6247 — an automated remittance (EM_Etar_Automaticprocess, `eTARAutomaticprocess`) reaches
+// Cobrada/Pagada on «Confirmar», which also generates the SEPA file: its banner says so.
+describe('RemittanceStatusBanner — automated remittance (SEPA file)', () => {
+  it.each([
+    ['CT', 'Y', 'remittanceBannerCollectedFile'],
+    ['PT', 'Y', 'remittanceBannerPaidFile'],
+    ['CT', true, 'remittanceBannerCollectedFile'],
+    ['PT', true, 'remittanceBannerPaidFile'],
+  ])('%s with eTARAutomaticprocess %j shows %s, in the success tone', (status, automated, key) => {
+    render(<RemittanceStatusBanner data={{ id: 'rem-1', remittanceStatus: status, eTARAutomaticprocess: automated }} />);
+    const banner = screen.getByTestId('remittance-status-banner');
+    expect(banner).toHaveTextContent(key);
+    expect(banner.className).toContain(TONE_CLASS.success);
+  });
+
+  it.each([
+    ['CT', 'N', 'remittanceBannerCollected'],
+    ['PT', 'N', 'remittanceBannerPaid'],
+    ['CT', false, 'remittanceBannerCollected'],
+    ['CT', undefined, 'remittanceBannerCollected'],
+    ['PT', undefined, 'remittanceBannerPaid'],
+  ])('%s with eTARAutomaticprocess %j keeps the old key %s', (status, automated, key) => {
+    render(<RemittanceStatusBanner data={{ id: 'rem-1', remittanceStatus: status, eTARAutomaticprocess: automated }} />);
+    expect(screen.getByTestId('remittance-status-banner').textContent).toBe(key);
+  });
+
+  it('other statuses ignore the flag', () => {
+    for (const [status, , key] of CASES.filter(([code]) => !['CT', 'PT'].includes(code))) {
+      expect(remittanceStatusBanner(status, 'Y')).toMatchObject({ key });
+    }
+  });
+
+  it.each([['en_US', enUS], ['es_ES', esES], ['es_AR', esAR]])('the file banner keys exist in %s', (_loc, json) => {
+    for (const key of ['remittanceBannerCollectedFile', 'remittanceBannerPaidFile']) {
+      expect(json.genericLabels[key], key).toEqual(expect.stringMatching(/\S/));
+    }
   });
 });

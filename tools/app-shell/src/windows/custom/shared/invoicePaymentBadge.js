@@ -15,6 +15,8 @@
 // InvoicePaymentHistoryModal (the modal these badges open) has always done:
 // `const isCreditInstrument = grandTotal < 0`.
 
+import { isCompletedStatus } from '../../../lib/docStatus.js';
+
 /** Amounts below this are treated as zero — guards against float dust in sums. */
 const EPSILON = 0.001;
 
@@ -59,7 +61,7 @@ export function resolveInvoicePaymentBadge(record) {
   // credit?" (label swaps, due-date suppression) get the right answer on drafts too.
   const isCredit = grandTotal < 0;
 
-  if (record?.documentStatus !== 'CO') {
+  if (!isCompletedStatus(record?.documentStatus)) {
     return { kind: 'draft', amount: 0, isCredit };
   }
 

@@ -104,7 +104,7 @@ Menu group "Tesorería" (ETP-6389): Cobro, Pago, Cuentas, Informes (aging report
 
 | File | Description |
 |------|-------------|
-| [balance-sheet.md](balance-sheet.md) | Contract-driven financial report — point-in-time assets, liabilities, and owner equity by accounting schema and year |
+| [balance-sheet.md](balance-sheet.md) | Contract-driven financial report — Classic account-report tree (Activo / Patrimonio Neto y Pasivo); behind `dynamic-reports`, an interactive balance at a date with end-date shortcuts, one-day comparisons, Grupo/Epígrafe fold, balance check, ledger drill and the 129 result panel (ETP-6083) |
 | [report-journal-entries.md](report-journal-entries.md) | Contract-driven journal book — entries grouped with debit/credit lines for a date range with dimension filters |
 | [report-general-ledger.md](report-general-ledger.md) | Contract-driven General Ledger — per-account movements with opening balance, dimension filters (Product lists every active product) and optional grouping |
 | [profit-loss.md](profit-loss.md) | Contract-driven financial report — the period result as Classic's account-report tree, with contact/product filters and comparison; behind `dynamic-reports`, an interactive view with live filters, columns by month/quarter, a collapsible panel, splits and a ledger/entry/document drill-down; landscape PDF |

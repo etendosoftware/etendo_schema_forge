@@ -5,10 +5,11 @@
     "category": "finance",
     "name": "Remittance",
     "detailEntity": "lines",
-    "titleField": "name",
+    "titleField": "documentNo",
     "statusEnumLabels": {
       "PE": "remittanceStatusPe",
       "PR": "remittanceStatusPr",
+      "SB": "remittanceStatusSb",
       "CT": "remittanceStatusCt",
       "PT": "remittanceStatusPt",
       "CP": "remittanceStatusCp",
@@ -29,7 +30,8 @@
     "customComponents": {
       "bottomSection": "RemittanceBottomPanel",
       "subHeader": "RemittanceStatusBanner",
-      "processConfirmModal": "RemittanceProcessConfirmModal"
+      "processConfirmModal": "RemittanceProcessConfirmModal",
+      "topbarExtra": "RemittanceStatusSelector"
     },
     "subsetFilters": [
       {
@@ -72,12 +74,14 @@
       "processRemittance": {
         "exclude": true
       },
-      "process": {
+      "confirm": {
         "add": true,
-        "label": "process",
+        "exclude": true,
+        "label": "confirm",
         "style": "positive",
         "displayLogicRaw": "@Processed@='N'",
         "requiresLines": true,
+        "confirmModal": true,
         "params": [
           {
             "key": "grouping",
@@ -91,14 +95,43 @@
             ]
           }
         ],
-        "_note": "ETP-6148 — «Procesar»: RemittanceHeaderHandler action `process` (runs REM's REMRemittanceProcess). The params dialog asks the grouping (default P «Sin agrupar», GGPD «Agrupar por cliente y vencimiento») and posts it as fieldValues.grouping. Only while unprocessed and with lines."
+        "_note": "ETP-6247 — «Confirmar» (was ETP-6148's «Procesar»): RemittanceHeaderHandler action `confirm`, atomic: it checks fileReadiness, processes the remittance with REM's REMRemittanceProcess, leaves the payments in Remesado and the invoices uncollected (the remittance ends Pendiente de envío PR and can be reactivated until «Marcar como cobrada»), generates the SEPA file and stores it as the main attachment. `confirmModal` routes the click to customComponents.processConfirmModal (RemittanceProcessConfirmModal), which re-checks fileReadiness, asks the grouping from `params` (default P «Sin agrupar», GGPD «Agrupar por cliente y vencimiento», posted as fieldValues.grouping), warns that the payments stay in Remesado until it is marked collected, posts the action itself and offers the file in its success step. Only while unprocessed and with lines."
+      },
+      "markSent": {
+        "add": true,
+        "exclude": true,
+        "label": "remittanceAdvanceToSent",
+        "style": "positive",
+        "displayLogicRaw": "@RemittanceStatus@='PR'",
+        "requiresLines": true,
+        "confirmModal": true,
+        "_note": "ETP-6247 — NOT a header button any more (`exclude`: the generator emits no process for it): the step is chosen from the header status chip (RemittanceStatusSelector, window.customComponents.topbarExtra) and from the grid's row menu. The entry stays declared because the route and the selector read its label and displayLogicRaw as the single source of the step's visibility. «Pasar a Enviada al banco». RemittanceHeaderHandler action `markSent` (PR -> SB, informational: nothing is created or settled). Data key remittanceStatus (evalDisplayLogicRaw lower-cases the first letter). confirmModal routes it to RemittanceProcessConfirmModal -> RemittanceSentDialog (the two chips «Pendiente de envío -> Enviada al banco» and what it does), which posts the action itself."
+      },
+      "markCollected": {
+        "add": true,
+        "exclude": true,
+        "label": "remittanceAdvanceToCollected",
+        "style": "positive",
+        "displayLogicRaw": "@RemittanceStatus@='SB'",
+        "requiresLines": true,
+        "confirmModal": true,
+        "_note": "ETP-6247 — NOT a header button any more (`exclude`, see markSent): chosen from the status chip selector and the row menu. «Pasar a Cobrada». RemittanceHeaderHandler action `markCollected` (SB -> CT/PT: settles every payment at the remittance's due date and the invoices become collected). The UI no longer offers it straight from PR (the backend still allows it). confirmModal routes it to RemittanceProcessConfirmModal -> RemittanceCollectDialog (the chips «Enviada al banco -> Cobrada» and the settlement warning), which posts the action itself. The label stays «Cobrada» for a payment remittance too: the process label is static."
       },
       "reactivate": {
         "add": true,
         "label": "reactivate",
         "style": "primary-danger",
-        "displayLogicRaw": "@Processed@='Y'",
-        "_note": "ETP-6148 — «Reactivar»: RemittanceHeaderHandler action `reactivate` (deletes the payments the process created; the remittance becomes editable again). Danger style, so DetailView asks for confirmation through customComponents.processConfirmModal (RemittanceProcessConfirmModal)."
+        "displayLogicRaw": "@RemittanceStatus@!='PE' & @RemittanceStatus@!='CT' & @RemittanceStatus@!='PT' & @RemittanceStatus@!='CP' & @RemittanceStatus@!='PP' & @RemittanceStatus@!='AN'",
+        "_note": "ETP-6148 — «Reactivar»: RemittanceHeaderHandler action `reactivate` (deletes the payments the process created; the remittance becomes editable again; ETP-6247: only from Pendiente de envío PR or Enviada al banco SB, otherwise 422 ETGO_RemittanceReactivateNotAllowed). Danger style, so DetailView asks for confirmation through customComponents.processConfirmModal (RemittanceProcessConfirmModal). ETP-6247: only while the remittance is Pendiente de envío (PR) or Enviada al banco (SB); it is written as «not PE/CT/PT/CP/PP/AN» on the data key remittanceStatus (evalDisplayLogicRaw lower-cases the first letter and has no OR)."
+      },
+      "returnLines": {
+        "add": true,
+        "label": "remittanceReturnAction",
+        "style": "primary-danger",
+        "displayLogicRaw": "@RemittanceStatus@!='PE' & @RemittanceStatus@!='PR' & @RemittanceStatus@!='SB' & @RemittanceStatus@!='PT' & @RemittanceStatus@!='PP' & @RemittanceStatus@!='AN'",
+        "requiresLines": true,
+        "confirmModal": true,
+        "_note": "ETP-6247 returns — «Devolver»: the bank did not collect some receipts of a confirmed remittance. confirmModal routes the click to customComponents.processConfirmModal (RemittanceProcessConfirmModal), which opens RemittanceReturnDialog; the dialog reads returnState + the lines, picks them, and posts RemittanceHeaderHandler action `returnLines` itself. Shown only on a Cobrada (CT) or partially collected (CP) remittance, never before it is collected (data key remittanceStatus, written as «not PE/PR/SB/PT/PP/AN» because displayLogic has no OR). A payment remittance cannot be told apart from the record, so the dialog says so when returnState.collection is false."
       },
       "selectInvoicesAndOrders": {
         "exclude": true
@@ -230,6 +263,7 @@
           "enumValues": [
             { "value": "PE", "name": "remittanceStatusPe" },
             { "value": "PR", "name": "remittanceStatusPr" },
+            { "value": "SB", "name": "remittanceStatusSb" },
             { "value": "CT", "name": "remittanceStatusCt" },
             { "value": "PT", "name": "remittanceStatusPt" },
             { "value": "CP", "name": "remittanceStatusCp" },
@@ -238,7 +272,8 @@
           ],
           "enumVariants": {
             "PE": "neutral",
-            "PR": "info",
+            "PR": "warning",
+            "SB": "info",
             "CT": "success",
             "PT": "success",
             "CP": "warning",
@@ -266,6 +301,39 @@
           "grid": false,
           "form": false,
           "reason": "ETP-6148 — kept in the payload (not shown) because every header field's readOnlyLogic is @Processed@='Y': a processed remittance is locked."
+        },
+        "creditorIdentifier": {
+          "visibility": "editable",
+          "grid": false,
+          "form": false,
+          "required": false,
+          "reason": "ETP-6247 — REM_REMITTANCE.CREDITOR_IDENTIFIER: the remittance's own SEPA creditor identifier (AT-02), the one its file carries. Writable on create and update while not processed so the custom block can preload it (the account's, else the one computed from the organization) and save it with the general «Guardar»; RemittanceHeaderWrites normalizes and validates it (ETGO_SepaCreditorId* keys), collections only, never written to the account. A blank one is ignored: RemittanceHeaderWrites proposes the account's valid one on create and when the account changes or the type switches between collection and payment (the Classic form gets it from the RemittanceSepaDefaultsCallout callout), and confirm keeps the organization's computed one as the copy. REM_REMITTANCE_TRG no longer defaults it: it only freezes it once the remittance is processed. form:false: the custom block owns it."
+        },
+        "directDebitScheme": {
+          "visibility": "editable",
+          "grid": false,
+          "form": false,
+          "required": false,
+          "reason": "ETP-6247 — REM_REMITTANCE.DD_SCHEME: CORE | B2B, only for collection remittances (default CORE, set by RemittanceHeaderWrites on the create of a collection, and by the RemittanceSepaDefaultsCallout callout in the Classic form; REM_REMITTANCE_TRG only freezes it once processed). Writable while the remittance is not processed (RemittanceHeaderWrites normalizes it, 422 ETGO_RemittanceSchemeInvalid / ETGO_RemittanceOptionsCollectionOnly); the SEPA file carries it in LclInstrm/Cd. form:false: the custom «Opciones avanzadas» block owns it."
+        },
+        "financed": {
+          "visibility": "editable",
+          "grid": false,
+          "form": false,
+          "reason": "ETP-6247 — REM_REMITTANCE.ISFINANCED (NOT NULL, default N): «Remesa financiada», only for collection remittances. Writable while not processed; the SEPA file's GrpHdr/MsgId carries the financed prefix. form:false: the custom «Opciones avanzadas» block owns it. Stays required as the AD says (quality-gate invariant): with form:false it is not in the header form's save gate, and an untouched switch leaves it to the column default N."
+        },
+        "iBAN": {
+          "visibility": "editable",
+          "grid": false,
+          "form": false,
+          "required": false,
+          "reason": "ETP-6247 — REM_REMITTANCE.IBAN: the remittance's own IBAN, proposed from the account by RemittanceHeaderWrites on create and when the account changes or the type switches between collection and payment (the Classic form gets it from the RemittanceSepaDefaultsCallout callout; REM_REMITTANCE_TRG only freezes it once processed), and the one its SEPA file always carries. Writable on create and update so the custom «Datos para el fichero SEPA» block can send the IBAN typed for THIS remittance before its first save (RemittanceHeaderWrites normalizes and validates it, 422 ETGO_RemittanceIbanInvalid); never written to the account. form:false keeps it out of the generic form: the custom block owns it."
+        },
+        "eTARAutomaticprocess": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false,
+          "reason": "ETP-6247 — EM_Etar_Automaticprocess (com.etendoerp.automated.remittance, «Process Automated»). A remittance created through GO keeps it N (confirm resets it to N before REM processes it, so the payments are not settled automatically); it becomes Y only on markCollected («Cobrada»), which settles the payments. Kept in the payload (not shown) only so the custom RemittanceStatusBanner can tell a remittance settled by GO's «Cobrada» (whose SEPA file «Confirmar» generated) apart from one settled otherwise; «Reactivar» is hidden by the status (processOverrides.reactivate), not by this flag."
         },
         "chargedate": {
           "visibility": "discarded",
@@ -521,7 +589,20 @@
             "es_AR": "Estado del recibo",
             "en_US": "Receipt status"
           },
-          "reason": "ETP-6148 — 'Estado del recibo': the Classic property-path field payment.status (AD_Field.Property), opted in by \"propertyPath\": \"payment.status\" (per-field opt-in). Served as a PROPERTY_PATH row; rendered as a status badge with the payment status labels (genericLabels statusRpap… statusRemSent / statusRemCancel) and getStatusTone. Empty until the remittance is processed (the line has no payment yet)."
+          "enumValues": [
+            { "value": "RPAP", "name": "statusRpap" },
+            { "value": "RPAE", "name": "statusRpae" },
+            { "value": "RPVOID", "name": "remittanceReceiptReturned" },
+            { "value": "REM_SENT", "name": "statusRemSent" },
+            { "value": "PPM", "name": "statusPpm" },
+            { "value": "RPR", "name": "statusRpr" },
+            { "value": "REM_CANCEL", "name": "statusRemCancel" },
+            { "value": "RDNC", "name": "statusRdnc" },
+            { "value": "PWNC", "name": "statusPwnc" },
+            { "value": "RPPC", "name": "statusRppc" },
+            { "value": "ETGOERR", "name": "statusEtgoerr" }
+          ],
+          "reason": "ETP-6148 — 'Estado del recibo': the Classic property-path field payment.status (AD_Field.Property), opted in by \"propertyPath\": \"payment.status\" (per-field opt-in). Served as a PROPERTY_PATH row; rendered as a status badge with the payment status labels (genericLabels statusRpap… statusRemSent / statusRemCancel) and getStatusTone. Empty until the remittance is processed (the line has no payment yet). ETP-6247: enumValues repeats the payment status labels the extractor emitted, with RPVOID (the voided payment a return leaves) named «Devuelto» (remittanceReceiptReturned), so a returned receipt reads as returned in the grid."
         },
         "displayedAccount": {
           "visibility": "discarded",

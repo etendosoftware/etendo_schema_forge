@@ -3984,6 +3984,40 @@ one disables Save (`saveBlocked`) instead of persisting an empty value. Test ids
 `option-edit-account-{type|currency}-<id>`; the `edit-account-type` / `edit-account-currency` ids sit on
 the selector wrapper.
 
+## Edit account modal — «Remesas» section, SEPA creditor identifier (ETP-6247)
+
+«Editar cuenta» shows a **«Remesas»** section (`SepaCreditorIdSection.jsx`,
+`data-testid="sepa-remittances-section"`) with one field, **«Identificador del acreedor»** (the SEPA
+creditor identifier, AT-02). The full contract lives in
+[financial-account-management.md → SEPA remittances on Bank accounts](financial-account-management.md#sepa-remittances-on-bank-accounts-etp-6148);
+the remittance side in [remittance.md → SEPA creditor identifier](remittance.md#sepa-creditor-identifier).
+What this window does:
+
+- **When it is shown.** Only for a **Bank** account (the pending «Tipo de cuenta» selection) and only
+  when the role has the `sepaRemittances` capability, which the backend derives from the
+  `sepa-remittances` feature flag. The value is read once per opening, the first time the Type is
+  Bank; if that read is refused (no remittance payment methods, flag off) the section stays hidden.
+  State lives in `useAccountCreditorId.js`; the section only renders it.
+- **What it shows.** Only the value stored on the account (`accountCreditorId` of the remittance
+  `sepaFileData` action), **empty** when the account has none. The placeholder is neutral
+  (`sepaCreditorIdPlaceholder`, same style as BIC/SWIFT) and the (i) tooltip (`sepaCreditorIdInfo`)
+  explains what it is and that the bank assigns it, with no example value. No proposal computed
+  from the organization is offered here.
+- **Inline format check** (`lib/sepaCreditorId.js`, mirror of the backend `SepaCreditorId`):
+  country (2 letters) + check digits (2) + business code (3) + national id, validated mod 97. An
+  invalid value shows its error under the input and blocks «Guardar cambios». The server remains
+  the authority.
+- **Saving.** No button of its own: the modal's general «Guardar cambios» saves it **after** the
+  account update, only when the normalized value changed and is not empty, through the remittance
+  `saveCreditorId` action on record `new` with `accountId` and `saveToAccount: true`. That call
+  requires write access to the `financial-account` spec; without it the backend answers 403
+  `ETGO_RemittanceCreditorIdAccountWriteDenied`. Any refusal is shown as a translated toast and the
+  modal stays open.
+- **A saved value cannot be cleared** (the backend has no delete): emptying it shows the hint
+  `sepaCreditorIdCannotClear` and blocks the save. An account that never had one may stay empty.
+- **Effect.** The account value is the default copied into each new **collection** remittance; the
+  remittance keeps its own copy, so a later change here affects future collections only.
+
 ## Accounting visibility — "Show Accounting Fields" (ETP-5684)
 
 A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.

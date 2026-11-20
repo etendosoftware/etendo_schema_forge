@@ -1666,7 +1666,7 @@
       ]
     },
     "1ff82f378ae21bc327da4382fb94121e5e53f4ea9283f7c46698b579c45f2078": {
-      "checksum": "dc86d0653d99d32f5b55a560b8842cdaf818da7412912771f59751f85ae06080",
+      "checksum": "eb3796e1e269c5c535d87c2c0e76f2f0fa9e963ccea166a9b5eecc7c12c1a769",
       "params": [
         [
           "A57088821ED94129B1F252AD80F75E5A",
@@ -1710,6 +1710,12 @@
           "name": "Recurring",
           "name_es": "Adeudo recurrente",
           "value": "RCUR"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Sent to bank",
+          "name_es": "Sent to bank",
+          "value": "SB"
         },
         {
           "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
@@ -12215,6 +12221,169 @@
           "name": "User defined",
           "name_es": "Definido por el usuario",
           "value": "U"
+        }
+      ]
+    },
+    "d5118b012d809312be15e3261975b5a4e3b667f1fd501855010d2ae630c0a9e0": {
+      "checksum": "34bda12ea00feb4f0d1f0dbe3060bb130c244b799c97565e937454fc06f7965f",
+      "params": [
+        [
+          "A57088821ED94129B1F252AD80F75E5A",
+          "4498966495D440DEAA45693BCBB34CC0",
+          "575BCB88A4694C27BC013DE9C73E6FE7",
+          "8DC0016258B840EE9F4200ACA20F6208"
+        ]
+      ],
+      "rows": [
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Awaiting Payment",
+          "name_es": "A Pagar",
+          "value": "RPAP"
+        },
+        {
+          "ad_reference_id": "4498966495D440DEAA45693BCBB34CC0",
+          "name": "Core",
+          "name_es": "Core",
+          "value": "CORE"
+        },
+        {
+          "ad_reference_id": "8DC0016258B840EE9F4200ACA20F6208",
+          "name": "First",
+          "name_es": "Primer adeudo",
+          "value": "FRST"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Pending",
+          "name_es": "Pending",
+          "value": "PE"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Awaiting Execution",
+          "name_es": "A Ejecutar",
+          "value": "RPAE"
+        },
+        {
+          "ad_reference_id": "4498966495D440DEAA45693BCBB34CC0",
+          "name": "B2B",
+          "name_es": "B2B",
+          "value": "B2B"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Processed",
+          "name_es": "Processed",
+          "value": "PR"
+        },
+        {
+          "ad_reference_id": "8DC0016258B840EE9F4200ACA20F6208",
+          "name": "Recurring",
+          "name_es": "Adeudo recurrente",
+          "value": "RCUR"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Sent to bank",
+          "name_es": "Sent to bank",
+          "value": "SB"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Collected",
+          "name_es": "Collected",
+          "value": "CT"
+        },
+        {
+          "ad_reference_id": "8DC0016258B840EE9F4200ACA20F6208",
+          "name": "Final",
+          "name_es": "Último adeudo",
+          "value": "FNAL"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Void",
+          "name_es": "Anulado",
+          "value": "RPVOID"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Remitted",
+          "name_es": "Remitted",
+          "value": "REM_SENT"
+        },
+        {
+          "ad_reference_id": "8DC0016258B840EE9F4200ACA20F6208",
+          "name": "One-Off",
+          "name_es": "Adeudo único",
+          "value": "OOFF"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Paid",
+          "name_es": "Paid",
+          "value": "PT"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Made",
+          "name_es": "Pagado",
+          "value": "PPM"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Received",
+          "name_es": "Cobrado",
+          "value": "RPR"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Settled in Remittance",
+          "name_es": "Settled in Remittance",
+          "value": "REM_CANCEL"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Deposited not Cleared",
+          "name_es": "Cobro depositado",
+          "value": "RDNC"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Partially collected",
+          "name_es": "Partially collected",
+          "value": "CP"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Withdrawn not Cleared",
+          "name_es": "Pago reintegrado",
+          "value": "PWNC"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Partially paid",
+          "name_es": "Partially paid",
+          "value": "PP"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Cleared",
+          "name_es": "Conciliado",
+          "value": "RPPC"
+        },
+        {
+          "ad_reference_id": "575BCB88A4694C27BC013DE9C73E6FE7",
+          "name": "Payment Error",
+          "name_es": "Payment Error",
+          "value": "ETGOERR"
+        },
+        {
+          "ad_reference_id": "A57088821ED94129B1F252AD80F75E5A",
+          "name": "Voided",
+          "name_es": "Voided",
+          "value": "AN"
         }
       ]
     },

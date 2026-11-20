@@ -27,7 +27,7 @@ import { useFavorites } from '@/components/layout/FavoritesContext';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { fetchMyReportAccess } from '@/lib/rolesApi.js';
-import { useFeatureFlag, DYNAMIC_REPORTS } from '@/lib/flags';
+import { useFeatureFlag, DYNAMIC_REPORTS, DYNAMIC_BALANCE_REPORTS } from '@/lib/flags';
 import { opensDynamicView } from '@/components/reports/dynamic/dynamicReports.js';
 import { CATEGORY_LABELS } from '@/components/reports/reportCategories.js';
 import { cn } from '@/lib/utils';
@@ -280,7 +280,14 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
   );
 }
 
-// ETP-6080: loaded only when the `dynamic-reports` flag opens it.
+// ETP-6083: the flags that open the interactive reports (P&L and the two balances apart), keyed by flag.
+function useDynamicReportFlags() {
+  const pnl = useFeatureFlag(DYNAMIC_REPORTS);
+  const balances = useFeatureFlag(DYNAMIC_BALANCE_REPORTS);
+  return useMemo(() => ({ [DYNAMIC_REPORTS]: pnl, [DYNAMIC_BALANCE_REPORTS]: balances }), [pnl, balances]);
+}
+
+// ETP-6080: loaded only when its flag opens it.
 const DynamicReportView = lazy(() => import('@/components/reports/dynamic/DynamicReportView.jsx'));
 
 // Dropdown / search-as-you-type selector.
@@ -925,8 +932,9 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
     // No "None" row: the base/empty entry (value '') is dropped from the list entirely —
     // clearing a selection is done via the chip's "×" (CreatableSearchSelect's clearable
     // behavior), not via a pinned empty option.
+    // `dynamicOnly` options (ETP-6083, the Balance's Grupo / Epígrafe folds) only exist in the interactive view.
     const staticOpts = resolvedOptions
-      .filter(o => o.value !== '')
+      .filter(o => o.value !== '' && !o.dynamicOnly)
       .map(o => ({ id: o.value, name: resolveOptLabel(o) }));
     const selectedOpt = staticOpts.find(o => o.id === (params[p.name] || ''));
     return (
@@ -1154,12 +1162,13 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
 /**
  * The message of a failed render. The org and report access checks (ETP-6080) answer
  * `ORG_ACCESS_DENIED` / `REPORT_ACCESS_DENIED` with an
- * English text, so those codes are shown translated; anything else keeps the server's message.
+ * English text (and a query past the statement timeout, `REPORT_TIMEOUT`, ETP-6146), so those codes are shown translated; anything else keeps the server's message.
  */
 async function renderErrorMessage(res, ui) {
   const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
   if (data?.code === 'ORG_ACCESS_DENIED') return ui('reportErrorOrgAccess');
   if (data?.code === 'REPORT_ACCESS_DENIED') return ui('reportErrorReportAccess');
+  if (data?.code === 'REPORT_TIMEOUT') return ui('reportErrorTimeout');
   return data?.error || `Render failed: ${res.status}`;
 }
 
@@ -1954,7 +1963,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
   const tMenu = useMenuLabel();
   const ui = useUI();
   const { toggleFavorite, isFavorite } = useFavorites();
-  const dynamicReportsOn = useFeatureFlag(DYNAMIC_REPORTS);
+  const dynamicFlags = useDynamicReportFlags();
   const favKey = categoryFilter ? `report-viewer?category=${categoryFilter}` : 'report-viewer';
   const favActive = isFavorite(favKey);
   // Same list/gallery switch as the Product window (ListView.jsx's ViewToggle,
@@ -2031,7 +2040,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 <ReportListRow
                   key={r.id}
                   report={r}
-                  interactive={opensDynamicView(r.id, dynamicReportsOn, r)}
+                  interactive={opensDynamicView(r.id, dynamicFlags, r)}
                   onRun={selectReport}
                   locale={locale}
                   data-testid="ReportListRow__3c998a" />
@@ -2056,7 +2065,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 <ReportCard
                   key={r.id}
                   report={r}
-                  interactive={opensDynamicView(r.id, dynamicReportsOn, r)}
+                  interactive={opensDynamicView(r.id, dynamicFlags, r)}
                   onRun={selectReport}
                   data-testid="ReportCard__3c998a" />
               ))}
@@ -2094,7 +2103,7 @@ export default function ReportViewerPage() {
   const localeLangKey = locale === 'es_ES' ? 'es' : 'en';
   const urlCategory = searchParams.get('category');
   const reportId = searchParams.get('report');
-  const dynamicReportsOn = useFeatureFlag(DYNAMIC_REPORTS);
+  const dynamicFlags = useDynamicReportFlags();
 
   // ETP-5402 QA follow-up — the caller's own per-report tiers (id -> 'full'|'read-only', a
   // missing key means no access), fetched once on mount. `null` means "not resolved yet" —
@@ -2229,7 +2238,7 @@ export default function ReportViewerPage() {
     );
   }
 
-  if (selectedReport && opensDynamicView(selectedReport.id, dynamicReportsOn, selectedReport)) {
+  if (selectedReport && opensDynamicView(selectedReport.id, dynamicFlags, selectedReport)) {
     return (
       <Suspense
         fallback={<CircleNotchIcon
