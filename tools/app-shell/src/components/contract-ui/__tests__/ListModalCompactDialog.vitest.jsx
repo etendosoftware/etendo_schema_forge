@@ -206,6 +206,45 @@ describe('ListModalCompactDialog — footer and close', () => {
   });
 });
 
+// readOnly (a read-only role): the popup is a view — every field disabled, no Save, and the
+// outline pill reads "close", alone at the right of the footer.
+describe('ListModalCompactDialog — read-only view', () => {
+  it('hands readOnly to every EntityForm run', () => {
+    renderDialog({ readOnly: true });
+    expect(entityFormCalls.length).toBeGreaterThan(0);
+    const lastRender = entityFormCalls.slice(-2);
+    expect(lastRender.map((p) => p.readOnly)).toEqual([true, true]);
+  });
+
+  it('renders no Save pill', () => {
+    renderDialog({ readOnly: true });
+    expect(screen.queryByTestId('list-modal-submit')).toBeNull();
+  });
+
+  it('the outline pill reads "close", closes, and never submits', () => {
+    const { onClose, onSubmit } = renderDialog({ readOnly: true });
+    const pill = screen.getByTestId('list-modal-cancel');
+    expect(pill).toHaveTextContent('close');
+    expect(pill).not.toHaveTextContent('cancel');
+    fireEvent.click(pill);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('right-aligns the lone Close pill in the footer', () => {
+    renderDialog({ readOnly: true });
+    expect(screen.getByTestId('list-modal-cancel').parentElement.className).toContain('justify-end');
+  });
+
+  it('by default (readOnly false) every run is editable and the footer keeps Cancel + Save', () => {
+    renderDialog();
+    expect(entityFormCalls.slice(-2).map((p) => p.readOnly)).toEqual([false, false]);
+    expect(screen.getByTestId('list-modal-cancel')).toHaveTextContent('cancel');
+    expect(screen.getByTestId('list-modal-submit')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-cancel').parentElement.className).toContain('justify-between');
+  });
+});
+
 // QA BUG-1: the round X was never visible. DialogContent hides the base dialog's own close with
 // `[&>button]:hidden` (every DIRECT child button), and the custom X was a direct child too, so it
 // got display:none. jsdom applies no Tailwind, so a click test passes regardless — this guards
