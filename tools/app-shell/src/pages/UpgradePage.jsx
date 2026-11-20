@@ -35,6 +35,7 @@ import {
 import { useLogout } from '@/auth/useLogout.js';
 import { formatCurrency, formatGroupedNumber } from '@/lib/formatCurrency.js';
 import { quotaResourceLabel, quotaUnitLabel } from '@/lib/planQuotas.js';
+import { pushPurchase } from '@/lib/marketing/dataLayer.js';
 
 /** Billing interval as the catalog spells it, mapped to the i18n key that phrases the price. */
 const PRICE_LABEL_KEYS = { month: 'upgradePlanPriceMonthly', year: 'upgradePlanPriceYearly' };
@@ -147,6 +148,23 @@ const PENDING_CHECKOUT_ACTION = 'sf_pending_checkout_action';
 /** Checkout-submitted timestamp, so durationMs survives the Stripe redirect. */
 const PENDING_CHECKOUT_STARTED_AT = 'sf_pending_checkout_started_at';
 const PENDING_CHECKOUT_DATA_TRANSFER = 'sf_pending_checkout_data_transfer';
+/** ETP-6363 — the plan bought, for marketing's `purchase` once the payment is confirmed. */
+const PENDING_CHECKOUT_PLAN = 'sf_pending_checkout_plan';
+
+/**
+ * ETP-6363 — marketing's `purchase` (GTM's dataLayer), once the backend confirmed the payment
+ * (the Stripe webhook): once per purchase, with the plan this browser chose when it has it.
+ */
+function reportConfirmedPurchase(storage, requestId) {
+  let plan = null;
+  try {
+    plan = JSON.parse(storage.getItem(PENDING_CHECKOUT_PLAN) || 'null');
+  } catch {
+    plan = null;
+  }
+  pushPurchase({ transactionId: requestId, ...(plan && typeof plan === 'object' ? plan : {}) });
+  storage.removeItem(PENDING_CHECKOUT_PLAN);
+}
 const DEFAULT_DATA_TRANSFER = { products: true, contacts: true };
 const PAYMENT_CONFIRMED_PURCHASE_STATUSES = new Set(['PAID', 'PROVISIONING', 'PROVISIONED']);
 const RECOVERABLE_PROVISIONING_STATUSES = new Set(['provisioning_failed', 'stalled']);
@@ -320,6 +338,7 @@ async function resumeCheckoutProvisioning({
   }
   if (status.status === 'provisioning' || status.status === 'provisioned') {
     if (isCancelled()) return;
+    reportConfirmedPurchase(storage, requestId);
     storage.removeItem(PENDING_CHECKOUT_NAME);
     storage.removeItem(PENDING_CHECKOUT_ACTION);
     storage.removeItem(PENDING_CHECKOUT_STARTED_AT);
@@ -329,6 +348,7 @@ async function resumeCheckoutProvisioning({
     return;
   }
   if (status.status !== 'paid') throw new Error('Checkout payment is not confirmed');
+  reportConfirmedPurchase(storage, requestId);
 
   // A purchase without a persisted demo source (productive origin) never carries a transfer.
   const hasPersistedDemoSource = Boolean(String(status?.demoClientId ?? '').trim());
@@ -1343,6 +1363,12 @@ export default function UpgradePage() {
       // The server persists this choice with the purchase; local storage is not
       // authoritative and is intentionally not used to restore the association.
       sessionStorage.setItem(PENDING_CHECKOUT_STARTED_AT, String(Date.now()));
+      sessionStorage.setItem(PENDING_CHECKOUT_PLAN, JSON.stringify({
+        planKey: selectedPlan.planKey,
+        planName: selectedPlan.name,
+        value: Number(selectedPlan.displayPrice),
+        currency: selectedPlan.currency,
+      }));
       // An explicit empty selection survives the Stripe redirect without restoring the demo
       // transfer defaults when the purchase starts in a productive environment.
       sessionStorage.setItem(PENDING_CHECKOUT_DATA_TRANSFER,

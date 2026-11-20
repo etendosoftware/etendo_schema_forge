@@ -14,6 +14,9 @@ vi.mock('@/lib/supportSession.js', async (importOriginal) => ({
   applySupportSessionFromServer,
 }));
 
+const pushFirstKeyAction = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/marketing/dataLayer.js', () => ({ pushFirstKeyAction }));
+
 import { useSupportSessionSync } from '../useSupportSessionSync.js';
 
 const SESSION = { clientId: 'C1', clientName: 'Acme', expiresAt: '2026-10-05T11:00:00Z' };
@@ -30,6 +33,16 @@ describe('useSupportSessionSync', () => {
     renderHook(() => useSupportSessionSync());
     await waitFor(() => expect(applySupportSessionFromServer).toHaveBeenCalledWith(SESSION));
     expect(fetchSupportSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the first key action the same /me read carries (ETP-6363)', async () => {
+    const firstKeyAction = { action: 'product', at: '2026-11-02T09:30:00Z' };
+    fetchSupportSession.mockImplementation(async ({ onAccount }) => {
+      onAccount({ id: 'A1', firstKeyAction });
+      return null;
+    });
+    renderHook(() => useSupportSessionSync());
+    await waitFor(() => expect(pushFirstKeyAction).toHaveBeenCalledWith('A1', firstKeyAction));
   });
 
   it('does not read /me when anonymous', () => {
