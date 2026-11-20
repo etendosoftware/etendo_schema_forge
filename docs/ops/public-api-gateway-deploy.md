@@ -1,94 +1,66 @@
 # Public API Gateway: Build and Deploy Runbook
 
-ETP-5862, ETP-6024. Deployment of the public API gateway (`gateway/`, the ETP-5345 NestJS app) is **automatic**: every merge to `main` that touches it is deployed to production by the [Deploy Public API gateway](../../.github/workflows/deploy-public-api.yml) workflow (section 0). It is not part of the SPA pipeline. Sections 1 to 7 are the manual procedure the workflow automates; keep them as the fallback when GitHub Actions is unavailable.
+ETP-5862, ETP-6024. Deployment of the public API gateway (`gateway/`, the ETP-5345 NestJS app) is **automatic**: every merge to `main` that touches it is deployed to production by the [Deploy Public API gateway](../../.github/workflows/deploy-public-api.yml) workflow (section 0). It is not part of the SPA pipeline. The sections below describe the manual procedure and CI setup; keep them as the fallback when GitHub Actions is unavailable.
 
-## 0. Automated deploy (default)
+## 0. Published gateway dependency (ETP-6150)
 
-The workflow `.github/workflows/deploy-public-api.yml`:
+The gateway, deployment workflow and Public API E2E installer consume the exact
+`@etendosoftware/api-gateway-core` version in `gateway/package.json` from GitHub Packages.
+No Schema Forge Core checkout or tarball build is needed. Installation must leave
+`gateway/package.json` unchanged; the workflow retains its `git diff --quiet` guardrail.
 
-- **Triggers** on push to `main` touching `gateway/**`, `public-api/**`, `package.json` (the core pin) or the workflow itself. A push where `package.json` changed but the core pin did not (any other dependency bump) deploys nothing. On pull requests touching the same paths it only runs the gateway tests and builds and smoke-tests the image; it never publishes or deploys.
-- **Takes the core from the pin**, not from a local checkout: `schema_forge_core` is checked out at the git tag of the exact version in `package.json` (`@etendosoftware/schema-forge-core`). A core change reaches production when its bump PR (opened by `bump-core-on-release.yml`) reaches `main`.
-- **Runs the gateway tests** (`npm test` in `gateway/`, against the `api-gateway-core` packed from the pinned core) on PRs and on `main`, before building. A failure stops the deploy.
-- **Smoke-tests the image before publishing** (no configuration needed): `/healthz`, `/api` 200, `/api/openapi.json` 200, `/api/v1/product` without key 401.
-- **Deploys by digest**, cloning the task definition revision the service is running (not the latest of the family), and verifies: rollout `COMPLETED`, every running task on the new revision, `HEALTHY` and with the expected digest, then the section 6 smoke checks through the public host.
-- **Rolls back automatically** to the previous running revision if any step after registering the task definition fails.
-- **Credentials:** AWS OIDC role `etendo-public-api-deploy` (only `main` of this repo can assume it; it can push only to `etendo/public-api-gateway` and update only this service). The account id and the role ARN are repository secrets (`AWS_ACCOUNT_ID`, `PUBLIC_API_DEPLOY_ROLE_ARN`), so this public repo's Actions logs mask them; task definitions are shown as `family:revision` only. The core is read with the read-only deploy key secret `CORE_DEPLOY_KEY`.
-- **`redeploy_tag`** is validated against `^sf-[0-9a-f]{7}-core-[0-9a-f]{7}$` and never interpolated into the script.
+The gateway pins stable `0.3.120`. Authenticated registry metadata verified this
+published version and its `latest` tag on 2026-11-20, after Core PR #400 merged
+and the integrated changes were promoted to `main`.
 
-**Rollback or redeploy:** Actions → "Deploy Public API gateway" → Run workflow on `main` with `redeploy_tag=<existing ECR tag>`. It goes through the same verification.
+For future updates, promoting integrated Core changes to `main` runs `release.yml`
+(the promotion workflow dispatches it explicitly), which resolves the lockstep
+release version and publishes `api-gateway-core` with `latest`. Verify the actual
+published stable version before updating the gateway pin; do not infer availability
+from Core's source package.json. The workflow also accepts preview pins for testing,
+so choosing a stable pin before production promotion remains a release responsibility.
 
-**Deployment record:** for automated deploys, each run's summary is the record (both full SHAs, core version, tag, digest, new and previous task definition revision). Manual deploys still add a row to section 8.
+The existing automated smoke checks, digest deployment and rollback remain unchanged.
+Image tags keep `sf-<7-character frontend SHA>-core-<7-character SHA256 of package version>`;
+older rollback tags remain valid. The deployment summary records the package version.
 
-## 1. Purpose and when to use
+## 1. Registry access and manual build
 
-Use this procedure (manual fallback) to build the gateway image from pinned sources, push it to ECR, roll the ECS service and verify it. For the routing around the service (CloudFront, ALB, target group) see [cloudfront-alb-routing.md](cloudfront-alb-routing.md), section "Public API gateway (production)".
+GitHub Actions uses `ETENDOBOT_TOKEN` with `read:packages` and access to the private
+package. Jenkins/local npm needs the same registry authorization in the user's npmrc:
 
-> **Build only from a `main` SHA that was agreed for the deploy.** Since the public API merge block (ETP-5873, including #1877) the Dockerfile installs whatever `api-gateway-core` version `.schema_forge_core` packs (`etendosoftware-api-gateway-core-*.tgz`), and `gateway/package.json` asks for `^0.2.0`; a core checkout older than 0.2.0 must not be used.
+```ini
+@etendosoftware:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
+```
 
-## 2. Prerequisites
-
-Tools (local machine or a build host):
-
-- `git`, `docker` (BuildKit), `aws` CLI v2.
-- The image must be `linux/amd64`: the service runs on Fargate and its task definition declares no `runtimePlatform`, so Fargate uses X86_64. Always pass `--platform linux/amd64`, especially when building on an Apple Silicon (arm64) machine.
-
-Access (describe by role, never share credentials in this repo or in the record):
-
-- Read access to the `etendosoftware/etendo_schema_forge` and `etendosoftware/schema_forge_core` repositories.
-- An AWS profile `<aws-profile>` in account `<aws-account-id>`, region `<aws-region>`, allowed to: authenticate to and push to the ECR repository `etendo/public-api-gateway`; describe and register ECS task definitions; update the service `etendo-public-api-service` in cluster `etendo-production`; read the service's CloudWatch logs.
-- Permission to pass the existing execution role when registering a new task definition revision (the task has no task role).
-
-Today the deploy runs from a developer machine with that person's own IAM credentials (no shared deploy role or profile). Who holds ECR push and ECS update rights is tracked by DevOps, not in this repo.
-
-## 3. Prepare sources at pinned SHAs
-
-The Dockerfile build context is the **root of `etendo_schema_forge`**. It copies `gateway/package.json`, `gateway/tsconfig.json`, `gateway/src`, `gateway/public` and `public-api/`, plus the core package from `.schema_forge_core/packages/api-gateway-core`. The Dockerfile does not select a core branch or commit: whatever is in `.schema_forge_core` is what gets built. So the checkout must be explicit and its SHA recorded.
+For Docker, pass an npmrc containing a resolved read token as a BuildKit secret;
+never pass it as a build argument or copy it into the image. Delete the temporary
+file after the build. The workflow creates and removes this temporary secret itself.
 
 ```bash
-# Decide both SHAs first (full 40-char SHAs go in the deployment record).
-SF_SHA=<etendo_schema_forge-sha>
-CORE_SHA=<schema_forge_core-sha>
-
-# 1. Clean etendo_schema_forge checkout at SF_SHA
-git clone git@github.com:etendosoftware/etendo_schema_forge.git sf-build
-cd sf-build
-git checkout "$SF_SHA"
-test -z "$(git status --porcelain)" || { echo "dirty tree, abort"; exit 1; }
-
-# 2. schema_forge_core at CORE_SHA, exactly where the Dockerfile expects it
-git clone git@github.com:etendosoftware/schema_forge_core.git .schema_forge_core
-git -C .schema_forge_core checkout "$CORE_SHA"
-test -z "$(git -C .schema_forge_core status --porcelain)" || { echo "dirty core, abort"; exit 1; }
-
-# 3. Sanity check: the version the Dockerfile will pack
-grep '"version"' .schema_forge_core/packages/api-gateway-core/package.json
-grep 'api-gateway-core-' gateway/Dockerfile
-```
-
-Do not pack the tarball by hand. The Dockerfile build stage already runs `npm install`, `npm run build` and `npm pack` inside `packages/api-gateway-core`, then installs `/tmp/etendosoftware-api-gateway-core-<version>.tgz`. Step 3 above must show the same `<version>` in both lines; if they differ, stop (see the warning in section 1).
-
-`.schema_forge_core` is not in the repo's `.gitignore` and there is no `.dockerignore`, so keep this checkout in a throwaway directory and never commit it.
-
-## 4. Image tag and build
-
-Tag convention, identifying both SHAs (7-char short SHAs):
-
-```
-sf-<etendo_schema_forge-short-sha>-core-<schema_forge_core-short-sha>
-```
-
-Example: `sf-a1b2c3d-core-e4f5a6b`. Never use `latest` for a deploy: it cannot be traced or rolled back.
-
-```bash
-TAG="sf-$(git rev-parse --short=7 HEAD)-core-$(git -C .schema_forge_core rev-parse --short=7 HEAD)"
+node scripts/lib/pack-gateway-core.mjs gateway --build
+PACKAGE_VERSION=$(node -p 'require("./gateway/package.json").dependencies["@etendosoftware/api-gateway-core"]')
+PACKAGE_ID=$(printf '%s' "$PACKAGE_VERSION" | sha256sum | cut -c1-7)
+TAG="sf-$(git rev-parse --short=7 HEAD)-core-$PACKAGE_ID"
 ECR="<aws-account-id>.dkr.ecr.<aws-region>.amazonaws.com/etendo/public-api-gateway"
-
-docker build --platform linux/amd64 -f gateway/Dockerfile -t "$ECR:$TAG" .
+docker build --platform linux/amd64 --secret id=npmrc,src=<resolved-token-npmrc> -f gateway/Dockerfile -t "$ECR:$TAG" .
 ```
 
-The final image runs `node dist/main.js` as user `node`, listens on port `4300` (`GATEWAY_PORT`) and serves `/app/public-api/base.v1.json` (`PUBLIC_API_SCHEMA_PATH`); `GATEWAY_PORT`, `PUBLIC_API_SCHEMA_PATH` and `NODE_ENV=production` are set in the image. The gateway reads `NEO_BASE_URL` at runtime to reach NEO through the internal ALB; it is not baked into the image and comes from the task definition environment. There are no secrets in the task definition today.
+The build installs development dependencies, compiles NestJS, and prunes them before
+copying production `node_modules` and `dist` to the final non-root Node image.
 
-## 5. Push to ECR and update ECS
+## 2. Jenkins Public API E2E
+
+The checked-in `scripts/public-api-e2e-ci.mjs install` no longer clones or archives
+Core. Run `make public-api-e2e-ci-install` with npm registry credentials, then the
+existing E2E command against NEO. Remove any external Jenkins stage cloning
+`schema_forge_core` solely for this suite, and remove `PUBLIC_API_CORE_DIR` and
+`PUBLIC_API_CORE_REPO`; preserve the functional checkout, NEO provisioning and
+E2E account credentials. `pipelines/Jenkinsfile` in this repo is the regeneration
+pipeline; the full Public API E2E job definition is administered externally.
+
+## 3. Push to ECR and update ECS
 
 ```bash
 export AWS_PROFILE=<aws-profile> AWS_REGION=<aws-region>
@@ -119,7 +91,7 @@ aws ecs wait services-stable --cluster etendo-production --services etendo-publi
 
 Confirm the rollout finished: `aws ecs describe-services` must show one deployment in `PRIMARY` state with `runningCount == desiredCount`, and the target group `etendo-public-api-production-tg` must report the new task healthy. Do not paste `td.json` anywhere: it may contain environment values.
 
-## 6. Smoke check
+## 4. Smoke check
 
 The documentation entrypoints need no API key; only data operations under `/api/v1/*` do. All three checks run against the public host:
 
@@ -139,9 +111,9 @@ curl -sS -w '\n%{http_code}\n' "$HOST/api/v1/products"   # expect a JSON error b
 
 `/healthz` (returns `{"status":"ok"}`) is not routed to the gateway through the public host: there it returns `200` with the SPA's HTML, which proves nothing. It is checked internally instead, by the target group `etendo-public-api-production-tg` (HTTP on the traffic port, expects 200) and by the container's own ECS health check against `localhost:4300/healthz`; the new task reporting healthy in the target group covers it. Also check the new task's CloudWatch log stream for startup errors.
 
-## 7. Rollback
+## 5. Rollback
 
-Redeploy the previous recorded revision. The previous task definition revision is in the last row of the [Deployment record](#8-deployment-record), and in the `describe-services` output you noted in section 5.
+Redeploy the previous recorded revision. The previous task definition revision is in the last row of the [Deployment record](#6-deployment-record), and in the `describe-services` output you noted in section 3.
 
 ```bash
 aws ecs update-service --cluster etendo-production --service etendo-public-api-service \
@@ -149,9 +121,9 @@ aws ecs update-service --cluster etendo-production --service etendo-public-api-s
 aws ecs wait services-stable --cluster etendo-production --services etendo-public-api-service
 ```
 
-Repeat the [smoke check](#6-smoke-check). The previous image tag must still exist in ECR; do not delete tags that appear in the record. Add a row for the rollback too, with the note "rollback of <tag>".
+Repeat the [smoke check](#4-smoke-check). The previous image tag must still exist in ECR; do not delete tags that appear in the record. Add a row for the rollback too, with the note "rollback of <tag>".
 
-## 8. Deployment record
+## 6. Deployment record
 
 Automated deploys are recorded in their workflow run summary (section 0). **Rule: every manual deployment (including rollbacks) adds a row in the same PR or commit window, before the deploy is considered done.** Use full SHAs. Never put credentials, account IDs or ARNs in this table.
 
@@ -162,13 +134,11 @@ Automated deploys are recorded in their workflow run summary (section 0). **Rule
 
 ## Open points
 
-- **Pin the core by version, not by a local checkout.** `api-gateway-core` is not published with the other `schema_forge_core` packages, so the image depends on whatever `.schema_forge_core` holds at build time. Publishing it in the core release would make the core version traceable from `gateway/package.json`. Infra sees no objection; the decision belongs to the core owners.
+- **Future package updates require registry verification.** Keep the exact stable pin in `gateway/package.json` aligned with the release verified in section 0.
 - **Rate limiting is per task.** The gateway's rate limit is kept in memory. With one task it is exact; scaling the service out multiplies the effective limit by the task count, so revisit it before raising `desiredCount`.
 
 ## Dockerfile notes
 
-Observations from reading `gateway/Dockerfile` (not changed here):
-
-- Before ETP-5873 the tarball name `...-0.1.0.tgz` was hardcoded and `gateway/package.json` asked for `^0.1.0`, so a 0.2.0 core broke the build. Both now follow the packed version (`*.tgz`, `^0.2.0`).
-- No core branch or commit is pinned or checked by the Dockerfile; the result depends only on the contents of `.schema_forge_core` at build time. This runbook compensates with section 3 and the deployment record.
+- The Dockerfile installs the exact published dependency in `gateway/package.json`; it does not clone or pack Core source.
+- Registry credentials are mounted only during installation as a BuildKit secret and are absent from the final image.
 - There is no `.dockerignore`, so the full repo root, including any `node_modules` and `.git`, is sent as build context.
