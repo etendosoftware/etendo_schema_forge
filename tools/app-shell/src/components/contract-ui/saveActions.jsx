@@ -495,7 +495,7 @@ function renderNewRecordSaveActions({
 function renderExistingRecordSaveAction({
   hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
   ui, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, isDocumentReadOnly, blockSaveForBalance, saveGate = {},
-  saveBusy = false, primarySave = false,
+  saveBusy = false, primarySave = false, processRunning = false,
 }) {
   // ETP-5278 — `saveBusy`: the window reports a save-related operation still in flight outside
   // `hook` (e.g. the Users role assignment run by `onAfterExistingSave`, or promote/demote).
@@ -511,7 +511,7 @@ function renderExistingRecordSaveAction({
     ? { className: `${saveBtnCls}${isStrongPrimary(primarySave) ? ' hover:!bg-[var(--primary-hover-strong)]' : ''}`, iconColor: undefined }
     : { variant: 'outline', className: `${saveBtnCls} ${SECONDARY_SAVE_CLS}`, iconColor: 'hsl(var(--muted-foreground))' };
   return (
-    <GateTooltip data-testid="GateTooltip__3b2291" title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} {...(saveLook.variant ? { variant: saveLook.variant } : {})} size="default" className={saveLook.className} data-testid="action-save" disabled={isDocumentReadOnly || busy || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
+    <GateTooltip data-testid="GateTooltip__3b2291" title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} {...(saveLook.variant ? { variant: saveLook.variant } : {})} size="default" className={saveLook.className} data-testid="action-save" disabled={isDocumentReadOnly || busy || processRunning || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
       if (!(await flushPendingLines())) return;
       const saved = await hook.handleSave({ silent: deferSaveToast });
       await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui, deferSaveToast });

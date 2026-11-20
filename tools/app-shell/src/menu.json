@@ -201,6 +201,18 @@
           "windowId": "144"
         },
         {
+          "name": "price-list",
+          "label": "Price List",
+          "favname": "Price List",
+          "windowId": "146"
+        },
+        {
+          "name": "warehouse",
+          "label": "Warehouse",
+          "favname": "Warehouse",
+          "windowId": "139"
+        },
+        {
           "name": "physical-inventory",
           "label": "Physical Inventory",
           "favname": "Physical Inventory",
@@ -217,12 +229,6 @@
           "label": "Internal Consumption",
           "favname": "Internal Consumption",
           "windowId": "800076"
-        },
-        {
-          "name": "warehouse",
-          "label": "Warehouse",
-          "favname": "Warehouse",
-          "windowId": "139"
         },
         {
           "name": "report-viewer-inventory",
@@ -526,12 +532,6 @@
           "label": "Document Sequence",
           "favname": "Document Sequence",
           "windowId": "112"
-        },
-        {
-          "name": "price-list",
-          "label": "Price List",
-          "favname": "Price List",
-          "windowId": "146"
         },
         {
           "name": "payment-term",

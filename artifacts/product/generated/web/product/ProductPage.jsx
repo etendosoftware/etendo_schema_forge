@@ -580,7 +580,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
         compactSidebarPadding
         whiteFormBackground
         autoSaveOnBlur
-        sidebarClassName="w-[320px] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle has-[[data-product-sidebar-collapsed=true]]:w-12 has-[[data-product-sidebar-collapsed=true]]:pr-0 has-[[data-product-sidebar-collapsed=true]]:overflow-hidden"
+        sidebarClassName="relative flex flex-col w-[320px] shrink-0 border-l border-border-subtle transition-[width] duration-200 ease-in-out motion-reduce:transition-none has-[[data-product-sidebar-collapsed=true]]:w-12"
         tabsBarPaddingX="px-2"
         toolbarPaddingX="px-2"
         contentBg="bg-card"

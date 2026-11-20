@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SRC = join(__dirname, '..', 'src');
+const PURCHASE_ORDER_ACTIONS = join(__dirname, '../../../artifacts/purchase-order/custom/PurchaseOrderActions.jsx');
 const OPT_OUT = 'doc-status-ok';
 
 // A line is an offender when it compares with `===`/`!==`/`==`/`!=` (either operand order; the same pattern also matches the `!=` of display expressions such as
@@ -76,7 +77,7 @@ function scan(source) {
 describe('no raw docStatus literal comparisons (ETP-6232)', () => {
   it('uses lib/docStatus.js helpers instead', () => {
     const offenders = [];
-    for (const file of collect(SRC)) {
+    for (const file of [...collect(SRC), PURCHASE_ORDER_ACTIONS]) {
       const rel = relative(SRC, file).split(sep).join('/');
       if (ALLOWED.has(rel)) continue;
       for (const o of scan(readFileSync(file, 'utf8'))) offenders.push(`${rel}:${o}`);
