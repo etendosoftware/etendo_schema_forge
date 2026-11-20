@@ -11,7 +11,7 @@ import {
  * ETP-6363 — marketing's tag container loads on the production host only, never in a support
  * session, and the cookie settings reopen HubSpot's banner.
  *
- * @covers schema_forge/tools/app-shell/src/lib/marketing/gtm.js
+ * @covers tools/app-shell/src/lib/marketing/gtm.js
  */
 describe('resolveGtmId', () => {
   it('loads the app container on the production host', () => {

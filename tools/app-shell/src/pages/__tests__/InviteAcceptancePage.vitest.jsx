@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/pages/InviteAcceptancePage.jsx
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';

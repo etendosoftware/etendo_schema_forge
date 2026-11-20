@@ -13,7 +13,7 @@ import {
  * ETP-6363 — marketing's events in GTM's dataLayer: only where GTM is loaded, nothing personal,
  * once each.
  *
- * @covers schema_forge/tools/app-shell/src/lib/marketing/dataLayer.js
+ * @covers tools/app-shell/src/lib/marketing/dataLayer.js
  */
 const ACCOUNT_ID = '0123456789ABCDEF0123456789ABCDEF';
 
