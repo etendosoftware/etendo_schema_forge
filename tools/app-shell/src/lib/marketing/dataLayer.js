@@ -194,7 +194,7 @@ export function pushFirstKeyAction(accountId, firstKeyAction, {
  * @param {object} properties its properties
  * @param {Window} [win]
  */
-export function pushOnboardingEvent(name, properties = {}, win) {
+export function pushOnboardingEvent(name, properties = {}, win = globalThis.window) {
   switch (name) {
     case 'onboarding_auth_succeeded':
       return pushAuthSucceeded(properties, win);
