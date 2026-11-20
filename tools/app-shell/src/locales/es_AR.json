@@ -16929,6 +16929,8 @@
     "invoiceInboxSaveErrorAccess": "Tu rol no puede editar documentos de la bandeja.",
     "invoiceInboxSaveErrorGeneric": "No se pudo guardar el cambio. Se restauró el valor anterior.",
     "invoiceInboxReviewProductMatchManual": "Elegido por vos",
+    "invoiceInboxReviewProductMatchSuggested": "Elegido por OCR",
+    "invoiceInboxReviewProductMatchSuggestedSimilarity": "Elegido por OCR · {similarity} %",
     "invoiceInboxReviewVendorLinkedManual": "Elegido por vos",
     "invoiceInboxReviewProductCategory": "Categoría",
     "invoiceInboxReviewProductUom": "Unidad de medida",

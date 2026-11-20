@@ -16948,6 +16948,8 @@
     "invoiceInboxSaveErrorAccess": "No tienes permiso para editar documentos de la bandeja.",
     "invoiceInboxSaveErrorGeneric": "No se pudo guardar el cambio. Se restauró el valor anterior.",
     "invoiceInboxReviewProductMatchManual": "Elegido por ti",
+    "invoiceInboxReviewProductMatchSuggested": "Elegido por OCR",
+    "invoiceInboxReviewProductMatchSuggestedSimilarity": "Elegido por OCR · {similarity} %",
     "invoiceInboxReviewVendorLinkedManual": "Elegido por ti",
     "invoiceInboxReviewProductCategory": "Categoría",
     "invoiceInboxReviewProductUom": "Unidad de medida",

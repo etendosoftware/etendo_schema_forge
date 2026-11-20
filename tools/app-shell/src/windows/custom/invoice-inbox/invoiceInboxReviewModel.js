@@ -322,6 +322,20 @@ export function productView(line) {
   return 'none';
 }
 
+/**
+ * The similarity (0-100) the search gave the linked product of a line, read from its candidate (the
+ * backend sends it as text: "72", "96.7" or "96.7%"), or `null` when it is missing or not a number.
+ * ETP-6051: shown next to "Chosen by OCR" so the user can judge how safe the pick is.
+ */
+export function linkedProductSimilarity(product) {
+  const candidates = Array.isArray(product?.candidates) ? product.candidates : [];
+  const own = candidates.find((candidate) => candidate?.id != null && candidate.id === product?.id);
+  const raw = String(own?.similarity ?? '').replace('%', '').replace(',', '.').trim();
+  if (raw === '') return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
 /** The extracted country as text: the `countryName` of decision 8, else the reader's `country`. */
 export function extractedCountry(extracted) {
   return String(extracted?.countryName ?? extracted?.country ?? '').trim();
