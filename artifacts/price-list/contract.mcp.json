@@ -2,7 +2,7 @@
   "version": "0.13.0",
   "generatedAt": "2026-04-29T18:12:11.134Z",
   "updatedAt": "2026-07-23T13:43:58.733Z",
-  "contractChecksum": "0253d359318f0899",
+  "contractChecksum": "94ca6acf4837089d",
   "apiPrediction": {
     "specName": "price-list",
     "baseUrl": "/sws/neo/price-list",

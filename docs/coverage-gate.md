@@ -116,7 +116,11 @@ all of that passed**, the SonarQube scan (it reads `coverage/merged-lcov.info` v
 `sonar-project.properties`) and, on a PR, the comparison and the quality gate. A
 failing test fails the job before the scan, so Sonar never gets a partial LCOV and a
 push never writes a 0% baseline. The job checks out the PR **head** commit, not the
-merge ref, so it does not cover the integration with the base branch.
+merge ref, so it does not cover the integration with the base branch. The action itself
+comes from the run's own commit (a second, sparse checkout into `.ci-actions`), so a PR
+head older than the action still runs it; when that head's script predates
+`--check-quality-gate`, the job compares the coverage alone and warns that the gate was
+not read (ETP-6387).
 
 Pushes keep the bases current: a push to `develop` runs the mini pipeline job (a
 branch analysis of `develop`, no comparison); a push to `main` that merges a cut the

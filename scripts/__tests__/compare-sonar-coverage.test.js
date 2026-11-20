@@ -887,6 +887,16 @@ describe('wiring guardrails', () => {
   const action = readFileSync(join(REPO_ROOT, '.github', 'actions', 'unit-tests-sonar', 'action.yml'), 'utf8');
   const mini = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'mini-pipeline.yml'), 'utf8');
   const full = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'full-pipeline.yml'), 'utf8');
+  // ETP-6387: the action is checked out from the run's own commit, apart from the PR head.
+  const assertActionFromRunCommit = (unit) => {
+    const step = /- name: Checkout the unit tests action\n([\s\S]*?)(?=\n {6}- )/.exec(unit)?.[1];
+    assert.ok(step, 'the action has its own checkout');
+    assert.match(step, /path: \.ci-actions/);
+    assert.match(step, /sparse-checkout: \.github\/actions/);
+    assert.doesNotMatch(step, /ref:/, 'no ref: the run\'s own commit, the merge ref on a PR');
+    assert.match(unit, /uses: \.\/\.ci-actions\/\.github\/actions\/unit-tests-sonar/);
+    assert.ok(unit.indexOf('fetch-depth: 0') < unit.indexOf('Checkout the unit tests action'), 'the head checkout runs first: it cleans the workspace');
+  };
   const job = (workflow, id) => new RegExp(`\n {2}${id}:\n([\\s\\S]*?)(?=\n {2}[A-Za-z_-]+:\n|$)`).exec(workflow)?.[1];
 
   it('run-sonar.sh delegates the gate to scripts/compare-sonar-coverage.js', () => {
@@ -904,8 +914,10 @@ describe('wiring guardrails', () => {
     assert.ok(step, 'compare step present in the action');
     assert.match(step, /if: github\.event_name == 'pull_request'/);
     assert.match(step, /node scripts\/compare-sonar-coverage\.js --context ci/);
-    assert.match(step, /--report-task \.scannerwork\/report-task\.txt --check-quality-gate/);
+    assert.match(step, /--report-task \.scannerwork\/report-task\.txt \$gate/);
     assert.match(step, /--pull-request "\$PR_NUMBER" --base-branch "\$BASE_BRANCH"/);
+    assert.match(step, /gate=--check-quality-gate\n\s+if ! grep -q -- "--check-quality-gate" scripts\/compare-sonar-coverage\.js; then\n\s+gate=/,
+      'the gate flag goes only to a script that supports it (a PR head older than ETP-6374)');
     assert.ok(action.indexOf('make test-ci-coverage') < action.indexOf('sonarqube-scan-action'), 'the scan runs after the tests');
     assert.ok(action.indexOf('sonarqube-scan-action') < action.indexOf('Compare coverage with the base branch'),
       'compare runs after the scan');
@@ -922,7 +934,7 @@ describe('wiring guardrails', () => {
     const unit = job(mini, 'unit-tests-sonar');
     assert.ok(unit, 'unit-tests-sonar job present');
     assert.match(unit, /name: 'Mini Pipeline: Unit tests \+ Sonar \+ coverage'/);
-    assert.match(unit, /uses: \.\/\.github\/actions\/unit-tests-sonar/);
+    assertActionFromRunCommit(unit);
     assert.match(unit, /fetch-depth: 0/);
     assert.match(job(mini, 'mocked'), /if: github\.event_name != 'push'/);
   });
@@ -931,7 +943,7 @@ describe('wiring guardrails', () => {
     const unit = job(full, 'unit-tests');
     assert.ok(unit, 'unit-tests job present');
     assert.match(unit, /name: Unit tests \+ Sonar \+ coverage/);
-    assert.match(unit, /uses: \.\/\.github\/actions\/unit-tests-sonar/);
+    assertActionFromRunCommit(unit);
     assert.match(unit, /needs\.route\.outputs\.validated_run == ''/);
     const cut = job(full, 'validated-cut-sonar');
     assert.ok(cut, 'validated-cut-sonar job present');
