@@ -233,7 +233,11 @@ function ReportResults({ ui, data, rows, shown, noSchema, loading, chartTree, pa
             onOpenResult={onOpenResult}
             totals={chartTree ? (data?.totals ?? null) : null}
             data-testid="DynamicReportTable__c51cea" />
-          <PeriodNotes hiddenCount={hiddenCount} hasPartial={hasPartial} ui={ui} />
+          <PeriodNotes
+            hiddenCount={hiddenCount}
+            hasPartial={hasPartial}
+            ui={ui}
+            data-testid="PeriodNotes__c51cea" />
         </div>
       )}
     </>
@@ -502,7 +506,12 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
         <Button variant="outline" className="h-9 px-3 rounded-lg" data-testid="action-cancel" onClick={onBack}>
           {ui('cancel')}
         </Button>
-        <ExportButtons exporting={exporting} disabled={!data || !hasRange} exportTooLong={exportTooLong} onExport={exportAs} />
+        <ExportButtons
+          exporting={exporting}
+          disabled={!data || !hasRange}
+          exportTooLong={exportTooLong}
+          onExport={exportAs}
+          data-testid="ExportButtons__c51cea" />
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row">
@@ -547,7 +556,11 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
               {loading && <CircleNotchIcon className="w-4 h-4 animate-spin text-muted-foreground" data-testid="DynamicReportView__loading" />}
             </div>
 
-            <ReportChips chips={chips} ui={ui} onClear={userChange} />
+            <ReportChips
+              chips={chips}
+              ui={ui}
+              onClear={userChange}
+              data-testid="ReportChips__c51cea" />
 
             {exportTooLong && <p className="text-xs text-muted-foreground mb-3" data-testid="DynamicReportView__exportTooLong">{ui('dynamicReportExportTooLong')}</p>}
             {shownError && (
@@ -578,7 +591,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
               onOpenLedger={canOpen(LEDGER_REPORT_ID) ? openLedger : null}
               hiddenCount={hiddenCount}
               hasPartial={hasPartial}
-            />
+              data-testid="ReportResults__c51cea" />
           </div>
         </main>
       </div>

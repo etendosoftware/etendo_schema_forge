@@ -21,7 +21,8 @@ export function useBalanceAtDate({ ledgerStart, endShortcuts, compareModes, year
     if (!ledgerStart || !('dateTo' in patch || 'dateFrom' in patch)) return patch;
     const dateTo = patch.dateTo ?? state.dateTo;
     const yearChanged = fiscalYearStart(years, dateTo) !== fiscalYearStart(years, state.dateTo);
-    const wanted = 'dateFrom' in patch ? patch.dateFrom : (yearChanged ? '' : state.dateFrom);
+    let wanted = yearChanged ? '' : state.dateFrom;
+    if ('dateFrom' in patch) wanted = patch.dateFrom;
     return { ...patch, dateFrom: ledgerStartFor(years, wanted, dateTo) };
   }, [ledgerStart, years, state.dateFrom, state.dateTo]);
 

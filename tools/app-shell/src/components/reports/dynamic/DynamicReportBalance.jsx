@@ -38,5 +38,6 @@ function trialText(balance, partial, ui) {
 function sheetText(balance, partial, productFiltered, ui) {
   const lead = ui(partial ? 'dynamicReportSheetPartial' : 'dynamicReportSheetUnbalanced');
   const diff = ui('dynamicReportSheetDiff', { assets: formatCurrency(null, balance.activo), equity: formatCurrency(null, balance.pnPasivo), diff: formatCurrency(null, balance.diff) });
-  return `${lead} ${diff}${partial && productFiltered ? ` ${ui('dynamicReportSheetProductNote')}` : ''}`;
+  const note = partial && productFiltered ? ` ${ui('dynamicReportSheetProductNote')}` : '';
+  return `${lead} ${diff}${note}`;
 }
