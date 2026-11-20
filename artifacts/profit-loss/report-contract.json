@@ -44,6 +44,7 @@
     { "name": "toReferenceDate", "label": { "en_US": "Ending Date (Comparison)", "es_ES": "Fecha de Fin (comparación)" }, "type": "date", "visibleIf": { "param": "compareTo", "equals": "true" }, "section": "comparacion" },
     { "name": "bPartnerId", "label": { "en_US": "Contact", "es_ES": "Contacto" }, "type": "search", "selector": "bpartner", "multi": true, "inputStyle": "popup", "section": "dimensiones" },
     { "name": "productId", "label": { "en_US": "Product", "es_ES": "Producto" }, "type": "search", "selector": "product-all", "multi": true, "inputStyle": "popup", "section": "dimensiones" },
+    { "name": "columns", "label": { "en_US": "Columns", "es_ES": "Columnas" }, "type": "string", "hidden": true },
     { "name": "expandedNodeIds", "label": { "en_US": "Expanded rows", "es_ES": "Filas desplegadas" }, "type": "string", "hidden": true },
     { "name": "splitBy", "label": { "en_US": "Split by", "es_ES": "Desglosar por" }, "type": "string", "hidden": true },
     { "name": "splitNodeId", "label": { "en_US": "Split account", "es_ES": "Cuenta desglosada" }, "type": "string", "hidden": true },

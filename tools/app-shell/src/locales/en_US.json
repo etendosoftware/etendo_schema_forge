@@ -23802,6 +23802,7 @@
     "matchRuleNew": "New rule",
     "matchRuleNewTitle": "New matching rule",
     "matchRuleEditTitle": "Edit matching rule",
+    "matchRuleViewTitle": "Matching rule",
     "matchRuleNewSubtitle": "Configure a rule to suggest automatic links on lines without an invoice",
     "matchRuleSubmitCreate": "Create rule",
     "matchRuleSubmitSave": "Save changes",
@@ -23816,6 +23817,8 @@
     "paymentTermCreateTitle": "Create payment term",
     "paymentTermNewTitle": "New payment term",
     "paymentTermEditTitle": "Edit payment term",
+    "paymentTermViewTitle": "Payment term",
+    "transactionTypeViewTitle": "Transaction type",
     "paymentTermNew": "New payment term",
     "paymentTermDaysLabel": "Days until due",
     "paymentTermDaysPlaceholder": "e.g. 12",
@@ -27032,7 +27035,16 @@
     "dynamicReportExportTooLong": "Excel and CSV take up to 24 months or 8 quarters. Shorten the period to export them.",
     "dynamicReportHidePanel": "Hide filters panel",
     "dynamicReportShowPanel": "Show filters panel",
-    "dynamicReportActiveFilters": "{count} active filters"
+    "dynamicReportActiveFilters": "{count} active filters",
+    "dynamicReportTotalRow": "TOTALS",
+    "dynamicReportBalanced": "Balanced: total debit equals total credit and the closing balances add up to zero.",
+    "dynamicReportUnbalanced": "Out of balance.",
+    "dynamicReportBalancePartial": "With partial filters (accounts or dimensions) the report may not balance.",
+    "dynamicReportBalanceDiff": "Debit − Credit = {debitCredit}; sum of closing balances = {closing}.",
+    "dynamicReportCompareMovements": "Also compare movements",
+    "dynamicReportNoGrouping": "No grouping",
+    "dynamicReportOptions": "Options",
+    "dynamicReportComparison": "Comparison"
   },
   "menus": {
     "Invoice Inbox": {

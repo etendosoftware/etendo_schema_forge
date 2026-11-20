@@ -24,6 +24,9 @@ const COLUMN_OPTIONS = [
 ];
 
 const PANEL_ID = 'dynamic-report-panel';
+const DEFAULT_PICKERS = Object.freeze([{ name: 'bPartnerId', selector: 'bpartner' }, { name: 'productId', selector: 'product' }]);
+// An account range bound is one account; every other filter takes a list.
+const maxItemsOf = (selector) => (selector === 'account' ? 1 : MAX_PICKER_IDS);
 const selectClass = 'w-full h-9 rounded-lg border border-[hsl(var(--border-control))] bg-card px-2 text-sm';
 
 function Section({ title, children }) {
@@ -39,11 +42,14 @@ function Section({ title, children }) {
  * ETP-6080 — "Personalizar informe" for the dynamic view: every control applies on change (there is
  * no "Generar informe"). Labels come from the report contract (`label(name)`, `sectionLabel(id)`)
  * where it has them. The org picker only shows when the role reaches more than one organization.
+ *
+ * ETP-6084: the filters (`pickers`), the option toggles (`toggles`) and the grouping options (`groupByOptions`)
+ * come from the report's contract; the defaults are the P&L's own (contact and product, nothing else).
  */
 export default function DynamicReportPanel({
   state, onChange, onShortcut, onPickYear, onLevel, onExpandAll, onCollapseAll, onReset,
   shortcut, yearId, years, orgs, splitDimensions, levelOptions, label, sectionLabel, noFiscalYear, selectorOf,
-  offers = { columns: true, compare: true, splitBy: true }, collapsed = false, onToggleCollapsed, activeFilterCount = 0, collapseRef, expandRef,
+  offers = { columns: true, compare: true, splitBy: true }, pickers = DEFAULT_PICKERS, toggles = [], groupByOptions = null, collapsed = false, onToggleCollapsed, activeFilterCount = 0, collapseRef, expandRef,
 }) {
   const ui = useUI();
   const toggleLabel = ui(collapsed ? 'dynamicReportShowPanel' : 'dynamicReportHidePanel');
@@ -144,7 +150,7 @@ export default function DynamicReportPanel({
             </select>
           </label>
         )}
-        {['bPartnerId', 'productId'].map((name) => {
+        {pickers.map(({ name, selector }) => {
           const named = state[`_display_${name}`] ? '-named' : '';
           return (
           <div key={name} className="text-xs">
@@ -152,12 +158,12 @@ export default function DynamicReportPanel({
             <PopupMultiSelector
               // Remounts when the restored names land (the selector seeds its chips from props only once).
               key={`${state[name] ? 'set' : 'empty'}${named}`}
-              selector={selectorOf?.(name) ?? (name === 'bPartnerId' ? 'bpartner' : 'product')}
+              selector={selectorOf?.(name) ?? selector}
               label={label(name)}
               value={state[name]}
               displayValue={state[`_display_${name}`]}
               displayNames={state[`_names_${name}`]}
-              maxItems={MAX_PICKER_IDS}
+              maxItems={maxItemsOf(selector)}
               onChange={(ids, names, list) => onChange({ [name]: ids, [`_display_${name}`]: names, [`_names_${name}`]: list })}
               data-testid={`DynamicReportPanel__${name}`}
             />
@@ -176,6 +182,12 @@ export default function DynamicReportPanel({
           <Button variant="outline" className="h-8 px-2 text-xs" onClick={onExpandAll} data-testid="DynamicReportPanel__expandAll">{ui('expandAll')}</Button>
           <Button variant="outline" className="h-8 px-2 text-xs" onClick={onCollapseAll} data-testid="DynamicReportPanel__collapseAll">{ui('collapseAll')}</Button>
         </div>
+        {groupByOptions && <label className="text-xs">{label('groupBy')}
+          <select className={selectClass} value={state.groupBy ?? ''} onChange={(e) => onChange({ groupBy: e.target.value })} data-testid="DynamicReportPanel__groupBy">
+            {!groupByOptions.some((o) => o.value === '') && <option value="">{ui('dynamicReportNoGrouping')}</option>}
+            {groupByOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </label>}
         {offers.splitBy && <label className="text-xs">{ui('dynamicReportSplitBy')}
           <select className={selectClass} value={state.splitBy} onChange={(e) => onChange({ splitBy: e.target.value })} data-testid="DynamicReportPanel__splitBy">
             <option value="">{ui('dynamicReportNoSplit')}</option>
@@ -184,7 +196,16 @@ export default function DynamicReportPanel({
         </label>}
       </Section>
 
-      {(offers.columns || offers.compare) && <Section title={sectionLabel('comparacion')} data-testid="Section__f52339">
+      {toggles.length > 0 && <Section title={sectionLabel('opciones') || ui('dynamicReportOptions')} data-testid="Section__f52339">
+        {toggles.map((name) => (
+          <label key={name} className="flex items-start gap-2 text-xs">
+            <input type="checkbox" className="mt-0.5" checked={Boolean(state[name])} onChange={(e) => onChange({ [name]: e.target.checked })} data-testid={`DynamicReportPanel__toggle-${name}`} />
+            <span>{label(name)}</span>
+          </label>
+        ))}
+      </Section>}
+
+      {(offers.columns || offers.compare) && <Section title={sectionLabel('comparacion') || ui('dynamicReportComparison')} data-testid="Section__f52339">
         {offers.columns && <label className="text-xs">{ui('dynamicReportColumns')}
           <select className={selectClass} value={state.columns} onChange={(e) => onChange({ columns: e.target.value })} data-testid="DynamicReportPanel__columns">
             {COLUMN_OPTIONS.map(([value, key]) => <option key={value} value={value}>{ui(key)}</option>)}
@@ -193,6 +214,12 @@ export default function DynamicReportPanel({
         {offers.compare && <select className={selectClass} value={state.compare} onChange={(e) => onChange({ compare: e.target.value })} aria-label={label('compareTo')} data-testid="DynamicReportPanel__compare">
           {COMPARISONS.map(([value, key]) => <option key={value} value={value}>{ui(key)}</option>)}
         </select>}
+        {offers.compare && offers.movements && state.compare && (
+          <label className="flex items-start gap-2 text-xs">
+            <input type="checkbox" className="mt-0.5" checked={Boolean(state.compareMovements)} onChange={(e) => onChange({ compareMovements: e.target.checked })} data-testid="DynamicReportPanel__compareMovements" />
+            <span>{ui('dynamicReportCompareMovements')}</span>
+          </label>
+        )}
       </Section>}
 
       <div className="px-3 py-3 border-t border-border/40">

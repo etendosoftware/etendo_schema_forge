@@ -76,7 +76,8 @@ const listModalConfig = {
         }
       ]
     }
-  ]
+  ],
+  "viewTitleKey": "matchRuleViewTitle"
 };
 
 export const api = {

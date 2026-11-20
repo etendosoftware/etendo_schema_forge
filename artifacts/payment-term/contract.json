@@ -1,8 +1,8 @@
 {
   "version": "0.12.0",
   "generatedAt": "2026-04-29T19:06:55.269Z",
-  "updatedAt": "2026-10-28T17:20:09.310Z",
-  "checksum": "c5128897a4012612",
+  "updatedAt": "2026-11-19T18:18:36.021Z",
+  "checksum": "26db50615ad53418",
   "frontendContract": {
     "window": {
       "id": "141",
@@ -12,6 +12,7 @@
       "templateConfig": {
         "titleKey": "paymentTermNewTitle",
         "editTitleKey": "paymentTermEditTitle",
+        "viewTitleKey": "paymentTermViewTitle",
         "newLabelKey": "paymentTermNew",
         "modalVariant": "compact",
         "hideBackButton": true,
@@ -194,6 +195,7 @@
       "templateConfig": {
         "titleKey": "paymentTermNewTitle",
         "editTitleKey": "paymentTermEditTitle",
+        "viewTitleKey": "paymentTermViewTitle",
         "newLabelKey": "paymentTermNew",
         "modalVariant": "compact",
         "hideBackButton": true,

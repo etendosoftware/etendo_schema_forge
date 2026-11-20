@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/components/reports/dynamic/reportColumns.js
 import {
-  columnCount, columnModel, cellParts, COLUMN_GRAINS, exportTooLong, modeHiddenCount, modeOf, periodLimit, rowsForMode, SCREEN_PERIODS,
+  amountKinds, columnCount, columnModel, cellParts, COLUMN_GRAINS, exportTooLong, modeHiddenCount, modeOf, periodLimit, rowsForMode, SCREEN_PERIODS,
 } from '../reportColumns.js';
 import { periodBuckets, serializePeriods } from '../dynamicDates.js';
 import { buildPeriodValues, EXPORT_MAX_BUCKETS, SCREEN_PERIODS as CORE_SCREEN_PERIODS } from '@etendosoftware/schema-forge-cli/src/report-periods.js';
@@ -215,5 +215,45 @@ describe('exportTooLong (the server validator itself)', () => {
     try { buildPeriodValues(serializePeriods(plan.buckets), { maxBuckets: EXPORT_MAX_BUCKETS, capRange: true, grain, hiddenCount: plan.hiddenCount }); } catch (e) { server = e.code === 'PERIOD_RANGE_TOO_LONG'; }
     expect(server).toBe(true);
     expect(exportTooLong(plan, grain)).toBe(true);
+  });
+});
+
+// ETP-6084 D3: the contract's amount columns.
+describe('reportColumns — amount columns (ETP-6084)', () => {
+  const AMOUNTS = [
+    { field: 'opening', labelKey: 'o', compare: 'never' },
+    { field: 'debit', labelKey: 'd', compare: 'optional' },
+    { field: 'closing', labelKey: 'c', compare: 'always' },
+  ];
+
+  it('amountKinds: compare columns for always, for optional only with the movements toggle', () => {
+    expect(amountKinds(AMOUNTS[2], 'none')).toEqual(['current']);
+    expect(amountKinds(AMOUNTS[2], 'sly')).toEqual(['current', 'compared', 'variation', 'variationPct']);
+    expect(amountKinds(AMOUNTS[1], 'sly')).toEqual(['current']);
+    expect(amountKinds(AMOUNTS[1], 'sly', true)).toHaveLength(4);
+    expect(amountKinds(AMOUNTS[0], 'prev', true)).toEqual(['current']);
+  });
+
+  it('without amountColumns a group is the single P&L amount column', () => {
+    const g = model({ periods: buckets('total'), grain: 'total' })[0];
+    expect(g.amounts).toBeUndefined();
+    expect(g.columns).toEqual(['current']);
+  });
+
+  it('with amountColumns each group lists one set per amount and columnCount adds them up', () => {
+    const plain = model({ periods: buckets('total'), grain: 'total', amountColumns: AMOUNTS });
+    expect(plain[0].amounts.map((a) => a.field)).toEqual(['opening', 'debit', 'closing']);
+    expect(columnCount(plain)).toBe(3);
+    const compared = model({ periods: buckets('total'), grain: 'total', mode: 'sly', amountColumns: AMOUNTS });
+    expect(columnCount(compared)).toBe(1 + 1 + 4); // opening, debit stay single; closing compares
+    const withMovements = model({ periods: buckets('total'), grain: 'total', mode: 'sly', amountColumns: AMOUNTS, compareMovements: true });
+    expect(columnCount(withMovements)).toBe(1 + 4 + 4);
+  });
+
+  it('cellParts reads the named amount of a chart-tree cell', () => {
+    const row = { cells: [{ opening: { amount: 5 }, closing: { amount: 9, sly: { amount: 7, variationAmount: 2, variationPct: 28.5 } } }] };
+    expect(cellParts(row, 0, 'none', 'opening').amount).toBe(5);
+    expect(cellParts(row, 0, 'sly', 'closing')).toMatchObject({ amount: 9, compared: 7, variationAmount: 2, variationPct: 28.5 });
+    expect(cellParts(row, 0, 'sly', 'debit').amount).toBe(0); // an amount the answer lacks reads as zero
   });
 });

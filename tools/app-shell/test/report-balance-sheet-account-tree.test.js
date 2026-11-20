@@ -93,8 +93,8 @@ describe('balance-sheet report-contract.json — sections', () => {
   });
 });
 
-describe('balance-sheet report-contract.json — the 11 sidebar parameters', () => {
-  it('declares exactly the same 11 parameters as profit-loss, in the same order', () => {
+describe('balance-sheet report-contract.json — the 12 sidebar parameters', () => {
+  it('declares exactly the 12 sidebar parameters shared with profit-loss, in the same order', () => {
     // Deliberate: both reports share one engine and one sidebar shape, so a
     // parameter added to one must be added to the other or the two drift.
     assert.deepEqual(
@@ -102,10 +102,10 @@ describe('balance-sheet report-contract.json — the 11 sidebar parameters', () 
       [
         'acctSchemaId', 'orgId', 'yearId', 'dateFrom', 'dateTo',
         'accountLevel', 'showOnlyAccountsWithValue',
-        'compareTo', 'referenceYearId', 'fromReferenceDate', 'toReferenceDate',
+        'compareTo', 'referenceYearId', 'fromReferenceDate', 'toReferenceDate', 'columns',
       ]
     );
-    assert.equal(CONTRACT.parameters.length, 11);
+    assert.equal(CONTRACT.parameters.length, 12);
   });
 
   it('every parameter is byte-identical to its profit-loss counterpart', () => {

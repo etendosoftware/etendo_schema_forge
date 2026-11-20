@@ -1,12 +1,20 @@
 /**
  * ETP-6080 — reports that open the interactive view when the `dynamic-reports` flag is on.
- * Balance Sheet and Trial Balance join when their stories land (plan decision Q4).
+ * Balance Sheet joins when its story lands (plan decision Q4). ETP-6084: Trial Balance joined, with its own
+ * contract-declared columns, filters and totals (`tree: 'chart'`).
  */
-export const DYNAMIC_REPORT_IDS = Object.freeze(new Set(['profit-loss']));
+export const DYNAMIC_REPORT_IDS = Object.freeze(new Set(['profit-loss', 'report-trial-balance']));
 
-/** True when `reportId` has an interactive view and the flag is on. */
-export function opensDynamicView(reportId, flagOn) {
-  return Boolean(flagOn) && DYNAMIC_REPORT_IDS.has(reportId);
+/**
+ * Reports that need a descriptor carrying `tree: 'chart'` (core that forwards it): against an older core the
+ * descriptor lacks it and the view would open broken, so they keep the old viewer.
+ */
+const NEEDS_CHART_TREE = Object.freeze(new Set(['report-trial-balance']));
+
+/** True when `reportId` has an interactive view and the flag is on. `report` is its descriptor. */
+export function opensDynamicView(reportId, flagOn, report = null) {
+  if (!flagOn || !DYNAMIC_REPORT_IDS.has(reportId)) return false;
+  return !NEEDS_CHART_TREE.has(reportId) || report?.tree === 'chart';
 }
 
 /** Result reports, whose tree adds up to income − expenses: they get the KPI strip on top. */
