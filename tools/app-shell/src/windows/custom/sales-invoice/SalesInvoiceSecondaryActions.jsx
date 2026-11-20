@@ -1,4 +1,5 @@
 import DocumentSecondaryActions from '@/windows/custom/shared/DocumentSecondaryActions';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 /**
  * Adapts the shared `DocumentSecondaryActions` group to sales-invoice (ETP-5260).
@@ -30,7 +31,7 @@ import DocumentSecondaryActions from '@/windows/custom/shared/DocumentSecondaryA
  * `PurchaseOrderSecondaryActions.jsx`).
  */
 export default function SalesInvoiceSecondaryActions(props) {
-  const isCompleted = props.data?.documentStatus === 'CO';
+  const isCompleted = isCompletedStatus(props.data?.documentStatus);
 
   return (
     <DocumentSecondaryActions

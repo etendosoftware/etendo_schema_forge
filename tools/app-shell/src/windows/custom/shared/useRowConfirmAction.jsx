@@ -7,6 +7,7 @@ import { ConfirmResultModal } from '@/components/contract-ui';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { buildHeaders } from '@/auth/api.js';
+import { isDraftStatus } from '../../../lib/docStatus.js';
 
 /**
  * ETP-5378 — "Confirmar" in the grid's row-hover kebab for the two albarán windows,
@@ -120,7 +121,7 @@ export function useRowConfirmAction({
    * to what it was before this entry existed.
    */
   const confirmMenuAction = useCallback((row) => (
-    row?.documentStatus === 'DR'
+    isDraftStatus(row?.documentStatus)
       ? { key: 'confirm', label: ui('confirm'), onClick: openConfirm }
       : null
   ), [ui, openConfirm]);

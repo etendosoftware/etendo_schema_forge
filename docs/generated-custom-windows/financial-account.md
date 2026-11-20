@@ -3824,8 +3824,10 @@ The slot therefore calls `useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D')` �
 `read-only` or `full` and hidden when it is `none` (`useWindowAccess` fails closed, so an unloaded
 access map hides it too) — being read-only on Financial Account is not a reason to hide a link to a
 different window. Under `read-only` on Match Rule, `ListModalWindow` (ETP-4950) offers no New, no
-row actions, no selection and disables the inline toggles; rows have no click handler, so no
-editable modal is reachable.
+row actions, no selection and disables the inline toggles. Since ETP-6221 a row click (or Enter /
+Space on a focused row) and the `/match-rule/<recordId>` deep link open the record in **view
+mode** — every field disabled, no Save, only a Close button — so the rule is readable but still
+no editable modal is reachable.
 
 The prop is **`windowReadOnly` everywhere, never `readOnly`**: in `ReconciliationSplitPanel.jsx`,
 `readOnly` already means "the selected line is already reconciled", and the two are unrelated.
@@ -3981,6 +3983,40 @@ one disables Save (`saveBlocked`) instead of persisting an empty value. Test ids
 `field-edit-account-type[-chip]` / `field-edit-account-currency[-chip]` and
 `option-edit-account-{type|currency}-<id>`; the `edit-account-type` / `edit-account-currency` ids sit on
 the selector wrapper.
+
+## Edit account modal — «Remesas» section, SEPA creditor identifier (ETP-6247)
+
+«Editar cuenta» shows a **«Remesas»** section (`SepaCreditorIdSection.jsx`,
+`data-testid="sepa-remittances-section"`) with one field, **«Identificador del acreedor»** (the SEPA
+creditor identifier, AT-02). The full contract lives in
+[financial-account-management.md → SEPA remittances on Bank accounts](financial-account-management.md#sepa-remittances-on-bank-accounts-etp-6148);
+the remittance side in [remittance.md → SEPA creditor identifier](remittance.md#sepa-creditor-identifier).
+What this window does:
+
+- **When it is shown.** Only for a **Bank** account (the pending «Tipo de cuenta» selection) and only
+  when the role has the `sepaRemittances` capability, which the backend derives from the
+  `sepa-remittances` feature flag. The value is read once per opening, the first time the Type is
+  Bank; if that read is refused (no remittance payment methods, flag off) the section stays hidden.
+  State lives in `useAccountCreditorId.js`; the section only renders it.
+- **What it shows.** Only the value stored on the account (`accountCreditorId` of the remittance
+  `sepaFileData` action), **empty** when the account has none. The placeholder is neutral
+  (`sepaCreditorIdPlaceholder`, same style as BIC/SWIFT) and the (i) tooltip (`sepaCreditorIdInfo`)
+  explains what it is and that the bank assigns it, with no example value. No proposal computed
+  from the organization is offered here.
+- **Inline format check** (`lib/sepaCreditorId.js`, mirror of the backend `SepaCreditorId`):
+  country (2 letters) + check digits (2) + business code (3) + national id, validated mod 97. An
+  invalid value shows its error under the input and blocks «Guardar cambios». The server remains
+  the authority.
+- **Saving.** No button of its own: the modal's general «Guardar cambios» saves it **after** the
+  account update, only when the normalized value changed and is not empty, through the remittance
+  `saveCreditorId` action on record `new` with `accountId` and `saveToAccount: true`. That call
+  requires write access to the `financial-account` spec; without it the backend answers 403
+  `ETGO_RemittanceCreditorIdAccountWriteDenied`. Any refusal is shown as a translated toast and the
+  modal stays open.
+- **A saved value cannot be cleared** (the backend has no delete): emptying it shows the hint
+  `sepaCreditorIdCannotClear` and blocks the save. An account that never had one may stay empty.
+- **Effect.** The account value is the default copied into each new **collection** remittance; the
+  remittance keeps its own copy, so a later change here affects future collections only.
 
 ## Accounting visibility — "Show Accounting Fields" (ETP-5684)
 

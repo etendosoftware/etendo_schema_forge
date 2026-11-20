@@ -1,5 +1,6 @@
 // @covers artifacts/purchase-order/custom/PurchaseOrderActions.jsx
 import { describe, it } from 'node:test';
+import { isDraftStatus } from '../../../../tools/app-shell/src/lib/docStatus.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -22,8 +23,8 @@ describe('PurchaseOrderActions', () => {
   });
 
   it('distinguishes draft vs completed orders by documentStatus', () => {
-    assert.match(src, /const isDraft\s*=\s*status\s*===\s*'DR'/);
-    assert.match(src, /const isCompleted\s*=\s*status\s*===\s*'CO'/);
+    assert.match(src, /const isDraft\s*=\s*isDraftStatus\(status\)/);
+    assert.match(src, /const isCompleted\s*=\s*isCompletedStatus\(status\)/);
   });
 
   it('listens for purchase-order:open-confirm-modal events', () => {
@@ -154,7 +155,7 @@ describe('PurchaseOrderActions', () => {
   describe('ConfirmModal total-discount preview (ETP-4006)', () => {
     it('applies the total-discount factor only while the purchase order is still in DR', () => {
       assert.match(src, /const discountPct\s*=\s*Number\(d\.etgoTotalDiscount \?\? 0\)/);
-      assert.match(src, /const isPreCompletion\s*=\s*d\.documentStatus === 'DR'/);
+      assert.match(src, /const isPreCompletion\s*=\s*isDraftStatus\(d\.documentStatus\)/);
       assert.match(src, /const discountFactor\s*=\s*\(isPreCompletion && discountPct > 0\) \? \(1 - discountPct \/ 100\) : 1/);
     });
 
@@ -199,8 +200,8 @@ describe('PurchaseOrderActions', () => {
     function evaluate(d) {
       const block = extractTotalsBlock(src);
       // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
-      const fn = new Function('d', `${block}\nreturn { discountFactor, totalLines, grandTotal };`);
-      return fn(d);
+      const fn = new Function('d', 'isDraftStatus', `${block}\nreturn { discountFactor, totalLines, grandTotal };`);
+      return fn(d, isDraftStatus);
     }
 
     it('does not double-discount a Draft purchase order whose grandTotalAmount is already GET-time-compensated (ETP-5132)', () => {

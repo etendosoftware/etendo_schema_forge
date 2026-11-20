@@ -32,7 +32,7 @@ exposure events are telemetry the SDK reports to Datadog on its own, and
 |----------|--------------|
 | Datadog | `VITE_DATADOG_ENABLED=true` plus application id, client token, site and `VITE_APP_ENV` |
 | AWS RUM | `VITE_RUM_ENABLED=true` and both RUM IDs are set |
-| Mixpanel | `VITE_MIXPANEL_ENABLED=true` and `VITE_MIXPANEL_TOKEN` is set |
+| Mixpanel | `VITE_MIXPANEL_ENABLED=true` and `VITE_MIXPANEL_TOKEN` is set, **and** the page is served from a production host (see below) |
 
 AWS RUM is opt-in (ETP-4578): the injected IDs alone no longer switch it on. Its SDK has no
 before-send hook, so every batch is sanitized through the SDK's `clientBuilder` before it is
@@ -40,8 +40,25 @@ serialized and signed (page titles, record ids and query strings never leave). C
 unless `VITE_RUM_ALLOW_COOKIES=true`; that is an open question for Privacy. RUM also calls
 `cognito-identity` at startup and keeps temporary credentials in `localStorage`.
 
+### Mixpanel only emits from production hosts (ETP-5466)
+
+The Mixpanel project is the source of the product KPIs, and it was flooded by development
+traffic: every developer with a token in the untracked `tools/app-shell/.env.local`, and every
+Playwright test (a new browser context, so a new device), emitted to it. The provider is
+therefore also gated by the page's hostname (`MIXPANEL_ALLOWED_HOSTS` in
+`observability/providers/mixpanel.js`): it starts only on **`app.etendo.software`** and
+**`app.etendo.ai`** (exact names, case-insensitive, no subdomains). On any other host —
+`localhost`, `127.0.0.1`, staging, experimental, a preview — it stays disabled even with
+`VITE_MIXPANEL_ENABLED=true` and a token: the SDK is never downloaded and nothing is sent, with
+no warning.
+
+To validate emission on purpose from a developer machine, build or run with
+`VITE_MIXPANEL_ALLOW_LOCAL=true` (only the literal `true`) in addition to the switch and the token.
+Never set it in a deployment workflow.
+
 | Variable | Description |
 |----------|-------------|
+| `VITE_MIXPANEL_ALLOW_LOCAL` | Set to `true` to let Mixpanel emit from a non-production host (local validation only). Off by default. |
 | `VITE_RUM_ENABLED` | Set to `true` to enable AWS RUM. Off by default; both RUM IDs are also required. |
 | `VITE_RUM_ALLOW_COOKIES` | Set to `true` to let RUM keep its session in cookies. Off by default (consent is undecided). |
 | `VITE_TELEMETRY_KILL` | Build-default kill switch: `true` stops every provider, a comma list (`mixpanel,aws-rum`) stops those. See [Kill Switch](#kill-switch). |
@@ -91,7 +108,8 @@ one and passes `VITE_*` through to it. The fake values below never reach a real 
 Scenario 1 is the default bundle, so the regular mocked suite (and the pre-push) already runs
 it. When `E2E_TELEMETRY` is unset, `run-e2e-full.sh` builds with `VITE_MIXPANEL_ENABLED`,
 `VITE_DATADOG_ENABLED` and `VITE_RUM_ENABLED` forced to `false`, so a developer's gitignored
-`tools/app-shell/.env.local` no longer leaks real providers into the default bundle. Scenarios 2 and 3 each need a bundle built with the fake provider configuration:
+`tools/app-shell/.env.local` no longer leaks real providers into the default bundle. (Mixpanel is
+also off there by host, since the suite runs on `localhost`.) Scenarios 2 and 3 each need a bundle built with the fake provider configuration:
 
 ```bash
 # 2. Positive control, providers configured and NOT killed: requests are attempted.
@@ -103,6 +121,7 @@ it. When `E2E_TELEMETRY` is unset, `run-e2e-full.sh` builds with `VITE_MIXPANEL_
   export VITE_APP_ENV=e2e
   export VITE_MIXPANEL_ENABLED=true
   export VITE_MIXPANEL_TOKEN=fake-project-token
+  export VITE_MIXPANEL_ALLOW_LOCAL=true   # the suite runs on localhost (ETP-5466)
   export VITE_RUM_ENABLED=true
   export VITE_RUM_APP_MONITOR_ID=fake-monitor
   export VITE_RUM_IDENTITY_POOL_ID=eu-west-3:fake-pool
@@ -120,6 +139,7 @@ it. When `E2E_TELEMETRY` is unset, `run-e2e-full.sh` builds with `VITE_MIXPANEL_
   export VITE_APP_ENV=e2e
   export VITE_MIXPANEL_ENABLED=true
   export VITE_MIXPANEL_TOKEN=fake-project-token
+  export VITE_MIXPANEL_ALLOW_LOCAL=true   # the suite runs on localhost (ETP-5466)
   export VITE_RUM_ENABLED=true
   export VITE_RUM_APP_MONITOR_ID=fake-monitor
   export VITE_RUM_IDENTITY_POOL_ID=eu-west-3:fake-pool
@@ -226,7 +246,7 @@ Its value (36 characters) stays under the gateway's opaque-value scrub. `errorCo
 | `report_opened` | Once per report session, when the first request answers | `source` (`menu` when picked from the report list, else `deep_link`), `outcome`, `durationMs`, `errorCode`, `account_id` |
 | `report_filter_applied` | One per user change, when its result is visible or its request failed. Never for the defaults, "Limpiar filtros" or a change whose request was replaced inside the debounce | `type` (`period`, `organization`, `account_level`, `business_partner`, `product`, `comparison`, `columns`), `outcome`, `durationMs` (none for `account_level` and `comparison`: nothing loads), `errorCode`, `account_id` |
 | `report_group_toggled` | A row folded or unfolded, expand all, collapse all | `type` (`expand`, `collapse`, `expand_all`, `collapse_all`), `outcome: success`, `account_id` |
-| `report_drilldown` | A drill-down step | `type` (`ledger`, `entry` timed from the click to the answer; `document` when the tab opens), `outcome` (`success`, `error` incl. a blocked pop-up, `no_document` for an entry with no window), `account_id` |
+| `report_drilldown` | A drill-down step | `type` (`ledger`, `entry` timed from the click to the answer; `result` when the balance sheet's income-summary (129) explanation panel opens, no duration, ETP-6083; `document` when the tab opens), `outcome` (`success`, `error` incl. a blocked pop-up, `no_document` for an entry with no window), `account_id` |
 | `report_panel_toggled` | The "Personalizar informe" panel was hidden or shown (ETP-6239) | `panelState` (`collapsed`, `expanded`), `trigger` (`user` for the button, `auto_columns` when choosing Mes/Trimestre hid it), `outcome: success`, `account_id`. The property is `panelState` and not `state`: the payload policy denylists `state` (OAuth) and would drop it |
 
 ### `account_id` and `internal_user` on report and walkthrough events (ETP-6230)
@@ -712,7 +732,8 @@ and STAGING from `VITE_DATADOG_APPLICATION_ID_<TARGET>` and
 same RUM application ID/client token plus `VITE_APP_ENV` enable Datadog Feature
 Flags (`VITE_FLAGS_PROVIDER`, default `datadog`), and `VITE_CONFIGCAT_SDK_KEY`
 keeps ConfigCat available as the fallback. Mixpanel is independently opt-in through
-`VITE_MIXPANEL_ENABLED`.
+`VITE_MIXPANEL_ENABLED`, and only emits on the production hosts (`app.etendo.software`,
+`app.etendo.ai`): a staging or experimental bundle built with it stays silent (ETP-5466).
 
 When Datadog telemetry is enabled, CI uploads hidden source maps using the
 server-side `DATADOG_API_KEY` secret, service `etendo-go-web`, commit SHA release

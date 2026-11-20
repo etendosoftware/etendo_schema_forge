@@ -12,7 +12,7 @@ import { useReportQuery } from './useReportQuery.js';
 import { REPORT_EVENTS, resultOf, startReportTiming, trackReportEvent } from './reportTelemetry.js';
 import {
   ENTRY_REPORT_ID, ENTRY_REQUIRED_PARAMS, LEDGER_LINE_CAP, LEDGER_REPORT_ID, entryDocument, entryParams, filterLedgerRows,
-  ledgerParams, ledgerSummary, sqlDateDay,
+  ledgerParams, ledgerSummary, sameAmount, sqlDateDay,
 } from './drillDown.js';
 
 const amount = (v) => formatCurrency(null, v);
@@ -23,7 +23,7 @@ function useErrorText(error, errorCode) {
   const ui = useUI();
   if (!error) return null;
   if (errorCode === 'network') return error;
-  const keys = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess' };
+  const keys = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess', report_timeout: 'reportErrorTimeout' };
   return ui(keys[errorCode] || 'dynamicReportErrorGeneric');
 }
 
@@ -47,7 +47,7 @@ function Status({ loading, error, errorCode, empty }) {
   return null;
 }
 
-function Ledger({ params, sign, locale, dateText, onOpenEntry, session, allLines, onLoadAll }) {
+function Ledger({ params, sign, locale, dateText, onOpenEntry, session, allLines, onLoadAll, atDate = false, clicked = null, calculated = 0 }) {
   const ui = useUI();
   const [search, setSearch] = useState('');
   // One line past the cap tells a capped ledger from one that has exactly the cap.
@@ -59,11 +59,12 @@ function Ledger({ params, sign, locale, dateText, onOpenEntry, session, allLines
   const rows = useMemo(() => (capped ? loaded.slice(0, LEDGER_LINE_CAP) : loaded), [capped, loaded]);
   const summary = useMemo(() => ledgerSummary(rows, data?.openingRows, sign), [rows, data, sign]);
   const shown = useMemo(() => filterLedgerRows(rows, search), [rows, search]);
+  // A balance AT A DATE (ETP-6083) shows opening and closing with the row's sign: the closing is the amount clicked.
   const totals = [
-    ['opening', 'dynamicReportOpening', summary.opening],
+    ['opening', 'dynamicReportOpening', atDate ? summary.openingSigned : summary.opening],
     ['debit', 'dynamicReportDebit', summary.debit],
     ['credit', 'dynamicReportCredit', summary.credit],
-    ['closing', 'dynamicReportClosing', summary.closing],
+    ['closing', 'dynamicReportClosing', atDate ? summary.closingSigned : summary.closing],
     ['movement', 'dynamicReportMovement', summary.movement],
   ].filter(([key]) => !capped || key === 'opening'); // the sums of a capped ledger would be wrong
   return (
@@ -77,6 +78,17 @@ function Ledger({ params, sign, locale, dateText, onOpenEntry, session, allLines
             </div>
           ))}
         </dl>
+      )}
+      {atDate && data && !capped && clicked != null && (
+        <p
+          className={cn('text-xs', sameAmount(summary.closingSigned, clicked) ? 'text-status-success-foreground' : 'text-destructive')}
+          data-testid="DynamicDrillPanel__closingCheck"
+        >
+          {ui(sameAmount(summary.closingSigned, clicked) ? 'dynamicReportClosingMatches' : 'dynamicReportClosingDiffers', { closing: amount(summary.closingSigned), clicked: amount(clicked) })}
+        </p>
+      )}
+      {atDate && calculated !== 0 && (
+        <p className="text-xs text-muted-foreground" data-testid="DynamicDrillPanel__calculatedNote">{ui('dynamicReportIncludesCalculated', { calculated: amount(calculated) })}</p>
       )}
       {capped && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground" data-testid="DynamicDrillPanel__capped">
@@ -210,13 +222,13 @@ function Entry({ params, locale, accountValue, session }) {
  * goes back to its step. An entry whose table has no window mapped ends the drill-down there (Q5).
  * Each step emits `report_drilldown` (ledger / entry timed, document when the tab opens).
  */
-export default function DynamicDrillPanel({ reportTitle, account, range = null, queryParams, session, canOpenEntry = true, onClose }) {
+export default function DynamicDrillPanel({ reportTitle, account, range = null, queryParams, session, canOpenEntry = true, atDate = false, clicked = null, calculated = 0, onClose }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const [entry, setEntry] = useState(null);
   const [allLines, setAllLines] = useState(false);
   const dateText = (raw) => (raw ? formatCalendarDate(sqlDateDay(raw), locale.replace('_', '-')) : '');
-  const ledger = useMemo(() => account && ledgerParams(queryParams, account, range), [account, range, queryParams]);
+  const ledger = useMemo(() => account && ledgerParams(queryParams, account, range, { atDate }), [account, range, queryParams, atDate]);
   const entryQuery = useMemo(() => entry && entryParams(queryParams, entry.id), [entry, queryParams]);
   const close = () => { setEntry(null); setAllLines(false); onClose(); };
 
@@ -248,6 +260,9 @@ export default function DynamicDrillPanel({ reportTitle, account, range = null, 
         {account && !entry && <Ledger
           params={ledger}
           sign={account?.sign}
+          atDate={atDate}
+          clicked={clicked}
+          calculated={calculated}
           locale={locale}
           dateText={dateText}
           onOpenEntry={canOpenEntry ? setEntry : null}

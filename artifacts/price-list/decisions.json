@@ -4,6 +4,7 @@
   "window": {
     "category": "settings",
     "name": "Price List",
+    "breadcrumb": "Inventory / Price List",
     "hidePrint": true,
     "hideMoreMenu": true,
     "showDetailFooterTotals": false,

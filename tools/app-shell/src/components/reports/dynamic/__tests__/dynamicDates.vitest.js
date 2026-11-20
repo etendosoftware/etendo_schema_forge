@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/components/reports/dynamic/dynamicDates.js
 import {
-  comparedRanges, comparisonPeriod, matchingShortcut, matchingYear, openingPeriod, periodBuckets, pickedYearPeriod,
+  comparedRanges, comparisonPeriod, compareDates, compareRulesOf, endShortcutDate, fiscalYearStart, ledgerStartFor, matchingEndShortcut, priorFiscalYearEnd, matchingShortcut, matchingYear, openingPeriod, periodBuckets, pickedYearPeriod,
   previousCalendarBucket, previousPeriod, samePeriodLastYear, serializePeriods, shortcutPeriod, yearContaining,
 } from '../dynamicDates.js';
 
@@ -200,3 +200,49 @@ for (const tz of ['Europe/Madrid', 'America/Argentina/Buenos_Aires']) {
     });
   });
 }
+
+// ETP-6083: a balance at a date: end-date shortcuts, ledger start, one-day comparisons, all from the fiscal calendar.
+describe('balance at a date (ETP-6083)', () => {
+  const FY = [
+    { id: 'A', startDate: '2025-04-01', endDate: '2026-03-31' },
+    { id: 'B', startDate: '2026-04-01', endDate: '2027-03-31' },
+  ];
+  const RULES = compareRulesOf({ sly: 'sameDateLastYear', prev: 'previousFiscalYearClose' }, FY);
+
+  it('shortcuts end on the last COMPLETED month, quarter and fiscal year', () => {
+    expect(endShortcutDate('today', '2026-11-20', FY)).toBe('2026-11-20');
+    expect(endShortcutDate('lastMonthEnd', '2026-11-20', FY)).toBe('2026-10-31');
+    expect(endShortcutDate('lastQuarterEnd', '2026-11-20', FY)).toBe('2026-09-30');
+    expect(endShortcutDate('lastMonthEnd', '2026-01-10', FY)).toBe('2025-12-31');
+    expect(endShortcutDate('lastFiscalYearEnd', '2026-11-20', FY)).toBe('2026-03-31'); // never assumes 31/12
+    expect(endShortcutDate('lastFiscalYearEnd', '2025-06-01', FY)).toBeNull();
+    expect(matchingEndShortcut('2026-10-31', ['today', 'lastMonthEnd'], '2026-11-20', FY)).toBe('lastMonthEnd');
+  });
+
+  it('Desde is the ledger start: inside the fiscal year of Hasta, else its start', () => {
+    expect(fiscalYearStart(FY, '2026-11-20')).toBe('2026-04-01');
+    expect(ledgerStartFor(FY, '2026-06-15', '2026-11-20')).toBe('2026-06-15');
+    expect(ledgerStartFor(FY, '2026-01-01', '2026-11-20')).toBe('2026-04-01');
+    expect(ledgerStartFor(FY, '2026-12-01', '2026-11-20')).toBe('2026-04-01');
+    expect(ledgerStartFor([], '', '2026-11-20')).toBe('2026-01-01'); // no calendar
+  });
+
+  it('compares one day: the same date a year back, and the close of the fiscal year before', () => {
+    expect(priorFiscalYearEnd(FY, '2026-11-20')).toBe('2026-03-31');
+    expect(priorFiscalYearEnd(FY, '2025-11-20')).toBeNull();
+    // Beyond the defined calendar: the latest year's month and day (a 04-01 calendar closes on 31 March), not 31 December.
+    expect(priorFiscalYearEnd(FY, '2028-11-20')).toBe('2028-03-31');
+    expect(priorFiscalYearEnd(FY, '2028-02-10')).toBe('2027-03-31');
+    expect(priorFiscalYearEnd([], '2028-02-10')).toBe('2027-12-31');
+    expect(compareDates(RULES, '2026-11-20')).toEqual({ sly: '2025-11-20', prev: '2026-03-31' });
+    expect(compareDates(RULES, '2024-02-29').sly).toBe('2023-02-28');
+    expect(comparedRanges({ dateFrom: '2026-04-01', dateTo: '2026-11-20' }, 'total', RULES)).toEqual({
+      sly: { from: '2025-11-20', to: '2025-11-20' }, prev: { from: '2026-03-31', to: '2026-03-31' },
+    });
+    // The P&L (no rules) keeps its period-shaped comparisons.
+    expect(comparedRanges({ dateFrom: '2026-04-01', dateTo: '2026-11-20' }, 'total').sly).toEqual({ from: '2025-04-01', to: '2025-11-20' });
+    // Without a prior fiscal year the prior-close comparison falls back to the previous period.
+    expect(comparedRanges({ dateFrom: '2025-04-01', dateTo: '2025-11-20' }, 'total', RULES).prev.from).not.toBe('2025-11-20');
+    expect(periodBuckets({ dateFrom: '2026-04-01', dateTo: '2026-11-20' }, 'total', { rules: RULES }).total.prev).toEqual({ from: '2026-03-31', to: '2026-03-31' });
+  });
+});

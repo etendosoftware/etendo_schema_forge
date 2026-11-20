@@ -11,6 +11,13 @@ const SHORTCUTS = [
   ['quarter', 'dynamicReportQuarter'],
   ['year', 'dynamicReportYear'],
 ];
+// ETP-6083: the end-date shortcuts a contract offers on Hasta (`dateTo.shortcuts`).
+const END_SHORTCUTS = {
+  today: 'dynamicReportToday',
+  lastMonthEnd: 'dynamicReportLastMonthEnd',
+  lastQuarterEnd: 'dynamicReportLastQuarterEnd',
+  lastFiscalYearEnd: 'dynamicReportLastFiscalYearEnd',
+};
 const COMPARISONS = [
   ['', 'dynamicReportNoComparison'],
   ['same-last-year', 'dynamicReportSamePeriodLastYear'],
@@ -24,6 +31,9 @@ const COLUMN_OPTIONS = [
 ];
 
 const PANEL_ID = 'dynamic-report-panel';
+const DEFAULT_PICKERS = Object.freeze([{ name: 'bPartnerId', selector: 'bpartner' }, { name: 'productId', selector: 'product' }]);
+// An account range bound is one account; every other filter takes a list.
+const maxItemsOf = (selector) => (selector === 'account' ? 1 : MAX_PICKER_IDS);
 const selectClass = 'w-full h-9 rounded-lg border border-[hsl(var(--border-control))] bg-card px-2 text-sm';
 
 function Section({ title, children }) {
@@ -39,11 +49,14 @@ function Section({ title, children }) {
  * ETP-6080 — "Personalizar informe" for the dynamic view: every control applies on change (there is
  * no "Generar informe"). Labels come from the report contract (`label(name)`, `sectionLabel(id)`)
  * where it has them. The org picker only shows when the role reaches more than one organization.
+ *
+ * ETP-6084: the filters (`pickers`), the option toggles (`toggles`) and the grouping options (`groupByOptions`)
+ * come from the report's contract; the defaults are the P&L's own (contact and product, nothing else).
  */
 export default function DynamicReportPanel({
   state, onChange, onShortcut, onPickYear, onLevel, onExpandAll, onCollapseAll, onReset,
-  shortcut, yearId, years, orgs, splitDimensions, levelOptions, label, sectionLabel, noFiscalYear, selectorOf,
-  offers = { columns: true, compare: true, splitBy: true }, collapsed = false, onToggleCollapsed, activeFilterCount = 0, collapseRef, expandRef,
+  shortcut, yearId, years, orgs, splitDimensions, levelOptions, label, sectionLabel, noFiscalYear, selectorOf, endShortcuts = null, ledgerStart = false, compareOptions = null, endShortcutDates = {},
+  offers = { columns: true, compare: true, splitBy: true }, pickers = DEFAULT_PICKERS, toggles = [], groupByOptions = null, collapsed = false, onToggleCollapsed, activeFilterCount = 0, collapseRef, expandRef,
 }) {
   const ui = useUI();
   const toggleLabel = ui(collapsed ? 'dynamicReportShowPanel' : 'dynamicReportHidePanel');
@@ -99,14 +112,32 @@ export default function DynamicReportPanel({
 
       <Section title={sectionLabel('periodo')} data-testid="Section__f52339">
         <div className="grid grid-cols-2 gap-2">
-          <label className="text-xs">{label('dateFrom')}
+          <label className="text-xs">{ledgerStart ? ui('dynamicReportLedgerStart') : label('dateFrom')}
             <DateField value={state.dateFrom} onChange={(v) => onChange({ dateFrom: v })} data-testid="DynamicReportPanel__dateFrom" />
           </label>
           <label className="text-xs">{label('dateTo')}
             <DateField value={state.dateTo} onChange={(v) => onChange({ dateTo: v })} data-testid="DynamicReportPanel__dateTo" />
           </label>
         </div>
-        <div className="flex rounded-lg border border-border overflow-hidden" role="group">
+        {ledgerStart && <p className="text-xs text-muted-foreground" data-testid="DynamicReportPanel__ledgerStartHint">{ui('dynamicReportLedgerStartHint')}</p>}
+        {endShortcuts ? (
+          <div className="grid grid-cols-2 gap-1" role="group">
+            {endShortcuts.filter((kind) => END_SHORTCUTS[kind]).map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                aria-pressed={shortcut === kind}
+                disabled={!endShortcutDates[kind]}
+                className={cn('py-1 px-1 text-xs rounded-lg border border-border disabled:opacity-50', shortcut === kind && 'bg-foreground text-background')}
+                onClick={() => onShortcut(kind)}
+                data-testid={`DynamicReportPanel__shortcut-${kind}`}
+              >
+                {ui(END_SHORTCUTS[kind])}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="flex rounded-lg border border-border overflow-hidden" role="group">
           {SHORTCUTS.map(([kind, key]) => (
             <button
               key={kind}
@@ -119,7 +150,8 @@ export default function DynamicReportPanel({
               {ui(key)}
             </button>
           ))}
-        </div>
+          </div>
+        )}
         {years.length > 0 && (
           <label className="text-xs">{ui('dynamicReportFiscalYear')}
             <select
@@ -144,7 +176,7 @@ export default function DynamicReportPanel({
             </select>
           </label>
         )}
-        {['bPartnerId', 'productId'].map((name) => {
+        {pickers.map(({ name, selector }) => {
           const named = state[`_display_${name}`] ? '-named' : '';
           return (
           <div key={name} className="text-xs">
@@ -152,12 +184,12 @@ export default function DynamicReportPanel({
             <PopupMultiSelector
               // Remounts when the restored names land (the selector seeds its chips from props only once).
               key={`${state[name] ? 'set' : 'empty'}${named}`}
-              selector={selectorOf?.(name) ?? (name === 'bPartnerId' ? 'bpartner' : 'product')}
+              selector={selectorOf?.(name) ?? selector}
               label={label(name)}
               value={state[name]}
               displayValue={state[`_display_${name}`]}
               displayNames={state[`_names_${name}`]}
-              maxItems={MAX_PICKER_IDS}
+              maxItems={maxItemsOf(selector)}
               onChange={(ids, names, list) => onChange({ [name]: ids, [`_display_${name}`]: names, [`_names_${name}`]: list })}
               data-testid={`DynamicReportPanel__${name}`}
             />
@@ -176,6 +208,12 @@ export default function DynamicReportPanel({
           <Button variant="outline" className="h-8 px-2 text-xs" onClick={onExpandAll} data-testid="DynamicReportPanel__expandAll">{ui('expandAll')}</Button>
           <Button variant="outline" className="h-8 px-2 text-xs" onClick={onCollapseAll} data-testid="DynamicReportPanel__collapseAll">{ui('collapseAll')}</Button>
         </div>
+        {groupByOptions && <label className="text-xs">{label('groupBy')}
+          <select className={selectClass} value={state.groupBy ?? ''} onChange={(e) => onChange({ groupBy: e.target.value })} data-testid="DynamicReportPanel__groupBy">
+            {!groupByOptions.some((o) => o.value === '') && <option value="">{ui('dynamicReportNoGrouping')}</option>}
+            {groupByOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </label>}
         {offers.splitBy && <label className="text-xs">{ui('dynamicReportSplitBy')}
           <select className={selectClass} value={state.splitBy} onChange={(e) => onChange({ splitBy: e.target.value })} data-testid="DynamicReportPanel__splitBy">
             <option value="">{ui('dynamicReportNoSplit')}</option>
@@ -184,15 +222,30 @@ export default function DynamicReportPanel({
         </label>}
       </Section>
 
-      {(offers.columns || offers.compare) && <Section title={sectionLabel('comparacion')} data-testid="Section__f52339">
+      {toggles.length > 0 && <Section title={sectionLabel('opciones') || ui('dynamicReportOptions')} data-testid="Section__f52339">
+        {toggles.map((name) => (
+          <label key={name} className="flex items-start gap-2 text-xs">
+            <input type="checkbox" className="mt-0.5" checked={Boolean(state[name])} onChange={(e) => onChange({ [name]: e.target.checked })} data-testid={`DynamicReportPanel__toggle-${name}`} />
+            <span>{label(name)}</span>
+          </label>
+        ))}
+      </Section>}
+
+      {(offers.columns || offers.compare) && <Section title={sectionLabel('comparacion') || ui('dynamicReportComparison')} data-testid="Section__f52339">
         {offers.columns && <label className="text-xs">{ui('dynamicReportColumns')}
           <select className={selectClass} value={state.columns} onChange={(e) => onChange({ columns: e.target.value })} data-testid="DynamicReportPanel__columns">
             {COLUMN_OPTIONS.map(([value, key]) => <option key={value} value={value}>{ui(key)}</option>)}
           </select>
         </label>}
         {offers.compare && <select className={selectClass} value={state.compare} onChange={(e) => onChange({ compare: e.target.value })} aria-label={label('compareTo')} data-testid="DynamicReportPanel__compare">
-          {COMPARISONS.map(([value, key]) => <option key={value} value={value}>{ui(key)}</option>)}
+          {(compareOptions ?? COMPARISONS.map(([value, key]) => [value, ui(key)])).map(([value, text]) => <option key={value} value={value}>{text}</option>)}
         </select>}
+        {offers.compare && offers.movements && state.compare && (
+          <label className="flex items-start gap-2 text-xs">
+            <input type="checkbox" className="mt-0.5" checked={Boolean(state.compareMovements)} onChange={(e) => onChange({ compareMovements: e.target.checked })} data-testid="DynamicReportPanel__compareMovements" />
+            <span>{ui('dynamicReportCompareMovements')}</span>
+          </label>
+        )}
       </Section>}
 
       <div className="px-3 py-3 border-t border-border/40">

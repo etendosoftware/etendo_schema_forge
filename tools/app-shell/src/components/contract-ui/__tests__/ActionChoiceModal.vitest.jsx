@@ -566,4 +566,15 @@ describe.each(MODES)('ActionChoiceModal — %s: focus when loading ends', (_, mo
     rerender(<ActionChoiceModal {...props} loading={false} />);
     expect(submitControl()).toHaveFocus();
   });
+
+  it('with ZERO options renders no question and no cards: summary, children and a label-only primary', async () => {
+    const { props } = renderModal({ options: [], defaultOptionId: undefined, children: <p data-testid="extra-body">body</p>, primaryLabel: 'Go' });
+    expect(screen.queryByText(QUESTION)).toBeNull();
+    expect(screen.queryByRole('radiogroup')).toBeNull();
+    expect(screen.queryByRole('radio')).toBeNull();
+    expect(screen.getByTestId('summary-total')).toHaveTextContent('12,10 EUR');
+    expect(screen.getByTestId('extra-body')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId(CONTINUE_TEST_ID));
+    expect(props.onContinue).toHaveBeenCalledWith(undefined);
+  });
 });

@@ -10,7 +10,7 @@ import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Settings / Price List';
+const breadcrumb = 'Inventory / Price List';
 
 
 // @sf-generated-start summary:priceList

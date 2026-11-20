@@ -1539,9 +1539,27 @@ removed by a product decision; an earlier iteration of ETP-6148 had them.
   provisioning; retry). It is mapped to `backendError.remittanceProvisioningConflict`.
 - **No backfill.** An account created before the feature, or while the flag was off, has no
   remittance methods. The remittance header refuses it (see [remittance.md](remittance.md)).
-- **The SEPA creditor identifier is not part of this task** and is not stored on the account. It is
-  computed when the SEPA XML is built, from the organization tax ID (NIF) and the remittance type's
-  `Creditor_Business_Code` parameter, default `000`.
+- **SEPA creditor identifier (AT-02), ETP-6247.** In **Edit account → Remittances** (a Bank account
+  for a role with the `sepaRemittances` capability) the «Identificador del acreedor» field is **one
+  more field of the form**, saved by «Guardar cambios» together with name, IBAN and BIC.
+  - It shows **only the value stored on the account** (`accountCreditorId` of the remittance
+    `sepaFileData` action) and is **empty** when there is none, with a neutral placeholder like
+    BIC/SWIFT. The modal has **no** origin caption, **no** proposal computed from the organization
+    and **no** «Usar el calculado» or own «Guardar» button: the proposal lives only in the remittance
+    window (see [remittance.md](remittance.md)). The (i) tooltip is kept.
+  - Format is checked inline (`lib/sepaCreditorId.js`, a mirror of the backend `SepaCreditorId`;
+    the server stays the authority). An invalid value blocks «Guardar cambios».
+  - On save it calls `saveCreditorId` on the record `new` with `accountId` and `saveToAccount: true`,
+    **only when the normalized value changed and is not empty**, after the account update. A server
+    refusal is shown translated (the check-digits refusal names the digits the server expects) and
+    keeps the modal open.
+  - **A saved identifier cannot be emptied**: the backend has no delete, so clearing the field shows
+    the hint `sepaCreditorIdCannotClear` and blocks the save (restore or retype a value). An account
+    with none saved may stay empty and saves its other fields as usual.
+  - If the read is refused (no remittance payment methods, flag off), the section is hidden. The state
+    lives in `useAccountCreditorId.js`; `SepaCreditorIdSection.jsx` only renders it.
+  - The value is the default for new collections; a draft collection may override its own copy and
+    optionally update the account's (remittance window).
 - The remittance window that uses these accounts is described in [remittance.md](remittance.md).
 
 #### Transaction status: remittance codes (ETP-6148)

@@ -26,6 +26,7 @@ enough to validate adoption of specific actions.
 | `copilot_interaction_started` | User starts a Copilot interaction. | `kpiId`, `module`, `type`, `source` |
 | `bank_account_configured` | Company finishes at least one bank account setup. | `kpiId`, `module`, `source`, `status` |
 | `asset_created` | Fixed asset is created. | `kpiId`, `module`, `channel`, `source`, `status` |
+| `backend_remittance_file_generated` | A remittance's SEPA file is generated («Confirmar» or «Regenerar fichero»), backend, when the action succeeds (ETP-6247). | `account_id`, `direction`, `invoice_count`, `is_regeneration`, `channel`, `flag_enabled`, `role_groups` |
 
 Implemented in App Shell: `kpiId`, `module`, `entityType`, and `channel` are in
 the safe payload allowlist. Dashboard quick actions, pending-task opens, and
