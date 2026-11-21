@@ -236,7 +236,7 @@ Display the full detail of a financial account: a summary strip with KPIs, and t
 ## What this view does
 
 - Navigate to `/financial-account/:id` from the Cuentas list (row click).
-- Topbar shows `{accountName}` as title and `Finanzas / Cuentas / {accountName}` as breadcrumb via `useSetPageMeta` (inlined in `index.jsx` — no per-window header bar).
+- Topbar shows `{accountName}` as title and `Tesorería / Cuentas / {accountName}` as breadcrumb (Treasury section since ETP-6389; the list view's generated breadcrumb is `Treasury / Accounts`, declared in `decisions.json → window.breadcrumb`) via `useSetPageMeta` (inlined in `index.jsx` — no per-window header bar).
 - Account Summary Strip (single horizontal bar inside the Movements tab body): avatar + IBAN (chunked in groups of 4, with copy-to-clipboard) — or card number, or the bank logo alone for an offline card; see the `AccountSummaryStrip` rules under `AccountLogoAvatar` | Saldo total | Entradas (30D) | Salidas (30D). The three KPI sections use `flex-1` so they spread evenly.
 - Three tabs with counts: Movements (live data), Reconciliation (live data — manual reconciliation split panel, T6 + automatch engine, T7), Imported Statements (live data).
 - **Editar** button (ETP-4530) sits to the left of the contextual tab-strip action, always visible regardless of the active tab — opens `EditAccountModal` (see below) so editing no longer requires going back to the Cuentas list.
@@ -1697,7 +1697,7 @@ The Movimientos row kebab (`MovementRowKebab.jsx`) mirrors the existing Post act
 ## Routing
 
 - URL: `/financial-account/:id` — catch-all route `/:windowName/:recordId` in `App.jsx` → `WindowLoader` → `customLoaders['financial-account']`.
-- Entry in `menu.json` under the Finance group (`hidden: true`) so `buildWindowMap()` registers it.
+- Entry in `menu.json` under the Treasury group (Finance until ETP-6389): a visible item (`windowId` `94EAA455D2644E04AB25D93BE5157B6D`, label "Cuentas"), so `buildWindowMap()` registers it.
 - Entry in `registry.js` `customLoaders`: `'financial-account': () => import('./custom/financial-account/index.jsx')`.
 
 ## Component tree

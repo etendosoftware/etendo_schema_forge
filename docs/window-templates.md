@@ -243,8 +243,11 @@ windowLoaders[name] || customLoaders[name] || PlaceholderWindow
 | `hidden: true` + `"redirect": "/path"` | stripped | `<Navigate to="/path" replace />` (old bookmarks keep working) |
 | … + `"redirectKeepPath": true` (ETP-5720) | stripped | same, but `/<name>/<id>?q#h` goes to `/path/<id>?q#h`. Only for a renamed window (`simple-g-l-journal` → `manual-journals`); a redirect to a different window must not carry a foreign record ID |
 | `hidden: true` + `"routeOnly": true` | stripped | loads the window (use only when an in-app link needs it: overview page buttons, row actions) |
+| `hidden: true` + `"reportId"` + `"path"` (ETP-6389) | stripped | not registered (the `path`, `report-viewer?category=<cat>&report=<id>`, points at the dedicated report viewer route). The `path` is read by the global search, which lists the row while the user types if they hold a grant on the report, and by the favourite-label map |
 
 Dedicated routes in `runtime-routes.jsx` (`/smart-scan`, `/hr`, `/report-viewer`...) win over `:windowName`, so hidden pages and reports are unaffected. A hidden window that has a `windowId` shared with a visible one (e.g. `business-partner` and `contacts`, 123) therefore no longer slips through role access: declare `redirect` to the window that replaced it. Do not add a link to a window that is hidden without one of the two flags.
+
+Access flags (`windowId`, `accessWindowId`, `capability`, `hideWhenFirstStepsDismissed`, `requiresGroupReport`) decide visibility, not routing; they are described with `filterMenuGroupsByAccess()` in `docs/generated-custom-windows/app-shell-functional-flows.md` (authenticated shell flow).
 
 ## Flow: layoutType → contract → generator
 

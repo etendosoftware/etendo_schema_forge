@@ -217,7 +217,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
         <div style={{ padding: '12px 16px', borderBottom: '1px solid hsl(var(--border-subtle))' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>{ui('financeCollections')}</div>
+              <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>{ui('treasuryCollections')}</div>
               <div style={{ fontSize: 14, fontWeight: 500, color: 'hsl(var(--foreground))' }}>{ui('newPayment')}</div>
             </div>
             <button type="button" onClick={handleClose} style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, border: '0.5px solid hsl(var(--border-subtle))', background: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))', fontSize: 14, lineHeight: 1 }}>&times;</button>

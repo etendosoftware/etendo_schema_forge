@@ -6,6 +6,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate, todayCalendarISO } from '@/lib/dateOnly.js';
 import { buildReportFilename } from '@/pages/ReportViewerPage.jsx';
+import { reportCategoryMenuKey } from '@/components/reports/reportCategories.js';
 import DynamicReportPanel from './DynamicReportPanel.jsx';
 import DynamicReportTable from './DynamicReportTable.jsx';
 import DynamicReportKpis from './DynamicReportKpis.jsx';
@@ -279,7 +280,8 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
 
   useSetPageMeta({
     title,
-    breadcrumb: [{ label: tMenu('Finance') }, { label: tMenu('Reports'), href: `/report-viewer?category=${report.category || 'finance'}` }, { label: title }],
+    // The report's own category names the first level (ETP-6389), Finance when it has none.
+    breadcrumb: [{ label: tMenu(reportCategoryMenuKey(report.category, 'Finance')) }, { label: tMenu('Reports'), href: `/report-viewer?category=${report.category || 'finance'}` }, { label: title }],
   }, [title]);
 
   const defaults = useReportDefaults(selectedOrgId);

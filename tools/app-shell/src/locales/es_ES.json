@@ -16295,6 +16295,9 @@
     "Finance": {
       "label": "Finanzas"
     },
+    "Treasury": {
+      "label": "Tesorería"
+    },
     "Inventory": {
       "label": "Inventario"
     },
@@ -16948,6 +16951,8 @@
     "invoiceInboxSaveErrorAccess": "No tienes permiso para editar documentos de la bandeja.",
     "invoiceInboxSaveErrorGeneric": "No se pudo guardar el cambio. Se restauró el valor anterior.",
     "invoiceInboxReviewProductMatchManual": "Elegido por ti",
+    "invoiceInboxReviewProductMatchSuggested": "Elegido por OCR",
+    "invoiceInboxReviewProductMatchSuggestedSimilarity": "Elegido por OCR · {similarity} %",
     "invoiceInboxReviewVendorLinkedManual": "Elegido por ti",
     "invoiceInboxReviewProductCategory": "Categoría",
     "invoiceInboxReviewProductUom": "Unidad de medida",
@@ -17814,7 +17819,7 @@
     "forceAppRefresh": "Forzar actualización de la app",
     "newPayment": "Nuevo pago",
     "paymentRecordedLocally": "Pago registrado localmente — se sincronizará cuando el endpoint esté disponible",
-    "financeCollections": "Finanzas · Cobros",
+    "treasuryCollections": "Tesorería · Cobros",
     "activity": "Actividad",
     "closeActivityPanel": "Cerrar panel de actividad",
     "paymentCreated": "Cobro creado",
@@ -19605,7 +19610,6 @@
     "statusPaymentMade": "Pago realizado",
     "statusWithdrawnNotCleared": "Retirado sin liquidar",
     "statusDepositedNotCleared": "Depositado sin liquidar",
-    "financeMenuLabel": "Finanzas",
     "financeAccountsPageTitle": "Cuentas",
     "financeAccountsSearchPlaceholder": "Buscar cuenta…",
     "financeAccountsFilterAll": "Todas las cuentas",
@@ -21085,6 +21089,7 @@
     "barChartAria": "Gráfico de barras de ventas mensuales",
     "language": "Idioma",
     "logout": "Cerrar sesión",
+    "cookieSettings": "Configuración de cookies",
     "onboardingLanguageSpanish": "Español",
     "onboardingLanguageEnglish": "Inglés",
     "onboardingAuthFeatureNoCard": "Sin tarjeta de crédito",
@@ -21220,8 +21225,7 @@
     "onboardingMarketingConsent": "Acepto recibir comunicaciones comerciales y material promocional de Etendo por correo electrónico.",
     "onboardingPhoneLabel": "Teléfono",
     "onboardingOptionalHint": "(opcional)",
-    "onboardingPhonePrefixLabel": "Prefijo telefónico",
-    "onboardingPhonePrefixPlaceholder": "Prefijo",
+    "onboardingCountryPlaceholder": "Elige",
     "onboardingPhonePlaceholder": "Número de teléfono",
     "onboardingPhoneInvalid": "Introduce un número de teléfono válido.",
     "onboardingBusinessSectorLabel": "Sector de actividad",
@@ -22986,6 +22990,7 @@
     "docNo": "Nº doc.",
     "documentNo": "Nº documento",
     "finance": "Finanzas",
+    "treasury": "Tesorería",
     "settings": "Configuración",
     "settingsDescription": "Gestiona el contexto de tu sesión. Cambiar el rol u organización volverá a autenticar tu sesión.",
     "currentSession": "Sesión actual",
@@ -27080,7 +27085,9 @@
     "portalSearchAllPlaceholder": "Buscar presupuestos, pedidos, facturas…",
     "portalSearchNoResults": "Ningún documento coincide con tu búsqueda.",
     "portalSearch": "Buscar",
-    "portalCreatedWith": "Creado con etendo.ai",
+    "portalCreatedWith": "Creado con Etendo",
+    "portalLearnMore": "Conoce más",
+    "portalCreatedWithLinkLabel": "Creado con Etendo · Conoce más",
     "portalExpiredOnPrefix": "Caducó el",
     "portalMore": "Más",
     "portalPreviewLabel": "Vista previa del documento",
@@ -27771,6 +27778,9 @@
     },
     "Finance Reports": {
       "label": "Informes de Finanzas"
+    },
+    "Treasury Reports": {
+      "label": "Informes de Tesorería"
     },
     "Payment Tracker": {
       "label": "Seguimiento cobros-pagos"

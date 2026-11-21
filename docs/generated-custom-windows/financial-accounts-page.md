@@ -84,7 +84,7 @@ i18n keys see `financial-account.md` -> "Last bank sync label (ETP-5582)".
 
 ## Interaction model
 
-- Route: `/finance/accounts` (registered in `App.jsx`).
+- Route: `/financial-account`. The original `/finance/accounts` route is now a redirect to it (`runtime-routes.jsx`).
 - Standalone page (Level 4 in the app-shell taxonomy) — not an AD window. The precedent is `DashboardPage.jsx` / `CrmPage.jsx`.
 - Layout: 292 px sidebar + flexible main panel with the accounts table.
 - The page uses `useSetPageMeta` to render the breadcrumb `Tesorería / Cuentas` on the topbar.
@@ -213,7 +213,7 @@ tools/app-shell/src/
 
 Locale keys use the flat `financeAccounts*` convention (camelCase, not dotted) in both `en_US.json` and `es_ES.json`.
 
-The legacy `bank-reconciliation` placeholder entry in `menu.json` is now hidden (`hidden: true`) — the canonical entry in the Finance menu is `financial-accounts` (label "Cuentas" / "Accounts", path `finance/accounts`). The placeholder will be removed in T8 once the full reconciliation flow is shipped.
+The legacy `bank-reconciliation` placeholder is no longer in `menu.json`. The Cuentas entry is `financial-account` in the Treasury menu section (Finance until ETP-6389): label "Cuentas" / "Accounts", `windowId` `94EAA455D2644E04AB25D93BE5157B6D`, route `/financial-account`. `/finance/accounts` is only a redirect to `/financial-account` (`runtime-routes.jsx`).
 
 ## Manual verification
 

@@ -26,7 +26,7 @@ const sections = [
 const filters = ['name'];
 // @sf-generated-end fields:header
 
-const breadcrumb = 'Settings / Payment Term';
+const breadcrumb = 'Treasury / Payment Term';
 const listModalConfig = {
   "titleKey": "paymentTermNewTitle",
   "editTitleKey": "paymentTermEditTitle",

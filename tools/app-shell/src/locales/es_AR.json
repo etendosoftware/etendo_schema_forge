@@ -16255,6 +16255,9 @@
     "Finance": {
       "label": "Finanzas"
     },
+    "Treasury": {
+      "label": "Tesorería"
+    },
     "Inventory": {
       "label": "Inventario"
     },
@@ -16929,6 +16932,8 @@
     "invoiceInboxSaveErrorAccess": "Tu rol no puede editar documentos de la bandeja.",
     "invoiceInboxSaveErrorGeneric": "No se pudo guardar el cambio. Se restauró el valor anterior.",
     "invoiceInboxReviewProductMatchManual": "Elegido por vos",
+    "invoiceInboxReviewProductMatchSuggested": "Elegido por OCR",
+    "invoiceInboxReviewProductMatchSuggestedSimilarity": "Elegido por OCR · {similarity} %",
     "invoiceInboxReviewVendorLinkedManual": "Elegido por vos",
     "invoiceInboxReviewProductCategory": "Categoría",
     "invoiceInboxReviewProductUom": "Unidad de medida",
@@ -17578,7 +17583,7 @@
     "forceAppRefresh": "Forzar actualización de la app",
     "newPayment": "Nuevo pago",
     "paymentRecordedLocally": "Pago registrado localmente — se sincronizará cuando el endpoint esté disponible",
-    "financeCollections": "Finanzas · Cobros",
+    "treasuryCollections": "Tesorería · Cobros",
     "activity": "Actividad",
     "closeActivityPanel": "Cerrar panel de actividad",
     "paymentCreated": "Cobro creado",
@@ -18938,7 +18943,6 @@
     "statusPaymentMade": "Pago realizado",
     "statusWithdrawnNotCleared": "Retirado sin liquidar",
     "statusDepositedNotCleared": "Depositado sin liquidar",
-    "financeMenuLabel": "Finanzas",
     "financeAccountsPageTitle": "Cuentas",
     "financeAccountsSearchPlaceholder": "Buscar cuenta…",
     "financeAccountsFilterAll": "Todas las cuentas",
@@ -20251,6 +20255,7 @@
     "barChartAria": "Gráfico de barras de ventas mensuales",
     "language": "Idioma",
     "logout": "Cerrar sesión",
+    "cookieSettings": "Configuración de cookies",
     "onboardingLanguageSpanish": "Español",
     "onboardingLanguageEnglish": "Inglés",
     "onboardingAuthFeatureNoCard": "Sin tarjeta de crédito",
@@ -20384,8 +20389,7 @@
     "onboardingMarketingConsent": "Acepto recibir comunicaciones comerciales y material promocional de Etendo por correo electrónico.",
     "onboardingPhoneLabel": "Teléfono",
     "onboardingOptionalHint": "(opcional)",
-    "onboardingPhonePrefixLabel": "Prefijo telefónico",
-    "onboardingPhonePrefixPlaceholder": "Prefijo",
+    "onboardingCountryPlaceholder": "Elegí",
     "onboardingPhonePlaceholder": "Número de teléfono",
     "onboardingPhoneInvalid": "Ingresá un número de teléfono válido.",
     "onboardingBusinessSectorLabel": "Sector de actividad",
@@ -21853,6 +21857,7 @@
     "docNo": "Nº doc.",
     "documentNo": "Nº documento",
     "finance": "Finanzas",
+    "treasury": "Tesorería",
     "settings": "Configuración",
     "settingsDescription": "Gestiona el contexto de tu sesión. Cambiar el rol u organización volverá a autenticar tu sesión.",
     "currentSession": "Sesión actual",
@@ -22695,7 +22700,9 @@
     "portalSearchAllPlaceholder": "Buscar presupuestos, pedidos, facturas…",
     "portalSearchNoResults": "Ningún documento coincide con tu búsqueda.",
     "portalSearch": "Buscar",
-    "portalCreatedWith": "Creado con etendo.ai",
+    "portalCreatedWith": "Creado con Etendo",
+    "portalLearnMore": "Conocé más",
+    "portalCreatedWithLinkLabel": "Creado con Etendo · Conocé más",
     "portalExpiredOnPrefix": "Venció el",
     "portalMore": "Más",
     "portalPreviewLabel": "Vista previa del documento",
@@ -23672,6 +23679,24 @@
     "Trial Balance": {
       "label": "Balance sumas y saldos"
     },
+    "Aging Report (Receivables)": {
+      "label": "Informe Antigüedad de Cobros"
+    },
+    "Aging Report (Payables)": {
+      "label": "Informe Antigüedad de Pagos"
+    },
+    "Balance Sheet": {
+      "label": "Balance de Situación"
+    },
+    "Profit & Loss": {
+      "label": "Pérdidas y Ganancias"
+    },
+    "General Ledger": {
+      "label": "Libro Mayor"
+    },
+    "Journal Entries": {
+      "label": "Diario de Asientos"
+    },
     "Create All Price Lists": {
       "label": "Actualizar tarifas"
     },
@@ -23698,6 +23723,9 @@
     },
     "Finance Reports": {
       "label": "Informes de Finanzas"
+    },
+    "Treasury Reports": {
+      "label": "Informes de Tesorería"
     },
     "Payment Tracker": {
       "label": "Seguimiento cobros-pagos"

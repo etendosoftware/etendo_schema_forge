@@ -38,7 +38,7 @@ const sections = [
 const filters = ['name', 'textPattern'];
 // @sf-generated-end fields:etgoMatchRuleHeader
 
-const breadcrumb = 'Finance / Accounts / Match Rule';
+const breadcrumb = 'Treasury / Accounts / Match Rule';
 const listModalConfig = {
   "titleKey": "matchRuleNewTitle",
   "editTitleKey": "matchRuleEditTitle",

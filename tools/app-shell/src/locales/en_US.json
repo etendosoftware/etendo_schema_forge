@@ -16266,6 +16266,9 @@
     "Finance": {
       "label": "Finance"
     },
+    "Treasury": {
+      "label": "Treasury"
+    },
     "General": {
       "label": "General"
     },
@@ -16712,6 +16715,8 @@
     "invoiceInboxSaveErrorAccess": "Your role cannot edit inbox documents.",
     "invoiceInboxSaveErrorGeneric": "The change could not be saved. The previous value was restored.",
     "invoiceInboxReviewProductMatchManual": "Chosen by you",
+    "invoiceInboxReviewProductMatchSuggested": "Chosen by OCR",
+    "invoiceInboxReviewProductMatchSuggestedSimilarity": "Chosen by OCR · {similarity}%",
     "invoiceInboxReviewVendorLinkedManual": "Chosen by you",
     "invoiceInboxReviewProductCategory": "Category",
     "invoiceInboxReviewProductUom": "Unit of measure",
@@ -17583,7 +17588,7 @@
     "forceAppRefresh": "Force app refresh",
     "newPayment": "New payment",
     "paymentRecordedLocally": "Payment recorded locally — it will sync when the endpoint is available",
-    "financeCollections": "Finance · Collections",
+    "treasuryCollections": "Treasury · Collections",
     "activity": "Activity",
     "closeActivityPanel": "Close activity panel",
     "paymentCreated": "Payment created",
@@ -19369,7 +19374,6 @@
     "statusPaymentMade": "Payment Made",
     "statusWithdrawnNotCleared": "Withdrawn not Cleared",
     "statusDepositedNotCleared": "Deposited not Cleared",
-    "financeMenuLabel": "Finances",
     "financeAccountsPageTitle": "Accounts",
     "financeAccountsSearchPlaceholder": "Search account…",
     "financeAccountsFilterAll": "All accounts",
@@ -20849,6 +20853,7 @@
     "barChartAria": "Monthly sales bar chart",
     "language": "Language",
     "logout": "Logout",
+    "cookieSettings": "Cookie settings",
     "onboardingLanguageSpanish": "Spanish",
     "onboardingLanguageEnglish": "English",
     "onboardingAuthFeatureNoCard": "No credit card",
@@ -20984,8 +20989,7 @@
     "onboardingMarketingConsent": "I agree to receive commercial communications and promotional material from Etendo by email.",
     "onboardingPhoneLabel": "Phone",
     "onboardingOptionalHint": "(optional)",
-    "onboardingPhonePrefixLabel": "Phone prefix",
-    "onboardingPhonePrefixPlaceholder": "Prefix",
+    "onboardingCountryPlaceholder": "Select",
     "onboardingPhonePlaceholder": "Phone number",
     "onboardingPhoneInvalid": "Enter a valid phone number.",
     "onboardingBusinessSectorLabel": "Business sector",
@@ -22750,6 +22754,7 @@
     "docNo": "Doc No",
     "documentNo": "Document No",
     "finance": "Finance",
+    "treasury": "Treasury",
     "settings": "Settings",
     "settingsDescription": "Manage your session context. Changing role or organization will re-authenticate your session.",
     "currentSession": "Current Session",
@@ -26842,7 +26847,9 @@
     "portalSearchAllPlaceholder": "Search quotations, orders, invoices…",
     "portalSearchNoResults": "No document matches your search.",
     "portalSearch": "Search",
-    "portalCreatedWith": "Built with etendo.ai",
+    "portalCreatedWith": "Built with Etendo",
+    "portalLearnMore": "Learn more",
+    "portalCreatedWithLinkLabel": "Built with Etendo · Learn more",
     "portalExpiredOnPrefix": "Expired on",
     "portalMore": "More",
     "portalPreviewLabel": "Document preview",
@@ -28140,6 +28147,9 @@
     },
     "Finance Reports": {
       "label": "Finance Reports"
+    },
+    "Treasury Reports": {
+      "label": "Treasury Reports"
     },
     "Production Management": {
       "label": "Production Management"
