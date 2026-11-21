@@ -164,8 +164,10 @@ vi.mock('../i18n/index.js', () => ({
   useUI: () => (key) => key,
 }));
 
+const mockLocale = vi.hoisted(() => ({ current: 'en_US' }));
+
 vi.mock('../i18n/useLocaleState.js', () => ({
-  useLocaleState: () => ['en_US', vi.fn()],
+  useLocaleState: () => [mockLocale.current, vi.fn()],
 }));
 
 vi.mock('../hooks/useServiceWorker.js', () => ({
@@ -209,6 +211,25 @@ describe('App', () => {
     // The runtime mock renders the `layout` prop it receives; App must pass
     // its own AppLayout so SideMenu/Favorites/CommandPalette/Copilot chrome survives.
     expect(screen.getByTestId('app-layout')).toBeInTheDocument();
+  });
+});
+
+describe('document language (ETP-6404)', () => {
+  afterEach(() => {
+    mockLocale.current = 'en_US';
+    document.documentElement.lang = '';
+  });
+
+  it('declares es-ES for the default locale', () => {
+    mockLocale.current = 'es_ES';
+    render(<App />);
+    expect(document.documentElement.lang).toBe('es-ES');
+  });
+
+  it('declares en-US when the locale is en_US', () => {
+    mockLocale.current = 'en_US';
+    render(<App />);
+    expect(document.documentElement.lang).toBe('en-US');
   });
 });
 
