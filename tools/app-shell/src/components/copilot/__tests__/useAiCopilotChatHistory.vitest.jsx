@@ -19,11 +19,12 @@ vi.mock('@ai-sdk/react', async () => {
       const [status, setStatus] = React.useState('ready');
       const [error, setError] = React.useState(undefined);
       globalThis.__chat = { setMessages, setStatus, setError };
+      const api = globalThis.__chatApi ??= { sendMessage: vi.fn() };
       return {
         messages, status, error, setMessages,
         stop: vi.fn(() => setStatus('ready')),
         clearError: () => setError(undefined),
-        sendMessage: vi.fn(), addToolOutput: vi.fn(), regenerate: vi.fn(),
+        sendMessage: api.sendMessage, addToolOutput: vi.fn(), regenerate: vi.fn(),
       };
     },
   };
@@ -303,5 +304,83 @@ describe('agent chat history', () => {
     expect(result.current.conversations).toEqual([]);
     expect(result.current.archivedConversations).toEqual([]);
     expect(result.current.error).toBe('');
+  });
+});
+
+describe('agent chat file attachments', () => {
+  const file = (name, size = 10, type = 'text/csv', content = 'a,b') => {
+    const f = new File([content], name, { type });
+    Object.defineProperty(f, 'size', { value: size });
+    return f;
+  };
+
+  it('queues supported files on the client and rejects bad extension or size', async () => {
+    const { result } = setup();
+    await act(async () => { result.current.actions.uploadFile(file('c.csv')); });
+    expect(result.current.files).toHaveLength(1);
+    await act(async () => { result.current.actions.uploadFile(file('a.pdf', 10, 'application/pdf')); });
+    expect(result.current.files).toHaveLength(1);
+    expect(result.current.error).toMatch(/Formato no soportado/);
+    await act(async () => { result.current.actions.uploadFile(file('big.xlsx', 600 * 1024)); });
+    expect(result.current.files).toHaveLength(1);
+    expect(result.current.error).toMatch(/demasiado grande/);
+    await act(async () => { result.current.actions.removeFile(0); });
+    expect(result.current.files).toHaveLength(0);
+  });
+
+  it('sends the queued files as file parts and empties the queue', async () => {
+    const { result } = setup();
+    await act(async () => { result.current.actions.uploadFile(file('c.csv')); });
+    await act(async () => { await result.current.actions.sendMessage('importa'); });
+    const chat = globalThis.__chatApi;
+    expect(chat.sendMessage).toHaveBeenCalledWith({
+      text: 'importa',
+      files: [expect.objectContaining({ type: 'file', mediaType: 'text/csv', filename: 'c.csv', url: expect.stringMatching(/^data:text\/csv/) })],
+    });
+    expect(result.current.files).toHaveLength(0);
+  });
+
+  it('rejects a file that would push the queue over the total limit', async () => {
+    const { result } = setup();
+    await act(async () => { result.current.actions.uploadFile(file('a.csv', 400 * 1024)); });
+    await act(async () => { result.current.actions.uploadFile(file('b.csv', 200 * 1024)); });
+    expect(result.current.files).toHaveLength(1);
+    expect(result.current.error).toMatch(/en total/);
+  });
+
+  it('rejects a known MIME type that is not tabular', async () => {
+    const { result } = setup();
+    await act(async () => { result.current.actions.uploadFile(file('a.csv', 10, 'application/pdf')); });
+    expect(result.current.files).toHaveLength(0);
+  });
+
+  it('dismissError clears a file error', async () => {
+    const { result } = setup();
+    await act(async () => { result.current.actions.uploadFile(file('a.pdf', 10, 'application/pdf')); });
+    expect(result.current.error).toBeTruthy();
+    await act(async () => { result.current.actions.dismissError(); });
+    expect(result.current.error).toBeFalsy();
+  });
+
+  it('keeps the queue and the text when a file cannot be read', async () => {
+    globalThis.__chatApi?.sendMessage.mockClear();
+    const { result } = setup();
+    await act(async () => { result.current.actions.uploadFile({ name: 'c.csv', size: 1, type: 'text/csv' }); });
+    await act(async () => { await result.current.actions.sendMessage('importa'); });
+    expect(result.current.files).toHaveLength(1);
+    expect(result.current.error).toMatch(/No se pudo leer/);
+    expect(globalThis.__chatApi.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ files: expect.anything() }));
+  });
+
+  it('replaces sent file parts with a note so later turns do not resend the data URL', async () => {
+    const { result } = setup();
+    await act(async () => { result.current.actions.uploadFile(file('c.csv')); });
+    await act(async () => {
+      globalThis.__chat.setMessages([{ id: 'u1', role: 'user', parts: [{ type: 'file', mediaType: 'text/csv', filename: 'c.csv', url: 'data:text/csv;base64,YSxi' }, text('importa')] }]);
+    });
+    await act(async () => { await result.current.actions.sendMessage('importa'); });
+    const payload = JSON.stringify(result.current.messages);
+    expect(payload).not.toContain('data:');
+    expect(result.current.messages[0]).toEqual({ id: 'u1', role: 'user', text: 'importa', files: [{ name: 'c.csv' }] });
   });
 });
