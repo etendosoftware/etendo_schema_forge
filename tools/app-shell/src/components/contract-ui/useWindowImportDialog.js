@@ -225,6 +225,7 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
       // kind of skip that records no reason of its own.
       skippedByUser: ui('importSkippedByUser'),
       unskip: ui('importUnskip'),
+      addRow: ui('importAddRow'),
       downloadErrors: ui('importDownloadErrors'),
       status: ui('importStatus'),
       statusOk: ui('importStatusOk'),
