@@ -214,9 +214,26 @@ export function browserTools() {
       description: [
         'Inspect the current Etendo page from the browser.',
         'Returns a compact accessibility-oriented list of visible interactive elements with temporary elementId values.',
+        'It also lists form fields, read-only ones included, each with a stable fieldKey, kind "field" and a label; prefer that fieldKey for highlight_element.',
         'Call this before interacting with a page element. Sensitive field values are not included.',
       ].join(' '),
       inputSchema: z.object({}),
+    }),
+    highlight_element: tool({
+      description: [
+        'Point at ONE element on the current Etendo page and explain it to the user, tutorial style.',
+        'This tool only draws a highlight and shows your note next to the element: it never clicks, focuses, types or changes any value.',
+        'Prefer fieldKey (a stable form field key reported by inspect_page_dom) over elementId, because a fieldKey survives a re-render.',
+        'Use elementId from inspect_page_dom for anything that is not a form field, such as a button or a tab.',
+        'Highlight one element per call; to walk the user through several elements, call this tool again — each call replaces the previous highlight.',
+        'Put the explanation in note, written for the user in the language of the conversation. Password fields cannot be highlighted.',
+      ].join(' '),
+      inputSchema: z.object({
+        fieldKey: z.string().min(1).optional(),
+        elementId: z.string().min(1).optional(),
+        note: z.string().optional(),
+        durationMs: z.number().int().positive().optional(),
+      }),
     }),
     interact_with_page: tool({
       description: [
@@ -351,6 +368,15 @@ export async function handleChat(req, res) {
       },
       onError: ({ error }) => {
         console.error('[ai-bff] model stream error:', error instanceof Error ? error.stack : error);
+        // An AI_APICallError wraps the upstream status in a generic "Provider
+        // returned error". Log only the URL and status code: the response body
+        // can echo conversation content, so it is deliberately never written.
+        if (error && typeof error === 'object' && 'responseBody' in error) {
+          console.error('[ai-bff] provider response:', {
+            url: error.url,
+            statusCode: error.statusCode,
+          });
+        }
         usage.fail();
       },
       onAbort: event => usage.abort(event),

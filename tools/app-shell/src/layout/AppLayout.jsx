@@ -28,6 +28,8 @@ import { useEnvironmentListFreshness } from '@/hooks/useEnvironmentListFreshness
 import { CommandPalette } from '@/components/CommandPalette.jsx';
 import { GlobalSearchProvider } from '@/components/global-search/GlobalSearchContext.jsx';
 import { CopilotProvider } from '@/components/CopilotContext';
+import { HighlightProvider } from '@/components/copilot/highlight/HighlightContext.jsx';
+import { HighlightOverlay } from '@/components/copilot/highlight/HighlightOverlay.jsx';
 import { CopilotWidget } from '@/components/CopilotWidget';
 import { CurrentWindowProvider } from '@/components/CurrentWindowContext';
 import { FirstStepsProvider, useFirstStepsProgressOptional }
@@ -845,6 +847,9 @@ function AppLayoutAccessGate({ menuGroups }) {
   return (
     <GlobalSearchProvider>
       <CurrentWindowProvider data-testid="CurrentWindowProvider__488148">
+      {/* Above CopilotProvider on purpose: useAiCopilotChat calls useHighlight()
+          from inside it, so the highlight state must already exist here. */}
+      <HighlightProvider data-testid="HighlightProvider__488148">
       <CopilotProvider menuGroups={filteredMenuGroups} data-testid="CopilotProvider__488148">
         <SupportChatProvider data-testid="SupportChatProvider__488148">
           <FavoritesProvider data-testid="FavoritesProvider__488148">
@@ -870,6 +875,8 @@ function AppLayoutAccessGate({ menuGroups }) {
           </FavoritesProvider>
         </SupportChatProvider>
       </CopilotProvider>
+      <HighlightOverlay data-testid="HighlightOverlay__488148" />
+      </HighlightProvider>
       </CurrentWindowProvider>
     </GlobalSearchProvider>
   );
