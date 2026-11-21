@@ -503,3 +503,15 @@ describe('getContactsTaxIdError — passport branch (type 3)', () => {
     assert.equal(getContactsTaxIdError('contacts', TAX_ID_FIELD, '12345678A', passportRecord()), null);
   });
 });
+
+describe('getContactsTextFieldError — contract-declared length wins (ETP-4557)', () => {
+  it('does not apply the table length when the field declares maxLength (the engine decides)', () => {
+    const over = 'x'.repeat(CONTACTS_TEXT_FIELD_LIMITS.name + 1);
+    assert.equal(getContactsTextFieldError('contacts', { key: 'name', maxLength: 255 }, over), null);
+    assert.equal(getContactsTextFieldError('contacts', { key: 'name', validation: { maxLength: 255 } }, over), null);
+  });
+  it('still applies the unsafe-character guard when the length is declared', () => {
+    assert.deepEqual(getContactsTextFieldError('contacts', { key: 'name', maxLength: 60 }, '<b>'),
+      { key: 'fieldInvalidCharacters', params: {} });
+  });
+});

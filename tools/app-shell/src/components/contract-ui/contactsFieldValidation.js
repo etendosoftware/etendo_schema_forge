@@ -99,7 +99,11 @@ export function getContactsTextFieldError(windowName, field, value) {
   const s = String(value ?? '');
   if (s === '') return null;
 
-  if (s.length > limit) {
+  // ETP-4557: when the contract declares the length (flat `maxLength` or `validation.maxLength`),
+  // the shared engine decides it in every flow; this table only covers fields whose contract is
+  // silent, so form, grid and import cannot disagree on the same value.
+  const declaresLength = field?.maxLength != null || field?.validation?.maxLength != null;
+  if (!declaresLength && s.length > limit) {
     return { key: 'fieldMaxLengthError', params: { maxLength: limit } };
   }
   if (hasUnsafeChars(s)) {

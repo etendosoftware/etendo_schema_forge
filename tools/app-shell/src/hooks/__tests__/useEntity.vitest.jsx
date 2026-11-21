@@ -1226,7 +1226,7 @@ describe('useEntity', () => {
       return result;
     }
 
-    it('blocks the save and toasts (toast-only, NO inline error) for a non-empty invalid email', async () => {
+    it('blocks the save, toasts and sets the inline error for a non-empty invalid email', async () => {
       const result = await setupNewWithEmailField();
       const { toast } = await import('sonner');
       toast.error.mockClear();
@@ -1236,9 +1236,9 @@ describe('useEntity', () => {
       await act(async () => { saved = await result.current.handleSave(); });
 
       expect(saved).toBeNull();
-      // Toast is the single signal — no inline fieldError under the email field.
-      expect(result.current.fieldErrors.etgoEmail).toBeUndefined();
-      expect(toast.error).toHaveBeenCalledWith('sendModalInvalidEmail');
+      // ETP-4557: toast is the summary, the inline error sits under the offending input.
+      expect(result.current.fieldErrors.etgoEmail).toBe('sendModalInvalidEmail');
+      expect(toast.error).toHaveBeenCalledWith('sendModalInvalidEmail', { id: 'core-field-etgoEmail' });
       // No POST was attempted.
       expect(globalThis.fetch.mock.calls.some(c => c[1]?.method === 'POST')).toBe(false);
     });
@@ -1256,18 +1256,17 @@ describe('useEntity', () => {
       expect(globalThis.fetch.mock.calls.some(c => c[1]?.method === 'POST')).toBe(true);
     });
 
-    it('never populates an inline fieldError for an invalid email (toast-only), even across changes', async () => {
+    it('sets the inline error on a blocked save and clears it on the next change', async () => {
       const result = await setupNewWithEmailField();
       const { toast } = await import('sonner');
       toast.error.mockClear();
-      // A blocked save toasts but must NOT set an inline error under the field.
+      // A blocked save toasts AND sets the inline error under the field (ETP-4557).
       act(() => { result.current.handleChange('etgoEmail', 'bad'); });
       await act(async () => { await result.current.handleSave(); });
-      expect(result.current.fieldErrors.etgoEmail).toBeUndefined();
-      expect(result.current.fieldErrors).toEqual({});
-      expect(toast.error).toHaveBeenCalledWith('sendModalInvalidEmail');
+      expect(result.current.fieldErrors).toEqual({ etgoEmail: 'sendModalInvalidEmail' });
+      expect(toast.error).toHaveBeenCalledWith('sendModalInvalidEmail', { id: 'core-field-etgoEmail' });
 
-      // Still invalid after another change → still no inline error.
+      // Touching the field clears its inline error; the next save re-validates.
       act(() => { result.current.handleChange('etgoEmail', 'still-bad'); });
       expect(result.current.fieldErrors.etgoEmail).toBeUndefined();
     });
@@ -1307,7 +1306,7 @@ describe('useEntity', () => {
       return result;
     }
 
-    it('blocks the save and toasts (toast-only, NO inline error) for a non-https website', async () => {
+    it('blocks the save, toasts and sets the inline error for a non-https website', async () => {
       const result = await setupNewWithWebField();
       const { toast } = await import('sonner');
       toast.error.mockClear();
@@ -1317,8 +1316,8 @@ describe('useEntity', () => {
       await act(async () => { saved = await result.current.handleSave(); });
 
       expect(saved).toBeNull();
-      expect(result.current.fieldErrors.etgoWeb).toBeUndefined();
-      expect(toast.error).toHaveBeenCalledWith('websiteInsecureUrl');
+      expect(result.current.fieldErrors.etgoWeb).toBe('websiteInsecureUrl');
+      expect(toast.error).toHaveBeenCalledWith('websiteInsecureUrl', { id: 'core-field-etgoWeb' });
       expect(globalThis.fetch.mock.calls.some(c => c[1]?.method === 'POST')).toBe(false);
     });
 
@@ -1368,7 +1367,7 @@ describe('useEntity', () => {
       return result;
     }
 
-    it('blocks the save and toasts (toast-only, NO inline error) for an invalid phone', async () => {
+    it('blocks the save, toasts and sets the inline error for an invalid phone', async () => {
       const result = await setupNewWithPhoneField();
       const { toast } = await import('sonner');
       toast.error.mockClear();
@@ -1378,8 +1377,8 @@ describe('useEntity', () => {
       await act(async () => { saved = await result.current.handleSave(); });
 
       expect(saved).toBeNull();
-      expect(result.current.fieldErrors.etgoPhone).toBeUndefined();
-      expect(toast.error).toHaveBeenCalledWith('phoneInvalidChars');
+      expect(result.current.fieldErrors.etgoPhone).toBe('phoneInvalidChars');
+      expect(toast.error).toHaveBeenCalledWith('phoneInvalidChars', { id: 'core-field-etgoPhone' });
       expect(globalThis.fetch.mock.calls.some(c => c[1]?.method === 'POST')).toBe(false);
     });
 
@@ -1460,7 +1459,7 @@ describe('useEntity', () => {
       await act(async () => { saved = await result.current.handleSave(); });
 
       expect(saved).toBeNull();
-      expect(toast.error).toHaveBeenCalledWith('phoneInvalidChars');
+      expect(toast.error).toHaveBeenCalledWith('phoneInvalidChars', { id: 'core-field-etgoPhone' });
       expect(globalThis.fetch.mock.calls.some(c => c[1]?.method === 'PATCH')).toBe(false);
     });
   });

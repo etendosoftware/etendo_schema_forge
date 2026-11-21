@@ -24,6 +24,7 @@ export function isValidEmailAddress(value) {
 // future editable exposure of one can never block a save by mis-validating it.
 const EMAIL_CREDENTIAL_RE = /email_?(user(name)?|pw|password)/i;
 
+/** @deprecated ETP-4557 — name heuristic; validation now runs through lib/coreValidation.js. */
 export function isEmailField(field) {
   if (!field) return false;
   if (field.type === 'email') return true;
@@ -108,6 +109,7 @@ export function isSecureUrl(value) {
 // key/column contains a 'website'/'homepage'/'url'/'web' token (camelCase or
 // snake_case boundary) — so etgoWeb / EM_Etgo_Web / URL match, but 'webhook' and
 // similar substrings do not. Text-like inputs only (mirrors isEmailField).
+/** @deprecated ETP-4557 — name heuristic; validation now runs through lib/coreValidation.js. */
 export function isWebsiteField(field) {
   if (!field) return false;
   if (field.type === 'url') return true;
@@ -150,6 +152,7 @@ export function isValidPhone(value) {
 // (case-insensitive). "phone" is distinctive enough to match as a substring (it
 // covers etgoPhone / EM_Etgo_Phone / phone / alternativePhone) without the short-
 // token false positives that "web" had. Text-like inputs only (mirrors isEmailField).
+/** @deprecated ETP-4557 — name heuristic; validation now runs through lib/coreValidation.js. */
 export function isPhoneField(field) {
   if (!field) return false;
   const textLike = field.type == null || field.type === 'text' || field.type === 'string' || field.type === 'textarea' || field.type === 'tel';
