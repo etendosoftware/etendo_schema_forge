@@ -34,6 +34,7 @@ import { ThemeProvider } from 'next-themes';
 import { Toaster } from 'sonner';
 import { IconContext } from '@phosphor-icons/react';
 import App from './App.jsx';
+import { ErrorBoundary, StaticErrorPage } from './components/errors/ErrorBoundary.jsx';
 import { ICON_DEFAULTS } from './lib/iconDefaults.js';
 import './index.css';
 
@@ -52,7 +53,11 @@ createRoot(document.getElementById('root')).render(
         rail opts into Fill itself), and 24px for an icon that sets no size of its own, so
         it keeps the footprint it had before the migration from lucide. */}
     <IconContext.Provider value={ICON_DEFAULTS}>
-      <App data-testid="App__bc6e1f" />
+      <ErrorBoundary
+        fallback={<StaticErrorPage data-testid="StaticErrorPage__bc6e1f" />}
+        data-testid="ErrorBoundary__bc6e1f">
+        <App data-testid="App__bc6e1f" />
+      </ErrorBoundary>
       <Toaster
         position="bottom-right"
         richColors

@@ -11,6 +11,7 @@ import {
   trackWalkthroughStarted,
 } from '@/lib/walkthrough/walkthrough-events.js';
 import AppLayout from './layout/AppLayout.jsx';
+import { NotFoundPage } from './components/errors/NotFoundPage.jsx';
 import { buildMenuGroups, buildWindowMap } from './windows/registry.js';
 import { buildRuntimeRoutes } from './runtime-routes.jsx';
 import { createMockFetch } from './lib/mockFetch.js';
@@ -481,6 +482,10 @@ export default function App() {
   // The message is resolved when the error is built, which is always after a request settles,
   // so this effect is in place before any request of the same commit can fail.
   useEffect(() => installErrorTranslator(dictionaries[renderedLocale]), [dictionaries, renderedLocale]);
+  // ETP-5792 — index.html ships lang="en"; keep the document language (BCP 47, e.g. es-ES) in step with the UI locale.
+  useEffect(() => {
+    document.documentElement.lang = String(renderedLocale || 'en_US').replace('_', '-');
+  }, [renderedLocale]);
 
   // ETP-5022 — changing the language must reload the page. Translated reference data
   // (country names, UoMs, AD_Ref_List labels) is resolved server-side from the request's
@@ -547,7 +552,7 @@ export default function App() {
         locale={renderedLocale}
         setLocale={guardedSetLocale}
         dictionaries={dictionaries}
-        notFoundElement={<div className="p-8 text-muted-foreground">Loading...</div>}
+        notFoundElement={<NotFoundPage data-testid="NotFoundPage__ecaf3f" />}
         data-testid="AppShellRuntime__ecaf3f">
         <ObservabilityRouteTracker data-testid="ObservabilityRouteTracker__ecaf3f" />
         <ListStateRouteGuard data-testid="ListStateRouteGuard__ecaf3f" />

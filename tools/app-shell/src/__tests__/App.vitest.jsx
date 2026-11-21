@@ -30,13 +30,14 @@ vi.mock('sonner', () => ({
 vi.mock('@etendosoftware/app-shell-core/runtime', async () => {
   const { MemoryRouter } = await import('react-router-dom');
   return {
-    AppShellRuntime: ({ children, layout: Layout, menuGroups, auth }) => {
+    AppShellRuntime: ({ children, layout: Layout, menuGroups, auth, notFoundElement }) => {
       runtimeSession.onSessionChange = auth?.onSessionChange;
       return (
         <MemoryRouter>
           <div data-testid="app-shell-runtime">
             {children}
             {Layout && <Layout menuGroups={menuGroups} />}
+            <div data-testid="not-found-slot">{notFoundElement}</div>
           </div>
         </MemoryRouter>
       );
@@ -164,8 +165,9 @@ vi.mock('../i18n/index.js', () => ({
   useUI: () => (key) => key,
 }));
 
+const mockLocale = vi.hoisted(() => ({ value: 'en_US' }));
 vi.mock('../i18n/useLocaleState.js', () => ({
-  useLocaleState: () => ['en_US', vi.fn()],
+  useLocaleState: () => [mockLocale.value, vi.fn()],
 }));
 
 vi.mock('../hooks/useServiceWorker.js', () => ({
@@ -193,7 +195,7 @@ vi.mock('../lib/observability/RouteTracker.jsx', () => ({
   ObservabilityRouteTracker: () => null,
 }));
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import App, { fetchWindowAccess, __resetMenuAccessCacheForTest } from '../App.jsx';
 import { MENU_ACCESS_UNREACHABLE } from '../lib/menuTree.js';
 
@@ -209,6 +211,27 @@ describe('App', () => {
     // The runtime mock renders the `layout` prop it receives; App must pass
     // its own AppLayout so SideMenu/Favorites/CommandPalette/Copilot chrome survives.
     expect(screen.getByTestId('app-layout')).toBeInTheDocument();
+  });
+
+  // ETP-5792 — index.html ships lang="en"; the document language must follow the UI locale.
+  it.each([['en_US', 'en-US'], ['es_ES', 'es-ES'], ['es_AR', 'es-AR']])(
+    'sets <html lang> from the %s locale as %s',
+    (locale, tag) => {
+      mockLocale.value = locale;
+      document.documentElement.lang = 'en';
+      render(<App />);
+      expect(document.documentElement.lang).toBe(tag);
+      mockLocale.value = 'en_US';
+    },
+  );
+
+  // ETP-5792 — unknown routes get a real, translated 404 instead of a hardcoded "Loading...".
+  it('passes the translated NotFoundPage as notFoundElement', () => {
+    render(<App />);
+    const slot = screen.getByTestId('not-found-slot');
+    expect(within(slot).getByTestId('NotFoundPage__5792')).toBeInTheDocument();
+    expect(slot.textContent).toContain('pageNotFoundTitle');
+    expect(slot.textContent).not.toContain('Loading...');
   });
 });
 
