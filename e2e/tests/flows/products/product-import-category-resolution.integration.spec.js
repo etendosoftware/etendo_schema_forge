@@ -176,9 +176,7 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
       fullPage: true,
     });
 
-    await page.getByTestId('ImportDialog__importButton').click();
-    await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
-    await expect(page.getByTestId('ImportConfirmStep__importCount')).toContainText('6');
+    await expect(page.getByTestId('ImportDialog__rowSummary')).toContainText('6');
     await captureScreenshot(page, {
       path: resolve(evidenceDir, 'ETP-4905-product-import-tomcat-multi-confirm.png'),
       fullPage: true,
@@ -193,7 +191,7 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
         && response.url().includes('/sws/neo/batch'),
       { timeout: 30_000 },
     );
-    await page.getByTestId('ImportConfirmStep__confirm').click();
+    await page.getByTestId('ImportDialog__importButton').click();
     const [categoryResponse, batchResponse] = await Promise.all([categoryResponsePromise, batchResponsePromise]);
     expect(categoryResponse.status()).toBeLessThan(300);
     expect(batchResponse.status()).toBeLessThan(300);

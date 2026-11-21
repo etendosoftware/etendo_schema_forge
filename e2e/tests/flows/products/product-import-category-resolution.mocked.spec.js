@@ -102,11 +102,9 @@ test('keeps invalid rows out of the batch and allows valid rows to continue', as
     .toContainText(/precio|price|number|número/i);
   await page.getByTestId('ImportReviewQueue__statusFilter-ok').click();
 
+  await expect(page.getByTestId('ImportDialog__rowSummary')).toContainText('2');
   await page.getByTestId('ImportDialog__importButton').click();
-  await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
   // Two, not three — the invalid price never enters the batch.
-  await expect(page.getByTestId('ImportConfirmStep__importCount')).toContainText('2');
-  await page.getByTestId('ImportConfirmStep__confirm').click();
 
   // AMBIG-4905 still needs the send to fail: its category carries no matchEntity, so it is
   // only resolved server-side. The review queue is rebuilt from the send results here, so

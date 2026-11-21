@@ -196,11 +196,9 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
       .toContainText(/categoria\s*→\s*(Categoría de contacto|Contact Category)/);
     await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-review.png'), fullPage: true });
 
+    await expect(page.getByTestId('ImportDialog__rowSummary')).toContainText('5');
     await page.getByTestId('ImportDialog__importButton').click();
-    await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
-    await expect(page.getByTestId('ImportConfirmStep__importCount')).toContainText('5');
     await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-confirm.png'), fullPage: true });
-    await page.getByTestId('ImportConfirmStep__confirm').click();
 
     // The two rows naming the unknown category fail on their own row, telling the user to
     // create it first — and nothing tries to create it.
@@ -326,8 +324,6 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
 
       await expect(page.getByTestId('ImportDialog__importButton')).toContainText(`Importar ${rows.length}`);
       await page.getByTestId('ImportDialog__importButton').click();
-      await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
-      await page.getByTestId('ImportConfirmStep__confirm').click();
 
       // Resolve each imported contact through the backend by its taxID — the window's own dedupe
       // key, queried with the same `criteria=` list request the import's existing-record lookup
