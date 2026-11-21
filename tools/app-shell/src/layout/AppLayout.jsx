@@ -646,7 +646,9 @@ function AppLayoutInner({ menuGroups, embedded, reportAccess = null }) {
             >
               <div className="flex-1 flex flex-col min-h-0 bg-card rounded-xl border border-border/30 overflow-hidden">
                 {/* ETP-5792 — the surrounding <main key> remounts this on navigation, clearing a caught error. */}
-                <ErrorBoundary fallback={<ErrorPage />}>
+                <ErrorBoundary
+                  fallback={<ErrorPage data-testid="ErrorPage__488148" />}
+                  data-testid="ErrorBoundary__488148">
                   <Outlet data-testid="Outlet__488148" />
                 </ErrorBoundary>
               </div>

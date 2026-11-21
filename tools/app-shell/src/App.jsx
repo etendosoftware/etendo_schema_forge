@@ -552,7 +552,7 @@ export default function App() {
         locale={renderedLocale}
         setLocale={guardedSetLocale}
         dictionaries={dictionaries}
-        notFoundElement={<NotFoundPage />}
+        notFoundElement={<NotFoundPage data-testid="NotFoundPage__ecaf3f" />}
         data-testid="AppShellRuntime__ecaf3f">
         <ObservabilityRouteTracker data-testid="ObservabilityRouteTracker__ecaf3f" />
         <ListStateRouteGuard data-testid="ListStateRouteGuard__ecaf3f" />

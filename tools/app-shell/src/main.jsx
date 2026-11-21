@@ -53,7 +53,9 @@ createRoot(document.getElementById('root')).render(
         rail opts into Fill itself), and 24px for an icon that sets no size of its own, so
         it keeps the footprint it had before the migration from lucide. */}
     <IconContext.Provider value={ICON_DEFAULTS}>
-      <ErrorBoundary fallback={<StaticErrorPage />}>
+      <ErrorBoundary
+        fallback={<StaticErrorPage data-testid="StaticErrorPage__bc6e1f" />}
+        data-testid="ErrorBoundary__bc6e1f">
         <App data-testid="App__bc6e1f" />
       </ErrorBoundary>
       <Toaster
