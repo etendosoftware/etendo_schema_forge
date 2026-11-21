@@ -13,7 +13,8 @@ import {
   resolveWindowSearchSuggestions,
 } from '@/lib/vectorSearchConfig.js';
 import { rankVectorMatches } from '@/lib/vectorSearchRanking.js';
-import { filterMenuGroups, splitSearchHighlight } from '@/lib/globalSearchMenu.js';
+import { filterMenuGroups, isSearchableMenuItem, splitSearchHighlight } from '@/lib/globalSearchMenu.js';
+import { hasAccessibleReportInGroup } from '@/windows/registry.js';
 import {
   GlobalSearchDialog as CommandDialog,
   GlobalSearchEmpty as CommandEmpty,
@@ -27,29 +28,31 @@ import { useSupportSession } from '@/hooks/useSupportSession.js';
 import { isSupportRestrictedMenuItem } from '@/lib/supportSession.js';
 
 import {
-  LayoutDashboard,
-  ShoppingCart,
-  Truck,
-  Calculator,
-  Package,
-  Users,
-  FolderKanban,
-  Settings,
-  Search,
-  X,
-  Clock3,
-  Sparkles,
-} from 'lucide-react';
+  SquaresFourIcon,
+  ShoppingCartIcon,
+  TruckIcon,
+  CalculatorIcon,
+  PackageIcon,
+  UsersIcon,
+  KanbanIcon,
+  GearIcon,
+  MagnifyingGlassIcon,
+  XIcon,
+  ClockIcon,
+  SparkleIcon,
+  WalletIcon,
+} from '@phosphor-icons/react';
 
 const ICON_MAP = {
-  LayoutDashboard,
-  ShoppingCart,
-  Truck,
-  Calculator,
-  Package,
-  Users,
-  FolderKanban,
-  Settings,
+  LayoutDashboard: SquaresFourIcon,
+  ShoppingCart: ShoppingCartIcon,
+  Truck: TruckIcon,
+  Calculator: CalculatorIcon,
+  Package: PackageIcon,
+  Users: UsersIcon,
+  FolderKanban: KanbanIcon,
+  Settings: GearIcon,
+  Wallet: WalletIcon,
 };
 
 function HighlightedQuery({ text, query }) {
@@ -76,7 +79,14 @@ function resolveVectorSearchScopeLabel(selectedTargets, tMenu, ui) {
   return ui('allWindows');
 }
 
-export function CommandPalette() {
+/**
+ * @param {{reportAccess?: Record<string, string>|null}} props
+ *   `reportAccess` — the caller's per-report grants (id -> tier, from `fetchMyReportAccess()`,
+ *   owned by AppLayout). Gates the hidden report rows listed while searching and the
+ *   `requiresGroupReport` links, the same way the sidebar does (ETP-6389). `null`/omitted fails
+ *   closed for both; admins/client-admins bypass.
+ */
+export function CommandPalette({ reportAccess = null } = {}) {
   const { open, setOpen, query, setQuery, registerKeyboardHandler } = useGlobalSearch();
   const { recentSearches, addRecentSearch } = useRecentSearches();
   const [keyboardIndex, setKeyboardIndex] = useState(-1);
@@ -325,9 +335,11 @@ export function CommandPalette() {
     setSelectedVectorTargetKeys([currentWindowVectorTarget.target]);
   }, [currentWindowVectorTarget, open, scopeOverrideTargets]);
 
-  const handleSelect = (name) => {
+  // `path` wins over `name`: a report-category link (`report-viewer?category=…`) or a report row
+  // (`report-viewer?category=…&report=…`) is not a route of its own name (ETP-6389).
+  const handleSelect = (item) => {
     setQuery('');
-    navigate(`/${name}`);
+    navigate(`/${item.path || item.name}`);
     setOpen(false);
   };
 
@@ -375,11 +387,18 @@ export function CommandPalette() {
     [PROOF_OF_CONCEPT_MENU]: proofOfConceptMenuEnabled,
     [UNIFIED_CALENDAR_POC]: unifiedCalendarPocEnabled,
   };
+  const isAdminOrClientAdmin = capabilities?.isAdminOrClientAdmin === true;
+  // ETP-6389 — report rows are listed only while searching, and only those the caller may open.
+  const searchableItemOptions = {
+    includeReports: query.trim().length > 0,
+    canOpenReport: (reportId) => isAdminOrClientAdmin || reportAccess?.[reportId] !== undefined,
+  };
   const visibleMenuGroups = menuConfig.menu
     .filter((group) => !group.hidden)
     .map((group) => ({
       ...group,
-      items: group.items.filter((i) => !i.hidden
+      items: group.items.filter((i) => isSearchableMenuItem(i, searchableItemOptions)
+        && (!i.requiresGroupReport || isAdminOrClientAdmin || hasAccessibleReportInGroup(group.group, reportAccess))
         && (!i.featureFlag || featureFlagValues[i.featureFlag] === true)
         && (!i.capability || capabilities?.[i.capability] === true)
         && !(isSupportMode && isSupportRestrictedMenuItem(i))),
@@ -408,9 +427,8 @@ export function CommandPalette() {
         onSelect={() => handleVectorSelect(match)}
         data-testid="vector-search-result"
       >
-        <Search
+        <MagnifyingGlassIcon
           className="mr-2 h-4 w-4 shrink-0"
-          strokeWidth={2}
           data-testid="Search__73263e" />
         <span className="min-w-0 flex-1 break-words" data-testid="vector-search-result-label"><HighlightedQuery text={label} query={query} data-testid="HighlightedQuery__73263e" /></span>
         {entityLabel && <span className="ml-auto shrink-0 whitespace-nowrap rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground" data-testid="vector-search-result-tag">{entityLabel}</span>}
@@ -432,7 +450,7 @@ export function CommandPalette() {
             data-testid="vector-search-scope"
           >
             <span className="truncate">{vectorSearchScopeLabel}</span>
-            <X className="h-3 w-3 shrink-0" aria-hidden="true" data-testid="X__73263e" />
+            <XIcon className="h-3 w-3 shrink-0" aria-hidden="true" data-testid="X__73263e" />
           </button>
           {/* Portaled (Radix) so the cmdk-root's overflow-hidden — the dialog is only as wide and
               as tall as the search box and its results — can never clip it; Radix flips/shifts it
@@ -509,7 +527,7 @@ export function CommandPalette() {
                     data-testid="recent-search-item"
                     data-search-kind="recent"
                   >
-                    <Clock3
+                    <ClockIcon
                       className="mr-2 h-4 w-4 text-muted-foreground"
                       data-testid="Clock3__73263e" />
                     <span>{item.query}</span>
@@ -540,7 +558,7 @@ export function CommandPalette() {
                   }}
                   data-testid="window-filter-suggestion"
                 >
-                  <Sparkles
+                  <SparkleIcon
                     className="mr-2 h-4 w-4 text-muted-foreground"
                     data-testid="Sparkles__73263e" />
                   <span>{ui(suggestion.label) || tMenu(suggestion.label) || suggestion.label}</span>
@@ -555,7 +573,7 @@ export function CommandPalette() {
           </CommandGroup>
         )}
         {matchingMenuGroups.map((group) => {
-          const Icon = ICON_MAP[group.icon] || Package;
+          const Icon = ICON_MAP[group.icon] || PackageIcon;
           return (
             <CommandGroup
               key={`${group.tier ?? 0}:${group.group}`}
@@ -567,7 +585,7 @@ export function CommandPalette() {
                   <CommandItem
                     key={item.name}
                     value={`${translatedLabel} ${item.label} ${item.name}`}
-                    onSelect={() => handleSelect(item.name)}
+                    onSelect={() => handleSelect(item)}
                     data-testid="CommandItem__73263e">
                     <Icon className="mr-2 h-4 w-4" data-testid="Icon__73263e" />
                     <span><HighlightedQuery

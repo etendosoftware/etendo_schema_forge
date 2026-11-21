@@ -16,6 +16,7 @@ import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { todayCalendarISO } from '@/lib/dateOnly.js';
 import { PeriodRecoveryLink } from '@/components/contract-ui/PeriodRecoveryLink.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { isCompletedStatus, isDraftStatus } from '@/lib/docStatus.js';
 import { useInvoiceSifStep, InvoiceSifStepPanel, withSifFields, SIF_STEP_DIALOG_WIDTH } from '@/windows/custom/shared/InvoiceSifStep.jsx';
 
 export { ConfirmResultModal as PoConfirmResultModal };
@@ -58,8 +59,8 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   const [confirmedTitle, setConfirmedTitle] = useState(null); // null = "PO confirmed", string = custom title
 
   const status      = data?.documentStatus;
-  const isDraft     = status === 'DR';
-  const isCompleted = status === 'CO';
+  const isDraft     = isDraftStatus(status);
+  const isCompleted = isCompletedStatus(status);
 
   const base    = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
@@ -236,10 +237,10 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   if (isCompleted && fetched) {
     const { receipts, invoices, orderLines } = fetched;
 
-    const receiptsDraft    = receipts.filter(r => r.documentStatus === 'DR');
-    const receiptsComplete = receipts.filter(r => r.documentStatus === 'CO');
-    const invoiceDraft     = invoices.find(i => i.documentStatus === 'DR') ?? null;
-    const invoicesComplete = invoices.filter(i => i.documentStatus === 'CO');
+    const receiptsDraft    = receipts.filter(r => isDraftStatus(r.documentStatus));
+    const receiptsComplete = receipts.filter(r => isCompletedStatus(r.documentStatus));
+    const invoiceDraft     = invoices.find(i => isDraftStatus(i.documentStatus)) ?? null;
+    const invoicesComplete = invoices.filter(i => isCompletedStatus(i.documentStatus));
 
     const qtyOrdered   = orderLines.reduce((s, l) => s + (Number(l.orderedQuantity)   || 0), 0);
     const qtyDelivered = orderLines.reduce((s, l) => s + (Number(l.deliveredQuantity) || 0), 0);
@@ -391,7 +392,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
   // the server totals are pre-discount and we show the user what the totals WILL be
   // once the order is completed. After CO the totals already reflect the discount.
   const discountPct    = Number(d.etgoTotalDiscount ?? 0);
-  const isPreCompletion = d.documentStatus === 'DR';
+  const isPreCompletion = isDraftStatus(d.documentStatus);
   const discountFactor = (isPreCompletion && discountPct > 0) ? (1 - discountPct / 100) : 1;
   // Same accounting rule as DocumentTotalsPanel: the displayed total must equal
   // round(net × factor) + round(tax × factor), not round(gross × factor).
@@ -444,9 +445,11 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
     // If this fails the order is still in DR, so the rest of the flow makes no sense.
     if (!orderConfirmed) {
       try {
+        // ETP-5424 — synchronous document process: opt out of the default timeout, a cut-off
+        // completion that still commits server-side invites a double submit.
         const processRes = await apiFetch(
           `${orderUrl}/${orderId}/action/documentAction`,
-          { method: 'POST', body: JSON.stringify({ docAction: 'CO' }) },
+          { method: 'POST', body: JSON.stringify({ docAction: 'CO' }), timeout: 0 },
         );
         if (!processRes.ok) {
           const e = await processRes.json().catch(() => null);
@@ -501,7 +504,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
     if (createInvoice && !invoiceResult) {
       try {
         const res = await apiFetch(`${orderUrl}/${orderId}/action/createPurchaseInvoice`,
-          { method: 'POST', body: JSON.stringify(withSifFields({}, sif)) });
+          { method: 'POST', body: JSON.stringify(withSifFields({}, sif)), timeout: 0 });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           // ETP-5381: mirrors the sales twin — this was the only branch here not translating the
@@ -1075,10 +1078,10 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   // then saw a different number of hooks between renders ("Rendered more hooks than during the
   // previous render") and unmounted the entire app (no ErrorBoundary anywhere catches it).
   const { receipts, invoices, orderLines } = fetched ?? { receipts: [], invoices: [], orderLines: [] };
-  const receiptsDraft    = receipts.filter(r => r.documentStatus === 'DR');
-  const receiptsComplete = receipts.filter(r => r.documentStatus === 'CO');
-  const invoiceDraft     = invoices.find(i => i.documentStatus === 'DR') ?? null;
-  const invoicesComplete = invoices.filter(i => i.documentStatus === 'CO');
+  const receiptsDraft    = receipts.filter(r => isDraftStatus(r.documentStatus));
+  const receiptsComplete = receipts.filter(r => isCompletedStatus(r.documentStatus));
+  const invoiceDraft     = invoices.find(i => isDraftStatus(i.documentStatus)) ?? null;
+  const invoicesComplete = invoices.filter(i => isCompletedStatus(i.documentStatus));
 
   const qtyOrdered   = orderLines.reduce((s, l) => s + (Number(l.orderedQuantity)   || 0), 0);
   const qtyDelivered = orderLines.reduce((s, l) => s + (Number(l.deliveredQuantity) || 0), 0);

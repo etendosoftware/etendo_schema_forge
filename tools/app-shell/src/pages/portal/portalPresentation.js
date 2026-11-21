@@ -1,6 +1,7 @@
 // Relative imports, not the `@/` alias: keeps this module loadable by plain `node --test`.
 import { resolveInvoicePaymentBadge } from '../../windows/custom/shared/invoicePaymentBadge.js';
 import { getCalendarDateRelation, todayCalendarISO } from '../../lib/dateOnly.js';
+import { isCompletedStatus, isNotApprovedStatus } from '../../lib/docStatus.js';
 
 /**
  * Presentation rules of the customer portal (ETP-6209 Part B) — pure, no React.
@@ -38,28 +39,29 @@ export const PORTAL_KIND_META = Object.freeze({
 /**
  * The list tabs per kind (design Listado: "Todos / Por responder / Aceptados / Rechazados"): the
  * customer-facing status groups the backend defines (`PortalDocumentQuery.GROUPS`), each with its
- * label. "All" is the implicit first tab. The mapping is recorded in the plan (§B.4); the badges in
- * the rows keep the app's own status labels.
+ * label. "All" is the implicit first tab. The mapping is recorded in the plan (§B.4). Labels are
+ * the app's own status keys (PO answer: the same status names as the app), the ones its badges
+ * use; only "delivered" keeps a portal key, as the app has no status of that name.
  */
 export const PORTAL_KIND_GROUPS = Object.freeze({
   QUOTATION: [
-    { code: 'awaiting', labelKey: 'portalGroupAwaiting' },
-    { code: 'accepted', labelKey: 'portalGroupAccepted' },
-    { code: 'rejected', labelKey: 'portalGroupRejected' },
+    { code: 'awaiting', labelKey: 'statusUnderEvaluation' },
+    { code: 'accepted', labelKey: 'statusAccepted' },
+    { code: 'rejected', labelKey: 'statusRejected' },
   ],
   ORDER: [
-    { code: 'inProgress', labelKey: 'portalGroupInProgress' },
-    { code: 'completed', labelKey: 'portalGroupCompleted' },
-    { code: 'voided', labelKey: 'portalGroupVoided' },
+    { code: 'inProgress', labelKey: 'statusInProcess' },
+    { code: 'completed', labelKey: 'statusComplete' },
+    { code: 'voided', labelKey: 'statusVoid' },
   ],
   SHIPMENT: [
     { code: 'delivered', labelKey: 'portalGroupDelivered' },
-    { code: 'voided', labelKey: 'portalGroupVoided' },
+    { code: 'voided', labelKey: 'statusVoid' },
   ],
   INVOICE: [
-    { code: 'pending', labelKey: 'portalGroupPending' },
-    { code: 'overdue', labelKey: 'portalGroupOverdue' },
-    { code: 'paid', labelKey: 'portalGroupPaid' },
+    { code: 'pending', labelKey: 'statusPending' },
+    { code: 'overdue', labelKey: 'statusOverdue' },
+    { code: 'paid', labelKey: 'statusPaid' },
   ],
 });
 
@@ -88,7 +90,7 @@ export const PORTAL_HIGHLIGHTS = Object.freeze({
  */
 export function quotationValidity(document) {
   if (document?.kind !== 'QUOTATION' || !document.validUntil) return null;
-  const open = document.documentStatus === 'UE' || document.documentStatus === 'CO';
+  const open = isNotApprovedStatus(document.documentStatus) || isCompletedStatus(document.documentStatus);
   if (!open) return { state: 'answered' };
   return { state: getCalendarDateRelation(document.validUntil) === 'past' ? 'expired' : 'open' };
 }
@@ -209,7 +211,7 @@ export function toCalendarParam(date) {
  *
  * - `{ view: 'home' }`
  * - `{ view: 'list', kind, group? }` — `group` one of the kind's tabs ({@link PORTAL_KIND_GROUPS})
- * - `{ view: 'doc', kind, id }`
+ * - `{ view: 'doc', kind, id, group? }` — `group`: the list tab the document was opened from
  */
 export function readPortalView(searchParams) {
   const view = searchParams.get('view');
@@ -221,7 +223,10 @@ export function readPortalView(searchParams) {
   if (view === 'list' && PORTAL_KIND_META[kind]) {
     return isPortalGroup(kind, group) ? { view: 'list', kind, group } : { view: 'list', kind };
   }
-  if (view === 'doc' && PORTAL_KIND_META[kind] && id) return { view: 'doc', kind, id };
+  // A document keeps the list tab it was opened from (the list stays underneath it on desktop).
+  if (view === 'doc' && PORTAL_KIND_META[kind] && id) {
+    return isPortalGroup(kind, group) ? { view: 'doc', kind, id, group } : { view: 'doc', kind, id };
+  }
   if (view === 'home') return { view: 'home' };
   return null;
 }

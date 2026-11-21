@@ -17,9 +17,9 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
-vi.mock('lucide-react', async (importOriginal) => {
+vi.mock('@phosphor-icons/react', async (importOriginal) => {
   const actual = await importOriginal();
-  return { ...actual, ChevronRight: () => <span data-testid="chevron" /> };
+  return { ...actual, CaretRightIcon: () => <span data-testid="chevron" /> };
 });
 
 vi.mock('../NewPaymentEntryModal.jsx', () => ({

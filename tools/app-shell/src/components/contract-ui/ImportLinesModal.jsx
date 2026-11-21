@@ -2,9 +2,14 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import {
-  CircleCheck, Loader2, Search, SquareCheck, X,
-} from 'lucide-react';
-import { InfoIcon, WarningIcon } from '@phosphor-icons/react';
+  CheckCircleIcon,
+  CircleNotchIcon,
+  MagnifyingGlassIcon,
+  CheckSquareIcon,
+  XIcon,
+  InfoIcon,
+  WarningIcon,
+} from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -12,7 +17,7 @@ import { NumberStepperInput } from '@/components/contract-ui/NumberStepperInput.
 import { RowExpandToggle } from '@/components/contract-ui/RowExpandToggle.jsx';
 import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { translateQuotaRefusalBody } from '@/lib/backendErrors.js';
+import { translateMappedImportRefusal, translateQuotaRefusalBody } from '@/lib/backendErrors.js';
 import { cn } from '@/lib/utils';
 
 // A draft is valid when it parses to a finite magnitude in (0, maxQty]. Sign is
@@ -155,8 +160,6 @@ export default function ImportLinesModal({
                          // lines not needed (for eagerLoadLines={false}); all hidden → allImportedMessageKey
   getDocumentTotal,      // (doc) => number | null: the row total while the document's lines are NOT
                          // loaded; once loaded (or null/undefined, or no prop) the sum of its lines
-  countLinesInFooter = false, // true: the footer reads «1 línea seleccionada» / «N líneas
-                              // seleccionadas»; false keeps the generic «N Seleccionados»
   describeLine,          // (line, { imported }) => string | null: the note under a line's product
                          // (e.g. the draft invoice holding it). On a greyed-out line null/absent
                          // keeps the default («ya importado», or the line's draft shipments); on a
@@ -383,10 +386,20 @@ export default function ImportLinesModal({
     toast.success(ui(successMessageKey, { count }));
   };
 
+  // ETP-6002 CP-30: why the server refused a line, when it says so with an import refusal code.
+  const readImportRefusal = async (res) => {
+    try {
+      return translateMappedImportRefusal(await res.json(), ui);
+    } catch {
+      return null;
+    }
+  };
+
   // One POST per selected line, in document order; line numbers step by 10.
   const postSelectedLines = async () => {
     let lineNo = 10;
     let errors = 0;
+    let refusal = null;
     let importedCount = 0;
     const importedDocIds = new Set();
     for (const { line, qty, docId } of collectSelectedLines()) {
@@ -396,11 +409,14 @@ export default function ImportLinesModal({
       const res = await apiFetch(`/${linesEndpoint}`, {
         method: 'POST', headers, body: JSON.stringify(lineBody), on401: 'ignore', timeout: 0,
       });
-      if (!res.ok) errors++;
-      else { importedDocIds.add(docId); importedCount++; }
+      if (res.ok) { importedDocIds.add(docId); importedCount++; }
+      else {
+        errors++;
+        refusal = refusal ?? (await readImportRefusal(res));
+      }
       lineNo += 10;
     }
-    return { errors, importedCount, importedDocIds };
+    return { errors, importedCount, importedDocIds, refusal };
   };
 
   const runAfterImport = (importedDocIds) => (afterImport
@@ -412,10 +428,11 @@ export default function ImportLinesModal({
 
   // Default: one POST per selected line against `linesEndpoint`.
   const importViaPerLinePost = async () => {
-    const { errors, importedCount, importedDocIds } = await postSelectedLines();
+    const { errors, importedCount, importedDocIds, refusal } = await postSelectedLines();
     const afterImportResult = await runAfterImport(importedDocIds);
     if (errors > 0) {
       toast.warning(ui('importedLinesWithErrors', { count: importedCount, errors }));
+      if (refusal) toast.error(refusal);
       showCustomToast(getSuccessToast?.({ ...selection, count: importedCount, importedDocIds, afterImportResult, partial: true }));
     } else {
       showSuccessToast({ count: importedCount, importedDocIds, afterImportResult });
@@ -454,16 +471,13 @@ export default function ImportLinesModal({
   const selectionSize = selected.size;
   const importDisabled = selected.size === 0 || importing;
 
-  // ETP-5828 (QA UI-6) — with `countLinesInFooter` (the order popups) the footer counts the
-  // selected LINES in the singular or the plural: «1 línea seleccionada», «2 líneas seleccionadas».
-  // Every other popup keeps the generic «N Seleccionados».
+  // ETP-5651 — every import popup (order, invoice, shipment) counts the selected LINES in the
+  // footer, singular or plural: «1 línea seleccionada», «2 líneas seleccionadas».
   const renderLinesCount = () => {
     const one = selectionSize === 1;
     return (
       <>
-        <strong className="font-semibold">
-          {ui(one ? 'importLinesSelectedCountOne' : 'importLinesSelectedCountMany', { count: selectionSize })}
-        </strong>
+        {ui(one ? 'importLinesSelectedCountOne' : 'importLinesSelectedCountMany', { count: selectionSize })}
         {' '}{ui(one ? 'importLinesSelectedSuffixOne' : 'importLinesSelectedSuffixMany')}
       </>
     );
@@ -473,8 +487,8 @@ export default function ImportLinesModal({
     if (selectionSize === 0) return ui('selectLinesToImport');
     return (
       <>
-        <CircleCheck size={20} aria-hidden="true" className={cn('shrink-0', ICON_COLOR)} data-testid="CircleCheck__b0ad7a" />
-        <span>{countLinesInFooter ? renderLinesCount() : ui('selected', { count: selectionSize })}</span>
+        <CheckCircleIcon size={20} aria-hidden="true" className={cn('shrink-0', ICON_COLOR)} data-testid="CircleCheck__b0ad7a" />
+        <span>{renderLinesCount()}</span>
       </>
     );
   };
@@ -485,8 +499,8 @@ export default function ImportLinesModal({
       className="flex h-full min-h-[120px] flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground"
     >
       {spinner
-        ? <Loader2 size={20} aria-hidden="true" className={cn('animate-spin', ICON_COLOR)} data-testid="Loader2__b0ad7a" />
-        : <Search size={20} aria-hidden="true" className={ICON_COLOR} data-testid="Search__b0ad7a" />}
+        ? <CircleNotchIcon size={20} aria-hidden="true" className={cn('animate-spin', ICON_COLOR)} data-testid="Loader2__b0ad7a" />
+        : <MagnifyingGlassIcon size={20} aria-hidden="true" className={ICON_COLOR} data-testid="Search__b0ad7a" />}
       <p>{message}</p>
     </div>
   );
@@ -762,7 +776,7 @@ export default function ImportLinesModal({
           data-testid="ImportLinesModal__close"
           className={cn('absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted', ICON_COLOR)}
         >
-          <X size={20} aria-hidden="true" data-testid="X__b0ad7a" />
+          <XIcon size={20} aria-hidden="true" data-testid="X__b0ad7a" />
         </button>
 
         <div className="flex shrink-0 flex-col gap-0.5 py-3 pl-7 pr-12">
@@ -775,7 +789,7 @@ export default function ImportLinesModal({
         <div className="flex min-h-0 flex-1 flex-col gap-2 px-7 pb-3">
           <div className="flex h-10 shrink-0 items-center gap-3">
             <label className="relative flex h-10 min-w-0 flex-1 items-center">
-              <Search
+              <MagnifyingGlassIcon
                 size={20}
                 aria-hidden="true"
                 className={cn('pointer-events-none absolute left-2', ICON_COLOR)}
@@ -800,7 +814,7 @@ export default function ImportLinesModal({
               data-testid="ImportLinesModal__selectAll"
               className="inline-flex h-10 shrink-0 items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium leading-6 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
             >
-              <SquareCheck size={20} aria-hidden="true" className={ICON_COLOR} data-testid="SquareCheck__b0ad7a" />
+              <CheckSquareIcon size={20} aria-hidden="true" className={ICON_COLOR} data-testid="SquareCheck__b0ad7a" />
               {ui(allVisibleSelected ? 'deselectAll' : 'selectAll')}
             </button>
           </div>
@@ -838,7 +852,7 @@ export default function ImportLinesModal({
               type="button"
               onClick={onClose}
               data-testid="ImportLinesModal__cancel"
-              className={cn(PILL_BASE, 'border bg-card text-foreground hover:bg-muted', CONTROL_BORDER, SHADOW_XS)}
+              className={cn(PILL_BASE, 'bg-transparent text-foreground hover:bg-muted')}
             >
               {ui('cancel')}
             </button>
@@ -847,7 +861,8 @@ export default function ImportLinesModal({
               onClick={handleImport}
               disabled={importDisabled}
               data-testid="ImportLinesModal__import"
-              className={cn(PILL_BASE, 'bg-primary text-primary-foreground enabled:hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-primary/40')}
+              // ETP-5651 (Figma): black while enabled, grey while nothing is selected.
+              className={cn(PILL_BASE, 'bg-foreground text-background enabled:hover:bg-foreground/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground')}
             >
               {importing ? ui('importing') : ui(importButtonKey, { count: selectionSize > 0 ? ` (${selectionSize})` : '' })}
             </button>

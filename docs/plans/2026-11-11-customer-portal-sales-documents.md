@@ -958,6 +958,184 @@ instead of an error. S1: `validate`, `findSentLink` and `renew` enter admin mode
 - **Status filter.** `?status=` values are trimmed one by one; empty values are dropped.
 - **Dead MVP copy (BUG-8).** The MVP's invoice-only i18n keys were removed from the three locales.
 
+**Main screen aligned with the designer's spec (2026-11-17, desktop only).** Home and shell only;
+the list, detail, decision and confirmation screens keep their current design until their own spec
+arrives, so every shared piece takes the new look as an opt-in (`PortalSection variant="dashboard"`,
+`PortalSearchPill variant="header"`, `PortalDesktopHeader size="lg"`).
+- **Rail.** Expanded (default, 240 px): the etendo.ai mark and name (the link to the product site
+  that used to be the footer's "Creado con etendo.ai"), the collapse button, the company (tenant
+  logo and name; no chevron — a link belongs to one company), "General · Inicio", "Mis documentos"
+  with the kinds in alphabetical order of the viewer's language and their count chips (blue
+  quotations to answer, red overdue invoices), the promo card "Lleva tu negocio más lejos" with
+  "Empieza gratis", then the customer and the ES/EN switch. Collapsed (56 px): icons only; "Mis
+  documentos" shows the total count and expands the rail. The promo card shows only while expanded.
+  The choice is remembered per browser (`localStorage`, `etendo.portal.railCollapsed`; the rail
+  works without it).
+- **Top bar.** "Portal del cliente" (20/32) with the same subtitle, the 392 px white search pill.
+- **Branding update (Figma, 2026-11-20; supersedes the etendo.ai mark above).** The rail header
+  shows the issuing company instead of the etendo.ai mark: its round 40×40 logo (initials without
+  one) and, expanded, its name beside it; the company block that sat below the header is gone, and
+  the collapsed rail no longer has an "Empresa" item (toggle, Inicio, Mis documentos). The Etendo
+  link moved to the top bar's right column as a dark pill "Creado con Etendo / Conoce más" (from
+  `lg` up) and, on the mobile Inicio bar, as the compact lime tile left of the search button. Both
+  open `ETENDO_PRICING_URL` (`PortalBits.jsx`; provisional `https://etendo.ai` until marketing
+  sends the pricing URL with its UTM).
+- **Etendo link on every view (user decision, 2026-11-20; PROVISIONAL until the designer sends the
+  mobile design).** Desktop headers (Inicio, the lists, the document detail) carry the exact-Figma
+  pill from `lg` up and the compact lime circle between `md` and `lg` (one or the other, never both:
+  `PortalCreatedWithHeaderLink`). Below `md` the compact circle sits in each view's mobile top bar,
+  left of the other controls: Inicio (search, avatar), lists (avatar), detail (PDF download). The
+  detail drawer has no header of its own; the list header behind it carries the link.
+- **Body.** Greeting with the smiley tile; tiles 154 px with the icon bubble, the 60 px figure and a
+  pill badge (icons: FileText, Receipt, ShoppingCart, Package — the closest Lucide glyphs to the
+  design's Phosphor ones); "Tu saldo" now lists "Pagado este año" first, each with a count pill and
+  an amount badge; "Documentos recientes" has the round arrow button (desktop) and rows with packed
+  pills, no amount pill for a shipment; section headers in Space Mono 12/16 (the font the app
+  already loads for `.font-mono`).
+- **Chart.** A legend item per series (one today: "Facturado"; built as a series list so a second
+  one can join), a vertical / horizontal switch, the success gradient, dotted gridlines at the
+  dashboard helpers' round ticks and a dark tooltip with month and amount on hover or focus.
+- **Colours.** Badges keep the app's status tokens (statuses must look as in the app), which differ
+  slightly from the spec's hex values (e.g. the info blue).
+- **Pending with the PO (Jira comment 149666) — answered 2026-11-18, see "PO answers to the
+  redesign" below.** Still open: the "Ingresos" / "Gastos" legend is not drawn (the single invoiced
+  series keeps its label) and "Ayuda y soporte" stays provisional (pending marketing). Not built
+  either: the top-bar buttons the design hides.
+- **PO answers to the redesign (2026-11-18).**
+  1. "Empieza gratis" opens the app's public sign-up, `https://app.etendo.ai/onboarding`
+     (`ETENDO_SIGNUP_URL` in `PortalShell.jsx`; the route is `onboarding` in `runtime-routes.jsx`),
+     in a new tab with `rel="noopener noreferrer"`. The etendo.ai brand still opens etendo.ai.
+  2. Search (superseded by the PO final answers below: the pill is now shared): the PO asked for
+     the app's own search component without the microphone. **Not
+     reused:** the app's search is not a component but inline markup inside `TopBar.jsx`, wired to
+     the authenticated app context (`useGlobalSearch` / `GlobalSearchProvider`, vector-search
+     contracts, the menu); extracting it is a shared-component refactor of its own, and forking it
+     was ruled out. The portal keeps its search pill on `searchPortalDocuments`. The app's search
+     has no microphone either.
+  3. "Albaranes de devolución": not shown anywhere in the portal (no kind, tab or filter; the
+     backend lists only `C-` shipments and leaves return-material orders out). Nothing to remove.
+  4. "Ingresos" / "Gastos": no answer yet, unchanged.
+  5. "Ayuda y soporte": pending marketing, unchanged.
+  6. Status names: the list tabs (and the funnel's choices) use the app's status keys
+     (`statusUnderEvaluation`, `statusAccepted`, `statusRejected`, `statusInProcess`,
+     `statusComplete`, `statusVoid`, `statusPending`, `statusOverdue`, `statusPaid`); the portal
+     copies `portalGroup*` were removed from the locales. "Entregados" (`portalGroupDelivered`)
+     stays, as the app has no status of that name. The row badges already used the app's
+     `statusLabel`. The home's attention tiles ("Por responder", "Vencidas", "En curso", "Este
+     mes") are counts, not statuses, and are unchanged.
+  7. Language: provisionally as in the app, inside the user menu. The customer (the rail's row,
+     expanded or collapsed, and the mobile avatar on Inicio and the lists) opens the app's
+     `DropdownMenu` with the app's `LanguageMenuSection`; the standalone language switch is gone.
+     The menu holds only the language: the portal has no login, so the app's account entries do
+     not apply. With no customer name there is no user, hence no menu.
+  8. Comments box: never built in the portal (an agreed OUT item); nothing to remove.
+  9. "Descargar seleccionados" and the row checkboxes (select-all included) are removed for now
+     (performance); a document still downloads from its detail.
+- **PO final answers (2026-11-18, supersede the matching points above).**
+  - 2 (search): decided. Only the visual pill was extracted from the app's top bar into the shared,
+    presentational `components/layout/SearchBar.jsx` (search icon, optional leading slot, input; no
+    microphone, no state); `TopBar.jsx` renders it with the same classes and test ids and keeps
+    `useGlobalSearch`, the scopes, the vector search and its popup. The portal's `PortalSearchPill`
+    now renders that bar on Inicio and the lists (the old Phosphor/Lucide pill and its `header`
+    variant are gone), keeping its own data source (`searchPortalDocuments`, the list's query) and
+    its own results panel, so the customer only sees their documents. Visible change in the portal:
+    the pill takes the app's look (44px, the app's search background) on desktop and mobile.
+  - 4: the chart's legend reads only "Gastos" (en "Expenses", the app's `expenses` key): one series,
+    since what the customer was invoiced is their expense. The legend swatch is green to match the
+    bars (user decision; the Figma's red "Gastos" swatch was an artefact of the generic chart).
+  - 5: "Ayuda y soporte" is removed from the rail (link, help URL constant and icon). The
+    `helpAndSupport` key stays: the app's side menu uses it.
+  - 7: the user menu has the app's user-popup look: a header with the customer's name and email,
+    then the language. `GET /sws/portal/me` now also answers `email` (additive): the first valid To
+    of the link's root send, the address the portal already treats as the customer
+    (`PortalDecisionService.confirmationRecipient`), `""` when none.
+  - A (app, sales quotation: create a reject reason from the editable "Motivo de rechazo"): built
+    (user decision). The field offers "+ Crear razón" and opens the reject flow's own
+    `CreateRejectReasonModal` (`createRejectReason` action); the created reason is selected in the
+    field. The generic `allowCreate` could not do it (it POSTs `{ name }` to a CRUD spec and reject
+    reasons have none), so a small backwards-compatible hook was added: `FieldCreateContext`, read by
+    `EntityForm`'s searchable selector and provided by the window's custom code
+    (`windows/custom/sales-quotation/index.jsx`); no `decisions.json` change
+    (`docs/ui-customization.md` §19d).
+  - B (internal reasons in the notes): investigated, no change. No path writes the tenant's reason
+    into the notes; the only notes write is the portal's own line (`PortalDecisionService.appendNote`).
+- **Pixel pass against the Figma (2026-11-17, user: "tal cual el figma").** Compared side by side
+  with the reference captures at 1440×703 in both rail states. Icons are the design's Phosphor ones
+  (`@phosphor-icons/react`, already a dependency). The rail footer is a rule, then "Ayuda y soporte"
+  (https://help.etendo.ai, provisional, new tab) and the customer, each with a chevron; **no
+  language switch in the rail** (user decision; superseded 2026-11-18: the language now lives in
+  the user menu opened from the customer, see the PO answers above). The company box shows the tenant logo, its name and a decorative chevron.
+  Badges on the main screen use the Figma's hex colours (`PortalTag palette="figma"`), not the app
+  palette: a quotation awaiting an answer is blue, an invoice to pay yellow. The status **names**
+  stay the app's ("Bajo evaluación", "Completado", "Vencidas") until the PO decides (they conflict
+  with the "statuses exactly as the app" criterion). Row 1 is 226px tall; at the 1440px design width its four
+  tiles are 205px and "Requiere tu atención" hugs them (901px) while "Tu saldo" takes the rest
+  (259px rail expanded, 443px collapsed, as the two Figma frames). Other widths keep that rail
+  state's 901 : 259 or 901 : 443 proportion ("Tu saldo" never under 258px; the shell exposes the
+  rail state as `data-rail` for this);
+  row 2 is 320px tall with "Documentos recientes" and the chart at 520 : 840 (documents never under
+  440px, so a row stays on one line) and the chart filling its card. Rows never stretch to the
+  window — the body scrolls — checked at 1280, 1366, 1440, 1536 and 1920 in both rail states.
+  The 226 / 320 px heights are minimums: real content (several currencies, long amounts, many
+  recent rows) grows the row and both cards keep the same height; balance badges sit side by side
+  and wrap, a recent row wraps rather than clips, a 4–5 digit tile figure steps down in size, and
+  the collapsed "Mis documentos" badge reads "99+" past 99; chart
+  months are three capitalised letters ("Sep", not "sept"), ticks "1,5K", sparse dotted gridlines.
+- **Rail = Figma component "Portal Cliente Navigation Rail" (Expandido / Comprimido).** 62px header,
+  224×32 company selector, group headings, 32px items (no kind icons in "Mis documentos"), the
+  banner pushed to the bottom of the menu list, footer items with chevrons; collapsed: 36×36 grey
+  buttons and the 18px #F3164E count badge. Desktop page background #F3F5F9.
+- **Document detail side panel (desktop, Figma 2026-11-17).** 320px panel: title, "Emitido por" and
+  a close button (back to the list); one wrapping row of 32px buttons — Aceptar (primary) and
+  Rechazar where the quotation can be answered (the decision popups behind them are unchanged), and
+  Descargar PDF; the "Detalles" card (total header; date, validity, status, tax base, taxes, plus
+  the invoice rows the story requires) and "Documentos relacionados" with a refresh button that
+  re-reads the document in place. Not built: "Comentarios" (on hold, no backend) and the greyed
+  "Pedido – Pendiente de creación" placeholder (user decision). The mobile detail keeps the app's
+  preview cards.
+- **"Panel PDC" (desktop detail content, Figma).** The PDF area (#E3E7EC, rounded 12px on the left,
+  24px top / 28px side padding, the page filling its width and running into the bottom edge,
+  scrolling inside) and the 320px white side panel (rounded 12px on the right; 68px header with
+  "Emitido por: …" and a 36×36 close button). Toolbar: the Figma's 4-button group — zoom in, full
+  screen (as before), zoom out and a kebab whose only item is "Descargar PDF" (the design gives it
+  no behaviour, so it offers nothing the portal did not already do).
+- **Desktop list = Figma "PC Presupuestos".** Header: the kind's title (20/32) with the kind's total
+  as a badge (the home tile's figure; the current query's when the home is not loaded) and the
+  "Mis documentos / <kind>" breadcrumb; the white search pill. Toolbar (padding 8px): the kind's
+  status tabs (#F3F5F9, selected white + shadow-sm), the date-range button (the app's picker in the
+  Figma's button), a funnel with the same status choices (the portal has no other quick filter),
+  and refresh ("Descargar seleccionados" and the checkbox column were removed by the PO answers of
+  2026-11-18). Table: the kind's columns at the Figma's widths, 40px
+  rows with #E3E7EC rules, "Válido hasta" with a #FFC233 dot while the quotation can be answered
+  (red once past), Figma-palette status badges, and one "Total" row per currency of the rows shown.
+  Orders, shipments and invoices keep their own tabs and columns (invoices: type, due date,
+  payment state, outstanding; shipments: no amounts, no totals). Mobile list unchanged.
+- **Desktop detail = drawer over the list (Figma prototype).** A document opens over its kind's list,
+  which stays mounted underneath (tab, range and scroll kept): a backdrop dims the whole viewport
+  (`--scrim` at 35%), and "Panel PDC" floats 8px from the top, right and bottom, 70% of the
+  viewport wide (720–1344px; 1008px at 1440), with no page header. It closes with the panel's X,
+  Escape or a click on the backdrop; focus is trapped inside and returns to the opening row; a 200ms
+  slide-in respects reduced motion. `?view=doc&kind=&id=` keeps working: a deep link (the email's,
+  the home's tiles and recent rows) renders that kind's list behind the drawer, and closing lands on
+  it; a document opened from a tab carries `&group=` so closing returns to that tab. "Documentos
+  relacionados" lists only the other documents: the open one is left out (user decision,
+  2026-11-18; it used to head the list as "Este", key `portalRelatedThis`, now removed), and with
+  none the section shows its empty state. Mobile keeps the full-page
+  detail (its list stays mounted but hidden).
+- **Decision popups and confirmation page (Figma, 2026-11-17).** One 456px modal style (white, r8,
+  the "Overlay/Light" shadow, 32px round close, 40px fully rounded buttons). Aceptar → "¿Deseas aceptar
+  este presupuesto?" (the recipient's email box) → Continuar sends; Rechazar → the six reasons
+  (Figma radios; "Otros" requires "Describe el motivo"; Continuar disabled until valid) → "Confirma
+  tu decisión por correo" (Cancelar · Volver · Enviar solicitud) sends; both end on "Revisa tu
+  correo electrónico" (Entendido). The recipient is the backend's `decision.email` (first To
+  of the original send, shown in full). The email link's landing no longer enters the portal by itself:
+  it shows "¡Presupuesto aceptado!" / "¡Presupuesto rechazado!" with the summary (number, issue date
+  or reason, total, status — app label, Figma colour) and "La empresa emisora ha sido notificada…",
+  and its "Portal de clientes" button enters the portal on the quotation, with no notice (removed
+  2026-11-18: the Figma has none; hidden without a portal token). The other landing states keep their logic in the same page.
+  Backend fields (additive, `com.etendoerp.go`): `date`, `grandTotal`, `currency`, `documentStatus`
+  on the decision view/confirm answers; `decision.email` on a decidable quotation's detail.
+
 ---
 
 # Part C — Accept / reject a quotation from the portal (planned and built 2026-11-13; PO answers in C.13)
@@ -1074,7 +1252,7 @@ pending-until-sent rule), so a failed send leaves no usable token.
   Scope: `findInScope(session, QUOTATION, id)`; then pending + not expired + a To recipient on the
   root send (else 409 `not_pending` / `expired` / `no_recipient`). Rate limits: the data limiter **plus** a per-quotation
   cool-down (e.g. 2 min, configurable like `PortalLinkConfig.java:48-50`) so the button cannot be used
-  to spam the contact. Answers `{state: "sent", maskedEmail}`. Requires `validate` = valid (an
+  to spam the contact. Answers `{state: "sent", email}`. Requires `validate` = valid (an
   expired link renews first, as today).
 - **`GET /decisions/me`** and **`POST /decisions/confirm`** — the confirmation landing. The token is
   read from `X-Portal-Decision-Token` (the email link is `/portal/decision/{token}`; the SPA moves it
@@ -1116,7 +1294,7 @@ pending-until-sent rule), so a failed send leaves no usable token.
   the same frame and classes, a radio list of the six fixed reasons and a required textarea for
   "Otros". → reuse its layout constants by extracting them if worthwhile (decide in DEV).
 - **"Correo enviado" state:** the panel replaces the buttons with "Se ha enviado un correo a
-  {maskedEmail} para confirmar la decisión." and a pending note until the page reloads.
+  {email} para confirmar la decisión." and a pending note until the page reloads.
 - **Landing `/portal/decision/:token`:** brand + document + decision + reason + "Confirmar" →
   result screen per state of C.5. Route registered next to `/portal/:token` (`runtime-routes.jsx`).
 - After a confirmed decision the quotation simply shows its new status (`ETGO_AC` / `CJ`); no buttons.
@@ -1143,7 +1321,7 @@ pending-until-sent rule), so a failed send leaves no usable token.
   email; ES/EN); reason find-or-create; `ETGO_AC` convertible (order and invoice) and advertised in `SalesQuotationHeaderHandler`; first To
   recipient chosen, CC never mailed, empty To refused.
 - sf (Vitest): buttons only with `canDecide`, disabled reason, reject modal validation ("Otros"
-  requires text), sent state with masked email, landing states; mocked E2E: request → landing → confirm.
+  requires text), sent state with the full email, landing states; mocked E2E: request → landing → confirm.
 - **Effort (rough):** backend 4.5–5.5 d (table + AD, the `ETGO_AC` list value and translations,
   endpoints, lock, two contracts, quotation methods + `@NeoExtension` migration, convert on
   `ETGO_AC`), SPA 2.5–3 d (portal, plus the app's Confirmar gate and status labels), tests 2–3 d,
@@ -1160,7 +1338,7 @@ Confirmar (convert) available on them; rejected ones show the portal reason and 
 
 **Decided (user, 2026-11-13):** a quotation with no `ValidUntil` is not expired (C.2); the
 confirmation goes to the first To recipient of the root send, never CC, buttons disabled when there is
-none (C.3); the portal shows the address masked (C.3); one click on the landing confirms, opening the
+none (C.3); the portal shows the address in full (C.3, revised to follow the Figma; it was masked first); one click on the landing confirms, opening the
 link never applies (C.5). By this plan: no sender notice when the sender cannot be resolved (C.6);
 KPI: only the hook points (`decision.requested`, `decision.confirmed`, `decision.voided`,
 `decision.not_applied` call sites in the service), names and semantics per the PO's new KPI
@@ -1190,7 +1368,7 @@ Built in both repos following C.0–C.11.
   routes in `PortalServlet`, the detail's `decision` block.
 - **SPA.** `PortalDecisionActions` (desktop panel row before "Descargar PDF"; mobile bottom bar),
   the portal reject modal (six fixed reasons; the "Otros" text is shown, required and sent only for
-  "Otros", cleared when another reason is picked — the server also drops it), the masked "correo
+  "Otros", cleared when another reason is picked — the server also drops it), the "correo
   enviado" state, `PortalDecisionPage` at `/portal/decision/:token`, i18n in three locales.
 
 ## C.13 PO answers applied (2026-11-13)
@@ -1222,14 +1400,14 @@ Built in both repos following C.0–C.11.
    first-option fallback) is closed in `SalesQuotationHeaderHandler.afterHandle` (DEFAULTS drop
    `rejectReason`). Needs `make regen ONLY=sales-quotation PUSH_TO_NEO=1` + `export.database` (the NEO
    field is still read-only until pushed).
-4. **Quotation PDF "Motivo" (user decision 2026-11-16, Jira comment 149518 point 5).** A rejected
-   quotation's printable always shows one observation line "Motivo: <reason>": the tenant's reject
-   reason when the seller has set one, otherwise the customer's portal reason (and the "Otros" text),
-   read from the portal's note line; that line is left out of the observations so "Motivo" is not
-   printed twice. Built in `buildQuotationData` and `QuotationPrintableData` (every producer).
-   **The internal (tenant) reason is visible to the customer** — this is the PDF the customer
-   downloads from the portal and receives by email — and the user accepted this explicitly.
-   **Cache:** editing the reason moves the quotation's `updated`, so the stored PDF goes stale; the
+4. **Quotation PDF "Motivo" (Jira comment 149518 point 5, revised by QA).** A rejected quotation's
+   printable shows one observation line "Motivo: <reason>" with the customer's own portal reason
+   only (and the "Otros" text), read from the portal's note line; that line is left out of the
+   observations so "Motivo" is not printed twice. Built in `buildQuotationData` and
+   `QuotationPrintableData` (every producer). **The tenant's reject reason is never printed**: it
+   can be internal, and this is the PDF the customer downloads from the portal and receives by
+   email. A quotation rejected without a portal reason (e.g. in the app) prints no "Motivo" line.
+   **Cache:** editing the quotation moves the quotation's `updated`, so the stored PDF goes stale; the
    app's preview re-renders it, and the portal's `/pdf` now re-renders a stored PDF older than the
    document before serving it (D29).
 5. **One step for the 2FA.** The confirmation email's button names the decision ("Confirmar rechazo" /
@@ -1254,10 +1432,11 @@ Built in both repos following C.0–C.11.
    `LINK_ORIGIN = DECISION`, parent = the decision's link, root = its root) and marks it usable at
    once, since no email carries it (`PortalDecisionEntry`). Its raw token comes back only in the
    confirm POST's answer (`portalToken`, `quotationId`). The SPA opens
-   `/portal/<token>?view=doc&kind=QUOTATION&id=<quotationId>` and hands it a one-off notice through
-   router state, dropped from the history entry once read (`PortalArrivalNotice`): "Has aceptado el
-   presupuesto {n}", "Has rechazado el presupuesto {n}" with "Motivo: …", "Ya habías respondido este
-   presupuesto", no longer pending, expired. Opening the portal records `portal.link.opened` as usual
+   `/portal/<token>?view=doc&kind=QUOTATION&id=<quotationId>` (replacing the landing in the history),
+   with no notice: the one-off arrival banner ("Has aceptado / rechazado el presupuesto {n}", "Ya
+   habías respondido…", `PortalArrivalNotice`, router state) was removed on 2026-11-18, as the Figma
+   has none and the confirmation page already says what happened; its `portalNotice*` keys left the
+   locales. Opening the portal records `portal.link.opened` as usual
    (origin `DECISION`). No link, and the landing keeps its card: invalid token, portal closed for the
    customer by the access checks, or minting failed; the decision itself is applied or not exactly as
    before. Bound: at most 10 `DECISION` links per decision link and day, besides the confirm route's

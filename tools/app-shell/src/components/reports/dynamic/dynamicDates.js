@@ -106,12 +106,109 @@ export function previousCalendarBucket({ dateFrom, dateTo }, grain) {
   return { from: shiftBack(dateFrom, months), to: shiftBack(dateTo, months) };
 }
 
+/** First day of the fiscal year containing `day`; no such year (no calendar for the org): 1 January, as `openingPeriod`. */
+export function fiscalYearStart(years, day) {
+  return yearContaining(years, day)?.startDate ?? `${day.slice(0, 4)}-01-01`;
+}
+
+/** Last day of the latest fiscal year that ended before `day` (the last COMPLETED year, never assuming 31/12), or null. */
+export function lastCompletedYearEnd(years, day) {
+  const ends = (years || []).filter((y) => y.endDate && y.endDate < day).map((y) => y.endDate);
+  return ends.length ? ends.sort().pop() : null;
+}
+
+/**
+ * ETP-6083 — the end dates a report offers on its Hasta (`dateTo.shortcuts` in the contract): today, and the end of
+ * the last COMPLETED month / quarter / fiscal year. The fiscal year comes from the calendar (`years`), never 31/12.
+ * Null when the date does not exist yet (no completed fiscal year).
+ */
+export function endShortcutDate(kind, today, years) {
+  const [y, m] = parts(today);
+  if (kind === 'today') return today;
+  if (kind === 'lastMonthEnd') return iso(y, m, 0);
+  if (kind === 'lastQuarterEnd') return iso(y, m - (m % 3), 0);
+  if (kind === 'lastFiscalYearEnd') return lastCompletedYearEnd(years, today);
+  throw new Error(`Unknown end-date shortcut: ${kind}`);
+}
+
+/** Which of the offered end shortcuts `dateTo` equals, or null (so the panel can show it as selected). */
+export function matchingEndShortcut(dateTo, kinds, today, years) {
+  return (kinds || []).find((k) => dateTo && endShortcutDate(k, today, years) === dateTo) ?? null;
+}
+
+/**
+ * ETP-6083 — a report whose Desde is the ledger start (`dateFrom.role = 'ledgerStart'`): it never changes the
+ * amounts (a balance at Hasta), only where the ledger drill starts. Always inside the fiscal year of Hasta, so
+ * opening + movements = the balance: a value outside [year start, Hasta] is brought back to the year start.
+ */
+export function ledgerStartFor(years, dateFrom, dateTo) {
+  const yearStart = fiscalYearStart(years, dateTo);
+  return !dateFrom || dateFrom < yearStart || dateFrom > dateTo ? yearStart : dateFrom;
+}
+
+/** The balance on `day` as a one-day range: the shape the period queries take (cumulative, they ignore `from`). */
+const atDay = (day) => ({ from: day, to: day });
+
+/**
+ * ETP-6083 — "compare" rules declared by the contract (`compareTo.compareModes`) for a report that is a balance AT A DATE:
+ * `sly` = 'sameDateLastYear' (the day one year back) and `prev` = 'previousFiscalYearClose' (the end of the fiscal year
+ * before the one containing the date). Each is a one-day range. Null (the P&L) keeps the period-shaped comparisons.
+ */
+export function compareRulesOf(compareModes, years) {
+  if (!compareModes) return null;
+  return { modes: compareModes, years };
+}
+
+/** The day each comparison mode of `rules` compares `day` with (`{ sly, prev }`, null where it has none): for the panel's labels. */
+export function compareDates(rules, day) {
+  const { sly, prev } = dateRanges(rules, day);
+  return { sly: sly?.to ?? null, prev: prev?.to ?? null };
+}
+
+/**
+ * The fiscal year-end before the year containing `day`: the previous year's close. A date beyond the defined calendar follows
+ * the latest known year's month and day (a 04-01 calendar closes on 31 March); with no calendar at all, 31 December.
+ */
+export function priorFiscalYearEnd(years, day) {
+  const year = yearContaining(years, day);
+  if (year) return lastCompletedYearEnd(years, year.startDate);
+  const known = (years || []).map((y) => y.endDate).filter(Boolean).sort().pop();
+  if (!known) return `${Number(day.slice(0, 4)) - 1}-12-31`;
+  const [y0, m, d] = parts(known);
+  const isLast = d === lastDay(y0, m);
+  const onYear = (y) => iso(y, m, isLast ? lastDay(y, m) : d);
+  const y = Number(day.slice(0, 4));
+  const closing = onYear(y) >= day ? onYear(y) : onYear(y + 1);
+  return onYear(Number(closing.slice(0, 4)) - 1);
+}
+
+function dateRanges(rules, day) {
+  const kinds = {
+    sameDateLastYear: () => minusOneYear(day),
+    previousFiscalYearClose: () => priorFiscalYearEnd(rules.years, day),
+  };
+  const of = (mode) => {
+    const resolved = kinds[rules.modes[mode]]?.();
+    return resolved ? atDay(resolved) : null;
+  };
+  return { sly: of('sly'), prev: of('prev') };
+}
+
 /**
  * The two ranges a period is compared with: same period last year, and the previous period. In
  * Total mode the previous period is the same number of days (`previousPeriod`); in Month / Quarter
  * mode it is the previous calendar bucket, which for the range itself is `[prev(first).from, prev(last).to]`.
+ * `rules` (ETP-6083, `compareRulesOf`): a report that is a balance at a date compares the bucket's end DATE instead.
+ * A date with no fiscal year before it has no prior close: that comparison falls back to the period-shaped one.
  */
-export function comparedRanges(period, grain) {
+export function comparedRanges(period, grain, rules = null) {
+  const fallback = comparedPeriodRanges(period, grain);
+  if (!rules) return fallback;
+  const byDate = dateRanges(rules, period.dateTo);
+  return { sly: byDate.sly ?? fallback.sly, prev: byDate.prev ?? fallback.prev };
+}
+
+function comparedPeriodRanges(period, grain) {
   const sly = { from: minusOneYear(period.dateFrom), to: minusOneYear(period.dateTo) };
   if (grain === 'total') {
     const prev = previousPeriod(period);
@@ -120,7 +217,7 @@ export function comparedRanges(period, grain) {
   return { sly, prev: previousCalendarBucket(period, grain) };
 }
 
-const bucketOf = (idx, dateFrom, dateTo, partial, grain) => ({ idx, dateFrom, dateTo, partial, ...comparedRanges({ dateFrom, dateTo }, grain) });
+const bucketOf = (idx, dateFrom, dateTo, partial, grain, rules) => ({ idx, dateFrom, dateTo, partial, ...comparedRanges({ dateFrom, dateTo }, grain, rules) });
 
 /** The calendar months (span 1) or quarters (span 3) touching the range, clipped to it. */
 function calendarBuckets({ dateFrom, dateTo }, grain) {
@@ -145,12 +242,12 @@ function calendarBuckets({ dateFrom, dateTo }, grain) {
  * same-last-year and previous ranges. `hiddenCount` is how many earlier buckets were left out;
  * `total` is bucket 0's compared ranges. `grain` is 'total' | 'month' | 'quarter'.
  */
-export function periodBuckets({ dateFrom, dateTo }, grain, { maxShown = Infinity } = {}) {
-  const total = bucketOf(0, dateFrom, dateTo, false, grain);
+export function periodBuckets({ dateFrom, dateTo }, grain, { maxShown = Infinity, rules = null } = {}) {
+  const total = bucketOf(0, dateFrom, dateTo, false, grain, rules);
   const all = grain === 'total' ? [] : calendarBuckets({ dateFrom, dateTo }, grain);
   const shown = all.slice(-maxShown);
   return {
-    buckets: [total, ...shown.map((b, i) => bucketOf(i + 1, b.from, b.to, b.partial, grain))],
+    buckets: [total, ...shown.map((b, i) => bucketOf(i + 1, b.from, b.to, b.partial, grain, rules))],
     hiddenCount: all.length - shown.length,
     total: { sly: total.sly, prev: total.prev },
   };

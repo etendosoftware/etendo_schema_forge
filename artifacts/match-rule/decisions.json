@@ -6,10 +6,11 @@
     "name": "Match Rule",
     "detailEntity": null,
     "layoutType": "list-modal",
-    "breadcrumb": "Finance / Accounts / Match Rule",
+    "breadcrumb": "Treasury / Accounts / Match Rule",
     "templateConfig": {
       "titleKey": "matchRuleNewTitle",
       "editTitleKey": "matchRuleEditTitle",
+      "viewTitleKey": "matchRuleViewTitle",
       "subtitleKey": "matchRuleNewSubtitle",
       "submitLabelKey": "matchRuleSubmitCreate",
       "editSubmitLabelKey": "matchRuleSubmitSave",

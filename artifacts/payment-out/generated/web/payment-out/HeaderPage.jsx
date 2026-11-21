@@ -11,7 +11,7 @@ import ReactivarConfirmModal from '../../../custom/ReactivarConfirmModal';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Finance / Payment Out';
+const breadcrumb = 'Treasury / Payment Out';
 
 
 // @sf-generated-start summary:header

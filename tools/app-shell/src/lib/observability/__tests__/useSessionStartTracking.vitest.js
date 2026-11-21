@@ -194,4 +194,62 @@ describe('useSessionStartTracking', () => {
 
     expect(trackSessionStartedMock).toHaveBeenCalledOnce();
   });
+
+  it('sets the three identity ids in the context before session_started fires (ETP-6228)', () => {
+    mockUseAuth.mockReturnValue({
+      username: 'alice', clientId: 'C1', userId: 'U1', etgoAccountId: 'A1',
+      account: { id: 'MEMBER', email: 'a@x.com' },
+    });
+
+    renderHook(() => useSessionStartTracking());
+
+    const identityCall = setContextMock.mock.calls.findIndex(([c]) => 'ad_client_id' in c);
+    expect(setContextMock.mock.calls[identityCall][0])
+      .toEqual({ ad_user_id: 'U1', ad_client_id: 'C1', etgo_account_id: 'A1' });
+    expect(setContextMock.mock.invocationCallOrder[identityCall])
+      .toBeLessThan(trackSessionStartedMock.mock.invocationCallOrder[0]);
+  });
+
+  it('never sends the signed-in account as the owner account', () => {
+    mockUseAuth.mockReturnValue({ clientId: 'C1', userId: 'U1', account: { id: 'MEMBER' } });
+
+    renderHook(() => useSessionStartTracking());
+
+    expect(setContextMock).toHaveBeenCalledWith({ ad_user_id: 'U1', ad_client_id: 'C1', etgo_account_id: undefined });
+    expect(JSON.stringify(setContextMock.mock.calls)).not.toContain('MEMBER');
+  });
+
+  it('clears the ids when the session is lost while the shell stays mounted', () => {
+    mockUseAuth.mockReturnValue({ clientId: 'C1', userId: 'U1', etgoAccountId: 'A1' });
+    const { rerender } = renderHook(() => useSessionStartTracking());
+
+    mockUseAuth.mockReturnValue({});
+    rerender();
+
+    expect(setContextMock).toHaveBeenLastCalledWith({
+      ad_user_id: undefined, ad_client_id: undefined, etgo_account_id: undefined,
+    });
+  });
+
+  it('replaces all three ids on a company switch and clears them on unmount', () => {
+    mockUseAuth.mockReturnValue({ clientId: 'C1', userId: 'U1', etgoAccountId: 'A1' });
+    const { rerender, unmount } = renderHook(() => useSessionStartTracking());
+
+    mockUseAuth.mockReturnValue({ clientId: 'C2', userId: 'U1', etgoAccountId: 'A1' });
+    rerender();
+    expect(setContextMock).toHaveBeenCalledWith({ ad_user_id: 'U1', ad_client_id: 'C2', etgo_account_id: 'A1' });
+
+    unmount();
+    expect(setContextMock).toHaveBeenLastCalledWith({
+      ad_user_id: undefined, ad_client_id: undefined, etgo_account_id: undefined,
+    });
+  });
+
+  it('leaves unknown ids undefined instead of reusing another tenant', () => {
+    mockUseAuth.mockReturnValue({ clientId: 'C1' });
+    renderHook(() => useSessionStartTracking());
+    expect(setContextMock).toHaveBeenCalledWith({
+      ad_user_id: undefined, ad_client_id: 'C1', etgo_account_id: undefined,
+    });
+  });
 });

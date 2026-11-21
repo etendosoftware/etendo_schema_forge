@@ -3,7 +3,13 @@ import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx'
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import { Fragment, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Info, Loader2, Pencil, Trash2, TriangleAlert } from 'lucide-react';
+import {
+  InfoIcon,
+  CircleNotchIcon,
+  PencilSimpleIcon,
+  TrashIcon,
+  WarningIcon,
+} from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -140,7 +146,7 @@ function RepresentativeForm({ initial, isNew, saving, onSubmit, onCancel }) {
           disabled={saving}
           className="h-9 px-3 rounded-lg"
           data-testid="RepresentantesLegalesSection__save">
-          {saving && <Loader2 className="h-4 w-4 animate-spin mr-1.5" data-testid="Loader2__orgRepSaving" />}
+          {saving && <CircleNotchIcon className="h-4 w-4 animate-spin mr-1.5" data-testid="Loader2__orgRepSaving" />}
           {ui('save')}
         </Button>
       </div>
@@ -225,7 +231,7 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
       return (
         <tr>
           <td colSpan={columns.length + 2} className="py-8 text-center text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin inline mr-1.5" data-testid="Loader2__orgRepLoading" />
+            <CircleNotchIcon className="h-4 w-4 animate-spin inline mr-1.5" data-testid="Loader2__orgRepLoading" />
           </td>
         </tr>
       );
@@ -272,7 +278,7 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
           {columns.map(column => <Fragment key={column.key}>{cells[column.key]}</Fragment>)}
           <td className="py-1.5 px-2 align-middle text-right whitespace-nowrap">
             {busy ? (
-              <Loader2 className="h-4 w-4 animate-spin inline text-muted-foreground" data-testid="Loader2__orgRepRowBusy" />
+              <CircleNotchIcon className="h-4 w-4 animate-spin inline text-muted-foreground" data-testid="Loader2__orgRepRowBusy" />
             ) : (
               <>
                 <button
@@ -283,7 +289,7 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
                   title={ui('edit')}
                   className="h-7 w-7 inline-flex items-center justify-center rounded-full text-muted-foreground hover:bg-muted transition-colors"
                   data-testid="RepresentantesLegalesSection__edit">
-                  <Pencil className="h-4 w-4" data-testid="Pencil__orgRepEdit" />
+                  <PencilSimpleIcon className="h-4 w-4" data-testid="Pencil__orgRepEdit" />
                 </button>
                 <button
                   type="button"
@@ -293,7 +299,7 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
                   title={ui('deleteRowTooltip')}
                   className="h-7 w-7 inline-flex items-center justify-center rounded-full text-destructive hover:bg-destructive/10 transition-colors"
                   data-testid="RepresentantesLegalesSection__delete">
-                  <Trash2 className="h-4 w-4" data-testid="Trash2__orgRepDelete" />
+                  <TrashIcon className="h-4 w-4" data-testid="Trash2__orgRepDelete" />
                 </button>
               </>
             )}
@@ -306,7 +312,7 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
   return (
     <div className="flex flex-col gap-3" data-testid="RepresentantesLegalesSection__root">
       <p className="flex items-start gap-1.5 text-xs leading-[18px] text-muted-foreground" data-testid="RepresentantesLegalesSection__limitHint">
-        <Info size={13} className="mt-0.5 shrink-0" data-testid="Info__orgRepLimitHint" />
+        <InfoIcon size={13} className="mt-0.5 shrink-0" data-testid="Info__orgRepLimitHint" />
         <span>{ui('orgRepLimitHint', { limit: MODELO_390_REPRESENTATIVE_LIMIT })}</span>
       </p>
       {/* Blocking for the 390: the AEAT rejects a legal entity's declaration with no representative
@@ -317,7 +323,7 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
           role="status"
           className="flex items-start gap-1.5 text-xs leading-[18px] text-[var(--status-warning-fg)]"
           data-testid="RepresentantesLegalesSection__noActiveHint">
-          <TriangleAlert size={13} className="mt-0.5 shrink-0" data-testid="TriangleAlert__orgRepNoActive" />
+          <WarningIcon size={13} className="mt-0.5 shrink-0" data-testid="TriangleAlert__orgRepNoActive" />
           <span>{ui('orgRepLegalEntityHint')}</span>
         </p>
       )}

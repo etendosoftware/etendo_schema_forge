@@ -1,4 +1,10 @@
-import { ChevronLeft, ChevronRight, FileText, Image as ImageIcon, X } from 'lucide-react';
+import {
+  CaretLeftIcon,
+  CaretRightIcon,
+  FileTextIcon,
+  ImageIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { SheetClose, SheetTitle } from '@/components/ui/sheet';
@@ -51,7 +57,7 @@ export default function InvoiceInboxReviewHeader({
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const statusKey = statusLabelKey(document.status);
-  const FileIcon = isImageFileName(document.fileName) ? ImageIcon : FileText;
+  const FileIcon = isImageFileName(document.fileName) ? ImageIcon : FileTextIcon;
   return (
     <header
       className="flex h-[60px] flex-none items-center gap-3 border-b border-border pl-5 pr-4 max-[480px]:gap-2 max-[480px]:pl-3 max-[480px]:pr-2"
@@ -94,7 +100,7 @@ export default function InvoiceInboxReviewHeader({
         disabled={!canPrev}
         testId="invoice-inbox-review-prev"
         data-testid="IconButton__abf2a4">
-        <ChevronLeft className="h-4 w-4" aria-hidden="true" data-testid="ChevronLeft__review-header" />
+        <CaretLeftIcon className="h-4 w-4" aria-hidden="true" data-testid="ChevronLeft__review-header" />
       </IconButton>
       <IconButton
         label={ui('next')}
@@ -102,7 +108,7 @@ export default function InvoiceInboxReviewHeader({
         disabled={!canNext}
         testId="invoice-inbox-review-next"
         data-testid="IconButton__abf2a4">
-        <ChevronRight className="h-4 w-4" aria-hidden="true" data-testid="ChevronRight__review-header" />
+        <CaretRightIcon className="h-4 w-4" aria-hidden="true" data-testid="ChevronRight__review-header" />
       </IconButton>
       <SheetClose asChild data-testid="SheetClose__review-header">
         <Button
@@ -113,7 +119,7 @@ export default function InvoiceInboxReviewHeader({
           title={ui('close')}
           className="h-8 w-8 flex-none"
           data-testid="invoice-inbox-review-close">
-          <X className="h-4 w-4" aria-hidden="true" data-testid="X__review-header" />
+          <XIcon className="h-4 w-4" aria-hidden="true" data-testid="X__review-header" />
         </Button>
       </SheetClose>
     </header>

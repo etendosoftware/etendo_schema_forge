@@ -5,7 +5,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   computeTotals, documentTotal, totalMismatch, missingSet, lineKey, unresolvedProductCount, hasMissingTax,
-  pendingCount, vendorView, productView, joinMeta, extractedCountry, isReviewReadOnly, isOpenableRow,
+  pendingCount, vendorView, productView, linkedProductSimilarity, joinMeta, extractedCountry, isReviewReadOnly, isOpenableRow,
   isSettledStatus, reviewBanners, reviewNeighbors, reviewErrorKey, lineAmount, lineRate,
   initialZoom, stepZoom, PAPER_WIDTH, ZOOM_MIN, ZOOM_MAX, ZOOM_STEP,
   lineUnit6, toScaled, divRoundHalfAway, normalizeNumber, sameNumber, buildOp, applyOperationLocally,
@@ -61,14 +61,22 @@ describe('computeTotals', () => {
 
 describe('documentTotal', () => {
   const totals = { linesTotal: 121 };
-  it('uses the document total when numeric, rounded to the cent', () => {
-    assert.equal(documentTotal({ totalAmount: 130.456 }, totals), 130.46);
+  it('is the lines total, never the printed one (owner decision 2026-11-18)', () => {
+    assert.equal(documentTotal(totals), 121);
+    assert.equal(documentTotal(totals, null), 121);
   });
-  it('falls back to the lines total when missing, empty or not a number', () => {
-    assert.equal(documentTotal({}, totals), 121);
-    assert.equal(documentTotal({ totalAmount: '' }, totals), 121);
-    assert.equal(documentTotal({ totalAmount: 'n/a' }, totals), 121);
-    assert.equal(documentTotal(undefined, totals), 121);
+  it('is the created invoice grand total when given, rounded to the scale', () => {
+    assert.equal(documentTotal(totals, 217.8), 217.8);
+    assert.equal(documentTotal(totals, '217.804'), 217.8);
+    assert.equal(documentTotal(totals, 0), 0);
+  });
+  it('ignores an invoice total that is empty or not a number', () => {
+    assert.equal(documentTotal(totals, ''), 121);
+    assert.equal(documentTotal(totals, 'n/a'), 121);
+    assert.equal(documentTotal(totals, undefined), 121);
+  });
+  it('zero lines give zero', () => {
+    assert.equal(documentTotal({ linesTotal: 0 }), 0);
   });
 });
 
@@ -143,6 +151,20 @@ describe('vendorView / productView / text helpers', () => {
     assert.equal(productView({ product: { state: 'zzz' } }), 'none');
     assert.equal(productView({}), 'none');
     assert.equal(productView(null), 'none');
+  });
+  it('linkedProductSimilarity reads the similarity of the linked candidate (ETP-6051)', () => {
+    const product = (id, candidates) => ({ state: 'linked', id, matchedBy: 'suggested', candidates });
+    assert.equal(linkedProductSimilarity(product('P1', [{ id: 'P1', similarity: '72' }, { id: 'P2', similarity: '90' }])), 72);
+    assert.equal(linkedProductSimilarity(product('P2', [{ id: 'P1', similarity: '72' }, { id: 'P2', similarity: '96.7%' }])), 96.7);
+    assert.equal(linkedProductSimilarity(product('P1', [{ id: 'P1', similarity: '88,5' }])), 88.5);
+  });
+  it('linkedProductSimilarity is null when there is no usable number (ETP-6051)', () => {
+    assert.equal(linkedProductSimilarity({ id: 'P1', candidates: [{ id: 'P1' }] }), null);
+    assert.equal(linkedProductSimilarity({ id: 'P1', candidates: [{ id: 'P1', similarity: ' ' }] }), null);
+    assert.equal(linkedProductSimilarity({ id: 'P1', candidates: [{ id: 'P1', similarity: 'n/a' }] }), null);
+    assert.equal(linkedProductSimilarity({ id: 'P1', candidates: [{ id: 'P2', similarity: '80' }] }), null);
+    assert.equal(linkedProductSimilarity({ id: 'P1' }), null);
+    assert.equal(linkedProductSimilarity(null), null);
   });
   it('joinMeta skips empty parts and trims', () => {
     assert.equal(joinMeta(['B1', ' ', null, ' Madrid ', undefined]), 'B1 · Madrid');
@@ -268,10 +290,10 @@ describe('zoom', () => {
   });
 });
 
-// ── ETP-6050 S2: shared totals fixture, number helpers, operations, optimistic copy ────────────
+// ── ETP-6050 S2: totals fixture, number helpers, operations, optimistic copy ────────────
 const FIXTURE = JSON.parse(readFileSync(new URL('../../../../../__tests__/fixtures/invoice-inbox-totals.json', import.meta.url), 'utf8'));
 
-describe('totals shared fixture (same file the backend reads)', () => {
+describe('totals fixture (SPA copy; Java keeps its own, a rounding change updates both)', () => {
   it('carries the 22 agreed cases', () => {
     assert.equal(FIXTURE.cases.length, 22);
   });
@@ -675,11 +697,12 @@ describe('ETP-6050 S2 — totals edge cases (any sign, missing sides, discount b
   it('a scale of 3 and of 0 flow through computeTotals, documentTotal and totalMismatch', () => {
     const t3 = computeTotals([{ quantity: 3, unitPrice: 1.2345, taxRate: 10 }], 3);
     assert.equal(t3.linesTotal, 4.074);
-    assert.equal(documentTotal({ totalSource: 'printed', totalAmount: 4.0744 }, t3, 3), 4.074);
+    assert.equal(documentTotal(t3, null, 3), 4.074);
+    assert.equal(documentTotal(t3, 4.0744, 3), 4.074);
     assert.equal(totalMismatch({ totalSource: 'printed', totalAmount: 4.075 }, t3, 3), null);
     assert.deepEqual(totalMismatch({ totalSource: 'printed', totalAmount: 4.076 }, t3, 3), { lines: 4.074, document: 4.076 });
     const t0 = computeTotals([{ quantity: 3, unitPrice: 33.5, taxRate: 21 }], 0);
-    assert.equal(documentTotal({ totalSource: 'printed', totalAmount: 122.4 }, t0, 0), 122);
+    assert.equal(documentTotal(t0, 122.4, 0), 122);
     assert.equal(totalMismatch({ totalSource: 'printed', totalAmount: 123 }, t0, 0), null);
     assert.notEqual(totalMismatch({ totalSource: 'printed', totalAmount: 124 }, t0, 0), null);
   });
@@ -818,10 +841,10 @@ describe('omitKeys', () => {
 });
 
 
-// ── Confirm rules and the shared total-mismatch fixture ───────────────────────────────────────
+// ── Confirm rules and the total-mismatch fixture ───────────────────────────────────────
 const MISMATCH_FIXTURE = JSON.parse(readFileSync(new URL('../../../../../__tests__/fixtures/invoice-inbox-total-mismatch.json', import.meta.url), 'utf8'));
 
-describe('total mismatch shared fixture (same file the backend will read)', () => {
+describe('total mismatch fixture (SPA only; the Java rule has its own tests)', () => {
   it('carries the 18 agreed cases', () => {
     assert.equal(MISMATCH_FIXTURE.cases.length, 18);
   });
@@ -896,8 +919,15 @@ describe('confirmBlockers', () => {
 
 describe('reviewBanners (confirm)', () => {
   it('a failed confirm shows the confirmFailed banner with the stored detail (null when absent)', () => {
-    assert.deepEqual(reviewBanners({ status: 'ERROR', errorCode: 'CONFIRM_FAILED', errorDetail: 'boom' }), [{ kind: 'confirmFailed', detail: 'boom' }]);
-    assert.deepEqual(reviewBanners({ status: 'ERROR', errorCode: 'CONFIRM_FAILED' }), [{ kind: 'confirmFailed', detail: null }]);
+    assert.deepEqual(reviewBanners({ status: 'ERROR', errorCode: 'CONFIRM_FAILED', errorDetail: 'boom' }), [{ kind: 'confirmFailed', detail: 'boom', info: null }]);
+    assert.deepEqual(reviewBanners({ status: 'ERROR', errorCode: 'CONFIRM_FAILED' }), [{ kind: 'confirmFailed', detail: null, info: null }]);
+  });
+  it('a stored identifier travels as info next to the raw stored detail', () => {
+    const info = { code: 'step_failed', params: { step: 'line', n: 2, reason: 'Tax is required' } };
+    assert.deepEqual(
+      reviewBanners({ status: 'ERROR', errorCode: 'CONFIRM_FAILED', errorDetail: '{"v":1}', errorInfo: info }),
+      [{ kind: 'confirmFailed', detail: '{"v":1}', info }],
+    );
   });
   it('blockers show on an open document, before the duplicates; settled documents show none', () => {
     const document = { validation: { missing: ['exchangeRate', 'vendorAddress'] }, header: { duplicate: { state: 'found', invoices: [{ documentNo: 'F1' }] } } };

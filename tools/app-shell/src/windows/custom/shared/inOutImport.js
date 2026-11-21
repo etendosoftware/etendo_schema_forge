@@ -1,4 +1,5 @@
 import { listAll, listLines } from './importActionClient.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 /**
  * The data side of the four «Importar desde…» popups of a goods shipment / goods receipt
@@ -27,30 +28,24 @@ const rowsOf = async (res) => (await res.json())?.response?.data || [];
 export const isCoveredDocument = (doc) => Number(doc?.pendingLines) === 0;
 
 /**
- * The row total of a listed ORDER (and, since ETP-6002, of a SALES invoice on the goods shipment):
- * the server's pending amount (`amount`, sent with `detail`),
- * else the loaded lines' sum.
+ * The row total of a listed document while its lines are not loaded: the server's pending amount
+ * (`amount`) — an order's (sent with `detail`) and an invoice's on both the goods shipment (since
+ * ETP-6002 CP-27) and the goods receipt (since ETP-5828 QA UI-9; it used to show 0,00). Null when
+ * the row carries none (an older backend): ImportLinesModal then falls back to the loaded lines' sum.
  */
 export const pendingDocumentTotal = (doc) => {
   const amount = Number(doc?.amount);
   return doc?.amount != null && Number.isFinite(amount) ? amount : null;
 };
 
-/**
- * The row total of a listed PURCHASE invoice (goods receipt): always 0, as the popup showed it
- * before ETP-6099 (its lines carry no price, so the eager line sum was 0 on every listed invoice).
- * The receipt's `availableInvoices` has no `amount`; without this the row would stay blank until
- * expanded. The goods shipment's invoice popup uses `pendingDocumentTotal` since ETP-6002 (CP-27):
- * its `availableInvoices` sends the pending `amount`.
- */
-export const zeroDocumentTotal = () => 0;
-
 /** The line's selectable quantity: the server's pending, never negative. */
 export const pendingOf = (row) => Math.max(0, Number(row?.pendingQuantity) || 0);
 
 /**
  * The «in draft shipment: …» note of a line: the documentNo of the OTHER draft shipments /
- * receipts holding it, or undefined when none (the popup then says «already imported»).
+ * receipts holding it, or undefined when none (the popup then says «already imported»). Used by
+ * all four popups, purchases included since ETP-5828 QA UI-8 (they used to read the
+ * `pendingBasis: 'classic'` rule, which deducted no draft and so named none).
  */
 export const draftDocumentsOf = (row) =>
   (Array.isArray(row?.inDraftDocuments) && row.inDraftDocuments.length > 0 ? [...row.inDraftDocuments] : undefined);
@@ -84,7 +79,7 @@ async function excludedOnlyByCurrency({ apiFetch, base, spec, entity, targetId, 
     if (!currency) return false;
     const isCandidate = probe.isCandidate || (() => true);
     const candidates = (await rowsOf(sourceRes)).filter(d =>
-      d.documentStatus === 'CO' && d.businessPartner === bpId && isCandidate(d));
+      isCompletedStatus(d.documentStatus) && d.businessPartner === bpId && isCandidate(d));
     return candidates.length > 0 && !candidates.some(d => d.currency === currency);
   } catch {
     return false;
@@ -97,15 +92,13 @@ async function excludedOnlyByCurrency({ apiFetch, base, spec, entity, targetId, 
  * the popup listed in another order than the action (e.g. `newestCreatedFirst` from importActionClient.js). `entity` is the target's header entity
  * in the NEO path (`goodsShipment` / `goodsReceipt`), named by the popup.
  *
- * `params` adds keys to the action body (e.g. `{ pendingBasis: 'classic' }`); none by default.
- *
  * @returns {Promise<{ documents: object[], sharedContext: { targetId: string }, excludedByCurrency: boolean }>}
  */
 export async function fetchInOutDocuments({
-  apiFetch, base, spec, entity, targetId, bpId, action, dateKey, currencyProbe, order = (rows) => rows, params = {},
+  apiFetch, base, spec, entity, targetId, bpId, action, dateKey, currencyProbe, order = (rows) => rows,
 }) {
   const rows = await listAll({
-    apiFetch, base, spec, targetId, action, entity, params: { includeCovered: true, detail: true, ...params },
+    apiFetch, base, spec, targetId, action, entity, params: { includeCovered: true, detail: true },
   });
   const documents = order(rows.map(r => ({ ...r, [dateKey]: r.date, documentStatus: 'CO' })));
   const excludedByCurrency = documents.length === 0

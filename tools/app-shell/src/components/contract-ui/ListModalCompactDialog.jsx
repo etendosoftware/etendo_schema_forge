@@ -1,4 +1,4 @@
-import { Save, X } from 'lucide-react';
+import { FloppyDiskIcon, XIcon } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
 import { EntityForm } from './EntityForm.jsx';
 
@@ -47,12 +47,17 @@ export function splitCompactRuns(fields) {
  *
  * Purely presentational: the host (`ListModalWindow`) owns the form state, the validation and
  * the save, exactly as for the default modal.
+ *
+ * `readOnly` (a read-only role) turns it into a view: every field is disabled, the Save pill is
+ * not rendered and the outline pill reads "Close", alone at the right of the footer.
  */
 export function ListModalCompactDialog({
   open, onClose, title, subtitle, fields, entity, formData, onFieldChange,
-  api, token, apiBaseUrl, formError, onSubmit, submitDisabled, submitting, submitLabel, ui,
+  api, token, apiBaseUrl, formError, onSubmit, submitDisabled, submitting, submitLabel,
+  readOnly = false, ui,
 }) {
   const runs = splitCompactRuns(fields);
+  const footerAlign = readOnly ? 'justify-end' : 'justify-between';
   return (
     <Dialog
       open={open}
@@ -89,36 +94,39 @@ export function ListModalCompactDialog({
               cols={1}
               gap={run.checkbox ? CHECKBOX_GAP : FIELD_GAP}
               variant="compact"
+              readOnly={readOnly}
               data-testid="EntityForm__c0a1d4" />
           ))}
           {formError && (
             <div
               role="alert"
               className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              <X size={16} className="mt-0.5 flex-shrink-0" data-testid="X__c0a1d4" />
+              <XIcon size={16} className="mt-0.5 flex-shrink-0" data-testid="X__c0a1d4" />
               <span>{formError}</span>
             </div>
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-3 px-7 py-3">
+        <div className={`flex items-center ${footerAlign} gap-3 px-7 py-3`}>
           <button
             type="button"
             onClick={onClose}
             disabled={submitting}
             data-testid="list-modal-cancel"
             className={CANCEL_PILL}>
-            {ui('cancel')}
+            {readOnly ? ui('close') : ui('cancel')}
           </button>
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={submitDisabled}
-            data-testid="list-modal-submit"
-            className={SAVE_PILL}>
-            <Save className="h-5 w-5" aria-hidden="true" data-testid="Save__c0a1d4" />
-            {submitting ? ui('saving') : submitLabel}
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={onSubmit}
+              disabled={submitDisabled}
+              data-testid="list-modal-submit"
+              className={SAVE_PILL}>
+              <FloppyDiskIcon className="h-5 w-5" aria-hidden="true" data-testid="Save__c0a1d4" />
+              {submitting ? ui('saving') : submitLabel}
+            </button>
+          )}
         </div>
 
         {/* Last in the DOM so the dialog's initial focus lands on the first field, not here.
@@ -131,7 +139,7 @@ export function ListModalCompactDialog({
             aria-label={ui('close')}
             data-testid="list-modal-close"
             className="inline-flex h-8 w-8 items-center justify-center rounded-full text-icon-secondary transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring">
-            <X className="h-5 w-5" aria-hidden="true" data-testid="X__c0a1d4" />
+            <XIcon className="h-5 w-5" aria-hidden="true" data-testid="X__c0a1d4" />
           </button>
         </div>
       </DialogContent>

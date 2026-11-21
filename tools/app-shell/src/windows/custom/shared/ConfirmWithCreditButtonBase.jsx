@@ -6,6 +6,7 @@ import ConfirmInOutModal from '@/components/contract-ui/ConfirmInOutModal';
 import { documentPeriodDate } from '@/lib/periodNotAvailable.js';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { useConfirmWithCredit } from './useConfirmWithCredit';
+import { isCompletedStatus, isDraftStatus } from '../../../lib/docStatus.js';
 
 /**
  * Confirm flow + completed-state actions shared by the two return windows
@@ -65,14 +66,14 @@ export default function ConfirmWithCreditButtonBase({
   useEffect(() => {
     if (!confirmEventName) return undefined;
     const handler = () => {
-      if (status !== 'DR' || saveBlocked || isDocumentReadOnly) return;
+      if (!isDraftStatus(status) || saveBlocked || isDocumentReadOnly) return;
       setShowModal(true);
     };
     window.addEventListener(confirmEventName, handler);
     return () => window.removeEventListener(confirmEventName, handler);
   }, [confirmEventName, status, saveBlocked, isDocumentReadOnly, setShowModal]);
 
-  if (status !== 'DR' && status !== 'CO') return null;
+  if (!isDraftStatus(status) && !isCompletedStatus(status)) return null;
 
   const isFullyInvoiced = parseFloat(data?.invoiceStatus ?? 0) >= 100;
 
@@ -85,7 +86,7 @@ export default function ConfirmWithCreditButtonBase({
 
   return (
     <>
-      {status === 'CO' && !hasReturnInvoice && (
+      {isCompletedStatus(status) && !hasReturnInvoice && (
         // ETP-5601 — record-toolbar primary button (Figma): 40px, 8px radius, text-sm/leading-6,
         // #121217 fill with white text. Was the `--status-info-fg` badge token (saturated blue).
         <button type="button" data-testid="action-create-return-invoice" onClick={() => setShowModal(true)}
@@ -101,7 +102,7 @@ export default function ConfirmWithCreditButtonBase({
       )}
       {extraActions}
       {extraPortals}
-      {showModal && status === 'DR' && (
+      {showModal && isDraftStatus(status) && (
         <ConfirmInOutModal
           base={base}
           headers={headers}
@@ -135,7 +136,7 @@ export default function ConfirmWithCreditButtonBase({
           onClose={() => setShowModal(false)}
           data-testid="ConfirmInOutModal__f9608e" />
       )}
-      {showModal && status === 'CO' && createPortal(
+      {showModal && isCompletedStatus(status) && createPortal(
         <CreateInvoiceConfirmModal
           data={data}
           loading={creatingInvoice}

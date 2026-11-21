@@ -3,7 +3,15 @@ import { GridViewControls } from '@/components/contract-ui/GridViewControls.jsx'
 import { gridHeaderProps, gridReorderHandle, gridResizeHandle } from '@/components/contract-ui/GridColumnHeaderControls.jsx';
 import { Fragment, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Check, ExternalLink, Info, Loader2, Trash2, TriangleAlert, X } from 'lucide-react';
+import {
+  CheckIcon,
+  ArrowSquareOutIcon,
+  InfoIcon,
+  CircleNotchIcon,
+  TrashIcon,
+  WarningIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AddLineButton } from '@/components/ui/add-line-button';
@@ -67,7 +75,7 @@ function CodeHint() {
       <Tooltip data-testid="Tooltip__iaeCodeHint">
         <TooltipTrigger asChild data-testid="TooltipTrigger__iaeCodeHint">
           <span className="inline-flex items-center ml-1 align-middle" tabIndex={0} aria-label={ui('orgIaeCodeHint')}>
-            <Info size={13} className="text-muted-foreground" data-testid="Info__iaeCodeHint" />
+            <InfoIcon size={13} className="text-muted-foreground" data-testid="Info__iaeCodeHint" />
           </span>
         </TooltipTrigger>
         <TooltipContent className="max-w-[240px] text-xs" data-testid="TooltipContent__iaeCodeHint">
@@ -94,7 +102,7 @@ function EpigraphSearchLink() {
       className="ml-2 inline-flex items-center gap-1 align-middle text-xs font-normal text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
       data-testid="ActividadesIaeSection__epigraphSearchLink">
       {ui('orgIaeEpigraphSearchLink')}
-      <ExternalLink size={12} aria-hidden="true" data-testid="ExternalLink__iaeEpigraphSearch" />
+      <ArrowSquareOutIcon size={12} aria-hidden="true" data-testid="ExternalLink__iaeEpigraphSearch" />
     </a>
   );
 }
@@ -215,7 +223,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
       return (
         <tr>
           <td colSpan={columns.length + 1} className="py-8 text-center text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin inline mr-1.5" data-testid="Loader2__iaeLoading" />
+            <CircleNotchIcon className="h-4 w-4 animate-spin inline mr-1.5" data-testid="Loader2__iaeLoading" />
           </td>
         </tr>
       );
@@ -259,7 +267,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
                   <Tooltip data-testid="Tooltip__iaeMissingCode">
                     <TooltipTrigger asChild data-testid="TooltipTrigger__iaeMissingCode">
                       <span className="inline-flex items-center text-[var(--status-warning-fg)]" tabIndex={0} aria-label={ui('orgIaeMissingCodeWarning')}>
-                        <TriangleAlert size={14} data-testid="TriangleAlert__iaeMissingCode" />
+                        <WarningIcon size={14} data-testid="TriangleAlert__iaeMissingCode" />
                       </span>
                     </TooltipTrigger>
                     <TooltipContent className="max-w-[240px] text-xs" data-testid="TooltipContent__iaeMissingCode">
@@ -284,7 +292,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
           {columns.map(column => <Fragment key={column.key}>{cells[column.key]}</Fragment>)}
           <td className="py-1.5 px-2 align-middle text-right">
             {rowSaving || deletingId === row.id ? (
-              <Loader2 className="h-4 w-4 animate-spin inline text-muted-foreground" data-testid="Loader2__iaeRowBusy" />
+              <CircleNotchIcon className="h-4 w-4 animate-spin inline text-muted-foreground" data-testid="Loader2__iaeRowBusy" />
             ) : (
               <button
                 type="button"
@@ -293,7 +301,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
                 title={ui('deleteRowTooltip')}
                 className="h-7 w-7 inline-flex items-center justify-center rounded-full text-destructive hover:bg-destructive/10 transition-colors"
                 data-testid="ActividadesIaeSection__delete">
-                <Trash2 className="h-4 w-4" data-testid="Trash2__iaeDelete" />
+                <TrashIcon className="h-4 w-4" data-testid="Trash2__iaeDelete" />
               </button>
             )}
           </td>
@@ -376,7 +384,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
                 <td className="py-1.5 px-2 align-middle">
                   <div className="flex items-center gap-1 justify-end">
                     {savingNew ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" data-testid="Loader2__iaeNewSaving" />
+                      <CircleNotchIcon className="h-4 w-4 animate-spin text-muted-foreground" data-testid="Loader2__iaeNewSaving" />
                     ) : (
                       <>
                         <button
@@ -386,7 +394,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
                           title={ui('save')}
                           className="h-7 w-7 inline-flex items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors"
                           data-testid="ActividadesIaeSection__saveNew">
-                          <Check className="h-4 w-4" data-testid="Check__iaeSaveNew" />
+                          <CheckIcon className="h-4 w-4" data-testid="Check__iaeSaveNew" />
                         </button>
                         <button
                           type="button"
@@ -395,7 +403,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
                           title={ui('cancel')}
                           className="h-7 w-7 inline-flex items-center justify-center rounded-full text-muted-foreground hover:bg-muted transition-colors"
                           data-testid="ActividadesIaeSection__cancelNew">
-                          <X className="h-4 w-4" data-testid="X__iaeCancelNew" />
+                          <XIcon className="h-4 w-4" data-testid="X__iaeCancelNew" />
                         </button>
                       </>
                     )}
@@ -413,7 +421,7 @@ export default function ActividadesIaeSection({ token, apiBaseUrl, orgId }) {
           role="alert"
           className="flex items-start gap-1.5 text-xs leading-[18px] text-[var(--status-warning-fg)]"
           data-testid="ActividadesIaeSection__overCapWarning">
-          <TriangleAlert size={13} className="mt-0.5 shrink-0" data-testid="TriangleAlert__iaeOverCap" />
+          <WarningIcon size={13} className="mt-0.5 shrink-0" data-testid="TriangleAlert__iaeOverCap" />
           <span>{ui('orgIaeOverCapWarning', { max: IAE_MAX_SECONDARY_ACTIVITIES })}</span>
         </p>
       )}

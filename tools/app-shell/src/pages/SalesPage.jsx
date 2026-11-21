@@ -5,14 +5,14 @@ import { KPIHeader, KanbanBoard } from '@/components/contract-ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { ShoppingCart, FileText, TrendingUp } from 'lucide-react';
+import { ShoppingCartIcon, FileTextIcon, TrendUpIcon } from '@phosphor-icons/react';
 
 import { sections } from '@generated/sales/generated/config';
 import * as mockData from '@generated/sales/generated/mockData';
 
 // -- Icon resolution (config stores string names) -----------------------------
 
-const ICON_MAP = { ShoppingCart, FileText, TrendingUp };
+const ICON_MAP = { ShoppingCart: ShoppingCartIcon, FileText: FileTextIcon, TrendingUp: TrendUpIcon };
 
 // -- Derived data from contract -----------------------------------------------
 

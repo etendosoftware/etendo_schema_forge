@@ -38,6 +38,9 @@ export const resultOf = (errorCode) => (errorCode ? { outcome: 'error', errorCod
 const FILTER_TYPES = [
   ['dateFrom', 'period'], ['dateTo', 'period'], ['orgId', 'organization'],
   ['bPartnerId', 'business_partner'], ['productId', 'product'], ['columns', 'columns'],
+  // ETP-6084: the Trial Balance's filters and options.
+  ['projectId', 'project'], ['costCenterId', 'cost_center'], ['fromAccountId', 'account_range'], ['toAccountId', 'account_range'],
+  ['groupBy', 'grouping'], ['openingEntryAmount', 'opening_entry'], ['showOnlyAccountsWithValue', 'only_with_value'],
 ];
 export function filterTypeOf(patch) {
   return FILTER_TYPES.find(([key]) => key in patch)?.[1] ?? null;

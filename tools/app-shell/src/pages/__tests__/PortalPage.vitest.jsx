@@ -2,15 +2,24 @@
 // @covers tools/app-shell/src/pages/portal/PortalShell.jsx
 // @covers tools/app-shell/src/pages/portal/PortalHomeView.jsx
 // @covers tools/app-shell/src/pages/portal/PortalDocumentListView.jsx
+// @covers tools/app-shell/src/pages/portal/PortalListDesktop.jsx
 // @covers tools/app-shell/src/pages/portal/PortalDocumentDetailView.jsx
+// @covers tools/app-shell/src/pages/portal/PortalDetailPanel.jsx
 // @covers tools/app-shell/src/pages/portal/PortalBits.jsx
-// @covers tools/app-shell/src/pages/portal/PortalArrivalNotice.jsx
+// @covers tools/app-shell/src/components/layout/SearchBar.jsx
+// @covers tools/app-shell/src/lib/portal/usePortalApiFetch.js
 // Mocks BEFORE imports.
 const apiFetchMock = vi.fn();
 
 // The page's only door to the network. Mocked at the hook rather than at `fetch` so the
 // request OPTIONS are observable — that is what the plan's §5.4 assertion below reads.
-vi.mock('@/lib/portal/usePortalApiFetch.js', () => ({ usePortalApiFetch: () => apiFetchMock }));
+// `real` lets the cold-open test drive the page through the REAL client over a stubbed `fetch`,
+// to see what the session scope does to the answers.
+const hookMode = { real: false };
+vi.mock('@/lib/portal/usePortalApiFetch.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { usePortalApiFetch: (base) => (hookMode.real ? actual.usePortalApiFetch(base) : apiFetchMock) };
+});
 
 // The download plumbing lives in its own module so a test can see what would be saved.
 vi.mock('@/lib/portal/portalDownload.js', () => ({ saveBlobAsFile: vi.fn() }));
@@ -73,7 +82,10 @@ import { StrictMode } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { registerApiSession, resetApiSessionForTests } from '@etendosoftware/app-shell-core/auth';
 import PortalPage from '../PortalPage.jsx';
+import { ETENDO_PRICING_URL, PortalCreatedWithHeaderLink } from '../portal/PortalBits.jsx';
+import { PortalListTable } from '../portal/PortalListDesktop.jsx';
 import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
 
 /**
@@ -89,7 +101,7 @@ const TOKEN = 'tok-abcdef0123456789';
 /** A euro amount exactly as the canonical formatter produces it (non-breaking space). */
 const eur = (digits) => `${digits} €`;
 
-const IDENTITY = { businessPartnerName: 'Cliente Uno', tenantName: 'Acme SA' };
+const IDENTITY = { businessPartnerName: 'Cliente Uno', email: 'cliente@uno.es', tenantName: 'Acme SA' };
 const WITH_ENTRY = { ...IDENTITY, entryDocument: { kind: 'INVOICE', id: 'inv-1' } };
 
 const HOME = {
@@ -245,6 +257,25 @@ const urlView = () => Object.fromEntries(new URLSearchParams(screen.getByTestId(
 /** The kind of the list on screen (its toolbar carries it). */
 const listKind = () => screen.getByTestId('portal-document-list').querySelector('[data-kind]')?.getAttribute('data-kind');
 
+/** Every "Creado con Etendo" link: the pricing page, in a new tab, with no opener, named by its label. */
+function expectEtendoLink(link) {
+  expect(link).toHaveAttribute('href', ETENDO_PRICING_URL);
+  expect(link).toHaveAttribute('target', '_blank');
+  expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  expect(link).toHaveAccessibleName('portalCreatedWithLinkLabel');
+}
+
+const ETENDO_LINK_TEST_IDS = ['portal-created-with', 'portal-created-with-compact', 'portal-created-with-mobile'];
+
+/** Renders below `md`, where the page opens a document as a full page with its own headers. */
+function withViewportWidth(width, body) {
+  const original = window.innerWidth;
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: width });
+  return Promise.resolve(body()).finally(() => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: original });
+  });
+}
+
 /** Exact options of every GET the page makes; `/renew` adds `method: 'POST'`. */
 const PORTAL_GET_OPTIONS = { token: TOKEN, headers: { 'X-Portal-Token': TOKEN }, on401: 'ignore' };
 
@@ -313,6 +344,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  // The rail remembers its collapsed state per browser; no test may leak it into the next.
+  localStorage.clear();
 });
 
 describe('PortalPage — token handling (plan §5.4)', () => {
@@ -325,7 +358,7 @@ describe('PortalPage — token handling (plan §5.4)', () => {
     await pdfReady();
 
     await user.click(screen.getByTestId('portal-download-pdf'));
-    await user.click(screen.getByTestId('portal-back'));
+    await user.click(screen.getByTestId('portal-panel-close'));
     await listReady();
     await user.click(screen.getByTestId('portal-nav-home'));
     await shellReady();
@@ -356,6 +389,46 @@ describe('PortalPage — token handling (plan §5.4)', () => {
 
     await waitFor(() => expect(screen.getByTestId('portal-invalid-link')).toBeInTheDocument());
     expect(apiFetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('PortalPage — a cold open from the email', () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    hookMode.real = false;
+    globalThis.fetch = realFetch;
+    resetApiSessionForTests();
+  });
+
+  it('shows the portal when the app session identity settles while its first requests are in flight', async () => {
+    // The customer has no app session: the auth bootstrap resolves the identity (unknown, then
+    // anonymous) in parallel with /me and /home. Their answers must not be discarded as belonging
+    // to a superseded session, which would put a valid link on the load-error screen.
+    let identityReplaced = false;
+    registerApiSession({
+      getToken: () => null,
+      onUnauthorized: vi.fn(),
+      scope: {
+        capture: () => ({}),
+        isSameIdentity: () => !identityReplaced,
+        isCurrent: () => !identityReplaced,
+      },
+    });
+    globalThis.fetch = vi.fn(async (url) => {
+      identityReplaced = true;
+      return new Response(JSON.stringify(String(url).endsWith('/sws/portal/me') ? IDENTITY : HOME), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    hookMode.real = true;
+
+    renderPortal();
+    await shellReady();
+
+    expect(screen.getByTestId('portal-home')).toBeInTheDocument();
+    expect(screen.getByTestId('portal-customer-name').textContent).toBe('Cliente Uno');
+    expect(screen.queryByTestId('portal-load-error')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('portal-invalid-link')).not.toBeInTheDocument();
   });
 });
 
@@ -416,7 +489,7 @@ describe('PortalPage — view in the URL', () => {
     await detailReady();
 
     expect(callsTo('/documents/invoice/inv-1')).toHaveLength(1);
-    expect(screen.getByTestId('portal-view-title').textContent).toBe('portalKindInvoice FV/0001');
+    expect(screen.getByTestId('portal-panel-title').textContent).toBe('portalKindInvoice FV/0001');
     expect(screen.getByTestId('location-probe').textContent).toBe('');
   });
 
@@ -487,7 +560,7 @@ describe('PortalPage — view in the URL', () => {
     renderPortal();
     await detailReady();
 
-    await user.click(screen.getByTestId('portal-back'));
+    await user.click(screen.getByTestId('portal-panel-close'));
     await listReady();
 
     expect(urlView()).toEqual({ view: 'list', kind: 'INVOICE' });
@@ -515,40 +588,174 @@ describe('PortalPage — shell', () => {
     expect(screen.queryByTestId('portal-customer-avatar')).not.toBeInTheDocument();
   });
 
-  it('links "Creado con etendo.ai" to the product site in a new tab, without an opener', async () => {
-    renderPortal();
-    await shellReady();
+  it('draws the header "Creado con Etendo" pill from lg and the compact tile below it, never both', () => {
+    render(<PortalCreatedWithHeaderLink />);
 
-    const link = screen.getByTestId('portal-created-with');
-    expect(link).toHaveAttribute('href', 'https://etendo.ai');
-    expect(link).toHaveAttribute('target', '_blank');
-    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    const pill = screen.getByTestId('portal-created-with');
+    const compact = screen.getByTestId('portal-created-with-compact');
+    // jsdom has no layout: what splits the two at the breakpoint is their wrappers' classes.
+    expect(pill.parentElement).toHaveClass('hidden', 'lg:flex');
+    expect(pill.parentElement).not.toHaveClass('lg:hidden');
+    expect(compact.parentElement).toHaveClass('lg:hidden');
+    expect(compact.parentElement).not.toHaveClass('hidden');
+    // The pill writes the copy; the compact tile is only the mark, named and titled by the label.
+    expect(pill).toHaveTextContent('portalCreatedWith');
+    expect(pill).toHaveTextContent('portalLearnMore');
+    expect(compact.textContent).toBe('');
+    expect(compact).toHaveAttribute('title', 'portalCreatedWithLinkLabel');
+    for (const link of [pill, compact]) expectEtendoLink(link);
   });
+
+  // Each view draws its own headers: the link must be in every one of them, and the rail (where
+  // the old etendo.ai brand lived) must not carry it.
+  for (const { view, path, width, ready, desktopHeader, mobileHeader } of [
+    {
+      view: 'home',
+      path: `/portal/${TOKEN}`,
+      ready: shellReady,
+      desktopHeader: () => screen.getByTestId('portal-view-header'),
+      mobileHeader: () => screen.getByTestId('portal-mobile-topbar'),
+    },
+    {
+      view: 'list',
+      path: `/portal/${TOKEN}?view=list&kind=INVOICE`,
+      ready: listReady,
+      desktopHeader: () => screen.getByTestId('portal-view-header'),
+      // The list's mobile header has no test id of its own; the only tile on this view is in it.
+      mobileHeader: () => screen.getByTestId('portal-created-with-mobile').closest('header'),
+    },
+    {
+      // Below md a document is a full page with both headers (desktop opens it as a drawer).
+      view: 'document page',
+      path: `/portal/${TOKEN}?view=doc&kind=ORDER&id=ord-1`,
+      width: 500,
+      ready: detailReady,
+      desktopHeader: () => screen.getByTestId('portal-back').closest('header'),
+      mobileHeader: () => screen.getByTestId('portal-back-mobile').closest('header'),
+    },
+  ]) {
+    it(`puts the Etendo link in the ${view} desktop and mobile headers, and never in the rail`, async () => {
+      await withViewportWidth(width ?? window.innerWidth, async () => {
+        renderPortal(path);
+        await ready();
+      });
+
+      const desktop = within(desktopHeader());
+      const mobile = mobileHeader();
+      expect(mobile).toHaveClass('md:hidden');
+      for (const link of [
+        desktop.getByTestId('portal-created-with'),
+        desktop.getByTestId('portal-created-with-compact'),
+        within(mobile).getByTestId('portal-created-with-mobile'),
+      ]) expectEtendoLink(link);
+      const rail = within(screen.getByTestId('portal-sidebar'));
+      for (const testId of ETENDO_LINK_TEST_IDS) expect(rail.queryByTestId(testId)).not.toBeInTheDocument();
+    });
+  }
 
   it('marks the open view in the sidebar and counts what needs the customer', async () => {
     renderPortal();
     await shellReady();
 
     expect(screen.getByTestId('portal-nav-home')).toHaveAttribute('aria-current', 'page');
+    // "Ayuda y soporte" was removed from the rail (PO answer).
+    expect(screen.queryByTestId('portal-help')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('portal-nav-quotation')).getByTestId('portal-nav-count').textContent).toBe('2');
     expect(within(screen.getByTestId('portal-nav-invoice')).getByTestId('portal-nav-count').textContent).toBe('1');
     expect(within(screen.getByTestId('portal-nav-order')).queryByTestId('portal-nav-count')).not.toBeInTheDocument();
   });
 });
 
+describe('PortalPage — rail', () => {
+  it('shows the promo card only while the rail is expanded, and remembers the choice', async () => {
+    const user = userEvent.setup();
+    renderPortal();
+    await shellReady();
+
+    const rail = screen.getByTestId('portal-sidebar');
+    expect(rail).toHaveAttribute('data-collapsed', 'false');
+    // "Empieza gratis" opens the app's sign-up (PO answer).
+    expect(within(rail).getByTestId('portal-promo-cta')).toHaveAttribute('href', 'https://app.etendo.ai/onboarding');
+
+    await user.click(screen.getByTestId('portal-rail-toggle'));
+
+    expect(rail).toHaveAttribute('data-collapsed', 'true');
+    expect(screen.queryByTestId('portal-promo')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('portal-nav-quotation')).not.toBeInTheDocument();
+    // Collapsed, "Mis documentos" carries the total of the kinds' counts (2 quotations + 1 invoice).
+    expect(screen.getByTestId('portal-nav-documents-count').textContent).toBe('3');
+    expect(localStorage.getItem('etendo.portal.railCollapsed')).toBe('true');
+
+    // "Mis documentos" expands the rail again, to choose a kind.
+    await user.click(screen.getByTestId('portal-nav-documents'));
+    expect(rail).toHaveAttribute('data-collapsed', 'false');
+    expect(screen.getByTestId('portal-promo')).toBeInTheDocument();
+  });
+
+  // The header is the only place the company appears in the rail. Scoped to `portal-rail-company`:
+  // the mobile top bar writes the tenant name too.
+  for (const { state, collapse, alt, title } of [
+    // Expanded, the name is written beside the logo, so the image stays silent.
+    { state: 'expanded', collapse: false, alt: '', title: null },
+    // Collapsed, the logo stands alone: it says the company, and its tooltip names it.
+    { state: 'collapsed', collapse: true, alt: 'Acme SA', title: 'Acme SA' },
+  ]) {
+    it(`heads the ${state} rail with the company's round logo`, async () => {
+      const user = userEvent.setup();
+      responses.me = jsonResponse({ ...IDENTITY, hasLogo: true });
+      responses.logo = blobResponse(new Blob(['logo'], { type: 'image/png' }));
+      renderPortal();
+      await shellReady();
+      if (collapse) await user.click(screen.getByTestId('portal-rail-toggle'));
+
+      const company = screen.getByTestId('portal-rail-company');
+      const logo = await waitFor(() => within(company).getByTestId('portal-logo'));
+      expect(logo).toHaveAttribute('src', 'blob:portal-object');
+      expect(logo).toHaveAttribute('alt', alt);
+      expect(within(company).getByTestId('portal-logo-tile')).toHaveClass('rounded-full');
+      expect(company.getAttribute('title')).toBe(title);
+      const names = within(company).queryAllByTestId('portal-tenant-name');
+      expect(names.map((name) => name.textContent)).toEqual(collapse ? [] : ['Acme SA']);
+    });
+  }
+
+  it('shows the company\'s initials without a logo, and no company item in either rail state', async () => {
+    const user = userEvent.setup();
+    renderPortal();
+    await shellReady();
+
+    const company = () => screen.getByTestId('portal-rail-company');
+    expect(within(company()).queryByTestId('portal-logo')).not.toBeInTheDocument();
+    expect(within(company()).getByTestId('portal-logo-tile').textContent).toBe('AS');
+    expect(screen.queryByTestId('portal-company')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('portal-rail-toggle'));
+
+    expect(within(company()).getByTestId('portal-logo-tile').textContent).toBe('AS');
+    expect(screen.queryByTestId('portal-company')).not.toBeInTheDocument();
+    // Collapsed, the menu below the header is only expand, Inicio and "Mis documentos".
+    const menu = screen.getByTestId('portal-nav-home').parentElement;
+    expect([...menu.children].map((item) => item.dataset.testid))
+      .toEqual(['portal-rail-toggle', 'portal-nav-home', 'portal-nav-documents']);
+  });
+});
+
 describe('PortalPage — language', () => {
-  it('opens the language menu from its trigger, names Spanish by default and switches to English', async () => {
+  it('offers the language only in the user menu, opened from the customer, and switches to English', async () => {
     const user = userEvent.setup();
     localeState.locale = undefined;
     renderPortal();
     await shellReady();
 
-    // The sidebar's trigger (the first) names the current language; Spanish when none is set.
-    const trigger = screen.getAllByTestId('portal-language-switch')[0];
-    expect(trigger).toHaveTextContent('Español');
-    // The menu is closed until its trigger is clicked.
+    // As in the app (PO answer): no standalone language switch; the user (the rail's customer row
+    // or the mobile avatar) opens a menu with the language section.
+    expect(screen.queryByTestId('portal-language-switch')).not.toBeInTheDocument();
     expect(screen.queryByTestId('portal-language-en')).not.toBeInTheDocument();
-    await user.click(trigger);
+    await user.click(within(screen.getByTestId('portal-sidebar')).getByTestId('portal-customer'));
+    // The app's user popup look: the customer's name and email, then the language.
+    const header = screen.getByTestId('portal-user-menu-header');
+    expect(header).toHaveTextContent('Cliente Uno');
+    expect(within(header).getByTestId('portal-user-menu-email').textContent).toBe('cliente@uno.es');
 
     await user.click(screen.getByTestId('portal-language-en'));
     expect(localeState.setLocale).toHaveBeenCalledWith('en_US');
@@ -561,7 +768,7 @@ describe('PortalPage — language', () => {
       renderPortal();
       await shellReady();
 
-      await user.click(screen.getAllByTestId('portal-language-switch')[0]);
+      await user.click(screen.getAllByTestId('portal-customer-avatar')[0]);
 
       for (const short of ['es', 'en']) {
         const { className } = screen.getByTestId(`portal-language-${short}`);
@@ -655,7 +862,56 @@ describe('PortalPage — home', () => {
 
     await detailReady();
     expect(callsTo('/documents/order/ord-1')).toHaveLength(1);
-    expect(screen.getByTestId('portal-view-title').textContent).toBe('portalKindOrder PV/0001');
+    expect(screen.getByTestId('portal-panel-title').textContent).toBe('portalKindOrder PV/0001');
+  });
+
+  it('switches the chart between vertical and horizontal bars, with the month and amount on hover', async () => {
+    const user = userEvent.setup();
+    responses.home = jsonResponse({
+      ...HOME,
+      chart: { months: 3, currency: 'EUR', bars: [{ month: '2026-09', amount: 500 }, { month: '2026-10', amount: 1000 }] },
+    });
+    renderPortal();
+    await shellReady();
+
+    const chart = screen.getByTestId('portal-chart-body');
+    expect(chart).toHaveAttribute('data-orientation', 'vertical');
+    expect(screen.getByTestId('portal-chart-orientation-vertical')).toHaveAttribute('aria-pressed', 'true');
+    const tallest = screen.getAllByTestId('portal-chart-bar')[1];
+    expect(tallest.style.height).toBe('100%');
+
+    await user.click(screen.getByTestId('portal-chart-orientation-horizontal'));
+
+    expect(chart).toHaveAttribute('data-orientation', 'horizontal');
+    expect(screen.getByTestId('portal-chart-orientation-horizontal')).toHaveAttribute('aria-pressed', 'true');
+    const [half, full] = screen.getAllByTestId('portal-chart-bar');
+    expect([half.style.width, full.style.width]).toEqual(['50%', '100%']);
+
+    await user.hover(full);
+    // The canonical formatter puts a no-break space before the symbol.
+    expect(screen.getByTestId('portal-chart-tooltip')).toHaveTextContent(/1\.000,00\s€/);
+  });
+
+  it('shows one balance badge per currency, side by side in a wrapping row', async () => {
+    responses.home = jsonResponse({
+      ...HOME,
+      balances: [
+        { currency: 'EUR', outstanding: 1234567.89, pendingCount: 3 },
+        { currency: 'USD', outstanding: 98765.43, pendingCount: 1 },
+      ],
+      paidThisYear: [{ currency: 'EUR', paid: 10, count: 1 }, { currency: 'USD', paid: 20, count: 2 }],
+    });
+    renderPortal();
+    await shellReady();
+
+    const pending = screen.getAllByTestId('portal-balance-outstanding');
+    expect(pending).toHaveLength(2);
+    expect(pending[0].parentElement).toBe(pending[1].parentElement);
+    expect(pending[0].parentElement).toHaveClass('flex-wrap');
+    expect(screen.getByTestId('portal-balance-pending-count').textContent).toBe('4');
+    const paid = screen.getAllByTestId('portal-balance-paid-amount');
+    expect(paid).toHaveLength(2);
+    expect(paid[0].parentElement).toHaveClass('flex-wrap');
   });
 
   it('refetches only the home aggregates for another chart period', async () => {
@@ -677,7 +933,12 @@ describe('PortalPage — home', () => {
     renderPortal();
     await shellReady();
 
-    await user.type(screen.getByTestId('portal-global-search'), 'FV');
+    // The app's own search bar (shared with the top bar), not a portal copy; it never reaches the
+    // app's global search: the query goes to the portal's /search only.
+    const input = screen.getByTestId('portal-global-search');
+    expect(input.closest('.bg-search-bg')).not.toBeNull();
+    expect(screen.queryByTestId('global-search-trigger')).not.toBeInTheDocument();
+    await user.type(input, 'FV');
 
     await waitFor(() => expect(screen.getAllByTestId('portal-search-result')).toHaveLength(1));
     expect(new URL(callsTo('/search')[0][0], 'http://portal').searchParams.get('q')).toBe('FV');
@@ -701,6 +962,33 @@ describe('PortalPage — document list', () => {
     expect(listQueries().length).toBeGreaterThan(0);
     for (const query of listQueries()) {
       expect([query.get('dateFrom'), query.get('dateTo')]).toEqual(['2026-02-28', '2026-03-31']);
+    }
+  });
+
+  it('offers no bulk download and no row checkboxes (PO: out for now)', async () => {
+    renderPortal(listPath('INVOICE'));
+    await listReady();
+
+    expect(screen.queryByTestId('portal-download-selected')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('portal-select-all')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('portal-select-row')).not.toBeInTheDocument();
+  });
+
+  it('sums the shown rows per currency', async () => {
+    LISTS.invoice = {
+      ...LISTS.invoice,
+      documents: [...INVOICES, { ...INVOICES[0], id: 'inv-usd', documentNo: 'US/0001', currency: 'USD', taxBase: 10, grandTotal: 12 }],
+    };
+    try {
+      renderPortal(listPath('INVOICE'));
+      await listReady();
+
+      const totals = screen.getAllByTestId('portal-document-totals');
+      expect(totals).toHaveLength(2);
+      expect(totals[0]).toHaveTextContent(/1\.400,00\s€/);
+      expect(totals[1]).toHaveTextContent(/12,00/);
+    } finally {
+      LISTS.invoice = { documents: INVOICES, totalCount: 3, statuses: ['CO', 'CL'] };
     }
   });
 
@@ -800,6 +1088,26 @@ describe('PortalPage — document list', () => {
     await detailReady();
     expect(urlView()).toEqual({ view: 'doc', kind: 'INVOICE', id: 'inv-1' });
   });
+
+  it('opens a document once from its number, by click or Enter, with only the row\'s hover', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    const row = order(1);
+    render(<PortalListTable kind="ORDER" documents={[row]} onOpen={onOpen} />);
+
+    const number = screen.getByTestId('portal-document-open');
+    // Hover belongs to the row (Figma): the number has no colour of its own, but keeps a focus ring.
+    expect(number.className).not.toMatch(/hover:text-/);
+    expect(number).toHaveClass('focus-visible:ring-2');
+
+    // The row opens the same document: the number's click must not reach it a second time.
+    await user.click(number);
+    expect(onOpen.mock.calls).toEqual([[row]]);
+
+    number.focus();
+    await user.keyboard('{Enter}');
+    expect(onOpen.mock.calls).toEqual([[row], [row]]);
+  });
 });
 
 describe('PortalPage — mobile layout', () => {
@@ -894,6 +1202,21 @@ describe('PortalPage — document detail', () => {
     expect(callsTo('/documents/invoice/inv-1/pdf')).toHaveLength(1);
   });
 
+  it('offers only "Descargar PDF" in the preview toolbar kebab, and it saves the same file', async () => {
+    const user = userEvent.setup();
+    responses.me = jsonResponse(WITH_ENTRY);
+    renderPortal();
+    await detailReady();
+    await pdfReady();
+
+    await user.click(screen.getByTestId('portal-pdf-more'));
+    expect(screen.getAllByRole('menuitem')).toHaveLength(1);
+    await user.click(screen.getByTestId('portal-pdf-more-download'));
+
+    expect(saveBlobAsFile).toHaveBeenCalledWith(expect.any(Blob), 'FV-0001.pdf');
+    expect(callsTo('/documents/invoice/inv-1/pdf')).toHaveLength(1);
+  });
+
   for (const [label, pdfAnswer, note] of [
     ['has none the server could render (404)', jsonResponse({}, { status: 404 }), 'portalPdfUnavailableHint'],
     ['failed to arrive', jsonResponse({}, { status: 500 }), 'portalDownloadFailed'],
@@ -941,9 +1264,47 @@ describe('PortalPage — document detail', () => {
 
     await user.click(screen.getByRole('button', { name: /orderDoc/ }));
 
-    await waitFor(() => expect(screen.getByTestId('portal-view-title').textContent).toBe('portalKindOrder PV/0001'));
+    await waitFor(() => expect(screen.getByTestId('portal-panel-title').textContent).toBe('portalKindOrder PV/0001'));
     expect(callsTo('/documents/order/ord-1')).toHaveLength(1);
     expect(urlView()).toEqual({ view: 'doc', kind: 'ORDER', id: 'ord-1' });
+  });
+
+  it('refreshes the related documents in place, without the loading screen', async () => {
+    const user = userEvent.setup();
+    responses.me = jsonResponse(WITH_ENTRY);
+    renderPortal();
+    await detailReady();
+    const reads = callsTo('/documents/invoice/inv-1').filter(([path]) => !path.endsWith('/pdf')).length;
+
+    await user.click(screen.getByTestId('portal-related-refresh'));
+
+    await waitFor(() => expect(callsTo('/documents/invoice/inv-1')
+      .filter(([path]) => !path.endsWith('/pdf'))).toHaveLength(reads + 1));
+    expect(screen.queryByTestId('portal-document-loading')).not.toBeInTheDocument();
+    expect(screen.getByTestId('portal-related-panel')).toBeInTheDocument();
+  });
+
+  it('opens a document from a list tab as a drawer over that list, and Escape returns to the tab', async () => {
+    const user = userEvent.setup();
+    renderPortal(`/portal/${TOKEN}?view=list&kind=INVOICE&group=pending`);
+    await listReady();
+    const listReads = listQueries().length;
+
+    await user.click(screen.getAllByTestId('portal-document-open')[0]);
+    await detailReady();
+
+    expect(screen.getByTestId('portal-detail-drawer')).toBeInTheDocument();
+    // The list stays underneath, not re-read.
+    expect(screen.getByTestId('portal-document-list')).toBeInTheDocument();
+    expect(urlView()).toEqual({ view: 'doc', kind: 'INVOICE', id: 'inv-1', group: 'pending' });
+    // The open document is not one of its own related documents (user decision).
+    expect(screen.queryByTestId('portal-related-current')).not.toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByTestId('portal-detail-drawer')).not.toBeInTheDocument());
+    expect(urlView()).toEqual({ view: 'list', kind: 'INVOICE', group: 'pending' });
+    expect(listQueries()).toHaveLength(listReads);
   });
 
   it('says the document is not available when it is not found', async () => {
@@ -1108,49 +1469,5 @@ describe('PortalPage — link states', () => {
     await waitFor(() => expect(screen.getByTestId('portal-renewed')).toBeInTheDocument());
     expect(callsTo('/renew')).toHaveLength(2);
     expect(screen.queryByTestId('portal-renew-error')).not.toBeInTheDocument();
-  });
-});
-
-describe('PortalPage — the notice of a decision confirmation (router state)', () => {
-  /** The entry the confirmation landing opens: the portal, with the notice in its state. */
-  const arrivalEntry = (notice) => ({ pathname: `/portal/${TOKEN}`, state: { portalNotice: notice } });
-
-  it('shows the notice once, with its reason, and drops it from the history entry so a reload shows nothing', async () => {
-    const { unmount } = renderPortal(arrivalEntry({
-      messageKey: 'portalNoticeRejected', tone: 'success', number: 'PR/0001',
-      reasonCode: 'OTHER', reasonText: 'Ya no lo necesitamos',
-    }));
-    await shellReady();
-
-    expect(screen.getAllByTestId('portal-arrival-notice')).toHaveLength(1);
-    expect(screen.getByTestId('portal-arrival-notice').querySelector('p').textContent)
-      .toBe('portalNoticeRejected {"number":"PR/0001"}');
-    expect(screen.getByTestId('portal-arrival-notice-reason').textContent)
-      .toBe('portalRejectReasonLabel: portalRejectReasonOther — Ya no lo necesitamos');
-    // The entry was replaced without its state, while the notice stays on screen.
-    await waitFor(() => expect(screen.getByTestId('location-probe').dataset.state).toBe('null'));
-    expect(screen.getByTestId('portal-arrival-notice')).toBeInTheDocument();
-
-    // A reload opens the same entry again, which no longer carries the notice.
-    const reloaded = { pathname: `/portal/${TOKEN}`, state: JSON.parse(screen.getByTestId('location-probe').dataset.state) };
-    unmount();
-    renderPortal(reloaded);
-    await shellReady();
-    expect(screen.queryByTestId('portal-arrival-notice')).not.toBeInTheDocument();
-  });
-
-  it('closes on dismiss; an acceptance has no reason line', async () => {
-    const user = userEvent.setup();
-    renderPortal(arrivalEntry({
-      messageKey: 'portalNoticeAccepted', tone: 'success', number: 'PR/0001', reasonCode: null, reasonText: null,
-    }));
-    await shellReady();
-
-    expect(screen.getByTestId('portal-arrival-notice').querySelector('p').textContent)
-      .toBe('portalNoticeAccepted {"number":"PR/0001"}');
-    expect(screen.queryByTestId('portal-arrival-notice-reason')).not.toBeInTheDocument();
-
-    await user.click(screen.getByTestId('portal-arrival-notice-dismiss'));
-    expect(screen.queryByTestId('portal-arrival-notice')).not.toBeInTheDocument();
   });
 });

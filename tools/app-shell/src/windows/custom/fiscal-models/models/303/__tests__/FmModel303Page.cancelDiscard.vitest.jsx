@@ -81,16 +81,8 @@ vi.mock('../AeatSubmitFlow.jsx', () => ({
   default: () => null,
   isMissingDefaultIaeActivity: () => false,
 }));
-vi.mock('lucide-react', () => ({
-  // ETP-5584 — the detail status chip renders lucide's Check for success tones.
-  Check: () => null,
-  Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null,
-  OctagonAlert: () => null, TriangleAlert: () => null, CircleCheck: () => null,
-  ArrowLeftRight: () => null, Calculator: () => null, Loader2: () => null,
-  MoreVertical: () => null, TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
-  ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
-  FileCheck: () => null, Landmark: () => null,
-}));
+import { allIconsAs } from '@/test/iconMock.js';
+vi.mock('@phosphor-icons/react', async importOriginal => allIconsAs(() => null, importOriginal));
 
 import FmModel303Page from '../FmModel303Page.jsx';
 import { jsonResponse } from '@/test/realApiFetch.js';

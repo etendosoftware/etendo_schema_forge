@@ -6,7 +6,16 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { AddLineButton } from '@/components/ui/add-line-button.jsx';
-import { X, Check, Printer, Mail, Trash2, Loader2, Lock, Undo2 } from 'lucide-react';
+import {
+  XIcon,
+  CheckIcon,
+  PrinterIcon,
+  EnvelopeSimpleIcon,
+  TrashIcon,
+  CircleNotchIcon,
+  LockIcon,
+  ArrowUUpLeftIcon,
+} from '@phosphor-icons/react';
 import TabStripButton from './TabStripButton.jsx';
 import DetailTabStrip from './DetailTabStrip.jsx';
 import {
@@ -284,7 +293,7 @@ export function DetailView({
   // the secondary/outline look instead of competing as a second primary button.
   hasExternalPrimaryAction = false, primarySave = false, // ETP-5600 primarySave: existing-record Save keeps the primary look (saveActions.jsx)
   statusFieldLabel = null,
-  statusEnumLabels = null,
+  statusEnumLabels = null, statusEnumVariants = null, // statusEnumVariants: per-code pill tones (the status field's enumVariants)
   salesTheme = false,
   sidebarContent: sidebarContentProp = null,
   othersLabel = null,
@@ -1939,7 +1948,10 @@ export function DetailView({
 
   const saveActionParams = {
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
-    ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, saveBusy,
+    ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls,
+    saveBusy,
+    // ETP-6233: Save stays disabled (no spinner) while a header process runs; a save would wait on it anyway.
+    processRunning: hook.runningProcess != null,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
     setShowProcessingModal, saveGate, hasExternalPrimaryAction, primarySave, onlySaveButton: onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode),
   };
@@ -1969,7 +1981,7 @@ export function DetailView({
       {/* Content card with rounded top-left corner */}
       <div className={`flex-1 flex flex-col ${contentBg} rounded-tl-2xl overflow-hidden min-h-0`}>
         {/* Action bar: Cancel + status | actions + save */}
-        {embedded ? renderEmbeddedStatusPill(statusField, data, statusEnumLabels) : (
+        {embedded ? renderEmbeddedStatusPill(statusField, data, statusEnumLabels, statusEnumVariants) : (
         <div className={getLinesToolbarClassName()}>
           <div className="flex items-center gap-2">
             <DetailCancelButton
@@ -1980,7 +1992,7 @@ export function DetailView({
             {statusField && data[statusField] != null && !WINDOW_HIDE_STATUS_PILL_FOR[windowName]?.has(data[statusField]) && (
               <DocumentStatusPill
                 status={data[statusField]}
-                enumLabels={statusEnumLabels}
+                enumLabels={statusEnumLabels} enumVariants={statusEnumVariants}
                 prefix={resolveStatusPrefix(statusFieldLabel, ui)}
                 data-testid="DocumentStatusPill__fa3275" />
             )}
@@ -2015,7 +2027,7 @@ export function DetailView({
                   title={ui('sendPreview')}
                   data-testid="action-document-preview"
                 >
-                  <Mail className="h-5 w-5" data-testid="Mail__fa3275" />
+                  <EnvelopeSimpleIcon className="h-5 w-5" data-testid="Mail__fa3275" />
                 </button>
               )}
               {/* Print document — shown when documentPreview is not provided */}
@@ -2026,7 +2038,7 @@ export function DetailView({
                   title={ui('print')}
                   data-testid="action-document-print"
                 >
-                  <Printer className="h-5 w-5" data-testid="Printer__fa3275" />
+                  <PrinterIcon className="h-5 w-5" data-testid="Printer__fa3275" />
                 </button>
               )}
               {/* Delete record — hidden unconditionally when hideDeleteButton is set; otherwise shown for a deleteAction-backed delete at any lifecycle stage (except RPVOID), or when hideDeleteWhenComplete/isProcessed rules allow it */}
@@ -2093,7 +2105,7 @@ export function DetailView({
                       variant={getProcessButtonVariant(p)}
                       size="default"
                       className={`${btnClass} ${saveBtnCls}`.trim()}
-                      disabled={isRunning}
+                      disabled={isRunning || hook.isSaving}
                       onClick={async () => {
                         for (const g of (p.requiresFieldMax ?? [])) {
                           const condOk = !g.conditionalOnField || data?.[g.conditionalOnField] === g.conditionalValue;
@@ -2115,13 +2127,13 @@ export function DetailView({
                       {isRunning
                         ? (
                           <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__process-running" />
+                            <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__process-running" />
                             {ui('generating')}
                           </>
                         )
                         : (
                           <>
-                            {isDangerProcess(p) && <Undo2 size={16} className={getDangerIconClass(p)} data-testid="Undo2__fa3275" />}{p.style === 'positive' && <Check size={16} className="mr-1" data-testid="Check__process" />}
+                            {isDangerProcess(p) && <ArrowUUpLeftIcon size={16} className={getDangerIconClass(p)} data-testid="Undo2__fa3275" />}{p.style === 'positive' && <CheckIcon size={16} className="mr-1" data-testid="Check__process" />}
                             {tMenu(resolveProcessLabel(p, data))}
                           </>
                         )}
@@ -2194,7 +2206,7 @@ export function DetailView({
         {renderProcessConfirmModal(
           confirmProcess,
           processConfirmModal,
-          async () => { await hook.handleProcess?.(confirmProcess); setConfirmProcess(null); },
+          async () => { if ((await hook.handleProcess?.(confirmProcess)) !== false) setConfirmProcess(null); },
           () => setConfirmProcess(null),
           data,
           apiBaseUrl,
@@ -2332,7 +2344,7 @@ export function DetailView({
                                 data-testid="locked-alert"
                               >
                                 <span className="flex items-start pl-1 shrink-0">
-                                  <Lock className="h-6 w-6" style={{ color: 'hsl(var(--text-disabled))' }} data-testid="Lock__fa3275" />
+                                  <LockIcon className="h-6 w-6" style={{ color: 'hsl(var(--text-disabled))' }} data-testid="Lock__fa3275" />
                                 </span>
                                 <div className="flex flex-1 flex-row items-center min-w-0">
                                   <div className="flex flex-1 items-center gap-2 px-2 min-w-0">
@@ -2729,7 +2741,7 @@ export function DetailView({
                                           aria-label={ui('delete')}
                                           className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
                                         >
-                                          <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
+                                          <TrashIcon className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
                                         </button>
                                       </SelectionToolbar>
                                     )}
@@ -2746,7 +2758,7 @@ export function DetailView({
                                       onClick={closeLine}
                                       className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
                                     >
-                                      <X className="h-3.5 w-3.5" data-testid="X__fa3275" />
+                                      <XIcon className="h-3.5 w-3.5" data-testid="X__fa3275" />
                                     </button>
                                   </div>
                                   <DetailForm
@@ -2852,7 +2864,7 @@ export function DetailView({
                                           }}
                                           className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
                                         >
-                                          <Trash2 className="h-4 w-4" data-testid="Trash2__fa3275" />
+                                          <TrashIcon className="h-4 w-4" data-testid="Trash2__fa3275" />
                                           {ui('delete')}
                                         </button>
                                       )}
@@ -3345,7 +3357,7 @@ export function DetailView({
           onInteractOutside={(e) => e.preventDefault()}
           data-testid="DialogContent__verifactu-processing">
           <div className="py-6 text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" data-testid="Loader2__verifactu-processing" />
+            <CircleNotchIcon className="h-8 w-8 animate-spin mx-auto text-primary" data-testid="Loader2__verifactu-processing" />
             <p className="text-sm font-medium mt-4">
               {ui(draftMode?.processingModal?.body) || draftMode?.processingModal?.body}
             </p>

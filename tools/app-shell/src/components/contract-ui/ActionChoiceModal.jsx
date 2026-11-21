@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { ArrowRight, Loader2, ReceiptText, X } from 'lucide-react';
+import { ArrowRightIcon, CircleNotchIcon, ReceiptIcon, XIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { MODAL_STYLES } from './modal-styles.js';
 
@@ -50,6 +50,12 @@ import { MODAL_STYLES } from './modal-styles.js';
  * @param {string} props.title Modal title.
  * @param {Array<{key: string, label: string, testId?: string}>} [props.summaryColumns] Summary table headers; the table is omitted when empty.
  * @param {Object<string, import('react').ReactNode>} [props.summaryData] Already-formatted value per column key.
+ * ZERO options (`options: []`) is allowed too: no question and no choice cards, just the summary, `children`,
+ * the error and the footer (a confirmation that has nothing to choose, e.g. «Devolver recibos»); the
+ * primary is a label-only pill and `onContinue` receives `undefined`.
+ *
+ * `cancelLabel` renames the secondary button (default `ui('cancel')`), e.g. «Cerrar» on a result step.
+ *
  * @param {string} [props.question] Text shown above the options (also above the static card in single-option mode; omitted there when empty).
  * @param {Array<{id: string, label: string, description: string, badge?: string, badgeTone?: 'success'|'info', testId?: string, icon?: import('react').ComponentType<{size?: number}>, actionLabel?: string}>} props.options
  *   One option renders the single-option confirmation; two or more render the choice cards.
@@ -82,6 +88,7 @@ export default function ActionChoiceModal({
   primaryDisabled = false,
   children,
   onSelectionChange,
+  cancelLabel,
 }) {
   const ui = useUI();
   const titleId = useId();
@@ -91,6 +98,7 @@ export default function ActionChoiceModal({
   const [selectedId, setSelectedId] = useState(defaultOptionId ?? options[0]?.id);
   const optionRefs = useRef({});
   const primaryRef = useRef(null);
+  const noOptions = options.length === 0;
   const singleOption = options.length === 1 ? options[0] : null;
   const currentId = singleOption ? singleOption.id : selectedId;
   const extraContent = typeof children === 'function' ? children(currentId) : children;
@@ -177,6 +185,45 @@ export default function ActionChoiceModal({
 
   const hasSummary = Array.isArray(summaryColumns) && summaryColumns.length > 0;
 
+  const renderChoiceSection = () => {
+    if (noOptions) return null;
+    if (singleOption) {
+      return (
+        <div style={choiceGroupStyle}>
+          {question && <p style={questionStyle}>{question}</p>}
+          <StaticOptionCard
+            option={singleOption}
+            descriptionId={descriptionId}
+            data-testid="StaticOptionCard__6f7a22" />
+        </div>
+      );
+    }
+    return (
+      <div style={choiceGroupStyle}>
+        <p id={questionId} style={questionStyle}>{question}</p>
+        <div
+          role="radiogroup"
+          aria-labelledby={questionId}
+          className="flex flex-col sm:flex-row"
+          style={cardsRowStyle}
+          onKeyDown={handleRadioKeyDown}
+        >
+          {options.map((option) => (
+            <OptionCard
+              key={option.id}
+              option={option}
+              selected={option.id === selectedId}
+              disabled={loading}
+              buttonRef={(el) => { optionRefs.current[option.id] = el; }}
+              onSelect={() => setSelectedId(option.id)}
+              data-testid="OptionCard__6f7a22" />
+          ))}
+        </div>
+      </div>
+    );
+  };
+  const choiceSection = renderChoiceSection();
+
   return (
     <div onClick={cancelUnlessLoading} style={overlayStyle}>
       <div
@@ -199,7 +246,7 @@ export default function ActionChoiceModal({
           className={FOCUS_RING_CLS}
           style={closeBtnStyle}
         >
-          <X size={20} data-testid="X__6f7a22" />
+          <XIcon size={20} data-testid="X__6f7a22" />
         </button>
 
         <div style={headerStyle}>
@@ -215,37 +262,7 @@ export default function ActionChoiceModal({
           )}
 
           <div style={sectionStyle}>
-            {singleOption ? (
-              <div style={choiceGroupStyle}>
-                {question && <p style={questionStyle}>{question}</p>}
-                <StaticOptionCard
-                  option={singleOption}
-                  descriptionId={descriptionId}
-                  data-testid="StaticOptionCard__6f7a22" />
-              </div>
-            ) : (
-            <div style={choiceGroupStyle}>
-              <p id={questionId} style={questionStyle}>{question}</p>
-              <div
-                role="radiogroup"
-                aria-labelledby={questionId}
-                className="flex flex-col sm:flex-row"
-                style={cardsRowStyle}
-                onKeyDown={handleRadioKeyDown}
-              >
-                {options.map((option) => (
-                  <OptionCard
-                    key={option.id}
-                    option={option}
-                    selected={option.id === selectedId}
-                    disabled={loading}
-                    buttonRef={(el) => { optionRefs.current[option.id] = el; }}
-                    onSelect={() => setSelectedId(option.id)}
-                    data-testid="OptionCard__6f7a22" />
-                ))}
-              </div>
-            </div>
-            )}
+            {choiceSection}
 
             {extraContent}
 
@@ -253,7 +270,7 @@ export default function ActionChoiceModal({
 
             <div style={footerStyle}>
               <button type="button" onClick={onCancel} disabled={loading} className={FOCUS_RING_CLS} style={cancelBtnStyle}>
-                {ui('cancel')}
+                {cancelLabel ?? ui('cancel')}
               </button>
               <button
                 ref={primaryRef}
@@ -262,9 +279,9 @@ export default function ActionChoiceModal({
                 onClick={() => onContinue(currentId)}
                 disabled={loading || primaryBlocked}
                 className={FOCUS_RING_CLS}
-                style={getPrimaryBtnStyle(loading, Boolean(singleOption), primaryBlocked)}
+                style={getPrimaryBtnStyle(loading, Boolean(singleOption) || noOptions, primaryBlocked)}
               >
-                <PrimaryIcon loading={loading} showArrow={!singleOption} data-testid="PrimaryIcon__6f7a22" />
+                <PrimaryIcon loading={loading} showArrow={!singleOption && !noOptions} data-testid="PrimaryIcon__6f7a22" />
                 {loading
                   ? (loadingLabel ?? ui('soProcessing'))
                   : (singleOption?.actionLabel ?? primaryLabel ?? ui('continue'))}
@@ -364,7 +381,7 @@ export function nextOptionId(options, currentId, key) {
  * dialog's `aria-describedby` target.
  */
 function StaticOptionCard({ option, descriptionId }) {
-  const Icon = option.icon ?? ReceiptText;
+  const Icon = option.icon ?? ReceiptIcon;
   return (
     <div data-testid={option.testId} style={staticCardStyle}>
       <span style={iconBoxStyle} aria-hidden="true">
@@ -407,7 +424,7 @@ function SummaryTable({ columns, data }) {
 
 function OptionCard({ option, selected, disabled, onSelect, buttonRef }) {
   const variant = selected ? CARD_VARIANTS.selected : CARD_VARIANTS.idle;
-  const Icon = option.icon ?? ReceiptText;
+  const Icon = option.icon ?? ReceiptIcon;
   return (
     <button
       ref={buttonRef}
@@ -443,10 +460,10 @@ function OptionCard({ option, selected, disabled, onSelect, buttonRef }) {
 
 function PrimaryIcon({ loading, showArrow }) {
   if (loading) {
-    return <Loader2 size={24} className="animate-spin" data-testid="Loader2__6f7a22" />;
+    return <CircleNotchIcon size={24} className="animate-spin" data-testid="Loader2__6f7a22" />;
   }
   if (!showArrow) return null;
-  return <ArrowRight size={24} style={{ opacity: 0.9 }} data-testid="ArrowRight__6f7a22" />;
+  return <ArrowRightIcon size={24} style={{ opacity: 0.9 }} data-testid="ArrowRight__6f7a22" />;
 }
 
 // Single-option mode: label-only pill (no arrow), so the padding is symmetric — except

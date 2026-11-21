@@ -19,6 +19,7 @@ endif
 test: ## Run all unit tests (CLI data-fixes + repo scripts + app-shell + artifacts + vitest)
 	node --test 'cli/test/*.test.js'
 	node --test 'scripts/__tests__/*.test.js'
+	node --test 'e2e/tests/helpers/__tests__/*.test.js'
 	node --test 'tools/app-shell/src/**/__tests__/*.test.js'
 	node --test 'tools/app-shell/test/*.test.js'
 	node --test 'artifacts/**/__tests__/*.test.js'
@@ -293,7 +294,7 @@ test-e2e-headless: ## Build a no-PWA E2E bundle, serve+test+teardown on its own 
 
 .PHONY: test-e2e-purchase-sales
 test-e2e-purchase-sales: ## Run only the failing Sales Order and Purchase Order integration specs
-	E2E_FILES=tests/flows/sales/sales-order-happy-path.integration.spec.js,tests/flows/purchases/purchase-order-full-flow.integration.spec.js ./scripts/run-e2e-last-failed.sh
+	E2E_FILES=tests/flows/before-financial-accounts/sales-order-happy-path.integration.spec.js,tests/flows/purchases/purchase-order-full-flow.integration.spec.js ./scripts/run-e2e-last-failed.sh
 
 .PHONY: test-e2e-last-failed
 test-e2e-last-failed: ## Rerun only failed integration tests recorded by the previous Playwright run

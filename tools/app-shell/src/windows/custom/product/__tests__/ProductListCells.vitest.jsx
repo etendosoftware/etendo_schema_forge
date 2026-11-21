@@ -8,7 +8,6 @@ vi.mock('@/i18n', () => ({
 
 import { render, screen } from '@testing-library/react';
 import {
-  BoxIcon,
   ProductSalePriceCell,
   ProductPurchasePriceCell,
   ProductCostCell,
@@ -288,36 +287,5 @@ describe('no network access (stored computed columns)', () => {
       </>,
     );
     expect(fetchSpy).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// BoxIcon re-export
-// ---------------------------------------------------------------------------
-
-describe('BoxIcon', () => {
-  it('renders an svg element', () => {
-    const { container } = render(<BoxIcon />);
-    expect(container.querySelector('svg')).toBeInTheDocument();
-  });
-
-  it('applies default size 24', () => {
-    const { container } = render(<BoxIcon />);
-    const svg = container.querySelector('svg');
-    expect(svg).toHaveAttribute('width', '24');
-    expect(svg).toHaveAttribute('height', '24');
-  });
-
-  it('applies custom size prop', () => {
-    const { container } = render(<BoxIcon size={48} />);
-    const svg = container.querySelector('svg');
-    expect(svg).toHaveAttribute('width', '48');
-    expect(svg).toHaveAttribute('height', '48');
-  });
-
-  it('applies custom color via stroke', () => {
-    const { container } = render(<BoxIcon color="#FF0000" />);
-    const path = container.querySelector('path');
-    expect(path).toHaveAttribute('stroke', '#FF0000');
   });
 });

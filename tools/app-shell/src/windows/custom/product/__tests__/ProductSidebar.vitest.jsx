@@ -35,22 +35,24 @@ vi.mock('@/components/ui/dialog', () => ({
   DialogTitle: ({ children }) => <div>{children}</div>,
 }));
 
-vi.mock('lucide-react', () => ({
-  ExternalLink: (props) => <span {...props} data-testid="icon-external" />,
-  Maximize2: (props) => <span {...props} data-testid="icon-maximize" />,
-  Box: (props) => <span {...props} data-testid="icon-box" />,
-  Calendar: (props) => <span {...props} data-testid="icon-calendar" />,
-  ChevronDown: (props) => <span {...props} data-testid="icon-chevron" />,
-  ArrowRightToLine: (props) => <span {...props} data-testid="icon-arrow-to-line" />,
-  ArrowLeftRight: (props) => <span {...props} data-testid="icon-arrow-lr" />,
-  Package: (props) => <span {...props} data-testid="icon-package" />,
-  Warehouse: (props) => <span {...props} data-testid="icon-warehouse" />,
+vi.mock('@phosphor-icons/react', () => ({
+  ArrowSquareOutIcon: (props) => <span {...props} data-testid="icon-external" />,
+  ArrowsOutIcon: (props) => <span {...props} data-testid="icon-maximize" />,
+  CubeIcon: (props) => <span {...props} data-testid="icon-box" />,
+  CalendarBlankIcon: (props) => <span {...props} data-testid="icon-calendar" />,
+  CaretDownIcon: (props) => <span {...props} data-testid="icon-chevron" />,
+  ArrowLineRightIcon: (props) => <span {...props} data-testid="icon-arrow-to-line" />,
+  ArrowsLeftRightIcon: (props) => <span {...props} data-testid="icon-arrow-lr" />,
+  PackageIcon: (props) => <span {...props} data-testid="icon-package" />,
+  WarehouseIcon: (props) => <span {...props} data-testid="icon-warehouse" />,
 }));
 
 // --- Import under test ---
 
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import ProductSidebar from '../ProductSidebar.jsx';
+import { SIDEBAR_COLLAPSED_KEY } from '../useSidebarCollapsed';
 import { chartSeriesColor } from '@/lib/chartPalette';
 
 // --- Helpers ---
@@ -939,7 +941,7 @@ describe('ProductSidebar — collapse (RF-16)', () => {
   beforeEach(() => { vi.setSystemTime(new Date(2026, 9, 15, 12, 0, 0)); });
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
-  it('shows the collapse button (Lucide ArrowRightToLine) with name, tooltip and aria-expanded', () => {
+  it('shows the collapse button (Phosphor collapse icon) with name, tooltip and aria-expanded', () => {
     mockFetchResponses();
     render(<ProductSidebar {...defaultProps} />);
     const btn = screen.getByTestId('ProductSidebarCollapseButton');
@@ -954,24 +956,78 @@ describe('ProductSidebar — collapse (RF-16)', () => {
     expect(screen.getByTestId('icon-arrow-to-line').getAttribute('class')).not.toContain('rotate-180');
   });
 
-  it('leaves the row position as it found it once unmounted', () => {
+  it('does not patch the surrounding layout: no inline position on the parent and no resize listener added by mount or toggle', () => {
     mockFetchResponses();
-    const { unmount } = render(<ProductSidebar {...defaultProps} />);
-    const row = screen.getByTestId('ProductSidebarCollapseButton').parentElement;
-    expect(row.style.position).toBe('relative');
-    unmount();
-    expect(row.style.position).toBe('');
+    const add = vi.spyOn(window, 'addEventListener');
+    try {
+      const { unmount } = render(<ProductSidebar {...defaultProps} />);
+      const parent = screen.getByTestId('ProductSidebarCollapseButton').parentElement;
+      expect(parent.style.position).toBe('');
+      add.mockClear(); // only what the toggle itself adds from here on counts
+      collapse();
+      fireEvent.click(screen.getByTestId('ProductSidebarOpenButton'));
+      expect(add.mock.calls.filter(([type]) => type === 'resize')).toHaveLength(0);
+      unmount();
+      expect(parent.style.position).toBe('');
+    } finally {
+      add.mockRestore();
+    }
   });
 
-  it('puts the button on the divider (outside the panel content and the tab header), as a 24 px white circle', () => {
+  it('renders the button inside the panel column (not portalled), placed by CSS classes only, as a 24 px white circle', () => {
     mockFetchResponses();
-    render(<ProductSidebar {...defaultProps} />);
+    const { container } = render(<ProductSidebar {...defaultProps} />);
     const btn = screen.getByTestId('ProductSidebarCollapseButton');
+    expect(container.contains(btn)).toBe(true);
+    expect(btn.parentElement.contains(screen.getByTestId('ProductSidebarClip'))).toBe(true);
     expect(btn.closest('[data-product-sidebar-collapsed]')).toBeNull();
     expect(screen.getByTestId('ProductSidebarTab-summary').parentElement.contains(btn)).toBe(false);
-    expect(btn.style.width).toBe('24px');
-    expect(btn.style.height).toBe('24px');
-    ['rounded-full', 'bg-card', 'border', 'hover:text-primary', 'hover:border-primary'].forEach((c) => expect(btn.className).toContain(c));
+    expect(btn.getAttribute('style')).toBeNull();
+    ['absolute', 'left-[-0.5px]', 'top-6', '-translate-x-1/2', 'h-6', 'w-6', 'z-20', 'rounded-full', 'bg-card', 'border', 'hover:text-primary', 'hover:border-primary']
+      .forEach((c) => expect(btn.className.split(/\s+/)).toContain(c));
+  });
+
+  it('keeps the same button DOM node across collapse and expand (no remount), only its state attributes change', async () => {
+    mockFetchResponses(rows());
+    render(<ProductSidebar {...defaultProps} />);
+    await screen.findByTestId('StockChartLegend');
+    const btn = screen.getByTestId('ProductSidebarCollapseButton');
+    collapse();
+    const same = screen.getByTestId('ProductSidebarOpenButton');
+    expect(same).toBe(btn);
+    expect(same.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(same);
+    expect(screen.getByTestId('ProductSidebarCollapseButton')).toBe(btn);
+    expect(btn.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('toggles from the keyboard (Enter / Space on the focused real button) and aria-expanded follows', async () => {
+    mockFetchResponses(rows());
+    const user = userEvent.setup();
+    render(<ProductSidebar {...defaultProps} />);
+    await screen.findByTestId('StockChartLegend');
+    const btn = screen.getByTestId('ProductSidebarCollapseButton');
+    btn.focus();
+    await user.keyboard('{Enter}');
+    expect(btn.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(btn);
+    await user.keyboard(' ');
+    expect(btn.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('gives the panel content a fixed width per state so it does not reflow while the column animates', async () => {
+    mockFetchResponses(rows());
+    render(<ProductSidebar {...defaultProps} />);
+    await screen.findByTestId('StockChartLegend');
+    const clip = screen.getByTestId('ProductSidebarClip');
+    const scroll = clip.firstElementChild;
+    expect(clip.className.split(/\s+/)).toContain('overflow-hidden');
+    expect(scroll.className.split(/\s+/)).toContain('w-[319px]');
+    expect(scroll.className).not.toContain('w-[47px]');
+    collapse();
+    const clipC = screen.getByTestId('ProductSidebarClip');
+    expect(clipC.firstElementChild.className.split(/\s+/)).toContain('w-[47px]');
+    expect(clipC.firstElementChild.className).not.toContain('w-[319px]');
   });
 
   it('also shows the collapse button in the empty state and for a new product', async () => {
@@ -1036,6 +1092,48 @@ describe('ProductSidebar — collapse (RF-16)', () => {
     const { container } = render(<ProductSidebar {...defaultProps} />);
     expect(marker(container)).toBe('true');
     expect(screen.queryByText('summary')).toBeNull();
+  });
+
+  it('first render with a stored collapsed preference is already collapsed: no open-then-close flash, toggle aria-expanded false', () => {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, 'true');
+    mockFetchResponses();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const added = [];
+    const observer = new MutationObserver(() => {});
+    observer.observe(host, { childList: true, subtree: true });
+    render(<ProductSidebar {...defaultProps} />, { container: host });
+    added.push(...observer.takeRecords().flatMap((r) => [...r.addedNodes]));
+    observer.disconnect();
+    // Everything ever inserted by the mount: nothing expanded was committed, not even for one frame.
+    expect(added.length).toBeGreaterThan(0);
+    const expanded = added.filter((n) => n.nodeType === 1 && (n.matches('[data-product-sidebar-collapsed="false"], [data-collapsed="false"], [data-testid="ProductSidebarCollapseButton"]') || n.querySelector('[data-product-sidebar-collapsed="false"], [data-collapsed="false"], [data-testid="ProductSidebarCollapseButton"]')));
+    expect(expanded).toEqual([]);
+    expect(marker(host)).toBe('true');
+    const toggle = screen.getByTestId('ProductSidebarOpenButton');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    host.remove();
+  });
+
+  it.each(['S', 'E', 'R'])('renders nothing at all for a non-stockable product type %s, so the column stays :empty', (productType) => {
+    mockFetchResponses();
+    const { container } = render(<ProductSidebar {...defaultProps} data={{ productType }} />);
+    expect(container.childNodes).toHaveLength(0);
+    expect(container.textContent).toBe('');
+    expect(container.matches(':empty')).toBe(true);
+  });
+
+  it('keeps the focus on the toggle button after a click and after pressing Enter on it', async () => {
+    mockFetchResponses();
+    const user = userEvent.setup();
+    render(<ProductSidebar {...defaultProps} />);
+    const btn = screen.getByTestId('ProductSidebarCollapseButton');
+    await user.click(btn);
+    expect(btn.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(btn);
+    await user.keyboard('{Enter}');
+    expect(btn.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(btn);
   });
 
   it('the open button reopens on the tab that was active', async () => {

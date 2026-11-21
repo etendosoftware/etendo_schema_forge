@@ -77,16 +77,16 @@ vi.mock('../../../FmTabContent.jsx', () => ({
   IncidentsTab: () => null,
 }));
 
-vi.mock('lucide-react', () => ({
-  ArrowLeft: () => null, Save: () => null, Download: () => null, FileDown: () => null, Play: () => null,
-  OctagonAlert: () => null, CircleCheck: () => null, Search: () => null, RefreshCw: () => null,
-  Globe: () => null, Eye: () => null, Lock: () => null, MoreVertical: () => null,
-  ChevronDown: () => null, ChevronRight: () => null, Users: () => null, FileEdit: () => null,
-  Clock: () => null, TriangleAlert: () => null, Folder: () => null, ReceiptText: () => null,
-  Calculator: () => null, PenLine: () => null, ShieldAlert: () => null, Info: () => null,
-  Star: () => null, ArrowUpRight: () => null, Loader2: () => null, TrendingUp: () => null,
-  TrendingDown: () => null, FileText: () => null, Settings: () => null, ArrowLeftRight: () => null,
-  Pencil: () => null, X: () => null, Check: () => null, Checkbox: () => null, FileCheck: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  ArrowLeftIcon: () => null, FloppyDiskIcon: () => null, DownloadSimpleIcon: () => null, PlayIcon: () => null,
+  WarningOctagonIcon: () => null, CheckCircleIcon: () => null, MagnifyingGlassIcon: () => null, ArrowsClockwiseIcon: () => null,
+  GlobeIcon: () => null, EyeIcon: () => null, LockIcon: () => null, DotsThreeVerticalIcon: () => null,
+  CaretDownIcon: () => null, CaretRightIcon: () => null, UsersIcon: () => null,
+  ClockIcon: () => null, WarningIcon: () => null, FolderIcon: () => null, ReceiptIcon: () => null,
+  CalculatorIcon: () => null, PencilSimpleIcon: () => null, ShieldWarningIcon: () => null, InfoIcon: () => null,
+  StarIcon: () => null, ArrowUpRightIcon: () => null, CircleNotchIcon: () => null, TrendUpIcon: () => null,
+  TrendDownIcon: () => null, FileTextIcon: () => null, GearIcon: () => null, ArrowsLeftRightIcon: () => null,
+  XIcon: () => null, CheckIcon: () => null, Checkbox: () => null, SealCheckIcon: () => null,
 }));
 
 import FmModel349Page from '../FmModel349Page.jsx';

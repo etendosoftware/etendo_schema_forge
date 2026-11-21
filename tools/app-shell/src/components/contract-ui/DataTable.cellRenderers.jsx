@@ -2,7 +2,7 @@ import { ProgressCircle } from './ProgressCircle.jsx';
 import { Switch } from '@/components/ui/switch';
 import { StatusTag } from '@/components/ui/status-tag';
 import { Tag } from '@/components/ui/tag';
-import { BoxIcon } from '@/components/ui/box-icon';
+import { PackageIcon } from '@phosphor-icons/react';
 import { TruncatedText } from '@/components/ui/truncated-text';
 import { useNeoImage } from '@/hooks/useNeoImage';
 import { formatAmount } from '@/lib/formatAmount.js';
@@ -272,7 +272,7 @@ export function MultiFieldCell({ row, col, token, apiBaseUrl }) {
         <div className="w-10 h-10 rounded-lg bg-[hsl(var(--muted))] flex items-center justify-center overflow-hidden flex-shrink-0">
           {imgSrc
             ? <img src={imgSrc} alt={titleValue} className="w-full h-full object-cover" />
-            : <BoxIcon data-testid="BoxIcon__fed565" />
+            : <PackageIcon size={24} color="#828FA3" data-testid="BoxIcon__fed565" />
           }
         </div>
       )}

@@ -373,7 +373,7 @@ describe('editing — currency scale and tax mode (ETP-6050 S2)', () => {
     await mountLoaded(review);
     const yen = (v) => formatCurrency('JPY', v, { minimumFractionDigits: 0, maximumFractionDigits: 0 }).replace(/\s+/g, ' ');
     expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(yen(101));
-    expect(tid('invoice-inbox-review-total')).toHaveTextContent(yen(125));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(yen(122)); // the lines total, not the printed 125
     expect(tid('invoice-inbox-review-total-tax-21')).toHaveTextContent(yen(21));
     // lines total 122 vs printed 125: 3 units apart -> warning; 1 unit apart would not warn
     expect(tid('invoice-inbox-review-banner-mismatch')).toHaveTextContent(yen(122));
@@ -681,6 +681,37 @@ describe('editing — product resolution', () => {
     fireEvent.click(tid('invoice-inbox-review-line-0-candidate-p1'));
     await waitFor(() => expect(editOps()).toEqual([{ op: 'selectProduct', index: 0, id: 'p1' }]));
     expect(tid('invoice-inbox-review-line-0-product')).toHaveAttribute('data-state', 'ok');
+  });
+
+  const suggestedLine = () => makeReview({}, {
+    lines: [line({
+      description: 'Tornillo',
+      product: {
+        state: 'linked', id: 'p0', matchedBy: 'suggested', details: { name: 'Tornillo A', searchKey: 'T-A' },
+        candidates: [
+          { id: 'p0', name: 'Tornillo A', searchKey: 'T-A', category: 'Cat', uom: 'Ud', similarity: '72' },
+          { id: 'p1', name: 'Tornillo B', searchKey: 'T-B', category: 'Cat', uom: 'Ud', similarity: '70' },
+        ],
+      },
+    })],
+  });
+
+  it('ETP-6051: chosen by OCR: choosing the same candidate sends nothing and keeps "Elegido por OCR"', async () => {
+    await mountLoaded(suggestedLine());
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    fireEvent.click(tid('invoice-inbox-review-line-0-candidate-p0'));
+    expect(editOps()).toEqual([]);
+    expect(tid('invoice-inbox-review-line-0-product-suggested')).toHaveTextContent('Elegido por OCR');
+  });
+
+  it('ETP-6051: chosen by OCR: choosing another candidate sends selectProduct and the line becomes chosen by the user', async () => {
+    await mountLoaded(suggestedLine());
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    fireEvent.click(tid('invoice-inbox-review-line-0-candidate-p1'));
+    await waitFor(() => expect(editOps()).toEqual([{ op: 'selectProduct', index: 0, id: 'p1' }]));
+    expect(tid('invoice-inbox-review-line-0-product')).toHaveAttribute('data-state', 'ok');
+    expect(maybe('invoice-inbox-review-line-0-product-suggested')).toBeNull();
+    expect(tid('invoice-inbox-review-line-0-product')).toHaveTextContent('Elegido por ti');
   });
 
   it('ambiguous: "Ninguno · crear producto nuevo" sends newProduct and opens the new-product form with the description as name', async () => {
@@ -1195,7 +1226,7 @@ describe('editing — currency scale end to end (ETP-6050 S2)', () => {
     expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(money('KWD', 3.704, 3));
     expect(tid('invoice-inbox-review-total-base')).toHaveTextContent(money('KWD', 3.704, 3));
     expect(tid('invoice-inbox-review-total-tax-10')).toHaveTextContent(money('KWD', 0.37, 3));
-    expect(tid('invoice-inbox-review-total')).toHaveTextContent(money('KWD', 4.075, 3));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(money('KWD', 4.074, 3)); // the lines total, not the printed 4.075
     expect(maybe('invoice-inbox-review-banner-mismatch')).toBeNull();
     ok.unmount();
     await mountLoaded(make(4.077));
@@ -1336,7 +1367,7 @@ describe('editing — any sign, zero and missing values (ETP-6050 S2)', () => {
     }));
     expect(tid('invoice-inbox-review-total-base')).toHaveTextContent(M(-121));
     expect(tid('invoice-inbox-review-total-tax-21')).toHaveTextContent(M(-25.41));
-    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(-150));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(-146.41)); // the lines total, not the printed -150
     expect(tid('invoice-inbox-review-banner-mismatch')).toHaveTextContent(M(-146.41));
     expect(tid('invoice-inbox-review-banner-mismatch')).toHaveTextContent(M(-150));
   });

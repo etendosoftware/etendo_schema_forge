@@ -16,7 +16,11 @@ From the current generated form and decisions, the visible window allows a user 
 - set a valid-from date
 - choose whether document-level or line-level amounts drive tax calculation
 - choose the base amount definition, including line net amount, line net amount plus tax, tax amount, alternative base amount, or alternative base plus tax
-- open the **Accounting** tab and maintain the Tax Due and Tax Credit GL accounts for each accounting schema the tax rate is posted under
+
+The window also opens the **Accounting** tab, where users maintain the Tax Due and Tax Credit GL
+accounts for each accounting schema the tax rate is posted under. It is written as prose, not as a
+bullet, on purpose: the public API manifest publishes the bullets of this section as the `tax`
+capabilities, and the API does not publish the Accounting tab.
 
 The list also lets users scan existing definitions quickly by showing the rate as a colored percentage tag and the applicability as `Sales` / `Purchase` tags. When the tax applies to both flows, the list shows both tags side by side rather than a single `Both` badge. The rate tag has three visual states: a positive rate (e.g. 21) renders as a green `+21 %` tag; a zero rate renders as a neutral gray `0 %` tag; a negative rate (e.g. withholdings at −10) renders as a red `−10 %` tag.
 
@@ -244,3 +248,14 @@ Saving an account field of the Accounting tab (Tax Due / Tax Credit) now refuses
 ## ETP-6062 — Header handler bound by `@NeoExtension`
 
 `TaxSifOverrideHandler` (`com.etendoerp.go`, the header handler that lets a tenant save the SIF tax keys on a shared tax) is now bound with `@NeoExtension(spec = "tax", entity = "tax")` instead of the legacy `Java_Qualifier` binding. In this repo, the `javaQualifier: "taxSifOverrideHandler"` key was removed from `artifacts/tax/decisions.json → entities.tax`, so the predicted `ETGO_SF_ENTITY` row matches the GO XML that no longer carries the qualifier (otherwise the GO PR's Offline Regen Check reports `JAVA_QUALIFIER: <none> → "taxSifOverrideHandler"`). The `accounting` entity keeps `javaQualifier: "taxAccountingHandler"` (still legacy). `make regen ONLY=tax FROM_CACHE=1` changed only the two `javaQualifier` lines and the checksum in `contract.json` plus the checksum echo in `contract.mcp.json`; no UI change. `make regen-check ONLY=tax` reports OK (3/3 XML match) and `sf-validate-pipeline --scope=tax` 0 violations.
+
+## Public API — read-only `tax` — ETP-6174
+
+The public API publishes the Tax Rate tab as `GET`/`LIST` only (`/api/v1/tax`), declared with
+`entities.tax.publicApi.readOnly: true` in `decisions.json`. The window's category (`settings`) is
+excluded by default; the window is published because it is listed in the generator's V1 allowlist.
+The Tax Zone, Translation, Accounting and Parameter tabs are not published. `tax_category` is a
+relationship to `tax-category`. Every field is read-only (`out`); a write answers `404`.
+
+The window itself is unchanged: entity-level `publicApi` only affects the public API manifest.
+Contract: `docs/public-api.md` §3 and §4.6.

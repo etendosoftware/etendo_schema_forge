@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { createClient, updateClient } from '@/lib/oauth2Api.js';
 import { toast } from 'sonner';
-import { Copy, AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
+import { CopyIcon, WarningIcon, ArrowSquareOutIcon, CircleNotchIcon } from '@phosphor-icons/react';
 
 const WILDCARD_SCOPE = 'etendo:*';
 const ALL_SCOPES = ['etendo:read', 'etendo:write', 'etendo:process', 'etendo:report', WILDCARD_SCOPE];
@@ -259,7 +259,7 @@ export default function OAuth2ClientDialog({ open, onOpenChange, client, apiFetc
               Cancel
             </Button>
             <Button type="submit" disabled={submitting} data-testid="Button__4aea7f">
-              {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" data-testid="Loader2__4aea7f" />}
+              {submitting && <CircleNotchIcon className="h-4 w-4 mr-2 animate-spin" data-testid="Loader2__4aea7f" />}
               {isEdit ? 'Save Changes' : 'Create Client'}
             </Button>
           </DialogFooter>
@@ -302,7 +302,7 @@ export function SecretRevealDialog({ open, onClose, clientId, clientSecret, auth
 
         <div className="space-y-4 py-4">
           <div className="flex items-center gap-2 rounded-md bg-status-warning/10 border border-status-warning-border/30 px-3 py-2 text-sm text-status-warning-foreground dark:text-status-warning-foreground">
-            <AlertTriangle className="h-4 w-4 shrink-0" data-testid="AlertTriangle__4aea7f" />
+            <WarningIcon className="h-4 w-4 shrink-0" data-testid="AlertTriangle__4aea7f" />
             <span>This secret will not be shown again. Copy it now.</span>
           </div>
 
@@ -320,7 +320,7 @@ export function SecretRevealDialog({ open, onClose, clientId, clientSecret, auth
                 className="shrink-0"
                 onClick={() => copyToClipboard(clientId, 'Client ID')}
                 data-testid="Button__4aea7f">
-                <Copy className="h-4 w-4" data-testid="Copy__4aea7f" />
+                <CopyIcon className="h-4 w-4" data-testid="Copy__4aea7f" />
               </Button>
             </div>
           </div>
@@ -335,10 +335,10 @@ export function SecretRevealDialog({ open, onClose, clientId, clientSecret, auth
                 size="icon"
                 className="shrink-0"
                 onClick={() => copyToClipboard(authorizationValue, 'Authorization value')}
-                data-testid="Button__4aea7f"><Copy className="h-4 w-4" data-testid="Copy__4aea7f" /></Button>
+                data-testid="Button__4aea7f"><CopyIcon className="h-4 w-4" data-testid="Copy__4aea7f" /></Button>
             </div>
             <p className="text-xs text-muted-foreground">Paste this value in Scalar under <span className="font-medium">Authentication → bearer</span>. Scalar adds <code className="rounded bg-muted px-1 font-mono">Bearer</code> automatically.</p>
-            {docsUrl && <a className="inline-flex items-center gap-1 text-sm text-primary underline underline-offset-4" href={docsUrl} target="_blank" rel="noreferrer">Open Scalar docs <ExternalLink className="h-3.5 w-3.5" data-testid="ExternalLink__4aea7f" /></a>}
+            {docsUrl && <a className="inline-flex items-center gap-1 text-sm text-primary underline underline-offset-4" href={docsUrl} target="_blank" rel="noreferrer">Open Scalar docs <ArrowSquareOutIcon className="h-3.5 w-3.5" data-testid="ExternalLink__4aea7f" /></a>}
           </div>}
 
           {/* Client Secret */}
@@ -355,7 +355,7 @@ export function SecretRevealDialog({ open, onClose, clientId, clientSecret, auth
                 className="shrink-0"
                 onClick={() => copyToClipboard(clientSecret, 'Secret')}
                 data-testid="Button__4aea7f">
-                <Copy className="h-4 w-4" data-testid="Copy__4aea7f" />
+                <CopyIcon className="h-4 w-4" data-testid="Copy__4aea7f" />
               </Button>
             </div>
           </div>
@@ -385,6 +385,7 @@ export function ConfirmDialog({
   variant = 'default',
   loading = false,
   onConfirm,
+  children = null,
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange} data-testid="Dialog__4aea7f">
@@ -393,6 +394,7 @@ export function ConfirmDialog({
           <DialogTitle data-testid="DialogTitle__4aea7f">{title}</DialogTitle>
           <DialogDescription data-testid="DialogDescription__4aea7f">{description}</DialogDescription>
         </DialogHeader>
+        {children}
         <DialogFooter data-testid="DialogFooter__4aea7f">
           <Button
             type="button"
@@ -408,7 +410,7 @@ export function ConfirmDialog({
             onClick={onConfirm}
             disabled={loading}
             data-testid="Button__4aea7f">
-            {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" data-testid="Loader2__4aea7f" />}
+            {loading && <CircleNotchIcon className="h-4 w-4 mr-2 animate-spin" data-testid="Loader2__4aea7f" />}
             {confirmLabel}
           </Button>
         </DialogFooter>

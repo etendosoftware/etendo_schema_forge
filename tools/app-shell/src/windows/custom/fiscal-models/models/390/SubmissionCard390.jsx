@@ -3,7 +3,7 @@
 // `manualData.submission` (submission390.js). A declaration presented before this data existed
 // shows only what it has; every missing value reads "—".
 import React from 'react';
-import { Landmark } from 'lucide-react';
+import { BankIcon } from '@phosphor-icons/react';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -47,7 +47,7 @@ export default function SubmissionCard390({ submission, t, bcpLocale }) {
       data-testid="SubmissionCard390"
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <Landmark size={16} strokeWidth={1.75} style={{ color: 'hsl(var(--muted-foreground))' }} data-testid="Landmark__submission390" />
+        <BankIcon size={16} style={{ color: 'hsl(var(--muted-foreground))' }} data-testid="Landmark__submission390" />
         <span style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{t('fm.m390.submission.title')}</span>
         <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }} data-testid="SubmissionCard390__method">
           {t(manual ? 'fm.m390.submission.method_manual' : 'fm.m390.submission.method_telematic')}

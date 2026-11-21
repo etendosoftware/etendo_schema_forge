@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { ZoomIn, ZoomOut, Maximize, Upload, Trash2, X } from 'lucide-react';
+import {
+  MagnifyingGlassPlusIcon,
+  MagnifyingGlassMinusIcon,
+  ArrowsOutIcon,
+  UploadSimpleIcon,
+  TrashIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { Dialog, DialogPortal, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { useUI } from '@/i18n';
 import PdfViewer, { usePdfZoom } from './PdfViewer.jsx';
@@ -102,7 +109,7 @@ function LightboxBody({ file, onReplace, onDelete, actionsDisabled }) {
             title={ui('pdfViewerZoomIn')}
             data-testid="file-lightbox-zoom-in"
           >
-            <ZoomIn size={18} data-testid="ZoomIn__c75ca8" />
+            <MagnifyingGlassPlusIcon size={18} data-testid="ZoomIn__c75ca8" />
           </button>
           <button
             type="button"
@@ -112,7 +119,7 @@ function LightboxBody({ file, onReplace, onDelete, actionsDisabled }) {
             title={ui('pdfViewerFitToPage')}
             data-testid="file-lightbox-fit"
           >
-            <Maximize size={18} data-testid="Maximize__c75ca8" />
+            <ArrowsOutIcon size={18} data-testid="Maximize__c75ca8" />
           </button>
           <button
             type="button"
@@ -123,7 +130,7 @@ function LightboxBody({ file, onReplace, onDelete, actionsDisabled }) {
             title={ui('pdfViewerZoomOut')}
             data-testid="file-lightbox-zoom-out"
           >
-            <ZoomOut size={18} data-testid="ZoomOut__c75ca8" />
+            <MagnifyingGlassMinusIcon size={18} data-testid="ZoomOut__c75ca8" />
           </button>
         </div>
         {onReplace && (
@@ -134,7 +141,7 @@ function LightboxBody({ file, onReplace, onDelete, actionsDisabled }) {
             className={`${TOOLBAR_BUTTON} ${TOOLBAR_BORDER} gap-2 rounded-lg px-3 text-sm font-medium`}
             data-testid="file-lightbox-replace"
           >
-            <Upload size={16} data-testid="Upload__c75ca8" />
+            <UploadSimpleIcon size={16} data-testid="Upload__c75ca8" />
             {ui('fileViewerReplace')}
           </button>
         )}
@@ -148,7 +155,7 @@ function LightboxBody({ file, onReplace, onDelete, actionsDisabled }) {
             title={ui('fileViewerDelete')}
             data-testid="file-lightbox-delete"
           >
-            <Trash2 size={16} data-testid="Trash2__c75ca8" />
+            <TrashIcon size={16} data-testid="Trash2__c75ca8" />
           </button>
         )}
         <DialogClose asChild data-testid="DialogClose__c75ca8">
@@ -159,7 +166,7 @@ function LightboxBody({ file, onReplace, onDelete, actionsDisabled }) {
             title={ui('close')}
             data-testid="file-lightbox-close"
           >
-            <X size={18} data-testid="X__c75ca8" />
+            <XIcon size={18} data-testid="X__c75ca8" />
           </button>
         </DialogClose>
       </div>
@@ -175,7 +182,7 @@ function LightboxBody({ file, onReplace, onDelete, actionsDisabled }) {
             url={file.objectUrl}
             zoom={zoom}
             hideToolbar
-            fitIcon={Maximize}
+            fitIcon={ArrowsOutIcon}
             onNumPages={setPageCount}
             data-testid="PdfViewer__c75ca8" />
         )}

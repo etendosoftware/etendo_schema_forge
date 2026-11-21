@@ -1,4 +1,4 @@
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRightIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { MoneyAmount } from '@/components/ui/money-amount';
@@ -141,7 +141,7 @@ function BouncePairRow({ group, checked, onToggle, onReview, currency, formatDat
                   onClick={() => onReview(group)}
                   className={REVIEW_BTN}
                   data-testid={`automatch-bounce-review-${group.groupKey}`}>
-                  <ArrowUpRight
+                  <ArrowUpRightIcon
                     className="h-4 w-4 text-[hsl(var(--text-disabled))]"
                     data-testid="ArrowUpRight__bounce-review" />
                   {ui('financeReconcileAutomatchBounceReview')}

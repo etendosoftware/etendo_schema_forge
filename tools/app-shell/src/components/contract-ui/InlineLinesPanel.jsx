@@ -8,8 +8,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Layers, Search } from 'lucide-react';
-import { IconicEditIcon, IconicTrashIcon } from '@/components/ui/custom-icons';
+import { StackIcon, MagnifyingGlassIcon, PencilSimpleIcon, TrashIcon } from '@phosphor-icons/react';
 import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -386,7 +385,7 @@ function useHorizontalOverflow(ref, enabled, columns, rowCount) {
  *
  * ETP-4610 — `extraActions` is a generic extension slot: any number of extra
  * icon buttons can be rendered ahead of the built-in Edit/Trash pair. Each
- * entry is `{ key, icon: LucideIcon, tooltip, onClick, testId? }` — the same
+ * entry is `{ key, icon: PhosphorIcon, tooltip, onClick, testId? }` — the same
  * shape InlineLinesPanel's own `rowActions` prop accepts (see below), so a
  * caller-provided action and an internally-computed one (e.g. the
  * "Add dimensions" trigger) render through the exact same code path. Defaults
@@ -404,8 +403,8 @@ function useHorizontalOverflow(ref, enabled, columns, rowCount) {
  * ETP-5600 — the buttons are the list quick actions' Figma Icon Button sm (32x32,
  * Round, Tertiary, 20px icon): the same `ROW_ACTION_BUTTON_*` classes from
  * rowVisuals.js that RowQuickActions uses, so a list row and a document line show
- * identical buttons. Edit is the Iconic edit (its testid stays `Pencil__3b7ec2`),
- * Delete the Iconic trash. The pill behind them stays off
+ * identical buttons. Edit is the pencil (its testid stays `Pencil__3b7ec2`),
+ * Delete the trash. The pill behind them stays off
  * (`QUICK_ACTIONS_USE_PILL`). `gap-0.5` (2px, the list band's gap) makes four 32px
  * buttons (Add dimensions + a caller action + Edit + Delete) plus the band's 12px
  * padding exactly the 158px `ACTION_SLOT_WIDTH_PX` slot (the Figma band width), and
@@ -458,7 +457,7 @@ function renderRowActionStrip({
               onClick={onEdit}
               className={isEditing ? `${ROW_ACTION_BUTTON_NEUTRAL} ${ROW_ACTION_BUTTON_ACTIVE}` : ROW_ACTION_BUTTON_NEUTRAL}
             >
-              <IconicEditIcon className="h-5 w-5" data-testid="Pencil__3b7ec2" />
+              <PencilSimpleIcon className="h-5 w-5" data-testid="Pencil__3b7ec2" />
             </button>
           )}
           {canDelete && (
@@ -470,7 +469,7 @@ function renderRowActionStrip({
               disabled={isDeleting}
               className={`${ROW_ACTION_BUTTON_DESTRUCTIVE} disabled:opacity-50`}
             >
-              <IconicTrashIcon className="h-5 w-5" data-testid="IconicTrashIcon__3b7ec2" />
+              <TrashIcon className="h-5 w-5" aria-hidden="true" data-testid="IconicTrashIcon__3b7ec2" />
             </button>
           )}
         </div>
@@ -779,7 +778,7 @@ function LookupTrigger({ field, label, value, row, displayLabel, selectorUrl, se
         onClick={() => setOpen(true)}
         className="w-full flex items-center gap-2 h-7 rounded-md border border-input bg-card px-2 text-sm text-left hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring focus-visible:outline-none transition-colors"
       >
-        <Search
+        <MagnifyingGlassIcon
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
           data-testid={"Search__" + field.id} />
         {displayLabel
@@ -1246,7 +1245,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // ETP-4610 — generic per-row hover-action extension slot. Additional actions
   // rendered in the hover strip ahead of the built-in Edit/Delete icons (see
   // `renderRowActionStrip`'s `extraActions`). Each entry:
-  //   { key, icon: LucideIcon, tooltip, onClick(row), show?: boolean | (row) => boolean, testId? }
+  //   { key, icon: PhosphorIcon, tooltip, onClick(row), show?: boolean | (row) => boolean, testId? }
   // `show` defaults to visible; pass a function to condition visibility per row
   // (e.g. only on rows meeting some business condition). Purely additive — no
   // caller passes this today, so omitting it renders identically to before this
@@ -1937,7 +1936,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
               extraActions: [
                 ...(hasDimensionsPanel ? [{
                   key: 'dimensions',
-                  icon: Layers,
+                  icon: StackIcon,
                   tooltip: ui('editDimensionsTooltip'),
                   onClick: () => setExpandedRowId(isRowExpanded ? null : row.id),
                   testId: 'line-action-add-dimensions',

@@ -6,9 +6,9 @@ vi.mock('@/i18n', () => ({
   useLocale: () => ({ genericLabels: {}, statuses: {} }),
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
-vi.mock('lucide-react', () => ({
-  TriangleAlert: () => null,
-  ArrowUpRight: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  WarningIcon: () => null,
+  ArrowUpRightIcon: () => null,
 }));
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }) => children,

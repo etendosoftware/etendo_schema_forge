@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpDown } from 'lucide-react';
+import { ArrowsDownUpIcon } from '@phosphor-icons/react';
 import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 
@@ -69,7 +69,7 @@ export function ListSortPopover({
   }, [open]);
 
   const sortable = columns.filter((col) => col.sortable !== false);
-  const SortEl = SortIconComponent || ArrowUpDown;
+  const SortEl = SortIconComponent || ArrowsDownUpIcon;
 
   const select = (key) => {
     onSelect(key);

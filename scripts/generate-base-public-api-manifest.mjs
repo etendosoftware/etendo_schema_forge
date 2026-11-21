@@ -11,8 +11,28 @@ export const publicApiV1Entities = Object.freeze({
   'purchase-order': ['header', 'lines'],
   'sales-order': ['header', 'lines'],
   'sales-quotation': ['quotation', 'quotationLine'],
+  tax: ['tax'],
+  'tax-category': ['taxCategory'],
+  'conversion-rates': ['conversionRate'],
+  'business-partner-category': ['businessPartnerCategory'],
 });
 
+// Public resource name of a window whose artifact (and NEO spec) name is not the
+// name an integrator should see. The manifest key, the routes and every link to
+// the resource use the public name; `specName` keeps the NEO spec, which is what
+// the gateway calls.
+export const publicResourceNames = Object.freeze({
+  'business-partner-category': 'contact-category',
+});
+
+export function publicResourceOf(specName) {
+  return publicResourceNames[specName] ?? specName;
+}
+
+// Categories outside the public API scope. Listing a window in
+// `publicApiV1Entities` is its scope decision, so an allowlisted window is
+// published whatever its category: the allowlist is the per-window opt-in.
+// Every window that is not allowlisted stays out, these categories included.
 const excludedCategories = new Set([
   // These modules are not part of the public API scope.
   'accounting',
@@ -33,7 +53,6 @@ const excludedWindows = new Set([
   // business-partner window shares the same primary entity and is not exposed
   // as a second public resource.
   'business-partner',
-  'business-partner-category',
   'bp-location',
   'bom-production',
   'commission-payment',
@@ -153,7 +172,25 @@ export function isPublicField(field, { curated }) {
 }
 
 function publicName(specName, entityName, primaryEntity) {
-  return entityName === primaryEntity ? specName : `${specName}-${entityName}`;
+  const resource = publicResourceOf(specName);
+  return entityName === primaryEntity ? resource : `${resource}-${entityName}`;
+}
+
+// Whether a window reaches the public API: it must be in the allowlist and not
+// excluded by name. Its category is not consulted: the allowlist overrides
+// `excludedCategories`, and a window outside the allowlist is never published,
+// whatever its category.
+export function isPublishedWindow(specName) {
+  return Object.hasOwn(publicApiV1Entities, specName) && !excludedWindows.has(specName);
+}
+
+// The decisions.json entry of a contract entity. It is keyed by the contract
+// name, or, when decisions renames the entity (`entities.header.name:
+// "conversionRate"`), by its original key with the contract name in `name`.
+export function decisionsEntityOf(decisions, entityName) {
+  const entities = decisions?.entities ?? {};
+  if (Object.hasOwn(entities, entityName)) return entities[entityName];
+  return Object.values(entities).find((entity) => entity?.name === entityName);
 }
 
 function pathSegment(entityName) {
@@ -177,6 +214,7 @@ const publicFieldOverrides = {
   etgoEmail: 'email',
   etgoPhone: 'phone',
   etgoIsperson: 'is_person',
+  etgoIscustomer: 'is_customer',
   name2: 'secondary_name',
   uRL: 'url',
   referenceNo: 'reference_number',
@@ -222,7 +260,7 @@ export function publicFieldName(internalName) {
 // AD reference (amount, price, quantity, generic number) is a JSON number; the
 // contract spells date-time `dateTime` (`datetime` is kept for older contracts).
 // Everything else (ids, list codes, buttons, text) is a string.
-function openApiType(fieldType) {
+export function openApiType(fieldType) {
   switch (fieldType) {
     case 'boolean': return { type: 'boolean' };
     case 'integer': return { type: 'integer', format: 'int32' };
@@ -236,6 +274,37 @@ function openApiType(fieldType) {
     case 'datetime': return { type: 'string', format: 'date-time' };
     default: return { type: 'string' };
   }
+}
+
+// The codes of an AD list (`enumValues` in the contract: `[{ value, name }]`), published so the
+// OpenAPI document lists what a list field accepts. NEO reads and writes the code (`value`);
+// `name` is the label the application shows for it. Generic: every published string field that
+// carries list values gets them, whatever its resource. Returns null when the field has none.
+export function enumOf(field) {
+  if (!Array.isArray(field?.enumValues) || field.enumValues.length === 0) return null;
+  const labels = {};
+  for (const option of field.enumValues) {
+    const code = option?.value;
+    if (typeof code !== 'string' || code === '' || Object.hasOwn(labels, code)) continue;
+    labels[code] = typeof option.name === 'string' && option.name ? option.name : code;
+  }
+  const codes = Object.keys(labels);
+  return codes.length ? { codes, labels } : null;
+}
+
+// A public description of a field, declared in decisions.json as `publicApi.description`. It is
+// published verbatim in the OpenAPI document, so it must be a non-empty string and must not cite
+// an internal reference (a ticket or Jira), like the functional texts.
+export function publicDescriptionOf(field, where) {
+  const description = field?.publicApi?.description;
+  if (description === undefined) return undefined;
+  if (typeof description !== 'string' || !description.trim()) {
+    throw new Error(`${where}: publicApi.description must be a non-empty string`);
+  }
+  if (internalReference.test(description)) {
+    throw new Error(`${where}: publicApi.description cites an internal reference (a ticket or Jira); it is published as is`);
+  }
+  return description.trim();
 }
 
 /**
@@ -265,7 +334,7 @@ function buildProcesses({ source, entityName, actions }) {
 // `writable: false` makes it read-only (`out`): a value the handler adds on read, never sent.
 // A resource with no write endpoint publishes only the read-only ones.
 export function inputFieldsOf(decisions, entityName) {
-  const list = decisions?.entities?.[entityName]?.publicApi?.inputFields;
+  const list = decisionsEntityOf(decisions, entityName)?.publicApi?.inputFields;
   return Array.isArray(list) ? list : [];
 }
 
@@ -309,10 +378,12 @@ export function lookupOf(field, where) {
 // - `entities.<entity>.fields.<field>.publicApi.required: true`: a writable field the API
 //   refuses to create without. Declared, not derived: the contract's `required` also covers
 //   fields NEO fills by itself (e.g. an order's address or price list).
+// - `entities.<entity>.fields.<field>.publicApi.description`: a text published as the field's
+//   OpenAPI description, for rules the type cannot express (see publicDescriptionOf).
 // Field names are the internal (contract) names. Platform guardrails
 // (`neverExposedFields`) are applied by the generator and win over this.
 export function exposurePolicyOf(decisions, entityName) {
-  const entity = decisions?.entities?.[entityName];
+  const entity = decisionsEntityOf(decisions, entityName);
   const actions = decisions?.window?.publicApi?.actions;
   const listed = entity?.publicApi?.readOnlyFields;
   const readOnlyFields = new Set(Array.isArray(listed) ? listed : []);
@@ -327,12 +398,18 @@ export function exposurePolicyOf(decisions, entityName) {
     const lookup = lookupOf(field, `${entityName}.${name}`);
     if (lookup) lookups.set(name, lookup);
   }
+  const descriptions = new Map();
+  for (const [name, field] of Object.entries(entity?.fields ?? {})) {
+    const description = publicDescriptionOf(field, `${entityName}.${name}`);
+    if (description) descriptions.set(name, description);
+  }
   return {
     actions: Array.isArray(actions) ? actions : [],
     readOnly: entity?.publicApi?.readOnly === true,
     readOnlyFields,
     requiredFields,
     lookups,
+    descriptions,
   };
 }
 
@@ -366,7 +443,7 @@ function attachLookups({ fields, lookups, specName, entityName, parent }) {
 
 export function buildEntity({
   specName, entityName, contract, functional, parent, rawEntity, inputFields = [],
-  policy = { actions: [], readOnly: false, readOnlyFields: new Set(), requiredFields: new Set(), lookups: new Map() },
+  policy = { actions: [], readOnly: false, readOnlyFields: new Set(), requiredFields: new Set(), lookups: new Map(), descriptions: new Map() },
 }) {
   if (parent && pathSegment(entityName) === LOOKUPS_SEGMENT) {
     throw new Error(`${specName}/${entityName}: a child resource cannot use the path segment "${LOOKUPS_SEGMENT}", it is kept for lookups (hygiene: the two kinds of route stay apart)`);
@@ -403,12 +480,17 @@ export function buildEntity({
       throw new Error(`Public field name collision in ${specName}/${entityName}: ${apiName}`);
     }
     const direction = writable && field.visibility === 'editable' && !policy.readOnlyFields.has(field.name) ? 'inout' : 'out';
+    const dataType = openApiType(field.type);
+    const values = dataType.type === 'string' && !field.reference ? enumOf(field) : null;
+    const description = policy.descriptions?.get(field.name);
     fields[apiName] = {
       sourceVisibility: field.visibility,
       direction,
       internalPath: field.name,
-      dataType: openApiType(field.type),
+      dataType: values ? { ...dataType, enum: values.codes } : dataType,
       reference: field.reference ?? null,
+      ...(values ? { enumLabels: values.labels } : {}),
+      ...(description ? { description } : {}),
       ...(direction === 'inout' && policy.requiredFields?.has(field.name) ? { required: true } : {}),
     };
   }
@@ -516,7 +598,7 @@ export async function generateManifest({
 } = {}) {
   const entities = {};
   for (const entry of await readdir(artifactsRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !Object.hasOwn(publicApiV1Entities, entry.name) || excludedWindows.has(entry.name)) continue;
+    if (!entry.isDirectory() || !isPublishedWindow(entry.name)) continue;
     const contractPath = join(artifactsRoot, entry.name, 'contract.json');
     let contract;
     try {
@@ -524,8 +606,6 @@ export async function generateManifest({
     } catch {
       continue;
     }
-    const category = contract.frontendContract?.window?.category;
-    if (excludedCategories.has(category)) continue;
     let rawContract;
     try {
       rawContract = JSON.parse(await readFile(join(artifactsRoot, entry.name, 'schema-raw.json'), 'utf8'));
@@ -571,7 +651,7 @@ export async function generateManifest({
           field.reference?.keyColumn === primaryIdField.columnName,
         );
         if (parentField) {
-          parent = { resource: entry.name, entityName: primaryEntityName, foreignKey: parentField.name };
+          parent = { resource: publicResourceOf(entry.name), entityName: primaryEntityName, foreignKey: parentField.name };
         }
       }
       // Custom window decisions are the source of truth for which child tabs are
@@ -636,6 +716,9 @@ export async function generateManifest({
           cardinality: 'one',
           foreignKey: publicFieldName,
         };
+        // A lookup lists ids an integrator then sends as this relationship, so
+        // its values carry the JSON:API type of the related resource.
+        if (field.lookup) field.lookup.type = resource;
       }
     }
   }
@@ -646,6 +729,9 @@ export async function generateManifest({
     policy: {
       entitySelection: 'explicit-v1-resources-with-schema-linked-children',
       allowedResources: publicApiV1Entities,
+      // An allowlisted window is published whatever its category.
+      windowSelection: 'allowlist-overrides-excluded-categories',
+      publicResourceNames,
       fieldSelection: 'curated-publicApi-else-form-plus-readonly-list',
       excludedCategories: [...excludedCategories],
       excludedWindows: [...excludedWindows],
@@ -659,6 +745,8 @@ export async function generateManifest({
       readOnlyFields: 'fields.<field>.publicApi.readOnly or entities.<entity>.publicApi.readOnlyFields in decisions.json',
       inputFields: 'entities.<entity>.publicApi.inputFields in decisions.json',
       lookups: 'entities.<entity>.fields.<field>.publicApi.lookup in decisions.json (top-level resources only)',
+      enums: 'the AD list values of a published string field (contract enumValues): dataType.enum plus enumLabels',
+      descriptions: 'entities.<entity>.fields.<field>.publicApi.description in decisions.json',
       failClosed: true,
     },
     entities,

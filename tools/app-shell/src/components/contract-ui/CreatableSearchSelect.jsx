@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Loader2, Check } from 'lucide-react';
+import { CaretDownIcon, CircleNotchIcon, CheckIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
@@ -333,7 +333,7 @@ function SearchSelectOptionsPanel({
             onMouseEnter={() => onHoverOption?.(index)}
           >
             {isSelected && (
-              <Check
+              <CheckIcon
                 aria-hidden="true"
                 className="inline-block h-4 w-4 mr-2 align-text-bottom text-primary"
                 data-testid={`option-${field.key}-${opt.id}-selected-indicator`} />
@@ -1263,7 +1263,7 @@ export function CreatableSearchSelect({
         />
       )}
       {!lookupMode && (loading || loadingMore) ? (
-        <Loader2
+        <CircleNotchIcon
           className="h-4 w-4 text-[hsl(var(--text-disabled))] animate-spin shrink-0 ml-auto"
           data-testid={"Loader2__" + field.id} />
       ) : (
@@ -1285,7 +1285,7 @@ export function CreatableSearchSelect({
           }}
           className="shrink-0 ml-auto flex items-center"
         >
-          <ChevronDown
+          <CaretDownIcon
             className="h-4 w-4 text-[hsl(var(--text-disabled))]"
             data-testid={"ChevronDown__" + field.id} />
         </button>

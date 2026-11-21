@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Sparkles, Upload, Pencil } from 'lucide-react';
+import { SparkleIcon, UploadSimpleIcon, PencilSimpleIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useUI } from '@/i18n';
@@ -138,7 +138,7 @@ function DetailToolbarActions({ activeTab, isCashAccount, ui, onRefresh, onEdit,
             onClick={onEdit}
             className={ACCOUNT_ACTION_BTN_CLS}
           >
-            <Pencil className="h-5 w-5 text-[#828FA3]" data-testid="Pencil__f7dbb3" />
+            <PencilSimpleIcon className="h-5 w-5 text-[#828FA3]" data-testid="Pencil__f7dbb3" />
             <span className="px-1">{ui('financeAccountsMenuEdit')}</span>
           </button>
         )}
@@ -151,7 +151,7 @@ function DetailToolbarActions({ activeTab, isCashAccount, ui, onRefresh, onEdit,
             onClick={onAutoMatch}
             className={ACCOUNT_ACTION_BTN_CLS}
           >
-            <Sparkles className="h-5 w-5 text-[#828FA3]" data-testid="Sparkles__f7dbb3" />
+            <SparkleIcon className="h-5 w-5 text-[#828FA3]" data-testid="Sparkles__f7dbb3" />
             <span className="px-1">{ui('financeReconcileActionAutomatch')}</span>
           </button>
         ) : null}
@@ -166,7 +166,7 @@ function DetailToolbarActions({ activeTab, isCashAccount, ui, onRefresh, onEdit,
             onClick={onExport}
             className={ACCOUNT_ACTION_BTN_CLS}
           >
-            <Upload className="h-5 w-5 text-[#828FA3]" data-testid="Upload__f7dbb3" />
+            <UploadSimpleIcon className="h-5 w-5 text-[#828FA3]" data-testid="Upload__f7dbb3" />
             <span className="px-1">{ui('financeAccountDetailExport')}</span>
           </button>
         ) : null}
@@ -550,7 +550,8 @@ export function FinancialAccountDetail({ recordId }) {
       titleExtra: account ? (
         <SyncStatusInline account={account} syncing={false} data-testid="SyncStatusInline__f7dbb3" />
       ) : null,
-      breadcrumb: `${ui('financeMenuLabel')} / ${ui('financeAccountsPageTitle')} / ${accountName}`,
+      // ETP-6389 — Cuentas lives under Tesorería: same label as the sidebar group.
+      breadcrumb: `${ui('treasury')} / ${ui('financeAccountsPageTitle')} / ${accountName}`,
     },
     [accountName, account?.type, account?.bankConnected, account?.bankConnectionPending, account?.lastSyncDate],
   );

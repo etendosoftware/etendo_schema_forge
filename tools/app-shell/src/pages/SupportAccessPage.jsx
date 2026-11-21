@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, LifeBuoy } from 'lucide-react';
+import { CircleNotchIcon, LifebuoyIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { detectBasePath } from '@/lib/neoBaseUrl.js';
 import {
@@ -43,7 +43,7 @@ export default function SupportAccessPage() {
         role="status"
         data-testid="support-access-redeeming"
       >
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" data-testid="Loader2__5351a1" />
+        <CircleNotchIcon className="h-6 w-6 animate-spin text-muted-foreground" data-testid="Loader2__5351a1" />
         <p className="text-sm text-muted-foreground">{ui('supportAccessRedeeming')}</p>
       </div>
     );
@@ -60,7 +60,7 @@ export default function SupportAccessPage() {
       data-testid="support-access-error"
     >
       <span className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        <LifeBuoy className="h-5 w-5" data-testid="LifeBuoy__5351a1" />
+        <LifebuoyIcon className="h-5 w-5" data-testid="LifeBuoy__5351a1" />
       </span>
       <p className="text-base font-medium text-foreground" data-testid="support-access-error-title">
         {ui('supportAccessUnavailableTitle')}

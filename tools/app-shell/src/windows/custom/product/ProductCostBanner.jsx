@@ -1,4 +1,4 @@
-import { AlertTriangle } from 'lucide-react';
+import { WarningIcon } from '@phosphor-icons/react';
 import { InfoBanner } from '@/components/InfoBanner';
 import { useUI } from '@/i18n';
 import { isProductMissingRequiredCost } from '@/lib/productCostRequirement.js';
@@ -19,7 +19,7 @@ export default function ProductCostBanner({ data }) {
   return (
     <InfoBanner
       tone="warning"
-      icon={AlertTriangle}
+      icon={WarningIcon}
       className="mb-4"
       data-testid="product-cost-banner"
     >

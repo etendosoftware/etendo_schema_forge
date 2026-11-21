@@ -54,6 +54,10 @@ describe('confirmRow', () => {
     const out = await confirmRow(apiFetch, row('a'));
     expect(out).toMatchObject({ ok: false, stops, failure: { id: 'a', fileName: 'a.pdf', code, detail: 'why' } });
   });
+  it('the identifier of a confirm_failed travels with the failure', async () => {
+    mockConfirm.mockResolvedValue(fail('confirm_failed', 422, { detail: 'why', detailInfo: { code: 'refused', params: { message: 'why' } } }));
+    expect(await confirmRow(apiFetch, row('a'))).toMatchObject({ failure: { detailInfo: { code: 'refused', params: { message: 'why' } } } });
+  });
   it('a code-less 403 stops as access_denied; a 404 is not_found and does not stop', async () => {
     mockConfirm.mockResolvedValue({ status: 'failed', code: null, httpStatus: 403 });
     expect(await confirmRow(apiFetch, row('a'))).toMatchObject({ stops: true, failure: { code: 'access_denied', reasonKey: 'invoiceInboxConfirmReasonAccess' } });

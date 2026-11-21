@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
-import { Search, Truck, ChevronDown, X } from 'lucide-react';
+import { MagnifyingGlassIcon, TruckIcon, CaretDownIcon, XIcon } from '@phosphor-icons/react';
 
 export default function SupplierSelector({ selected, onSelect, suppliers = [], inputRef }) {
   const ui = useUI();
@@ -33,20 +33,20 @@ export default function SupplierSelector({ selected, onSelect, suppliers = [], i
         onClick={() => { setOpen(!open); setQuery(''); }}
         className="flex w-full items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-left hover:bg-muted/30 transition-colors"
       >
-        <Truck
+        <TruckIcon
           className="h-4 w-4 text-muted-foreground shrink-0"
           data-testid="Truck__fbef91" />
         <span className="flex-1 truncate text-muted-foreground">
           {selected ? <span className="text-foreground">{selected.name}</span> : ui('qpoAllSuppliers')}
         </span>
-        <ChevronDown
+        <CaretDownIcon
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
           data-testid="ChevronDown__fbef91" />
       </button>
       {open && (
         <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-card shadow-lg">
           <div className="relative p-2">
-            <Search
+            <MagnifyingGlassIcon
               className="absolute left-4 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground"
               data-testid="Search__fbef91" />
             <input
@@ -63,7 +63,7 @@ export default function SupplierSelector({ selected, onSelect, suppliers = [], i
                 onClick={() => setQuery('')}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
-                <X className="h-3.5 w-3.5" data-testid="X__fbef91" />
+                <XIcon className="h-3.5 w-3.5" data-testid="X__fbef91" />
               </button>
             )}
           </div>

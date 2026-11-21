@@ -8,8 +8,11 @@
 import { CONFIRMABLE_ERROR_CODES, STATUS } from './invoiceInboxFilters.js';
 
 /**
- * Exact-decimal money math (ETP-6050 S2, plan 9.4c). The ONE formula the backend shares
- * (`InvoiceInboxTotals`, same fixture `tools/app-shell/__tests__/fixtures/invoice-inbox-totals.json`):
+ * Exact-decimal money math (ETP-6050 S2, plan 9.4c). The formula the backend
+ * repeats in `InvoiceInboxTotals` (and the Etendo engine a third time). Each repo owns its own cases: this
+ * one pins the SPA copy with `tools/app-shell/__tests__/fixtures/invoice-inbox-totals.json`, the Java side
+ * with `invoice-inbox-totals-cases.json`. The two case files are independent copies nothing keeps in sync
+ * automatically: a change to the rounding rule must update both:
  *
  *   unit6   = round6( unitPrice x (1 - discount / 100) )        (HALF_UP away from zero)
  *   lineNet = round_scale( quantity x unit6 )                   (scale = the document currency's decimals)
@@ -193,15 +196,21 @@ function taxOf(base, rateScaled) {
 const roundUnits = (value, scale) => Math.round((Number(value) || 0) * 10 ** scale);
 
 /**
- * The total the invoice carries: with `totalSource` `lines` the live lines total; otherwise the
- * printed one (S2-D3: a printed total stays printed after edits). Falls back to the recomputed
- * lines total when the document has none.
+ * The big Total of the review panel (owner decision 2026-11-18, supersedes S2-D3): ALWAYS the total
+ * computed from the lines, the closest to the grand total of the invoice that will be created, even
+ * when the document printed another one (that case is the non-blocking mismatch banner, see
+ * `totalMismatch`). The one exception is a CONFIRMED row: its Total is the grand total of the
+ * invoice that was created (`review.invoice.grandTotal`, read by the server at read time), whenever
+ * the answer carries it. Zero lines give 0.
+ *
+ * @param {object} totals `computeTotals(...)`
+ * @param {number|string|null} [invoiceTotal] the created invoice's grand total (confirmed rows only)
  */
-export function documentTotal(header, totals, scale = DEFAULT_SCALE) {
-  if (header?.totalSource === 'lines') return totals.linesTotal;
-  const value = header?.totalAmount;
-  if (value == null || value === '' || !Number.isFinite(Number(value))) return totals.linesTotal;
-  return Math.round(Number(value) * 10 ** scale) / 10 ** scale;
+export function documentTotal(totals, invoiceTotal = null, scale = DEFAULT_SCALE) {
+  if (invoiceTotal != null && invoiceTotal !== '' && Number.isFinite(Number(invoiceTotal))) {
+    return Math.round(Number(invoiceTotal) * 10 ** scale) / 10 ** scale;
+  }
+  return totals.linesTotal;
 }
 
 /**
@@ -313,6 +322,20 @@ export function productView(line) {
   return 'none';
 }
 
+/**
+ * The similarity (0-100) the search gave the linked product of a line, read from its candidate (the
+ * backend sends it as text: "72", "96.7" or "96.7%"), or `null` when it is missing or not a number.
+ * ETP-6051: shown next to "Chosen by OCR" so the user can judge how safe the pick is.
+ */
+export function linkedProductSimilarity(product) {
+  const candidates = Array.isArray(product?.candidates) ? product.candidates : [];
+  const own = candidates.find((candidate) => candidate?.id != null && candidate.id === product?.id);
+  const raw = String(own?.similarity ?? '').replace('%', '').replace(',', '.').trim();
+  if (raw === '') return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
 /** The extracted country as text: the `countryName` of decision 8, else the reader's `country`. */
 export function extractedCountry(extracted) {
   return String(extracted?.countryName ?? extracted?.country ?? '').trim();
@@ -340,13 +363,14 @@ export function vendorView(document) {
 
 /**
  * The banner of a document's stored error: unreadable (only while untouched: once the user edited
- * it, ADJUSTED, the data on screen is theirs), a failed confirm (with the reason the server stored)
+ * it, ADJUSTED, the data on screen is theirs), a failed confirm (with the reason the server stored: `info` is its
+ * identifier `{code, params}` when it is one, `detail` the raw stored string, legacy free text included)
  * or another error code. None for MISSING_FIELDS (the fields show it) or without an error.
  */
 function errorBanners(review) {
   if (review.status !== STATUS.ERROR || !review.errorCode) return [];
   if (review.errorCode === 'UNREADABLE') return review.adjusted ? [] : [{ kind: 'unreadable' }];
-  if (review.errorCode === 'CONFIRM_FAILED') return [{ kind: 'confirmFailed', detail: review.errorDetail ?? null }];
+  if (review.errorCode === 'CONFIRM_FAILED') return [{ kind: 'confirmFailed', detail: review.errorDetail ?? null, info: review.errorInfo ?? null }];
   if (review.errorCode === 'MISSING_FIELDS') return [];
   return [{ kind: 'error', code: review.errorCode }];
 }

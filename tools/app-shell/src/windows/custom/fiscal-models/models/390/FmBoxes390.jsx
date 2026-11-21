@@ -8,9 +8,18 @@
 // cells grey and read-only, manual cells white with a pencil, totals in bold.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  TrendingUp, TrendingDown, Pencil, RotateCcw, Search, ChevronLeft, ChevronRight, TriangleAlert, CircleAlert,
-  ReceiptText, Star,
-} from 'lucide-react';
+  TrendUpIcon,
+  TrendDownIcon,
+  PencilSimpleIcon,
+  ArrowCounterClockwiseIcon,
+  MagnifyingGlassIcon,
+  CaretLeftIcon,
+  CaretRightIcon,
+  WarningIcon,
+  WarningCircleIcon,
+  ReceiptIcon,
+  StarIcon,
+} from '@phosphor-icons/react';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -24,8 +33,8 @@ import {
 } from './fm390Layouts.js';
 
 const BLOCK_ICON = {
-  accrued: <TrendingUp size={20} strokeWidth={1.75} data-testid="TrendingUp__fm390" />,
-  deductible: <TrendingDown size={20} strokeWidth={1.75} data-testid="TrendingDown__fm390" />,
+  accrued: <TrendUpIcon size={20} data-testid="TrendingUp__fm390" />,
+  deductible: <TrendDownIcon size={20} data-testid="TrendingDown__fm390" />,
 };
 
 /** DOM id of a box cell, used by the box search to scroll to it. */
@@ -59,7 +68,7 @@ function ViewInvoicesLink({ box, ctx }) {
       onClick={() => ctx.onViewInvoices(box)}
       data-testid={`FmBoxes390__viewInvoices_${box}`}
     >
-      <ReceiptText size={13} strokeWidth={1.75} data-testid="ReceiptText__fm390" />
+      <ReceiptIcon size={13} data-testid="ReceiptText__fm390" />
     </button>
   );
 }
@@ -165,7 +174,7 @@ function InputCell({ spec, inputs, preloaded, onInputChange, onRestore, readOnly
               onClick={() => onRestore?.(key)}
               data-testid={`FmBoxes390__restore_${key}`}
             >
-              <RotateCcw size={12} strokeWidth={1.5} data-testid="RotateCcw__fm390" />
+              <ArrowCounterClockwiseIcon size={12} data-testid="RotateCcw__fm390" />
             </button>
           )}
           {!locked && (
@@ -176,7 +185,7 @@ function InputCell({ spec, inputs, preloaded, onInputChange, onRestore, readOnly
               onClick={start}
               data-testid={`FmBoxes390__edit_${key}`}
             >
-              <Pencil size={12} strokeWidth={1.5} data-testid="Pencil__fm390" />
+              <PencilSimpleIcon size={12} data-testid="Pencil__fm390" />
             </button>
           )}
         </>
@@ -344,7 +353,7 @@ function OrgSyncedCard({ title, subtitle, ctx, testId, children }) {
           onClick={() => ctx.onEditOrganization?.()}
           data-testid="FmBoxes390__editOrganization"
         >
-          <Pencil size={14} strokeWidth={1.75} data-testid="Pencil__fm390OrgCard" />
+          <PencilSimpleIcon size={14} data-testid="Pencil__fm390OrgCard" />
           {ctx.t('fm.m390.edit_in_organization')}
         </button>
       </div>
@@ -392,7 +401,7 @@ function NameTruncationWarnings({ ctx, fields, testId }) {
   return (
     <div className="fm-390-notices" data-testid={testId}>
       {warnings.map(w => (
-        <InfoBanner key={`${w.field}-${w.limit}-${w.label ?? ''}`} tone="warning" icon={TriangleAlert} dismissible={false} role="status" data-testid={`${testId}_item`}>
+        <InfoBanner key={`${w.field}-${w.limit}-${w.label ?? ''}`} tone="warning" icon={WarningIcon} dismissible={false} role="status" data-testid={`${testId}_item`}>
           {ctx.t('fm.m390.ident.truncated', {
             field: ctx.t(`fm.m390.ident.field.${w.field}`, { name: w.label ?? '' }),
             limit: w.limit,
@@ -497,7 +506,7 @@ function ActivityRank({ activity, t }) {
   if (activity.isDefault) {
     return (
       <span className="fm-390-rank fm-390-rank--main">
-        <Star size={11} strokeWidth={2} fill="currentColor" data-testid="Star__fm390Main" />
+        <StarIcon size={11} data-testid="Star__fm390Main" />
         {t('fm.m390.statistics.main_yes')}
       </span>
     );
@@ -670,7 +679,7 @@ function BoxesBlock({ block, boxes, ctx }) {
           {(showSumError || blockMessages.length > 0) && (
             <div className="fm-390-notices">
               {showSumError && (
-                <InfoBanner tone="danger" icon={CircleAlert} dismissible={false} role="alert" data-testid="FmBoxes390__territorySumError">
+                <InfoBanner tone="danger" icon={WarningCircleIcon} dismissible={false} role="alert" data-testid="FmBoxes390__territorySumError">
                   {ctx.t('fm.m390.territory.sum_error', { sum: formatPercent(percentSum) })}
                 </InfoBanner>
               )}
@@ -678,7 +687,7 @@ function BoxesBlock({ block, boxes, ctx }) {
                 <InfoBanner
                   key={m.id}
                   tone={m.level === 'error' ? 'danger' : 'warning'}
-                  icon={m.level === 'error' ? CircleAlert : TriangleAlert}
+                  icon={m.level === 'error' ? WarningCircleIcon : WarningIcon}
                   dismissible={false}
                   role={m.level === 'error' ? 'alert' : 'status'}
                   data-testid={`FmBoxes390__check_${m.id}`}>
@@ -710,7 +719,7 @@ function BoxSearch({ onSearch, notFound, t }) {
   return (
     <div className="fm-390-search">
       <div className="fm-390-search__field">
-        <Search size={14} strokeWidth={1.75} data-testid="Search__fm390" />
+        <MagnifyingGlassIcon size={14} data-testid="Search__fm390" />
         <input
           type="search"
           value={query}
@@ -882,7 +891,7 @@ export default function FmBoxes390({
         {Array.isArray(warnings) && warnings.length > 0 && (
           <div className="fm-390-notices" data-testid="FmBoxes390__warnings">
             {warnings.map((w, i) => (
-              <InfoBanner key={`${w.code}-${w.parameter}-${i}`} tone="warning" icon={TriangleAlert} dismissible={false} role="status" data-testid="FmBoxes390__warnings_item">
+              <InfoBanner key={`${w.code}-${w.parameter}-${i}`} tone="warning" icon={WarningIcon} dismissible={false} role="status" data-testid="FmBoxes390__warnings_item">
                 {t(w.code === 'UNSUPPORTED_RATE' ? 'fm.m390.warning.unsupported_rate' : 'fm.m390.warning.no_box', {
                   parameter: w.parameter ?? '', rate: w.rate != null ? formatPercent(parseAmount(w.rate)) : '',
                 })}
@@ -919,7 +928,7 @@ export default function FmBoxes390({
             onClick={() => select(layout[activeIdx - 1].id)}
             data-testid="FmBoxes390__prev"
           >
-            <ChevronLeft size={14} strokeWidth={1.75} data-testid="ChevronLeft__fm390" />
+            <CaretLeftIcon size={14} data-testid="ChevronLeft__fm390" />
             {t('fm.m390.pager.prev')}
           </button>
           <button
@@ -930,7 +939,7 @@ export default function FmBoxes390({
             data-testid="FmBoxes390__next"
           >
             {t('fm.m390.pager.next')}
-            <ChevronRight size={14} strokeWidth={1.75} data-testid="ChevronRight__fm390" />
+            <CaretRightIcon size={14} data-testid="ChevronRight__fm390" />
           </button>
         </div>
       </div>

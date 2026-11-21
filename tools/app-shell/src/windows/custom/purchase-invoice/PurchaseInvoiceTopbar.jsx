@@ -7,6 +7,7 @@ import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.j
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 import FollowUpDocumentButton from '@/components/follow-up-documents/FollowUpDocumentButton.jsx';
 import { PURCHASE_INVOICE_FOLLOW_UP } from '../shared/invoiceFollowUp.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 // ETP-5260 — Clone/SendToSif/Copy-link moved to the topbarSecondary slot
 // (PurchaseInvoiceSecondaryActions). This component now only renders the
@@ -28,7 +29,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, apiBaseUrl, onRe
   const grandTotal = data.grandTotalAmount ?? 0;
   const outstanding = data.outstandingAmount ?? grandTotal;
   const totalPaid = grandTotal - outstanding;
-  const isCompleted = docStatus === 'CO';
+  const isCompleted = isCompletedStatus(docStatus);
   // ETP-4841: payment state follows the SIGN of the total, not the document type —
   // a POSITIVE Factura Rectificativa is payable and a NEGATIVE ordinary Factura is
   // a credit. Shared with both grids via resolveInvoicePaymentBadge.

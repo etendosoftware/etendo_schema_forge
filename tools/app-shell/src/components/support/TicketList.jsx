@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ChevronRight } from 'lucide-react';
+import { CaretRightIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { ValerIATile } from './ValerIATile.jsx';
 
@@ -70,7 +70,7 @@ export function TicketList({ conversations, activeConversationId, isLoading, onS
         </div>
         {onStartChat && (
           <button className="sc-ask-cta" onClick={onStartChat}>
-            {ui('supportAskQuestionCta')} <ChevronRight
+            {ui('supportAskQuestionCta')} <CaretRightIcon
             size={12}
             style={{ transform: 'rotate(0deg)' }}
             data-testid="ChevronRight__258569" />
@@ -135,7 +135,7 @@ export function TicketList({ conversations, activeConversationId, isLoading, onS
       {onStartChat && (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 12px', flexShrink: 0 }}>
           <button className="sc-ask-cta" onClick={onStartChat}>
-            {ui('supportAskQuestionCta')} <ChevronRight size={12} data-testid="ChevronRight__258569" />
+            {ui('supportAskQuestionCta')} <CaretRightIcon size={12} data-testid="ChevronRight__258569" />
           </button>
         </div>
       )}

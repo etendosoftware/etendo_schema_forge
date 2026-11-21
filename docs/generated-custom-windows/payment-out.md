@@ -6,7 +6,7 @@ Use this window to register and complete outgoing payments to vendors or other p
 
 ## What this window should allow
 
-- Create, open, edit, and review outgoing payment headers from the Finance area.
+- Create, open, edit, and review outgoing payment headers from the Treasury area.
 - Capture the payment header around **Paying To**, **Paying From**, **Payment Method**, **Currency**, **Payment Date**, optional **Reference No.**, and descriptive notes.
 - Review payment status and the derived header amounts that summarize the payment, including total amount, used credit, and write-off amount.
 - Add allocation lines against payable schedules, especially purchase-invoice schedules, while reviewing **Due Date**, **Expected Amount**, **Paid Amount**, **Invoice No.**, **Order No.**, and related partner context.
@@ -16,7 +16,7 @@ Use this window to register and complete outgoing payments to vendors or other p
 ## Interaction model
 
 - **Route:** `/payment-out` for the list and `/payment-out/:recordId` for record detail, following the shared generated/custom window route behavior documented in `app-shell-functional-flows.md`.
-- **Visibility:** visible in the Finance menu through `tools/app-shell/src/menu.json`.
+- **Visibility:** visible in the Treasury menu section ("Tesorería") through `tools/app-shell/src/menu.json` (moved out of Finance in ETP-6389). Breadcrumb: `Treasury / Payment Out`, declared in `decisions.json → window.breadcrumb`.
 - **Implementation type:** custom app-shell route. `tools/app-shell/src/windows/registry.js` resolves `payment-out` to `tools/app-shell/src/windows/custom/payment-out/index.jsx`, which wraps the generated payment-out app from `artifacts/payment-out/generated/web/payment-out/index.jsx`. That generated `index.jsx` renders `HeaderPage.jsx` (the current page component for this window — the sibling `FinPaymentPage.jsx` file in the same directory is a stale leftover from an earlier entity-naming convention and is not imported by anything).
 - **Window shape:** master-child. The primary record is the payment header (`header` / generated `finPayment` page), and the main child working surface is **Lines**.
 - Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. Clicking "Añadir línea" while a form is already open saves the current line and opens a fresh form scrolled into view. See `docs/ui-customization.md` section 13 for the full reference.
@@ -47,7 +47,7 @@ Use this window to register and complete outgoing payments to vendors or other p
 
 ## Manual verification
 
-1. Open `/payment-out` from the Finance menu and confirm the route loads the custom payment-out window rather than a placeholder or generated fallback.
+1. Open `/payment-out` from the Treasury menu and confirm the route loads the custom payment-out window rather than a placeholder or generated fallback.
 2. Create a payment and confirm the header supports **Paying To**, **Paying From**, **Payment Method**, **Currency**, **Payment Date**, **Reference No.**, and notes.
 3. Change partner, account, payment method, date, and currency values and confirm dependent selector options or multi-currency fields react instead of remaining static.
 4. Add payment lines and confirm the user can allocate **Paid Amount** against payable schedules while reviewing due date, expected amount, invoice/order references, and related partner context.
@@ -525,3 +525,7 @@ The list opens with the date filter on "Últimos 30 días" (`window.listViewOpti
 ## Agent prompts on account and status — ETP-5852
 
 `decisions.json` carries an `agentPrompt` on `account` (the financial account the money is paid from), `status` (the payment lifecycle codes, RPAP to RPPC, and that accounting is a separate field) and `etblkpAccountingstatus` (Y posted, N not posted, any other value the reason posting failed). Feedback M-29.
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. The header **Exchange Rate** (`financialTransactionConvertRate`, `Finacc_Txn_Convert_Rate`) is now `decimal` in the contract (`tsType: number`).

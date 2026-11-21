@@ -7,6 +7,7 @@ import { useReturnToVendorPdf } from './useReturnToVendorPdf.js';
 import { downloadBlobAsFile } from '../shared/pdfUtils.js';
 import { PURCHASE_RELATED_DOCS } from '@/components/related-documents';
 import { buildReturnPreviewContent } from '../shared/preview-cards/buildReturnPreviewContent.jsx';
+import { isCompletedStatus, isDraftStatus } from '../../../lib/docStatus.js';
 
 export default function ReturnToVendorShipmentPreview({ shipment, token, apiBaseUrl, windowName, onClose, onEdit, readOnly = false }) {
   const ui = useUI();
@@ -22,7 +23,7 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
   // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig below; lets
   // useReturnToVendorPdf skip the jsreport round-trip and serve the marked attachment
   // directly when one already exists, instead of regenerating on every open.
-  const pdfCacheConfig = { tableName: 'M_InOut', storeCondition: shipment?.documentStatus !== 'DR', recordUpdated: shipment?.updated ?? null };
+  const pdfCacheConfig = { tableName: 'M_InOut', storeCondition: !isDraftStatus(shipment?.documentStatus), recordUpdated: shipment?.updated ?? null };
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useReturnToVendorPdf(
     shipment?.id ?? null,
     apiBaseUrl,
@@ -35,17 +36,17 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
   // ETP-4789 — Download PDF gets its own status gate: only downloadable once
   // the return shipment is Confirmed (CO), matching the rule applied to the
   // other 5 preview panels in this bug.
-  const isDownloadable = shipment.documentStatus === 'CO';
+  const isDownloadable = isCompletedStatus(shipment.documentStatus);
   // ETP-5124 — Send is only available once the shipment is Confirmed (CO), matching
   // the grid row quick-action's `emailAction.visibleWhen` gate in index.jsx and the
   // pattern used by every other document preview (e.g. ReturnMaterialReceiptPreview).
   // ETP-5205 — Solo-Lectura tier: Send is a write (mail + PDF attachment), Download stays.
-  const isSendable = shipment.documentStatus === 'CO' && !readOnly;
+  const isSendable = isCompletedStatus(shipment.documentStatus) && !readOnly;
 
   const partnerName = shipment['businessPartner$_identifier'] || '—';
   const movementDate = shipment.movementDate ? formatCalendarDate(shipment.movementDate, locale) : '—';
   const windowLabel = tMenu('Return to Vendor Shipment');
-  const isDraft = shipment.documentStatus === 'DR';
+  const isDraft = isDraftStatus(shipment.documentStatus);
 
   const handleDownload = () => {
     if (!pdfBlob) return;

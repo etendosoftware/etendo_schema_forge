@@ -3,6 +3,7 @@
   "window": {
     "category": "finance",
     "name": "Payment Out",
+    "breadcrumb": "Treasury / Payment Out",
     "relatedDocuments": false,
     "notesField": "description",
     "dateFilterKey": "paymentDate",

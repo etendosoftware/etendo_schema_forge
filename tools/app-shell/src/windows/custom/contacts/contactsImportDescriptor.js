@@ -605,7 +605,7 @@ function translatedWithParams(key, params, fallback, translate) {
  * that says anything about an address needs a street (Calle), a city and a country. Number is
  * never required (the server falls back to "s/n"). The server's max-length check
  * (`rejectOversizedFields`) is mirrored too, since it is two comparisons: Calle carries a whole
- * address when it comes from an old "Dirección" column, which can exceed the street's 70.
+ * address when it comes from an old "Dirección" column, which can exceed the street's 60.
  *
  * Flag OFF: a Número with no Calle is reported on the Calle cell (the single address line is
  * built from Calle, so the number would otherwise be dropped in silence), and so is a Calle longer

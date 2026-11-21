@@ -76,21 +76,21 @@ vi.mock('@/components/ui/checkbox', () => ({
       onChange: onChange ?? (() => {}),
     }),
 }));
-// lucide-react — includes Pencil (used by the real FmBoxes303's edit button),
+// @phosphor-icons/react — includes Pencil (used by the real FmBoxes303's edit button),
 // unlike FmModel303Page.vitest.jsx's own mock which never needed it since that
 // file mocks FmBoxes303.jsx away entirely.
 // ETP-5584 — FmBoxes303 renders the app's Radix Select; drive it as a native <select>.
 vi.mock('@/components/ui/select', () => import('../../../__tests__/testUtils/nativeSelectMock.jsx'));
-vi.mock('lucide-react', () => ({
-  // ETP-5584 — the detail status chip renders lucide's Check for success tones.
-  Check: () => null,
-  Settings: () => null, Download: () => null, OctagonAlert: () => null,
-  TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
-  Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
-  TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
-  ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
-  FileCheck: () => null, Landmark: () => null, Pencil: () => null,
-  Save: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  // ETP-5584 — the detail status chip renders a Phosphor Check for success tones.
+  CheckIcon: () => null,
+  GearIcon: () => null, DownloadSimpleIcon: () => null, WarningOctagonIcon: () => null,
+  WarningIcon: () => null, CheckCircleIcon: () => null, ArrowsLeftRightIcon: () => null,
+  CalculatorIcon: () => null, CircleNotchIcon: () => null, DotsThreeVerticalIcon: () => null,
+  TrendUpIcon: () => null, TrendDownIcon: () => null, ClockIcon: () => null,
+  ClipboardTextIcon: () => null, ReceiptIcon: () => null, FolderIcon: () => null,
+  SealCheckIcon: () => null, BankIcon: () => null, PencilSimpleIcon: () => null,
+  FloppyDiskIcon: () => null,
 }));
 
 // NOTE: '../FmBoxes303.jsx' is intentionally NOT mocked in this file.

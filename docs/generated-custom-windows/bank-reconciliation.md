@@ -1,5 +1,11 @@
 # Bank Reconciliation
 
+> **Retired window.** The generated `bank-reconciliation` window was removed in ETP-4100: its artifact (`artifacts/bank-reconciliation/`), its `menu.json` entry, its registry loader and its route are gone, so `/bank-reconciliation` only reaches `WindowLoader`'s `Window "bank-reconciliation" not found` error. Bank reconciliation is now done in the **Conciliación** tab of an account's detail (`/financial-account/:id`), reached from **Tesorería › Cuentas** (Treasury group since ETP-6389, Finance before):
+> - open an account and pick the Conciliación tab, or
+> - on an account row of the Cuentas list with pending lines, press the pending pill, which opens `/financial-account/:id?tab=reconciliation&autoMatch=true` (`AccountsHeaderTable.jsx` → `reconcilePill` in `components/financial-accounts/accountCellTypes.jsx`).
+>
+> The tab renders `ReconciliationSplitPanel` on the NEO spec `bank-reconciliation` (`/sws/neo/bank-reconciliation`, `ReconciliationHandler`). The name lives on only as that backend spec. Full guide: `financial-account.md` (Reconciliation tab). The sections below describe the retired generated window and are kept as history.
+
 ## Intent
 
 Use this window to reconcile one bank statement against its transaction lines, review whether the statement balances, and track which lines are already matched to accounting documents such as invoices. The business goal is to let a finance user move a statement from open review toward a fully matched, zero-difference result without leaving the reconciliation context.
@@ -15,9 +21,9 @@ Use this window to reconcile one bank statement against its transaction lines, r
 
 ## Interaction model
 
-- Route: `/bank-reconciliation` for the list and `/bank-reconciliation/:recordId` for the detail workflow.
-- Visibility: visible in the Finance menu.
-- Implementation type: generated window route loaded from the app-shell registry.
+- Route (until ETP-4100): `/bank-reconciliation` for the list and `/bank-reconciliation/:recordId` for the detail workflow. Neither route exists today; see the note at the top.
+- Visibility: no menu entry. It used to be in the Finance menu; today the reconciliation surface is the Conciliación tab under Tesorería › Cuentas.
+- Implementation type (until ETP-4100): generated window route loaded from the app-shell registry.
 - Window shape: master-child. The header entity is `bankReconciliation`; the child entity is `bankReconciliationLine`.
 
 ## Reactive behavior and dependencies
@@ -39,6 +45,12 @@ Use this window to reconcile one bank statement against its transaction lines, r
 
 ## Manual verification
 
+Current behaviour:
+
+1. Confirm the sidebar has no Bank Reconciliation entry. In Tesorería › Cuentas, press the pending pill on a bank account row with pending lines (an account with none shows a static reconciled badge instead): the account detail opens on the Conciliación tab (`?tab=reconciliation&autoMatch=true`). For the reconciliation flow itself, follow `financial-account.md`.
+
+The steps below applied to the retired generated window and can no longer be run:
+
 1. Open `/bank-reconciliation` from the Finance menu and confirm the list shows statement headers with document number, bank account, statement date, ending balance, difference, and status.
 2. Create a reconciliation header and confirm `bankAccount`, `statementDate`, and `endingBalance` are editable while `documentNo`, `startingBalance`, `difference`, and `status` remain review-only.
 3. Open the saved header, add several lines with positive and negative amounts, and confirm the child table refreshes under the same header.
@@ -47,9 +59,11 @@ Use this window to reconcile one bank statement against its transaction lines, r
 
 ## Automated evidence
 
-- `tools/app-shell/src/menu.json` registers `bank-reconciliation` under the Finance menu.
-- `tools/app-shell/src/windows/registry.js` maps `bank-reconciliation` to the generated window loader.
-- `artifacts/bank-reconciliation/generated/web/bank-reconciliation/BankReconciliationPage.jsx` confirms a master-child detail view with `bankReconciliation` as the header entity, `bankReconciliationLine` as the child entity, header summary fields for `documentNo`, `startingBalance`, and `difference`, and an empty `processes` array.
-- `artifacts/bank-reconciliation/generated/web/bank-reconciliation/BankReconciliationForm.jsx`, `BankReconciliationLineForm.jsx`, `BankReconciliationTable.jsx`, and `BankReconciliationLineTable.jsx` confirm the visible editable, read-only, and filterable fields described above.
-- `artifacts/bank-reconciliation/contract.json` defines the same header/line fields plus the backend `autoMatch` process endpoint and its stated preconditions.
+- Removal: commit `1e044565f` (ETP-4100, "drop legacy artifact") deleted `artifacts/bank-reconciliation/` and the window's entries in `menu.json`, `windows/registry.js` and `App.jsx`. The files named in the next bullets no longer exist; they are kept to explain what this guide described.
+- Today's entry point: `artifacts/financial-account/custom/AccountsHeaderTable.jsx` (`onReconcile` → `/financial-account/:id?tab=reconciliation&autoMatch=true`) and `tools/app-shell/src/windows/custom/financial-account/ReconciliationTab.jsx` (renders `ReconciliationSplitPanel`).
+- (Retired) `tools/app-shell/src/menu.json` registered `bank-reconciliation` under the Finance menu.
+- (Retired) `tools/app-shell/src/windows/registry.js` mapped `bank-reconciliation` to the generated window loader.
+- (Retired) `artifacts/bank-reconciliation/generated/web/bank-reconciliation/BankReconciliationPage.jsx` confirmed a master-child detail view with `bankReconciliation` as the header entity, `bankReconciliationLine` as the child entity, header summary fields for `documentNo`, `startingBalance`, and `difference`, and an empty `processes` array.
+- (Retired) `artifacts/bank-reconciliation/generated/web/bank-reconciliation/BankReconciliationForm.jsx`, `BankReconciliationLineForm.jsx`, `BankReconciliationTable.jsx`, and `BankReconciliationLineTable.jsx` confirmed the visible editable, read-only, and filterable fields described above.
+- (Retired) `artifacts/bank-reconciliation/contract.json` defined the same header/line fields plus the backend `autoMatch` process endpoint and its stated preconditions.
 - No dedicated automated app-shell test file was found for this specific window; shared route and CRUD behavior is documented in `docs/generated-custom-windows/app-shell-functional-flows.md`.

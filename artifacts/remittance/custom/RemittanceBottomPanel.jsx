@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FileInput } from 'lucide-react';
+import { ListChecksIcon } from '@phosphor-icons/react';
 import { LinesEmptyState } from '@/components/contract-ui';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -37,7 +37,7 @@ function SelectFromInvoicesButton({ onClick, testId }) {
   const ui = useUI();
   return (
     <button type="button" data-testid={testId} onClick={onClick} style={BUTTON_STYLE}>
-      <FileInput size={13} aria-hidden="true" data-testid="FileInput__remittance" />
+      <ListChecksIcon size={13} aria-hidden="true" data-testid="FileInput__remittance" />
       {ui('remittanceSelectFromInvoices')}
     </button>
   );
@@ -86,7 +86,7 @@ function RemittanceLinesTotal({ remittanceId, apiBaseUrl, lines }) {
  * DetailView's bottomSection contract has no refresh callback, so a selection made from here
  * reloads the page — the same fallback as the return-material-receipt panel. The window has no
  * notes or related documents, so there is no LinesBottomSection to render below it; the lines
- * total is the panel's own (RemittanceLinesTotal).
+ * total is the panel's own (RemittanceLinesTotal). The footer is always one row: the trigger on the left and the total filling the rest, right-aligned (a column footer used to centre the total once the trigger was hidden, i.e. on a processed remittance).
  */
 export default function RemittanceBottomPanel({ data, recordId, apiBaseUrl, lines, isDocumentReadOnly, windowReadOnly }) {
   const [open, setOpen] = useState(false);
@@ -98,7 +98,7 @@ export default function RemittanceBottomPanel({ data, recordId, apiBaseUrl, line
     <div
       data-testid="remittance-lines-footer"
       style={{
-        display: 'flex', flexDirection: showTrigger ? 'row' : 'column', alignItems: 'center',
+        display: 'flex', flexDirection: 'row', alignItems: 'center',
         justifyContent: 'space-between', gap: 6, padding: '10px 16px',
         // `--color-border-tertiary` is not defined in the app, so its fallback (the foreground,
         // near black) drew a heavy line; the design token for a subtle divider is --border-subtle.

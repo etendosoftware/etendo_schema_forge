@@ -5,14 +5,14 @@ import { KPIHeader, KanbanBoard } from '@/components/contract-ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Truck, FileText } from 'lucide-react';
+import { TruckIcon, FileTextIcon } from '@phosphor-icons/react';
 
 import { kpisConfig, sections } from '@generated/purchases/generated/config';
 import * as mockData from '@generated/purchases/generated/mockData';
 
 // -- Icon map (string name -> component) --------------------------------------
 
-const ICON_MAP = { FileText, Truck };
+const ICON_MAP = { FileText: FileTextIcon, Truck: TruckIcon };
 
 // -- Derived data from aggregate contract -------------------------------------
 

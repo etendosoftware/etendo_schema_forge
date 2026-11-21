@@ -19,24 +19,24 @@ vi.mock('@/i18n', () => ({
 }));
 
 // ETP-5806 follow-up: the legacy-address banner renders a shared `CopyButton`
-// (`@/components/ui/copy-button.jsx`), which imports `Copy` from lucide-react in
+// (`@/components/ui/copy-button.jsx`), which imports `Copy` from @phosphor-icons/react in
 // addition to `Check`. The pre-ETP-5806 mock only listed the 5 icons this modal
 // imports directly and crashed the moment the banner mounted ("No 'Copy' export
-// is defined on the 'lucide-react' mock") — found while extending this suite for
+// is defined on the '@phosphor-icons/react' mock") — found while extending this suite for
 // ETP-5806 (uncaught exception on every test that reached `isLegacyAddress`).
 // ETP-5806 follow-up (round 2): the redesigned legacy banner and the resulting-address
-// preview badge also render `Info` and `Lock` directly from lucide-react — missing either
+// preview badge also render `Info` and `Lock` directly from @phosphor-icons/react — missing either
 // one crashes the whole suite the moment the component mounts ("No 'Info'/'Lock' export is
-// defined on the 'lucide-react' mock"), the same failure mode `Copy` had above.
-vi.mock('lucide-react', () => ({
-  X: (props) => <span data-testid="icon-x" {...props} />,
-  Loader2: (props) => <span data-testid="loader" {...props} />,
-  Search: (props) => <span data-testid="icon-search" {...props} />,
-  ChevronDown: (props) => <span data-testid="icon-chevron" {...props} />,
-  Check: (props) => <span data-testid="icon-check" {...props} />,
-  Copy: (props) => <span data-testid="icon-copy" {...props} />,
-  Info: (props) => <span data-testid="icon-info" {...props} />,
-  Lock: (props) => <span data-testid="icon-lock" {...props} />,
+// defined on the '@phosphor-icons/react' mock"), the same failure mode `Copy` had above.
+vi.mock('@phosphor-icons/react', () => ({
+  XIcon: (props) => <span data-testid="icon-x" {...props} />,
+  CircleNotchIcon: (props) => <span data-testid="loader" {...props} />,
+  MagnifyingGlassIcon: (props) => <span data-testid="icon-search" {...props} />,
+  CaretDownIcon: (props) => <span data-testid="icon-chevron" {...props} />,
+  CheckIcon: (props) => <span data-testid="icon-check" {...props} />,
+  CopyIcon: (props) => <span data-testid="icon-copy" {...props} />,
+  InfoIcon: (props) => <span data-testid="icon-info" {...props} />,
+  LockIcon: (props) => <span data-testid="icon-lock" {...props} />,
 }));
 
 vi.mock('sonner', () => ({
@@ -793,7 +793,7 @@ describe('LocationEditorModal', () => {
 
   it('caps Street/Number/Building name inputs at their DB column lengths', () => {
     renderModal();
-    expect(streetNameInput()).toHaveAttribute('maxLength', '70');
+    expect(streetNameInput()).toHaveAttribute('maxLength', '60');
     expect(buildingNumberInput()).toHaveAttribute('maxLength', '16');
     expect(buildingNameInput()).toHaveAttribute('maxLength', '35');
   });
@@ -2212,4 +2212,121 @@ describe('LocationEditorModal — keyboard handling (ETP-5806 CP-9)', () => {
     expect(screen.queryByPlaceholderText('countrySearchPlaceholder')).not.toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });
+});
+
+// ---------------------------------------------------------------------------
+// Dynamic modal width (ETP-5806 follow-up round 3) — `modalMaxWidth` tracks the
+// measured pixel width of the wider preview pill instead of always paying for the
+// fixed 900 budget. jsdom does not implement canvas text measurement, so
+// `HTMLCanvasElement.prototype.getContext` is mocked here with a deterministic
+// per-character width so the clamp/measure logic itself can be exercised; the real
+// `canvas.measureText` call is exactly what `measurePreviewTextWidth` performs
+// (see the component's module-scope helper), only the measurement backend differs.
+// ---------------------------------------------------------------------------
+describe('LocationEditorModal — dynamic modal width (ETP-5806 follow-up round 3)', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [], hasMore: false }) }),
+    );
+    useCapabilitiesOn();
+  });
+
+  const CHAR_WIDTH_PX = 13; // chosen so a 60-char zero-space worst case clamps to the 900 ceiling
+    let measureTextMock;
+
+    beforeEach(() => {
+      measureTextMock = vi.fn((text) => ({ width: String(text ?? '').length * CHAR_WIDTH_PX }));
+      vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+        font: '',
+        measureText: measureTextMock,
+      });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      // `vi.restoreAllMocks()` above also restores the outer describe's `global.fetch`
+      // spy target, but `global.fetch` itself is a plain assignment (not a spy) in the
+      // outer `beforeEach`, so the next test's `beforeEach` still re-assigns it fresh.
+    });
+
+    /** The modal's card element — the direct child of the `location-modal` dialog whose
+     * inline `maxWidth` is `modalMaxWidth`. There is no dedicated `data-testid` for it. */
+    function modalCard() {
+      return screen.getByTestId('location-modal').firstElementChild;
+    }
+
+    function mockLegacyRecordWithLines(rowId, address, address2 = '') {
+      global.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            response: { data: [{ id: rowId, address, address2, country: 'ES', 'country$_identifier': 'Spain' }] },
+            items: [],
+            hasMore: false,
+          }),
+        }),
+      );
+    }
+
+    it('clamps to the 560 floor for a short/typical address instead of defaulting to 900', async () => {
+      mockLegacyRecordWithLines('loc-width-short', 'Avenida Principal 100', '');
+      renderModal({ rowId: 'loc-width-short' });
+
+      await screen.findByTestId('location-resulting-address1');
+      expect(modalCard()).toHaveStyle({ maxWidth: '560px' });
+    });
+
+    it('drives the width up toward the 900 ceiling for a 60-char, zero-space Primera línea', async () => {
+      const worstCaseLine1 = 'W'.repeat(60);
+      mockLegacyRecordWithLines('loc-width-line1', worstCaseLine1, '');
+      renderModal({ rowId: 'loc-width-line1' });
+
+      expect((await screen.findByTestId('location-resulting-address1'))).toHaveTextContent(worstCaseLine1);
+      // 60 * 13 * 1.05 + 40 (pill chrome) + 64 (modal chrome) = 923.6 -> clamped to the 900 ceiling.
+      expect(modalCard()).toHaveStyle({ maxWidth: '900px' });
+      expect(measureTextMock).toHaveBeenCalledWith(worstCaseLine1);
+    });
+
+    it('also drives the width up for a long Segunda línea even when Primera línea is short (max-of-both-lines)', async () => {
+      const shortLine1 = 'Calle Corta';
+      const longLine2 = 'B'.repeat(60);
+      mockLegacyRecordWithLines('loc-width-line2', shortLine1, longLine2);
+      renderModal({ rowId: 'loc-width-line2' });
+
+      expect(await screen.findByTestId('location-resulting-address2')).toHaveTextContent(longLine2);
+      expect(modalCard()).toHaveStyle({ maxWidth: '900px' });
+      expect(measureTextMock).toHaveBeenCalledWith(longLine2);
+    });
+
+    it('never produces a width below 560 or above 900 regardless of input', async () => {
+      mockLegacyRecordWithLines('loc-width-clamp', 'X'.repeat(500), 'Y'.repeat(500));
+      renderModal({ rowId: 'loc-width-clamp' });
+
+      await screen.findByTestId('location-resulting-address1');
+      const width = parseInt(modalCard().style.maxWidth, 10);
+      expect(width).toBeGreaterThanOrEqual(560);
+      expect(width).toBeLessThanOrEqual(900);
+    });
+
+    it('does not attempt to measure anything and stays at the 560 floor when structuredAddressForSepa is off', () => {
+      useCapabilitiesOff();
+      renderModal();
+
+      expect(modalCard()).toHaveStyle({ maxWidth: '560px' });
+      expect(measureTextMock).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the 560 floor without throwing when the canvas 2D context is unavailable', async () => {
+      // Some privacy/extension configurations make `getContext('2d')` return null even though
+      // the canvas element itself exists — `measurePreviewTextWidth` must short-circuit to 0
+      // instead of calling `.font`/`.measureText` on a null context.
+      HTMLCanvasElement.prototype.getContext.mockReturnValue(null);
+      mockLegacyRecordWithLines('loc-width-no-ctx', 'W'.repeat(60), '');
+
+      expect(() => renderModal({ rowId: 'loc-width-no-ctx' })).not.toThrow();
+
+      await screen.findByTestId('location-resulting-address1');
+      expect(modalCard()).toHaveStyle({ maxWidth: '560px' });
+      expect(measureTextMock).not.toHaveBeenCalled();
+    });
 });
