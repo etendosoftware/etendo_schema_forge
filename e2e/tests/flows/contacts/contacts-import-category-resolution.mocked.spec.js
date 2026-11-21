@@ -93,8 +93,6 @@ test('keeps valid contact rows and surfaces ambiguous or unknown category rows',
     ].join('\n')),
   });
   await page.getByTestId('ImportDialog__importButton').click();
-  await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
-  await page.getByTestId('ImportConfirmStep__confirm').click();
 
   const errorFilter = page.getByTestId('ImportReviewQueue__statusFilter-error');
   await expect(errorFilter).toContainText('2');
@@ -159,8 +157,6 @@ test('auto-creates an unknown category and applies the Cliente / Proveedor colum
 
   await expect(page.getByTestId('ImportDialog__importButton')).toContainText('Importar 1');
   await page.getByTestId('ImportDialog__importButton').click();
-  await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
-  await page.getByTestId('ImportConfirmStep__confirm').click();
 
   await expect.poll(() => state.batchBodies.length).toBe(1);
   expect(state.categoryPosts).toHaveLength(1);
@@ -216,10 +212,8 @@ test('skips an in-file duplicate tax id before sending the batch', async ({ page
   await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-duplicate-skipped.png'), fullPage: true });
 
   await page.getByTestId('ImportReviewQueue__statusFilter-ok').click();
+  await expect(page.getByTestId('ImportDialog__rowSummary')).toContainText('1');
   await page.getByTestId('ImportDialog__importButton').click();
-  await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
-  await expect(page.getByTestId('ImportConfirmStep__importCount')).toContainText('1');
-  await page.getByTestId('ImportConfirmStep__confirm').click();
   await expect(page.getByText('Contacto original', { exact: true })).toBeVisible();
 
   expect(state.batchBodies).toHaveLength(1);
@@ -259,10 +253,8 @@ test('imports a minimal company row with only the required legal name and tax id
 
   await expect(page.getByTestId('ImportDialog__importButton')).toContainText('Importar 1');
   await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-minimal-review.png'), fullPage: true });
+  await expect(page.getByTestId('ImportDialog__rowSummary')).toContainText('1');
   await page.getByTestId('ImportDialog__importButton').click();
-  await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
-  await expect(page.getByTestId('ImportConfirmStep__importCount')).toContainText('1');
-  await page.getByTestId('ImportConfirmStep__confirm').click();
 
   expect(state.batchBodies).toHaveLength(1);
   const bpBody = state.batchBodies[0].operations.find((operation) => operation.entity === 'businessPartner').body;
