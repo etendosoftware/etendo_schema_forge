@@ -899,3 +899,10 @@ reads it off the `/me` call it already makes on each load (`useSupportSessionSyn
 on the next load after the milestone, not on the action itself. GA attributes it by its cookie, so
 the delay does not change the attribution. The 30-day limit keeps accounts active before the event
 shipped from reporting old milestones as new conversions.
+
+
+## Feature usage and backend correlation (ETP-5646)
+
+Stable feature keys, `feature_opened`, the `X-Etendo-Feature` request attribution, the structured
+backend line, Datadog forwarding/parsing, Java APM prerequisites, dashboards, adoption denominator
+and cardinality rules are in [feature-usage-and-correlation.md](feature-usage-and-correlation.md).

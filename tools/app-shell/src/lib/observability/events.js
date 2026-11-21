@@ -49,6 +49,8 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   POSITION: 'position',
   PROVIDER: 'provider',
   FEEDBACK: 'feedback',
+  // ETP-5646: stable key of an actionable menu entry (`window.sales-order`), never a record id.
+  FEATURE_KEY: 'featureKey',
   REASON: 'reason',
   UPGRADE_ACTION: 'upgradeAction',
   SCORE: 'score',
@@ -341,6 +343,19 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.ACCOUNT_ID,
       OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
       OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+    ],
+  }),
+  // ETP-5646: THE canonical "a feature was opened" event: one per actual open of a menu entry
+  // (menu click, in-app link or direct URL), never per re-render or per record within the entry.
+  // `source` is `direct_url` for the first route of a page load, else `navigation`. Adoption =
+  // distinct users of this event over distinct users of `session_started`. The user and tenant ids
+  // are added by the common identity context (ETP-6228), not here.
+  FEATURE_OPENED: defineEvent('feature_opened', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.FEATURE_KEY,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
     ],
   }),
   TIME_TO_CREATE: defineEvent('time_to_create', {

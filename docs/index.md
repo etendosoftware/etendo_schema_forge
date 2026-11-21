@@ -151,6 +151,7 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 | [ops/server-logs.md](ops/server-logs.md) | **Server logs**: tailing CloudWatch for experimental/production/demo1 (`make logs`), the per-env/per-service log group matrix, AWS CLI setup and troubleshooting |
 | [ops/mcp-copilot-metrics.md](ops/mcp-copilot-metrics.md) | **MCP / Copilot usage metrics**: `make mcp-metrics` (MCP calls, feedback, Copilot conversations/messages, total or per day) and `make mcp-usage` export; remote profile with `SSH_HOST` + `GRADLE_PROPERTIES` |
 | [ops/app-shell-observability.md](ops/app-shell-observability.md) | App Shell observability: providers, env vars, v1 events, privacy rules, and extension guide |
+| [ops/feature-usage-and-correlation.md](ops/feature-usage-and-correlation.md) | Feature keys, feature_opened, request attribution, Datadog forwarding, Java APM prerequisites, dashboards, adoption and cardinality (ETP-5646) |
 | [ops/mixpanel-kpi-emission-spec.md](ops/mixpanel-kpi-emission-spec.md) | Mixpanel KPI emission spec: frontend/backend runtime config, emitted events, advanced KPI gaps, and validation evidence |
 | [ops/saas-kpis/README.md](ops/saas-kpis/README.md) | Etendo SaaS KPI instrumentation catalog grouped by dimension, with Mixpanel-ready contracts and backend/definition gaps |
 

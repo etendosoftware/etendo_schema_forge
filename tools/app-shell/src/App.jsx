@@ -40,6 +40,7 @@ import { apiFetch } from '@/auth/api.js';
 import { clearStoredDateRange } from '@/components/dashboard/DashboardDateRangeContext.jsx';
 import { clearAccountIdentity } from '@/lib/flags/bootstrap.js';
 import { clearIdentityContext } from '@/lib/observability/identityContext.js';
+import { leaveFeature } from '@/lib/observability/featureUsage.js';
 import { detectBasePath, getNeoBaseUrl } from '@/lib/neoBaseUrl.js';
 import { withSupportModeCapabilities } from '@/lib/supportSession.js';
 import { useSupportSessionSync } from '@/hooks/useSupportSessionSync.js';
@@ -460,6 +461,8 @@ function clearSessionScopedState(session) {
     // ETP-6228 — the shell can stay mounted on a session expiry, so the hook's unmount cleanup
     // alone would leave the last user's ids on later events.
     void clearIdentityContext(); // NOSONAR -- fire-and-forget, like the clears above.
+    // ETP-5646 — the tab's feature (request attribution + RUM `featureKey`) must not label the next user.
+    void leaveFeature(); // NOSONAR -- fire-and-forget, like the clears above.
   }
 }
 

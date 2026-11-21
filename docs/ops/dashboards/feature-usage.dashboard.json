@@ -1,0 +1,25 @@
+{
+  "title": "Feature usage and request correlation (ETP-5646)",
+  "description": "Definition only: pending import into Datadog. Per feature / tenant / user via scoped log and RUM queries. No user or tenant id is a custom-metric tag.",
+  "layout_type": "ordered",
+  "template_variables": [
+    { "name": "feature", "prefix": "@feature_key", "default": "*" },
+    { "name": "tenant", "prefix": "@ad_client_id", "default": "*" },
+    { "name": "user", "prefix": "@ad_user_id", "default": "*" },
+    { "name": "env", "prefix": "env", "default": "production" }
+  ],
+  "widgets": [
+    { "definition": { "type": "toplist", "title": "Feature interactions (RUM actions in a feature context; opens are in Mixpanel feature_opened)",
+      "requests": [{ "q": "", "response_format": "scalar", "queries": [{ "data_source": "rum", "name": "q1", "search": { "query": "@type:action @context.featureKey:* env:$env.value" }, "indexes": ["*"], "compute": { "aggregation": "count" }, "group_by": [{ "facet": "@context.featureKey", "limit": 25, "sort": { "aggregation": "count", "order": "desc" } }] }], "formulas": [{ "formula": "q1" }] }] } },
+    { "definition": { "type": "timeseries", "title": "Requests by outcome per feature (logs, logger NeoRequest)",
+      "requests": [{ "response_format": "timeseries", "queries": [{ "data_source": "logs", "name": "q1", "search": { "query": "@event:neo_request @feature_key:$feature.value @ad_client_id:$tenant.value env:$env.value" }, "indexes": ["*"], "compute": { "aggregation": "count" }, "group_by": [{ "facet": "@outcome", "limit": 5, "sort": { "aggregation": "count", "order": "desc" } }] }], "formulas": [{ "formula": "q1" }], "display_type": "bars" }] } },
+    { "definition": { "type": "timeseries", "title": "p95 latency per feature (ms)",
+      "requests": [{ "response_format": "timeseries", "queries": [{ "data_source": "logs", "name": "q1", "search": { "query": "@event:neo_request @feature_key:$feature.value env:$env.value" }, "indexes": ["*"], "compute": { "aggregation": "pc95", "metric": "@latency_ms" }, "group_by": [{ "facet": "@feature_key", "limit": 10, "sort": { "aggregation": "pc95", "order": "desc", "metric": "@latency_ms" } }] }], "formulas": [{ "formula": "q1" }], "display_type": "line" }] } },
+    { "definition": { "type": "toplist", "title": "Features per tenant (scoped log analytics)",
+      "requests": [{ "response_format": "scalar", "queries": [{ "data_source": "logs", "name": "q1", "search": { "query": "@event:neo_request @ad_client_id:$tenant.value @feature_key:$feature.value env:$env.value" }, "indexes": ["*"], "compute": { "aggregation": "count" }, "group_by": [{ "facet": "@feature_key", "limit": 25, "sort": { "aggregation": "count", "order": "desc" } }] }], "formulas": [{ "formula": "q1" }] }] } },
+    { "definition": { "type": "toplist", "title": "Features per user (scoped log analytics)",
+      "requests": [{ "response_format": "scalar", "queries": [{ "data_source": "logs", "name": "q1", "search": { "query": "@event:neo_request @ad_user_id:$user.value @feature_key:$feature.value env:$env.value" }, "indexes": ["*"], "compute": { "aggregation": "count" }, "group_by": [{ "facet": "@feature_key", "limit": 25, "sort": { "aggregation": "count", "order": "desc" } }] }], "formulas": [{ "formula": "q1" }] }] } },
+    { "definition": { "type": "query_value", "title": "Unique active users (logs, distinct @ad_user_id)",
+      "requests": [{ "response_format": "scalar", "queries": [{ "data_source": "logs", "name": "q1", "search": { "query": "@event:neo_request @feature_key:$feature.value @ad_client_id:$tenant.value env:$env.value" }, "indexes": ["*"], "compute": { "aggregation": "cardinality", "metric": "@ad_user_id" }, "group_by": [] }], "formulas": [{ "formula": "q1" }] }] } }
+  ]
+}
