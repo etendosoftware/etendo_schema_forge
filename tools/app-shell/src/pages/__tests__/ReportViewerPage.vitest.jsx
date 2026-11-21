@@ -1550,8 +1550,10 @@ describe('ReportViewer (viewer sub-component)', () => {
     });
     await user.click(screen.getByText('runReport'));
     await waitFor(() => {
-      expect(screen.getByText('Network failure')).toBeInTheDocument();
+      // ETP-5645: an unexpected error shows the generic key, never its raw English message.
+      expect(screen.getByText('reportErrorGeneric')).toBeInTheDocument();
     });
+    expect(screen.queryByText('Network failure')).not.toBeInTheDocument();
   });
 
   it('does not show ReportViewer when report id does not match any fetched report', async () => {

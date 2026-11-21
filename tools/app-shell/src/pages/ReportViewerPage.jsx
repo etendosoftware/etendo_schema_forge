@@ -26,6 +26,7 @@ import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
 import { fetchMyReportAccess } from '@/lib/rolesApi.js';
 import { useFeatureFlag, DYNAMIC_REPORTS, DYNAMIC_BALANCE_REPORTS } from '@/lib/flags';
 import { opensDynamicView } from '@/components/reports/dynamic/dynamicReports.js';
@@ -1172,6 +1173,19 @@ async function renderErrorMessage(res, ui) {
   return data?.error || `Render failed: ${res.status}`;
 }
 
+// A failure whose message the render endpoint produced and renderErrorMessage already resolved
+// (translated code or the server's own text). Anything else reaching the catch below is an
+// unexpected error whose `message` is untranslated English.
+class RenderFailure extends Error {}
+
+// ETP-5645 — null means "show nothing": the session AbortError is apiFetch abandoning a
+// request that belongs to a session that is gone (logout, other user/client), not a failed render.
+function renderCatchMessage(err, ui) {
+  if (err?.name === 'AbortError') return null;
+  if (err instanceof RenderFailure || isNetworkError(err)) return err.message;
+  return ui('reportErrorGeneric');
+}
+
 function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReportId, extraParams = {}, isolateParams = [] }) {
   const iframeRef = useRef(null);
   const [loading, setLoading] = useState(true);
@@ -1225,7 +1239,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReport
         timeout: 0,
       });
       if (!res.ok) {
-        throw new Error(await renderErrorMessage(res, ui));
+        throw new RenderFailure(await renderErrorMessage(res, ui));
       }
       if (format === 'html' || format === 'preview') {
         writeToIframe(await res.text());
@@ -1236,7 +1250,10 @@ function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReport
         const a = document.createElement('a'); a.href = url; a.download = buildReportFilename(report.id, format, '-detail'); a.click();
         URL.revokeObjectURL(url);
       }
-    } catch (err) { setError(err.message); }
+    } catch (err) {
+      const message = renderCatchMessage(err, ui);
+      if (message) setError(message);
+    }
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [report.id, apiFetch, bpId, locale]);
@@ -1583,7 +1600,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
         timeout: 0,
       });
       if (!res.ok) {
-        throw new Error(await renderErrorMessage(res, ui));
+        throw new RenderFailure(await renderErrorMessage(res, ui));
       }
       if (format === 'html' || format === 'preview') {
         const html = await res.text();
@@ -1605,7 +1622,8 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
         URL.revokeObjectURL(url);
       }
     } catch (err) {
-      setError(err.message);
+      const message = renderCatchMessage(err, ui);
+      if (message) setError(message);
     }
     setLoading(false);
   }, [report.id, apiFetch, submitParams, locale, ui]);
