@@ -562,7 +562,7 @@ It prints the key ids, never a password, cookie, CSRF token or secret. The gatew
 | `PUBLIC_API_E2E_GATEWAY_PORT` | fixed gateway port instead of a free one |
 | `PUBLIC_API_E2E_TIMEOUT_MINUTES` | overall limit of the run, default `30`; when it is reached the script stops the suite and the gateway, deletes the keys and exits `124` |
 
-The gateway must be built first: `make public-api-e2e-ci-install` installs `gateway/` and builds it with `@etendosoftware/api-gateway-core` taken from the `schema_forge_core` tag pinned in `package.json` (the package is not published; it is packed from source by `scripts/lib/pack-gateway-core.mjs`, the same helper the gateway tests of `deploy-public-api.yml` use; the `Dockerfile` repeats those steps inside its build stage). The source is exported from `PUBLIC_API_CORE_DIR` when it points at a local `schema_forge_core` clone that has the tag (read-only, the working tree is not touched), and cloned from `PUBLIC_API_CORE_REPO` otherwise (SSH by default). A second call with the same pin only rebuilds `gateway/` (seconds).
+The gateway must be built first: `make public-api-e2e-ci-install` installs the exact published `@etendosoftware/api-gateway-core` pin from `gateway/package.json` and builds the gateway. npm requires GitHub Packages read credentials. No Core clone, `PUBLIC_API_CORE_DIR` or `PUBLIC_API_CORE_REPO` is needed. A second call with the same pin only rebuilds. See the [gateway deployment runbook](ops/public-api-gateway-deploy.md#0-published-gateway-dependency-etp-6150) for registry access and verified stable package releases.
 
 ```bash
 make public-api-e2e-ci-install

@@ -22,10 +22,10 @@ describe('public-api-e2e-ci helpers', () => {
 
   describe('pinnedCoreVersion', () => {
     it('returns the exact pin', () => {
-      assert.equal(pinnedCoreVersion({ dependencies: { '@etendosoftware/schema-forge-core': '0.3.95' } }), '0.3.95');
+      assert.equal(pinnedCoreVersion({ dependencies: { '@etendosoftware/api-gateway-core': '0.3.95' } }), '0.3.95');
     });
-    it('refuses a range or a missing pin: there is no single tag to build from', () => {
-      assert.throws(() => pinnedCoreVersion({ dependencies: { '@etendosoftware/schema-forge-core': '^0.3.95' } }), /exact x\.y\.z/);
+    it('refuses a range or a missing published pin', () => {
+      assert.throws(() => pinnedCoreVersion({ dependencies: { '@etendosoftware/api-gateway-core': '^0.3.95' } }), /exact x\.y\.z/);
       assert.throws(() => pinnedCoreVersion({}), /exact x\.y\.z/);
     });
   });
@@ -146,11 +146,11 @@ describe('public-api-e2e-ci helpers', () => {
   });
 
   describe('edge cases', () => {
-    const CORE = '@etendosoftware/schema-forge-core';
+    const CORE = '@etendosoftware/api-gateway-core';
 
-    it('pinnedCoreVersion: falls back to devDependencies, refuses pre-release, v prefix and null', () => {
+    it('pinnedCoreVersion: falls back to devDependencies, accepts prerelease, refuses v prefix and null', () => {
       assert.equal(pinnedCoreVersion({ devDependencies: { [CORE]: '1.2.3' } }), '1.2.3');
-      assert.throws(() => pinnedCoreVersion({ dependencies: { [CORE]: '0.3.95-rc.1' } }), /exact x\.y\.z/);
+      assert.equal(pinnedCoreVersion({ dependencies: { [CORE]: '0.3.95-rc.1' } }), '0.3.95-rc.1');
       assert.throws(() => pinnedCoreVersion({ dependencies: { [CORE]: 'v0.3.95' } }), /exact x\.y\.z/);
       assert.throws(() => pinnedCoreVersion(null), /exact x\.y\.z/);
     });
