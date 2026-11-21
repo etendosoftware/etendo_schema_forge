@@ -55,6 +55,7 @@ export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'hasComment',
   'flagKey',
   'flow',
+  'featureKey',
   'flowId',
   'functional_area',
   'hostname',

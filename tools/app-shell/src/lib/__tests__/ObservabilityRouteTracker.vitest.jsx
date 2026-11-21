@@ -41,3 +41,29 @@ describe('ObservabilityRouteTracker', () => {
     expect(events).toEqual(['/dashboard']);
   });
 });
+
+describe('ObservabilityRouteTracker feature wiring (ETP-5646)', () => {
+  function renderWithFeatures(initialEntries, seen) {
+    const resolveFeature = (pathname, search) => ({ key: `f:${pathname}${search}` });
+    return render(
+      <MemoryRouter initialEntries={initialEntries}>
+        <ObservabilityRouteTracker
+          trackPage={() => {}}
+          resolveFeature={resolveFeature}
+          onFeature={(feature) => seen.push(feature?.key)}
+        />
+        <Routes>
+          <Route path="/dashboard" element={<TestPage target="/dashboard?report=x" />} />
+        </Routes>
+      </MemoryRouter>
+    );
+  }
+
+  it('resolves the feature of a direct URL on mount, and again when only the query changes', async () => {
+    const seen = [];
+    renderWithFeatures(['/dashboard'], seen);
+    expect(seen).toEqual(['f:/dashboard']);
+    await userEvent.click(screen.getByText('go'));
+    expect(seen).toEqual(['f:/dashboard', 'f:/dashboard?report=x']);
+  });
+});

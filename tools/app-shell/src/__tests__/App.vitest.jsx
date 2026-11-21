@@ -11,6 +11,8 @@ const clearIdentityContextMock = vi.hoisted(() => vi.fn().mockResolvedValue(unde
 vi.mock('@/lib/observability/identityContext.js', () => ({
   clearIdentityContext: clearIdentityContextMock,
 }));
+const leaveFeatureMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('@/lib/observability/featureUsage.js', () => ({ leaveFeature: leaveFeatureMock }));
 vi.mock('@/lib/flags/bootstrap.js', () => ({
   clearAccountIdentity: clearAccountIdentityMock,
 }));
@@ -247,6 +249,15 @@ describe('session changes preserve feature-flag identity until logout', () => {
     runtimeSession.onSessionChange({ token: 'rotated-token', username: 'erp-admin', clientId: 'company-a' });
 
     expect(clearAccountIdentityMock).not.toHaveBeenCalled();
+  });
+
+  it('drops the tab feature on logout, and keeps it on a token rotation (ETP-5646)', () => {
+    render(<App />);
+    leaveFeatureMock.mockClear();
+    runtimeSession.onSessionChange({ token: 'rotated-token', username: 'erp-admin', clientId: 'company-a' });
+    expect(leaveFeatureMock).not.toHaveBeenCalled();
+    runtimeSession.onSessionChange(null);
+    expect(leaveFeatureMock).toHaveBeenCalledTimes(1);
   });
 
   it('resets account targeting when the session is actually removed', () => {
