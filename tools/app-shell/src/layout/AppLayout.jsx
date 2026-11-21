@@ -561,7 +561,7 @@ function AppLayoutLoading() {
   );
 }
 
-function AppLayoutInner({ menuGroups, embedded }) {
+function AppLayoutInner({ menuGroups, embedded, reportAccess = null }) {
   const location = useLocation();
   const { expanded, toggle } = useSidebar();
   const meta = usePageMeta();
@@ -633,7 +633,9 @@ function AppLayoutInner({ menuGroups, embedded }) {
           );
         })()}
       </div>
-      {!embedded && <CommandPalette data-testid="CommandPalette__488148" />}
+      {/* ETP-6389 — the palette lists report rows while searching; it gates them on the same
+          per-report grants the sidebar is filtered with. */}
+      {!embedded && <CommandPalette reportAccess={reportAccess} data-testid="CommandPalette__488148" />}
       {!embedded && <CopilotWidget hideTrigger data-testid="CopilotWidget__488148" />}
       {!embedded && !isSupportMode && <SupportChatWidget data-testid="SupportChatWidget__488148" />}
     </>
@@ -860,6 +862,7 @@ function AppLayoutAccessGate({ menuGroups }) {
                   <AppLayoutInner
                     menuGroups={filteredMenuGroups}
                     embedded={embedded}
+                    reportAccess={reportAccess}
                     data-testid="AppLayoutInner__488148" />
                 </WalkthroughProvider>
               </PageMetaProvider>

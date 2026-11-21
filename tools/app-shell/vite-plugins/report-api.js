@@ -22,13 +22,15 @@ import { loadReportCli } from './report-cli.js';
 // every static import here always has. See report-cli.js / design id 455
 // ("Local verification of the plugin") and tasks id 458 (WU3.1/WU3.2).
 const { REPORT_UI_STRINGS, pickLabel, buildContractLabels } = await loadReportCli('report-i18n');
-const { resolveGrouping, buildNestedGroups, buildAccountReportTree, buildRenderAccountTree, foldOpeningBalance, foldAggregateRows } =
+const { resolveGrouping, buildNestedGroups, buildAccountReportTree, buildRenderAccountTree, buildRenderChartTree, foldOpeningBalance, foldAggregateRows } =
   await loadReportCli('report-grouping');
 const { applyPlaceholders } = await loadReportCli('report-sql');
 const { filterAndTransformParams } = await loadReportCli('report-filters');
 const { hydrateDocumentBranding, resolveCompanyLogoDataUrl } = await loadReportCli('report-branding');
 const { resolveReportSession, reportAuthErrorBody, assertReportOrgAccess, assertReportAccess } = await loadReportCli('report-auth');
-const { handleReportQuery, runReportSql } = await loadReportCli('report-query');
+// isChartTreeRender defaults off until the published core carries ETP-6084.
+const { handleReportQuery, runReportSql, isChartTreeRender = () => false } = await loadReportCli('report-query');
+const CHART_TREE_SUPPORTED = typeof buildRenderChartTree === 'function';
 const { buildPeriodMeta, normalizeCompareMode, maxPeriodBucketsFor } = await loadReportCli('report-periods');
 
 const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
@@ -139,6 +141,11 @@ function listReports() {
             outputs: contract.outputs,
             parameters: contract.parameters || [],
             sections: contract.sections || [],
+            // ETP-6084: the dynamic view's chart-tree contract (mirrors core's buildReportDescriptor).
+            // Only when the loaded core can serve the chart path: with the published core (no
+            // buildRenderChartTree) forwarding `tree` would open a dynamic view that cannot work.
+            ...(CHART_TREE_SUPPORTED && contract.tree !== undefined ? { tree: contract.tree } : {}),
+            ...(CHART_TREE_SUPPORTED && contract.amountColumns !== undefined ? { amountColumns: contract.amountColumns } : {}),
           });
         }
       } catch { /* skip malformed */ }
@@ -402,7 +409,7 @@ async function fetchReportData(reportId, { limit, session, params = {}, locale, 
     // Main query plus Libro Mayor's openingQuery (ETP-4898) and Profit & Loss's
     // operandsQuery (ETP-4899): core's runner, shared with `/query` and the report-server.
     // `periods` (ETP-6239) also returns periodRows/periodSpec; the cap depends on the format.
-    const { rows, openingRows, operandRows, periodRows, periodSpec } = await runReportSql(pool, contract, { clientId, params, locale, mainSql: sql, maxPeriodBuckets: maxPeriodBucketsFor(format) });
+    const { rows, openingRows, operandRows, periodRows, periodSpec } = await runReportSql(pool, contract, { clientId, params, locale, mainSql: sql, maxPeriodBuckets: maxPeriodBucketsFor(format), chartTree: isChartTreeRender(contract, params) });
 
     // Company logo for listing reports (ETP-5013) — "document" contracts
     // (print-*) resolve org_logo_id from their own header SQL row (see the
@@ -822,7 +829,16 @@ export default function reportApiPlugin(options = {}) {
             // the FLAT node list, and the indented tree (roll-up, formula nodes,
             // account-level cutoff) is assembled here, replacing `rows` so
             // recordCount/totals and the Excel/CSV templates keep working unchanged.
-            if (contract.sql?.operandsQuery !== undefined && Array.isArray(rows)) {
+            // ETP-6084: a chart-tree report (Trial Balance) asked for the interactive view's tree
+            // (it sent `expandedNodeIds`): same branch as the report-server's resolveReportData.
+            let chartMeta; let chartGrouping;
+            if (isChartTreeRender(contract, params) && Array.isArray(rows)) {
+              const chart = buildRenderChartTree(rows, params, result.periodRows
+                ? { periodRows: result.periodRows, spec: result.periodSpec, compareMode: normalizeCompareMode(params.compareMode) } : null);
+              rows = chart.rows;
+              chartMeta = chart.meta;
+              chartGrouping = resolveGrouping(contract, { ...params, groupBy: '' }, null, locale);
+            } else if (contract.sql?.operandsQuery !== undefined && Array.isArray(rows)) {
               rows = buildRenderAccountTree(rows, operandRows, params, contract,
                 result.periodRows ? { periodRows: result.periodRows, spec: result.periodSpec, compareMode: normalizeCompareMode(params.compareMode) } : null);
             }
@@ -839,7 +855,7 @@ export default function reportApiPlugin(options = {}) {
             // identically instead of almost-identically.
             let groupLabel; let descriptionLabel; let dimensionLabel; let dimensionField; let tbGroups;
             ({ groupLabel, descriptionLabel, dimensionLabel, dimensionField, tbGroups, rows } =
-              resolveGrouping(contract, params, rows, locale));
+              chartGrouping ? { ...chartGrouping, rows } : resolveGrouping(contract, params, rows, locale));
             const activeFilters = filterAndTransformParams(params, contract, locale);
             const artifactDir = join(ARTIFACTS_DIR, reportId);
             // Excel/CSV get their own flat, calculation-friendly template when the report
@@ -894,7 +910,7 @@ export default function reportApiPlugin(options = {}) {
             const isInteractive = format === 'html' || format === 'preview';
             const templateData = documentData
               ? { css, meta: { title, generatedAt: new Date().toISOString(), filters: activeFilters, params, locale, ui, labels, isInteractive }, header: documentData.header, lines: documentData.lines, taxes: documentData.taxes }
-              : { css, meta: { title, generatedAt: new Date().toISOString(), recordCount, filters: activeFilters, params, locale, ui, labels, totals, groupLabel, descriptionLabel, dimensionLabel, dimensionField, groups, tbGroups, companyLogoDataUrl, isInteractive, ...neoMeta, ...buildPeriodMeta(result.periodSpec, { format, compareMode: params.compareMode }) }, rows };
+              : { css, meta: { title, generatedAt: new Date().toISOString(), recordCount, filters: activeFilters, params, locale, ui, labels, totals, groupLabel, descriptionLabel, dimensionLabel, dimensionField, groups, tbGroups, companyLogoDataUrl, isInteractive, ...neoMeta, ...chartMeta, ...buildPeriodMeta(result.periodSpec, { format, compareMode: params.compareMode }) }, rows };
 
             // Document (print-*) reports render a QR of the header. QRCode.toDataURL
             // is async while Handlebars.compile is sync, so the QR cannot be a helper

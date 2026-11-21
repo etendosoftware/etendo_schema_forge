@@ -320,6 +320,32 @@ export function createReportHelpers({ numberFormat } = {}) {
     return 1 + groups * (mode === 'sly' || mode === 'prev' ? 4 : 1);
   }
 
+  // ETP-6084 — Excel/CSV number cells, canonical (replaces the copies in six per-report helpers.js).
+  // A blank or non-finite value (null, '', NaN, +-Infinity) is an EMPTY cell, never 0: html-to-xlsx writes a
+  // data-cell-type="number" cell holding no number as the literal NaN (invalid XML). Rounds HALF AWAY FROM ZERO on
+  // the decimal value (12.345 -> 12.35, -12.345 -> -12.35, as the screen's formatCurrency does) and never returns -0.
+  // Mirrored in JSREPORT_HELPER_SOURCES.
+  function round2(value) {
+    if (value == null || value === '') return '';
+    var num = Number(value);
+    if (!isFinite(num)) return '';
+    var abs = Math.abs(num);
+    var shifted = Number(abs + 'e2');
+    var out = (isFinite(shifted) ? Math.round(shifted) : Math.round(abs * 100)) / 100;
+    return num < 0 && out !== 0 ? -out : out;
+  }
+
+  // 'number' when there is a number to write, 'string' (an empty cell) otherwise: use as data-cell-type="{{numCellType x}}".
+  function numCellType(value) {
+    return value == null || value === '' || !isFinite(Number(value)) ? 'string' : 'number';
+  }
+
+  // CSV text of round2: always 2 decimals, dot separator, '' when there is no value.
+  function fixed2(value) {
+    var r = round2(value);
+    return r === '' ? '' : r.toFixed(2);
+  }
+
   return {
     isGroupBreak,
     resetGroupTracking,
@@ -345,6 +371,9 @@ export function createReportHelpers({ numberFormat } = {}) {
     periodCompared,
     periodComparedHeader,
     parseJson,
+    round2,
+    numCellType,
+    fixed2,
   };
 }
 
@@ -584,6 +613,22 @@ const JSREPORT_HELPER_SOURCES = {
   while (i < s.length && triggers.indexOf(s.charAt(i)) < 0 && /[\\s\\uFEFF]/.test(s.charAt(i))) i++;
   if (i < s.length && triggers.indexOf(s.charAt(i)) >= 0) s = "'" + s;
   return /[",\\n\\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}`,
+  round2: `function round2(value) {
+  if (value == null || value === '') return '';
+  var num = Number(value);
+  if (!isFinite(num)) return '';
+  var abs = Math.abs(num);
+  var shifted = Number(abs + 'e2');
+  var out = (isFinite(shifted) ? Math.round(shifted) : Math.round(abs * 100)) / 100;
+  return num < 0 && out !== 0 ? -out : out;
+}`,
+  numCellType: `function numCellType(value) {
+  return value == null || value === '' || !isFinite(Number(value)) ? 'string' : 'number';
+}`,
+  fixed2: `function fixed2(value) {
+  var r = round2(value);
+  return r === '' ? '' : r.toFixed(2);
 }`,
   periodLabel: `function periodLabel(period, columns, locale, totalLabel) {
   if (!period) return '';

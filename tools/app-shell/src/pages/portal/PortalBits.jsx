@@ -1,3 +1,4 @@
+import { CaretRightIcon } from '@phosphor-icons/react';
 import { SearchBar } from '@/components/layout/SearchBar.jsx';
 import { useLocale, useLocaleSwitch, useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -6,6 +7,107 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { getDueDateDotStyle, getDueDateState } from '@/lib/invoiceDueDate.js';
 import { invoicePaymentState, quotationValidity } from './portalPresentation.js';
+
+/**
+ * Where the top bar's "Creado con Etendo" pill sends the visitor: Etendo's pricing page.
+ * PROVISIONAL: marketing will send the final pricing URL (with its UTM); replace it here only.
+ */
+export const ETENDO_PRICING_URL = 'https://etendo.ai';
+
+/**
+ * Etendo's mark as the Figma draws it on the "Creado con Etendo" link: a 32×32 lime (#B8FA50)
+ * circle with the black glyph centred at 15.38×12.8. It reuses `/logo-etendo-ai.png`, a 160px lime
+ * tile of the same #B8FA50 whose glyph spans 77×64 (the same 1.2 ratio): drawn at 32px, the glyph
+ * lands at the Figma's size, and the circle clips the tile's corners with no seam.
+ */
+function EtendoMark() {
+  return (
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#B8FA50]">
+      <img src="/logo-etendo-ai.png" alt="" className="h-8 w-8 max-w-none" />
+    </span>
+  );
+}
+
+/**
+ * The top bar's "Creado con Etendo / Conoce más" pill, with the Figma's exact values (2026-11-20):
+ * 216×44, padding 4px, gap 8px, #1B1A1F, radius 200px; Etendo's 32px lime circle, a 128px text
+ * block (12/16 500 white title, 11/16 60%-white subtitle) and a 32px 10%-white round arrow with a
+ * 50%-white CaretRight. It opens the pricing page ({@link ETENDO_PRICING_URL}) in a new tab; the
+ * arrow is part of the link, not a button.
+ */
+export function PortalCreatedWithPill({ className }) {
+  const ui = useUI();
+  return (
+    <a
+      href={ETENDO_PRICING_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={ui('portalCreatedWithLinkLabel')}
+      className={cn(
+        'flex h-11 w-[216px] min-w-0 max-w-full items-center gap-2 rounded-[200px] bg-[#1B1A1F] p-1 text-left',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        className,
+      )}
+      data-testid="portal-created-with"
+    >
+      <EtendoMark data-testid="EtendoMark__7a317e" />
+      <span className="flex w-[128px] min-w-0 shrink flex-col items-start justify-center pr-1">
+        <span className="-my-[3px] max-w-full truncate text-xs font-medium leading-4 tracking-[-0.005em] text-white">
+          {ui('portalCreatedWith')}
+        </span>
+        <span className="max-w-full truncate text-[11px] font-normal leading-4 tracking-[-0.005em] text-white/60">
+          {ui('portalLearnMore')}
+        </span>
+      </span>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[360px] bg-white/10 text-white/50" aria-hidden="true">
+        <CaretRightIcon size={20} data-testid="CaretRight__7a317e" />
+      </span>
+    </a>
+  );
+}
+
+/**
+ * The compact "Creado con Etendo" link: only Etendo's lime circle, same destination as the desktop
+ * pill, named and titled by the same copy. Used on mobile top bars and, between md and lg, in the
+ * desktop headers. PROVISIONAL placement (user decision, 2026-11-20) until the designer sends the
+ * mobile design.
+ */
+export function PortalCreatedWithTile({ testId = 'portal-created-with-mobile' }) {
+  const ui = useUI();
+  const label = ui('portalCreatedWithLinkLabel');
+  return (
+    <a
+      href={ETENDO_PRICING_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={label}
+      title={label}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      data-testid={testId}
+    >
+      <EtendoMark data-testid="EtendoMark__7a317e" />
+    </a>
+  );
+}
+
+/**
+ * The Etendo link of a desktop header's right side: the exact-Figma pill from lg up (inside the
+ * Figma's 224×44 wrapper, whose 8px right padding keeps it off the window's edge) and, between md
+ * and lg, where the pill does not fit beside the search, the compact lime circle with the same
+ * right spacing. Never both. The md–lg tile is PROVISIONAL until the mobile/medium design arrives.
+ */
+export function PortalCreatedWithHeaderLink() {
+  return (
+    <>
+      <span className="flex shrink-0 pr-2 lg:hidden">
+        <PortalCreatedWithTile testId="portal-created-with-compact" data-testid="PortalCreatedWithTile__7a317e" />
+      </span>
+      <div className="hidden h-11 w-[224px] min-w-0 max-w-full items-center pr-2 lg:flex">
+        <PortalCreatedWithPill data-testid="PortalCreatedWithPill__7a317e" />
+      </div>
+    </>
+  );
+}
 
 /** The viewer's BCP-47 locale, for dates. */
 export function usePortalLocale() {
@@ -360,7 +462,10 @@ export function PortalDesktopHeader({ title, count, breadcrumb, search, size }) 
         </span>
       </div>
       {search ?? <div />}
-      <div />
+      {/* Right column: the Etendo link (the pill from lg up, the compact circle md–lg). */}
+      <div className="flex min-w-0 items-center justify-end">
+        <PortalCreatedWithHeaderLink data-testid="PortalCreatedWithHeaderLink__7a317e" />
+      </div>
     </header>
   );
 }

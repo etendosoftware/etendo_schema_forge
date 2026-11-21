@@ -11643,7 +11643,7 @@
       ]
     },
     "71ffdfc8865e7daf652e4f855e18d8bb6126fff59ba2b01e651989778533de54": {
-      "checksum": "b2216e9781b456fdc59453103434220bd677286a63655df82b12a24bcb6b49bf",
+      "checksum": "21df7babc2d163ae76e4f4a7eb0f2957aa5660bb4d1011f61a81e8b01defc6ed",
       "params": [
         "FF8080812E71F7C7012E71FD0499001B"
       ],
@@ -11834,6 +11834,54 @@
           "displaylogic": null,
           "field_id": "6E6B06FBA8F54530AC0B18D20184CEB5",
           "name": "Process Automated",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "9B7859AAB4E24C749BCC06F13CFEB8B8",
+          "columnname": "Creditor_Identifier",
+          "displaylogic": null,
+          "field_id": "50D4BF9E0EC1412891BB4D97DB141FBF",
+          "name": "SEPA Creditor Identifier",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "AF2CFCFC055144859C20E9C01BBB76EA",
+          "columnname": "Iban",
+          "displaylogic": null,
+          "field_id": "212E1AE275794E58A575438292FAD109",
+          "name": "IBAN",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "FC88F83900AA466DACF6B522695D09D5",
+          "columnname": "DD_Scheme",
+          "displaylogic": null,
+          "field_id": "C231EBC20B05482987AB0358A22FCA88",
+          "name": "Direct Debit Scheme",
+          "readonlylogic": "@Processed@='Y'",
+          "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
+          "tab_name": "Remittance",
+          "table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "table_name": "REM_Remittance"
+        },
+        {
+          "column_id": "133447821EA54D0ABD2B97631D333B12",
+          "columnname": "IsFinanced",
+          "displaylogic": null,
+          "field_id": "8C6797472FA249B1B1B17A15891B2C64",
+          "name": "Financed",
           "readonlylogic": "@Processed@='Y'",
           "tab_id": "FF8080812E71F7C7012E71FE49BB0021",
           "tab_name": "Remittance",

@@ -5,9 +5,17 @@ import { checkSalesInvoiceReadiness } from './onboarding/onboardingReadiness.js'
 import { OnboardingDashboardBackdrop } from './onboarding/OnboardingDashboardBackdrop.jsx';
 import { onboardingSteps } from './onboarding/onboardingSteps.jsx';
 import { track } from '../lib/observability.js';
+import { pushOnboardingEvent } from '../lib/marketing/dataLayer.js';
 import { buildObservabilityEvent } from '../lib/observability/events.js';
 import { trackSessionStarted } from '../lib/observability/health-events.js';
 import { markOnboardingCompleted } from '../lib/surveys/survey-state.js';
+
+/** ETP-6363 — the account id and whether the sign-in created it are for marketing's funnel only. */
+const FUNNEL_ONLY_KEYS = new Set(['accountId', 'accountCreated']);
+
+function withoutFunnelOnlyKeys(properties = {}) {
+  return Object.fromEntries(Object.entries(properties).filter(([key]) => !FUNNEL_ONLY_KEYS.has(key)));
+}
 
 export default function OnboardingPage() {
   const ui = useUI();
@@ -52,7 +60,10 @@ export default function OnboardingPage() {
       if (name === 'onboarding_run_succeeded') {
         markOnboardingCompleted();
       }
-      return track(name, { ...properties, ...event.properties });
+      // ETP-6363 — marketing's sign-up funnel (GTM's dataLayer): sign_up / login,
+      // user_identified, onboarding_step and onboarding_complete. No-op where GTM is not loaded.
+      pushOnboardingEvent(name, properties);
+      return track(name, { ...withoutFunnelOnlyKeys(properties), ...event.properties });
     },
     onSessionStarted: (env) => trackSessionStarted({
       username: env.adminUserName || env.adminUser,

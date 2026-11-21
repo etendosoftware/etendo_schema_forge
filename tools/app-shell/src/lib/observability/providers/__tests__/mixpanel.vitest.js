@@ -380,7 +380,7 @@ describe('createMixpanelProvider — flush', () => {
 describe('createMixpanelProvider — trusted context keys', () => {
   it('lets reportSessionId through unredacted', async () => {
     const client = makeClient();
-    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader: vi.fn().mockResolvedValue({ default: client }) });
+    const provider = createMixpanelProvider({ hostname: PROD_HOST, enabled: true, token: 'tok', loader: vi.fn().mockResolvedValue({ default: client }) });
     await provider.init();
     const uuid = '3f2b8c1e-5d4a-4e7b-9a10-0c6d2e8f7a11';
     const { before_send_events } = client.init.mock.calls[0][1].hooks;

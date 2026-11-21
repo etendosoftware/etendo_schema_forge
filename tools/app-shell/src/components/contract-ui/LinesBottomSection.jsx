@@ -2,6 +2,7 @@ import { useUI } from '@/i18n';
 import { resolveTotalDiscountPct } from '@/lib/documentTotals';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
+import { isEditableStatus } from '../../lib/docStatus.js';
 
 // `DocumentTotalsPanel`/`BalanceFooterPanel` call their `formatAmount` prop as
 // (value, currency) — keep that signature here and delegate to the shared
@@ -90,7 +91,7 @@ export default function LinesBottomSection({
 }) {
   const ui = useUI();
   const currency = data?.['currency$_identifier'] || '';
-  const isReadOnly = data?.documentStatus !== 'DR' || isDocumentReadOnly;
+  const isReadOnly = !isEditableStatus(data?.documentStatus) || isDocumentReadOnly;
 
   // ETP-4777 — the backend-persisted header total (maintained by the
   // C_ORDERLINE_TRG2/C_INVOICELINE_TRG2 triggers, same value the Grid's

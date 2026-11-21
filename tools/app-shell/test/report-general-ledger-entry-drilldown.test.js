@@ -239,3 +239,24 @@ describe('General Ledger / Journal Entries — org scope includes child orgs (ET
     });
   }
 });
+
+// ETP-6084 — the Trial Balance drill passes its opening-entry toggle so the panel matches the clicked cell.
+describe('report-general-ledger openingEntryAmount', () => {
+  const contract = JSON.parse(readFileSync(resolve(import.meta.dirname, '../../../artifacts/report-general-ledger/report-contract.json'), 'utf8'));
+  const param = contract.parameters.find((p) => p.name === 'openingEntryAmount');
+  const O_ON_DATE_FROM = "fa.dateacct = '__DATEFROM__'::date AND fa.factaccttype = 'O' AND '__OPENINGENTRYAMOUNT__' = 'true'";
+
+  it('defaults to off, so the standalone ledger and its MCP twin are unchanged', () => {
+    assert.equal(param.default, false);
+    assert.equal(param.type, 'toggle');
+  });
+
+  it('moves O entries dated on dateFrom from movement to opening, in both queries', () => {
+    assert.ok(contract.sql.query.includes(`NOT (${O_ON_DATE_FROM})`));
+    assert.ok(contract.sql.openingQuery.includes(`OR (${O_ON_DATE_FROM})`));
+  });
+
+  it('keeps R/C entries in the opening (no factaccttype exclusion there)', () => {
+    assert.doesNotMatch(contract.sql.openingQuery, /NOT IN \('R', 'C'\)/);
+  });
+});

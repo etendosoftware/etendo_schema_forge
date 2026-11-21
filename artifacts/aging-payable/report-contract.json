@@ -1,7 +1,7 @@
 {
   "version": 1,
   "reportId": "aging-payable",
-  "category": "finance",
+  "category": "treasury",
   "type": "listing",
   "source": "neo",
   "title": { "en_US": "Aging of Payables", "es_ES": "Antigüedad de Pagos" },

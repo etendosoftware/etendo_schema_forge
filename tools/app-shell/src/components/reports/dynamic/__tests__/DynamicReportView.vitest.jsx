@@ -5,6 +5,8 @@
 // @covers tools/app-shell/src/components/reports/dynamic/useReportDefaults.js
 // @covers tools/app-shell/src/components/reports/dynamic/useAccountSplit.js
 // @covers tools/app-shell/src/components/reports/dynamic/DynamicDrillPanel.jsx
+// @covers tools/app-shell/src/components/reports/dynamic/DynamicResultPanel.jsx
+// @covers tools/app-shell/src/components/reports/dynamic/DynamicReportBalance.jsx
 // @covers tools/app-shell/src/components/reports/dynamic/reportTelemetry.js
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { clearSessionIdentity, setSessionIdentity } from '@/lib/sessionIdentity.js';
@@ -36,6 +38,8 @@ vi.mock('@/pages/ReportViewerPage.jsx', () => ({
 }));
 
 import DynamicReportView from '../DynamicReportView.jsx';
+import DynamicReportBalance from '../DynamicReportBalance.jsx';
+import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { LEDGER_LINE_CAP } from '../drillDown.js';
 
 const REPORT = {
@@ -48,6 +52,7 @@ const REPORT = {
     { name: 'dateFrom', type: 'date', label: { es_ES: 'Fecha de Inicio' } },
     { name: 'dateTo', type: 'date', label: { es_ES: 'Fecha de Fin' } },
     { name: 'compareTo', type: 'toggle' },
+    { name: 'columns', type: 'string', hidden: true },
     { name: 'bPartnerId', type: 'search', selector: 'bpartner', label: { es_ES: 'Contacto' } },
     { name: 'productId', type: 'search', selector: 'product-all', label: { es_ES: 'Producto' } },
     { name: 'splitBy', type: 'string', hidden: true },
@@ -134,6 +139,30 @@ beforeEach(() => {
   globalThis.URL.revokeObjectURL = vi.fn();
 });
 afterEach(() => vi.useRealTimers());
+
+// The first breadcrumb level names the report's own category (Tesorería for the aging reports),
+// Finance when the contract has none. The category → label mapping itself is unit-tested in
+// components/reports/__tests__/reportCategories.vitest.js.
+describe('DynamicReportView — breadcrumb', () => {
+  const lastBreadcrumb = () => useSetPageMeta.mock.calls.map(([meta]) => meta).filter((m) => m?.breadcrumb).at(-1).breadcrumb;
+
+  beforeEach(() => useSetPageMeta.mockClear());
+
+  it.each([
+    ['treasury', 'Treasury', '/report-viewer?category=treasury'],
+    ['finance', 'Finance', '/report-viewer?category=finance'],
+    [undefined, 'Finance', '/report-viewer?category=finance'],
+    ['no-such-category', 'Finance', '/report-viewer?category=no-such-category'],
+  ])('category %j: first level %s, Reports links to %s', async (category, label, href) => {
+    renderView({ report: { ...REPORT, category } });
+    await waitFor(() => expect(queries()).toHaveLength(1));
+    expect(lastBreadcrumb()).toEqual([
+      { label },
+      { label: 'Reports', href },
+      { label: 'Pérdidas y Ganancias' },
+    ]);
+  });
+});
 
 describe('DynamicReportView — opening (§19)', () => {
   it('opens on the fiscal year that contains today, with the schema and org, and never sends a year', async () => {
@@ -417,6 +446,12 @@ describe('DynamicReportView — drill steps the role cannot open (ETP-6080)', ()
     queryAnswer = () => json({ error: 'x', code: 'REPORT_ACCESS_DENIED' }, { ok: false, status: 403 });
     renderView();
     expect(await screen.findByTestId('DynamicReportView__error')).toHaveTextContent('reportErrorReportAccess');
+  });
+
+  it('shows a query past the statement timeout as the translated timeout message (ETP-6146)', async () => {
+    queryAnswer = () => json({ error: 'REPORT_TIMEOUT', code: 'REPORT_TIMEOUT' }, { ok: false, status: 504 });
+    renderView();
+    expect(await screen.findByTestId('DynamicReportView__error')).toHaveTextContent('reportErrorTimeout');
   });
 });
 
@@ -1454,7 +1489,7 @@ describe('DynamicReportView — selections in the URL (ETP-6239)', () => {
   });
 
   it('the panel offers Columnas/Comparar/Dividir only when the contract declares them, like the URL', async () => {
-    const bare = { ...REPORT, parameters: REPORT.parameters.filter((p) => !['compareTo', 'splitBy'].includes(p.name)) };
+    const bare = { ...REPORT, parameters: REPORT.parameters.filter((p) => !['compareTo', 'splitBy', 'columns'].includes(p.name)) };
     link('columns=month&compare=previous&splitBy=org');
     renderView({ report: bare });
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
@@ -1533,5 +1568,631 @@ describe('DynamicReportView — Organización split and chip (ETP-6080)', () => 
     await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
     expect(screen.getByTestId('DynamicReportPanel__splitBy')).toHaveValue('');
     expect(screen.queryByTestId('DynamicReportView__chip-split')).toBeNull();
+  });
+});
+
+// ETP-6084 — the Trial Balance: a chart tree with the contract's own amount columns, filters, grouping and totals.
+describe('DynamicReportView — chart tree: Trial Balance (ETP-6084)', () => {
+  const TB = {
+    id: 'report-trial-balance',
+    category: 'finance',
+    title: { es_ES: 'Balance de Sumas y Saldos' },
+    tree: 'chart',
+    amountColumns: [
+      { field: 'opening', labelKey: 'dynamicReportOpening', compare: 'never' },
+      { field: 'debit', labelKey: 'dynamicReportDebit', compare: 'optional' },
+      { field: 'credit', labelKey: 'dynamicReportCredit', compare: 'optional' },
+      { field: 'closing', labelKey: 'dynamicReportClosing', compare: 'always' },
+    ],
+    sections: [{ id: 'periodo', label: { es_ES: 'Periodo' } }, { id: 'opciones', label: { es_ES: 'Opciones' } }],
+    parameters: [
+      { name: 'orgId', type: 'search', selector: 'org', hidden: true },
+      { name: 'dateFrom', type: 'date', label: { es_ES: 'Desde' } },
+      { name: 'dateTo', type: 'date', label: { es_ES: 'Hasta' } },
+      { name: 'compareTo', type: 'toggle' },
+      { name: 'fromAccountId', type: 'search', selector: 'account', label: { es_ES: 'Desde la cuenta' } },
+      { name: 'bPartnerId', type: 'search', selector: 'bpartner', label: { es_ES: 'Contacto' }, groupByValue: 'bpartner' },
+      { name: 'projectId', type: 'search', selector: 'project', label: { es_ES: 'Proyecto' } },
+      { name: 'groupBy', type: 'select', label: { es_ES: 'Agrupar por' } },
+      { name: 'openingEntryAmount', type: 'toggle', default: true, label: { es_ES: 'Asiento de apertura' } },
+      { name: 'showOnlyAccountsWithValue', type: 'toggle', default: true, label: { es_ES: 'Solo con valor' } },
+      { name: 'accountLevel', default: 'S', options: [{ value: 'E', label: { es_ES: 'Epígrafe' } }, { value: 'S', label: { es_ES: 'Subcuenta' } }] },
+    ],
+  };
+  const cell = (amount, ref = 0) => ({ amount, sly: { amount: ref, variationAmount: amount - ref, variationPct: 10, trend: null }, prev: { amount: ref, variationAmount: amount - ref, variationPct: 10, trend: null } });
+  const cells = (o, d, c, cl) => [{ opening: cell(o), debit: cell(d), credit: cell(c), closing: cell(cl, 1) }];
+  const TB_ROWS = [
+    { node_id: 'E1', parentId: null, elementlevel: 'E', value: '4', name: 'Acreedores', account_id: 'E1', cells: cells(0, 100, 100, 0) },
+    { node_id: 'S1', parentId: 'E1', elementlevel: 'S', value: '430', name: 'Clientes', account_id: 'S1', account_value: '430', cells: cells(0, 100, 100, 0) },
+  ];
+  const DIMENSION_ROWS = [
+    { node_id: 'S1|B1', parentId: 'S1', elementlevel: 'S', value: '430', name: 'Acme', isDimension: true, account_id: 'S1', account_value: '430', dimension_id: 'B1', dimension_name: 'Acme', cells: cells(0, 60, 60, 0) },
+    { node_id: 'S1|', parentId: 'S1', elementlevel: 'S', value: '430', name: '', isDimension: true, account_id: 'S1', account_value: '430', dimension_id: '', dimension_name: '', cells: cells(0, 40, 40, 0) },
+  ];
+  const TOTALS = cells(0, 100, 100, 0);
+  const tbAnswer = ({ balanced = true, balance } = {}) => (params) => json({
+    kind: 'tree',
+    periods: TOTAL_PERIOD,
+    rows: params.groupBy ? [...TB_ROWS, ...DIMENSION_ROWS] : TB_ROWS,
+    totals: TOTALS,
+    balance: balance ?? { balanced, debitCreditDiff: balanced ? 0 : 12.5, closingDiff: 0 },
+  });
+  const renderTb = (props = {}) => renderView({ report: TB, reportAccess: { ...FULL_ACCESS, 'report-trial-balance': 'full' }, ...props });
+  const tbQueries = () => queriesTo('report-trial-balance');
+  const headers = () => screen.getAllByTestId('DynamicReportTable__amount').map((h) => h.textContent);
+
+  beforeEach(() => { queryAnswer = tbAnswer(); });
+
+  it('one column group per contract amount, the TOTALES row and the balance check; no KPI strip, no bars', async () => {
+    renderTb();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'S1']));
+    expect(headers()).toEqual(['dynamicReportOpening', 'dynamicReportDebit', 'dynamicReportCredit', 'dynamicReportClosing']);
+    expect(screen.getByTestId('DynamicReportTable__totals')).toHaveTextContent('dynamicReportTotalRow');
+    expect(screen.getByTestId('DynamicReportBalance__ok')).toBeInTheDocument();
+    expect(screen.queryByTestId('DynamicReportKpis')).toBeNull();
+    expect(screen.queryByTestId('DynamicReportTable__bar')).toBeNull();
+  });
+
+  it('panel: the filters and toggles come from the contract; the toggles reach the query and none is forced', async () => {
+    renderTb();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'S1']));
+    expect(tbQueries()[0]).toMatchObject({ openingEntryAmount: 'true', showOnlyAccountsWithValue: 'true', groupBy: '', projectId: '', fromAccountId: '' });
+    expect(screen.getByTestId('DynamicReportPanel__projectId')).toBeInTheDocument();
+    expect(screen.getByTestId('DynamicReportPanel__fromAccountId')).toBeInTheDocument();
+    expect(screen.queryByTestId('DynamicReportPanel__columns')).toBeNull(); // no period columns marker
+    expect(screen.queryByTestId('DynamicReportPanel__productId')).toBeNull(); // not declared
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__toggle-showOnlyAccountsWithValue'));
+    await waitFor(() => expect(tbQueries().at(-1).showOnlyAccountsWithValue).toBe('false'));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__toggle-openingEntryAmount'));
+    await waitFor(() => expect(tbQueries().at(-1)).toMatchObject({ openingEntryAmount: 'false', showOnlyAccountsWithValue: 'false' }));
+  });
+
+  it('comparison: closing compares, debit/credit only with "Comparar también movimientos", and that sends no request', async () => {
+    renderTb();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'S1']));
+    expect(screen.queryByTestId('DynamicReportPanel__compareMovements')).toBeNull(); // only with a comparison
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'same-last-year' } });
+    await waitFor(() => expect(screen.getAllByText('dynamicReportCompared')).toHaveLength(1));
+    const sent = tbQueries().length;
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__compareMovements'));
+    await waitFor(() => expect(screen.getAllByText('dynamicReportCompared')).toHaveLength(3));
+    expect(tbQueries()).toHaveLength(sent);
+    // A TB variation is neutral: it has no trend, so no tone class
+    expect(screen.getAllByTestId('DynamicReportTable__variation')[0].className).not.toMatch(/destructive|success/);
+  });
+
+  it('grouping: dimension rows open under the account; a contact row drills with its id, an empty one does not', async () => {
+    renderTb();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'S1']));
+    fireEvent.change(screen.getByTestId('DynamicReportPanel__groupBy'), { target: { value: 'bpartner' } });
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'S1', 'S1|B1', 'S1|'])); // the account starts open
+    expect(tbQueries().at(-1).groupBy).toBe('bpartner');
+    expect(screen.getByTestId('DynamicReportView__chip-groupBy')).toBeInTheDocument();
+    // S1 (leaf account) and the contact row are drillable; the empty-dimension one is not.
+    expect(screen.getAllByTestId('DynamicReportTable__ledger')).toHaveLength(2);
+    fireEvent.click(screen.getAllByTestId('DynamicReportTable__ledger')[1]);
+    await waitFor(() => expect(queriesTo('report-general-ledger')).toHaveLength(1));
+    expect(queriesTo('report-general-ledger')[0]).toMatchObject({ accountId: 'S1', fromAccountId: '430', toAccountId: '430', bPartnerId: 'B1', openingEntryAmount: 'true' });
+  });
+
+  it('balance: out of balance is an alert; with a dimension filter or account range it is only a note', async () => {
+    queryAnswer = tbAnswer({ balanced: false });
+    renderTb();
+    await waitFor(() => expect(screen.getByTestId('DynamicReportBalance__error')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__projectId')); // the stub commits one item
+    await waitFor(() => expect(screen.getByTestId('DynamicReportBalance__partial')).toBeInTheDocument());
+    expect(screen.queryByTestId('DynamicReportBalance__error')).toBeNull();
+  });
+
+  it('the export sends the rows on screen as visibleNodeIds, and compareMovements; the P&L sends neither', async () => {
+    renderTb();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'S1']));
+    fireEvent.click(screen.getByTestId('DynamicReportView__export-pdf'));
+    await waitFor(() => expect(apiFetchMock.mock.calls.some(([u]) => u.endsWith('/render'))).toBe(true));
+    const body = (id) => JSON.parse(apiFetchMock.mock.calls.filter(([u]) => u === `/api/reports/${id}/render`).at(-1)[1].body).params;
+    expect(body('report-trial-balance')).toMatchObject({ visibleNodeIds: 'E1,S1', compareMovements: 'false' });
+    // Collapse all: only the roots are visible, and that is what prints.
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__collapseAll'));
+    fireEvent.click(screen.getByTestId('DynamicReportView__export-xlsx'));
+    await waitFor(() => expect(body('report-trial-balance').visibleNodeIds).toBe('E1'));
+    cleanup();
+    queryAnswer = (params) => json({ kind: 'tree', periods: TOTAL_PERIOD, rows: withVariation(TREE) });
+    renderView();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'C1']));
+    fireEvent.click(screen.getByTestId('DynamicReportView__export-pdf'));
+    await waitFor(() => expect(apiFetchMock.mock.calls.some(([u]) => u === '/api/reports/profit-loss/render')).toBe(true));
+    expect(body('profit-loss')).not.toHaveProperty('visibleNodeIds');
+    expect(body('profit-loss')).not.toHaveProperty('compareMovements');
+  });
+
+  it('a filter change is timed with the Trial Balance filter types', async () => {
+    renderTb();
+    await waitFor(() => expect(rowIds()).toEqual(['E1', 'S1']));
+    fireEvent.click(screen.getByTestId('DynamicReportPanel__projectId'));
+    await waitFor(() => expect(trackMock.mock.calls.filter(([e]) => e === 'report_filter_applied').map(([, p]) => p.type)).toContain('project'));
+  });
+});
+
+// ETP-6083 — the Balance Sheet: a balance AT A DATE on the period tree, everything it needs declared by its contract.
+describe('DynamicReportView — Balance Sheet (ETP-6083)', () => {
+  const ENDS = ['today', 'lastMonthEnd', 'lastQuarterEnd', 'lastFiscalYearEnd'];
+  const BS = {
+    id: 'balance-sheet',
+    category: 'finance',
+    title: { es_ES: 'Balance de Situación' },
+    balanceCheck: true,
+    sections: [{ id: 'periodo', label: { es_ES: 'Periodo' } }, { id: 'agrupacion', label: { es_ES: 'Agrupación' } }, { id: 'comparacion', label: { es_ES: 'Comparación' } }],
+    parameters: [
+      { name: 'orgId', type: 'search', selector: 'org', hidden: true },
+      { name: 'dateFrom', type: 'date', role: 'ledgerStart', label: { es_ES: 'Fecha de Inicio' } },
+      { name: 'dateTo', type: 'date', shortcuts: ENDS, label: { es_ES: 'Fecha de Fin' } },
+      { name: 'compareTo', type: 'toggle', compareModes: { sly: 'sameDateLastYear', prev: 'previousFiscalYearClose' } },
+      { name: 'bPartnerId', type: 'search', selector: 'bpartner', label: { es_ES: 'Contacto' } },
+      { name: 'productId', type: 'search', selector: 'product-all', label: { es_ES: 'Producto' } },
+      { name: 'splitBy', type: 'string', hidden: true },
+      {
+        name: 'accountLevel',
+        default: 'C',
+        options: [
+          { value: 'G', maxIndent: 0, dynamicOnly: true, label: { es_ES: 'Grupo' } },
+          { value: 'P', maxIndent: 1, dynamicOnly: true, label: { es_ES: 'Epígrafe' } },
+          { value: 'E', legacyOnly: true, label: { es_ES: 'Epígrafe (clásico)' } },
+          { value: 'C', label: { es_ES: 'Cuenta' } },
+          { value: 'D', legacyOnly: true, label: { es_ES: 'Desglose' } },
+          { value: 'S', label: { es_ES: 'Subcuenta' } },
+        ],
+      },
+    ],
+  };
+  const BS_ACCESS = { ...FULL_ACCESS, 'balance-sheet': 'full' };
+  const renderBs = (props = {}) => renderView({ report: BS, reportAccess: BS_ACCESS, ...props });
+  const bsQueries = () => queriesTo('balance-sheet');
+  const ONE_DAY = (n, sly, prev) => ({
+    amount: n,
+    sly: { amount: sly, variationAmount: n - sly, variationPct: 10, trend: null },
+    prev: { amount: prev, variationAmount: n - prev, variationPct: 5, trend: null },
+  });
+  // 129: the posted part is 0, everything is calculated on the fly (what the live company showed).
+  const RESULT_CELL = { ...ONE_DAY(37504, 24811, 20000), result: { onTheFly: 37504, posted: 0, sly: { onTheFly: 24811, posted: 0 }, prev: { onTheFly: 5000, posted: 15000 } } };
+  const row = (r, cell) => ({ ...r, amount: cell.amount, cells: [cell] });
+  const BS_ROWS = [
+    row({ node_id: 'A1', parentId: null, elementlevel: 'E', value: 'A', name: 'ACTIVO', sign: 'D', group: 'Activo', isGroupStart: true }, ONE_DAY(700, 600, 500)),
+    row({ node_id: 'A2', parentId: 'A1', elementlevel: 'E', value: 'A.I', name: 'Inmovilizado', sign: 'D', group: 'Activo' }, ONE_DAY(700, 600, 500)),
+    row({ node_id: '213', parentId: 'A2', elementlevel: 'C', value: '213', name: 'Maquinaria', sign: 'D', group: 'Activo' }, ONE_DAY(1000, 900, 800)),
+    row({ node_id: '281', parentId: 'A2', elementlevel: 'C', value: '281', name: 'Amortización acumulada', sign: 'D', group: 'Activo' }, ONE_DAY(-300, -300, -300)),
+    row({ node_id: 'P1', parentId: null, elementlevel: 'E', value: 'P', name: 'PATRIMONIO NETO', sign: 'C', group: 'Pasivo', isGroupStart: true }, ONE_DAY(37504, 24811, 20000)),
+    row({ node_id: 'P2', parentId: 'P1', elementlevel: 'E', value: 'P.I', name: 'Resultado', sign: 'C', group: 'Pasivo' }, ONE_DAY(37504, 24811, 20000)),
+    row({ node_id: '129', parentId: 'P2', elementlevel: 'C', value: '129', name: 'Resultados del ejercicio', sign: 'C', group: 'Pasivo', result: { onTheFly: 37504, posted: 0 } }, RESULT_CELL),
+  ];
+  const BALANCED = { balanced: true, activo: 700, pnPasivo: 700, diff: 0 };
+  const bsAnswer = (balance = BALANCED) => (params) => json({
+    kind: 'tree',
+    periods: [{ idx: 0, dateFrom: params.dateFrom, dateTo: params.dateTo, partial: false }],
+    hiddenCount: 0,
+    rows: BS_ROWS,
+    balance,
+  });
+  const ids = () => rowIds();
+  const sent = (name) => trackMock.mock.calls.filter(([event]) => event === name).map(([, props]) => props);
+  const quiet = () => new Promise((r) => setTimeout(r, 450)); // longer than the query debounce
+  const openNode = async (testId) => {
+    await waitFor(() => expect(ids()).toContain(testId));
+    return within(screen.getAllByTestId('DynamicReportTable__row').find((r) => r.dataset.nodeId === testId));
+  };
+
+  beforeEach(() => { queryAnswer = bsAnswer(); });
+
+  describe('opening and the panel', () => {
+    it('is the balance at Hasta: the query reads from the start of the fiscal year, the period chip is "balance at"', async () => {
+      renderBs();
+      await waitFor(() => expect(bsQueries()).toHaveLength(1));
+      expect(bsQueries()[0]).toMatchObject({ dateFrom: '2026-07-01', dateTo: '2026-11-03', columns: 'total' });
+      expect(bsQueries()[0].periods).toBe('2026-07-01..2026-11-03|2025-11-03..2025-11-03|2026-06-30..2026-06-30');
+      expect(screen.getByTestId('DynamicReportView__chip-period')).toHaveTextContent('dynamicReportAsOfChip');
+      expect(screen.getByTestId('DynamicReportView__chip-period')).toHaveTextContent('03/11/2026');
+      expect(screen.getByTestId('DynamicReportView__chip-period')).not.toHaveTextContent('dynamicReportPeriodChip');
+    });
+
+    it('Desde is labelled as the ledger start, with its hint, and the Hasta shortcuts replace Mes / Trimestre / Año', async () => {
+      renderBs();
+      await waitFor(() => expect(bsQueries()).toHaveLength(1));
+      expect(screen.getByText('dynamicReportLedgerStart')).toBeInTheDocument();
+      expect(screen.getByTestId('DynamicReportPanel__ledgerStartHint')).toHaveTextContent('dynamicReportLedgerStartHint');
+      for (const kind of ENDS) expect(screen.getByTestId(`DynamicReportPanel__shortcut-${kind}`)).toBeInTheDocument();
+      for (const gone of ['month', 'quarter', 'year']) expect(screen.queryByTestId(`DynamicReportPanel__shortcut-${gone}`)).toBeNull();
+      expect(screen.getByTestId('DynamicReportPanel__shortcut-today')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('each shortcut sets Hasta to its date, and Desde follows the fiscal year of that date', async () => {
+      renderBs();
+      await waitFor(() => expect(bsQueries()).toHaveLength(1));
+      const click = (kind) => fireEvent.click(screen.getByTestId(`DynamicReportPanel__shortcut-${kind}`));
+      click('lastMonthEnd');
+      await waitFor(() => expect(bsQueries().at(-1)).toMatchObject({ dateFrom: '2026-07-01', dateTo: '2026-10-31' }));
+      expect(screen.getByTestId('DynamicReportPanel__shortcut-lastMonthEnd')).toHaveAttribute('aria-pressed', 'true');
+      click('lastQuarterEnd');
+      await waitFor(() => expect(bsQueries().at(-1).dateTo).toBe('2026-09-30'));
+      // The last COMPLETED fiscal year ends 30 June 2026 (never "31 December"): Desde moves to that year's start.
+      click('lastFiscalYearEnd');
+      await waitFor(() => expect(bsQueries().at(-1)).toMatchObject({ dateFrom: '2025-07-01', dateTo: '2026-06-30' }));
+      expect(screen.getByTestId('DynamicReportPanel__dateFrom')).toHaveValue('2025-07-01');
+      click('today');
+      await waitFor(() => expect(bsQueries().at(-1)).toMatchObject({ dateFrom: '2026-07-01', dateTo: '2026-11-03' }));
+    });
+
+    it('with no completed fiscal year the last-fiscal-year shortcut is disabled and does nothing', async () => {
+      years = [JULY_YEARS[0]]; // only the year that contains today: none has ended
+      renderBs();
+      await waitFor(() => expect(bsQueries()).toHaveLength(1));
+      const button = screen.getByTestId('DynamicReportPanel__shortcut-lastFiscalYearEnd');
+      expect(button).toBeDisabled();
+      fireEvent.click(button);
+      await quiet();
+      expect(bsQueries()).toHaveLength(1);
+      expect(screen.getByTestId('DynamicReportPanel__shortcut-lastMonthEnd')).not.toBeDisabled();
+    });
+
+    it('Desde is clamped into the fiscal year of Hasta, and editing it sends no request', async () => {
+      renderBs();
+      await waitFor(() => expect(bsQueries()).toHaveLength(1));
+      const from = screen.getByTestId('DynamicReportPanel__dateFrom');
+      fireEvent.change(from, { target: { value: '2026-05-01' } }); // before the year start
+      await waitFor(() => expect(from).toHaveValue('2026-07-01'));
+      fireEvent.change(from, { target: { value: '2026-09-15' } }); // inside the year: kept
+      await waitFor(() => expect(from).toHaveValue('2026-09-15'));
+      fireEvent.change(from, { target: { value: '2026-12-01' } }); // after Hasta
+      await waitFor(() => expect(from).toHaveValue('2026-07-01'));
+      await quiet();
+      expect(bsQueries()).toHaveLength(1);
+    });
+
+    it('a deep link with a Desde outside the fiscal year of Hasta shows it clamped, like an edit', async () => {
+      renderBs({ search: 'dateFrom=2025-03-01&dateTo=2026-11-03' });
+      await waitFor(() => expect(screen.getByTestId('DynamicReportPanel__dateFrom')).toHaveValue('2026-07-01'));
+    });
+
+    it('offers Grupo / Epígrafe / Cuenta / Subcuenta and hides the legacy-only Epígrafe and Desglose', async () => {
+      renderBs();
+      await waitFor(() => expect(bsQueries()).toHaveLength(1));
+      const options = [...screen.getByTestId('DynamicReportPanel__level').querySelectorAll('option')].map((o) => [o.value, o.textContent]);
+      expect(options).toEqual([['G', 'Grupo'], ['P', 'Epígrafe'], ['C', 'Cuenta'], ['S', 'Subcuenta']]);
+    });
+
+    it('the comparison options name the date they compare with, from the contract modes', async () => {
+      renderBs();
+      await waitFor(() => expect(bsQueries()).toHaveLength(1));
+      const options = [...screen.getByTestId('DynamicReportPanel__compare').querySelectorAll('option')].map((o) => [o.value, o.textContent]);
+      expect(options).toEqual([
+        ['', 'dynamicReportNoComparison'],
+        ['same-last-year', 'dynamicReportSameDateLastYear:03/11/2025'],
+        ['previous', 'dynamicReportPreviousFiscalYearClose:30/06/2026'],
+      ]);
+      // Moving Hasta moves the compared dates.
+      fireEvent.click(screen.getByTestId('DynamicReportPanel__shortcut-lastMonthEnd'));
+      await waitFor(() => expect(screen.getByTestId('DynamicReportPanel__compare').textContent).toContain('dynamicReportSameDateLastYear:31/10/2025'));
+    });
+  });
+
+  describe('the tree', () => {
+    it('folds by Grupo (indent 0), Epígrafe (indent 1) and Cuenta, from the contract options', async () => {
+      renderBs();
+      await waitFor(() => expect(ids()).toEqual(['A1', 'A2', '213', '281', 'P1', 'P2', '129'])); // default: Cuenta
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__level'), { target: { value: 'G' } });
+      await waitFor(() => expect(ids()).toEqual(['A1', 'P1']));
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__level'), { target: { value: 'P' } });
+      await waitFor(() => expect(ids()).toEqual(['A1', 'A2', 'P1', 'P2']));
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__level'), { target: { value: 'C' } });
+      await waitFor(() => expect(ids()).toEqual(['A1', 'A2', '213', '281', 'P1', 'P2', '129']));
+      expect(bsQueries()).toHaveLength(1); // folding never asks again
+    });
+
+    it('a contra account keeps its negative sign in the cell', async () => {
+      renderBs();
+      const contra = await openNode('281');
+      expect(contra.getAllByTestId('DynamicReportTable__cellLedger')[0]).toHaveTextContent('-300');
+    });
+
+    it('has no KPI strip and no bars, and a variation carries no trend colour', async () => {
+      renderBs();
+      await waitFor(() => expect(ids()).toContain('213'));
+      expect(screen.queryByTestId('DynamicReportKpis')).toBeNull();
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'same-last-year' } });
+      await waitFor(() => expect(screen.getAllByTestId('DynamicReportTable__variation').length).toBeGreaterThan(0));
+      for (const cell of screen.getAllByTestId('DynamicReportTable__variation')) expect(cell.className).not.toMatch(/destructive|success/);
+    });
+
+    it('a comparison names its single date in the header and chip, and sends no request', async () => {
+      renderBs();
+      await waitFor(() => expect(ids()).toContain('213'));
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'previous' } });
+      await waitFor(() => expect(screen.getByTestId('DynamicReportTable__comparedLabel')).toHaveTextContent('(30/06/2026)'));
+      expect(screen.getByTestId('DynamicReportView__chip-compare')).toHaveTextContent('30/06/2026');
+      expect(screen.getByTestId('DynamicReportView__chip-compare')).not.toHaveTextContent('–');
+      expect(bsQueries()).toHaveLength(1);
+    });
+  });
+
+  describe('the balance check', () => {
+    it('balanced: one success line', async () => {
+      renderBs();
+      expect(await screen.findByTestId('DynamicReportBalance__ok')).toHaveTextContent('dynamicReportSheetBalanced');
+    });
+
+    it('unbalanced: an alert with the assets, the equity and the difference', async () => {
+      queryAnswer = bsAnswer({ balanced: false, activo: 1000, pnPasivo: 987.5, diff: 12.5 });
+      renderBs();
+      const alert = await screen.findByTestId('DynamicReportBalance__error');
+      expect(alert).toHaveAttribute('role', 'alert');
+      expect(alert).toHaveTextContent('dynamicReportSheetUnbalanced');
+      expect(alert).toHaveTextContent('dynamicReportSheetDiff:1.000,00,987,50,12,50');
+    });
+
+    it('with a contact filter the mismatch is only a note; with a product filter it adds the opening-balance note', async () => {
+      queryAnswer = bsAnswer({ balanced: false, activo: 1000, pnPasivo: 987.5, diff: 12.5 });
+      renderBs();
+      await screen.findByTestId('DynamicReportBalance__error');
+      fireEvent.click(screen.getByTestId('DynamicReportPanel__bPartnerId'));
+      const note = await screen.findByTestId('DynamicReportBalance__partial');
+      expect(note).toHaveTextContent('dynamicReportSheetPartial');
+      expect(note).not.toHaveTextContent('dynamicReportSheetProductNote');
+      expect(screen.queryByTestId('DynamicReportBalance__error')).toBeNull();
+      fireEvent.click(screen.getByTestId('DynamicReportPanel__productId'));
+      await waitFor(() => expect(screen.getByTestId('DynamicReportBalance__partial')).toHaveTextContent('dynamicReportSheetProductNote'));
+    });
+
+    it('no balance in the answer (a core without balanceCheck): no line at all', async () => {
+      queryAnswer = (params) => json({ kind: 'tree', periods: [{ idx: 0, dateFrom: params.dateFrom, dateTo: params.dateTo, partial: false }], hiddenCount: 0, rows: BS_ROWS });
+      renderBs();
+      await waitFor(() => expect(ids()).toContain('213'));
+      expect(screen.queryByTestId('DynamicReportBalance__ok')).toBeNull();
+      expect(screen.queryByTestId('DynamicReportBalance__error')).toBeNull();
+    });
+  });
+
+  describe('the ledger of an account', () => {
+    const lines = (rowsOfLedger, opening) => ({ kind: 'rows', rows: rowsOfLedger, openingRows: [{ value: '213', openingtotal: opening }] });
+    const LINE = { value: '213', dateacct: '2026-09-14T22:00:00.000Z', fact_acct_group_id: 'G1', groupbyname: 'Acme', amtacctdr: 1500, amtacctcr: 0 };
+
+    it('reads from Desde to Hasta with the opening entry, and its closing matches the amount clicked', async () => {
+      ledgerAnswer = () => lines([LINE], -500); // -500 + 1500 = 1000 = the 213 amount
+      renderBs();
+      const leaf = await openNode('213');
+      fireEvent.click(leaf.getByTestId('DynamicReportTable__ledger'));
+      await waitFor(() => expect(queriesTo('report-general-ledger')).toHaveLength(1));
+      expect(queriesTo('report-general-ledger')[0]).toMatchObject({ accountId: '213', dateFrom: '2026-07-01', dateTo: '2026-11-03', openingEntryAmount: 'true' });
+      expect(await screen.findByTestId('DynamicDrillPanel__closingCheck')).toHaveTextContent('dynamicReportClosingMatches');
+    });
+
+    it('says so when the closing differs from the amount clicked', async () => {
+      ledgerAnswer = () => lines([LINE], 0); // 1500 against 1000
+      renderBs();
+      const leaf = await openNode('213');
+      fireEvent.click(leaf.getByTestId('DynamicReportTable__ledger'));
+      expect(await screen.findByTestId('DynamicDrillPanel__closingCheck')).toHaveTextContent('dynamicReportClosingDiffers');
+    });
+
+    it('a Desde edited inside the year is where the ledger starts', async () => {
+      ledgerAnswer = () => lines([LINE], -500);
+      renderBs();
+      await waitFor(() => expect(ids()).toContain('213'));
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2026-09-15' } });
+      fireEvent.click((await openNode('213')).getByTestId('DynamicReportTable__ledger'));
+      await waitFor(() => expect(queriesTo('report-general-ledger')).toHaveLength(1));
+      expect(queriesTo('report-general-ledger')[0]).toMatchObject({ dateFrom: '2026-09-15', dateTo: '2026-11-03' });
+    });
+
+    it('the amount cell of the current column honours Desde too, not only the account name', async () => {
+      ledgerAnswer = () => lines([LINE], -500);
+      renderBs();
+      await waitFor(() => expect(ids()).toContain('213'));
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__dateFrom'), { target: { value: '2026-09-15' } });
+      fireEvent.click((await openNode('213')).getAllByTestId('DynamicReportTable__cellLedger')[0]);
+      await waitFor(() => expect(queriesTo('report-general-ledger')).toHaveLength(1));
+      expect(queriesTo('report-general-ledger')[0]).toMatchObject({ dateFrom: '2026-09-15', dateTo: '2026-11-03' });
+    });
+
+    it('a compared cell opens the ledger up to its one-day date, from the start of that fiscal year', async () => {
+      ledgerAnswer = () => lines([LINE], -500);
+      renderBs();
+      await waitFor(() => expect(ids()).toContain('213'));
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'previous' } });
+      const leaf = await openNode('213');
+      fireEvent.click(leaf.getAllByTestId('DynamicReportTable__cellLedger')[1]); // [current, compared]
+      await waitFor(() => expect(queriesTo('report-general-ledger')).toHaveLength(1));
+      expect(queriesTo('report-general-ledger')[0]).toMatchObject({ dateFrom: '2025-07-01', dateTo: '2026-06-30' });
+    });
+  });
+
+  describe('the result (129) panel', () => {
+    const resultRow = () => openNode('129');
+    const openResult = async () => {
+      fireEvent.click((await resultRow()).getByTestId('DynamicReportTable__ledger'));
+      return screen.findByTestId('DynamicResultPanel');
+    };
+
+    it('opens the result panel, not the ledger, with posted, calculated and the amount in the report', async () => {
+      renderBs();
+      const panel = await openResult();
+      expect(panel).toBeInTheDocument();
+      expect(screen.getByTestId('SheetTitle__result')).toHaveTextContent('129 - Resultados del ejercicio');
+      expect(screen.getByTestId('DynamicResultPanel__posted')).toHaveTextContent('0,00');
+      expect(screen.getByTestId('DynamicResultPanel__onTheFly')).toHaveTextContent('37.504,00');
+      expect(screen.getByTestId('DynamicResultPanel__total')).toHaveTextContent('37.504,00');
+      expect(queriesTo('report-general-ledger')).toHaveLength(0);
+    });
+
+    it('"Open Profit and Loss" goes to the P&L from the start of the fiscal year of Hasta, with the org', async () => {
+      renderBs();
+      await openResult();
+      const href = new URL(screen.getByTestId('DynamicResultPanel__openPnl').getAttribute('href'), 'http://x');
+      expect(href.pathname).toMatch(/\/report-viewer$/);
+      expect(Object.fromEntries(href.searchParams)).toEqual({ report: 'profit-loss', category: 'finance', dateFrom: '2026-07-01', dateTo: '2026-11-03', orgId: 'O1' });
+    });
+
+    it('carries the contact and product filters into the P&L link', async () => {
+      renderBs();
+      await waitFor(() => expect(ids()).toContain('129'));
+      fireEvent.click(screen.getByTestId('DynamicReportPanel__bPartnerId'));
+      fireEvent.click(screen.getByTestId('DynamicReportPanel__productId'));
+      await waitFor(() => expect(bsQueries().at(-1)).toMatchObject({ bPartnerId: 'B1', productId: 'B1' }));
+      await openResult();
+      const href = new URL(screen.getByTestId('DynamicResultPanel__openPnl').getAttribute('href'), 'http://x');
+      expect(href.searchParams.get('bPartnerId')).toBe('B1');
+      expect(href.searchParams.get('productId')).toBe('B1');
+    });
+
+    it('emits report_drilldown with type "result"', async () => {
+      renderBs();
+      await openResult();
+      expect(sent('report_drilldown')).toContainEqual(expect.objectContaining({ type: 'result', outcome: 'success' }));
+    });
+
+    it('the ledger button closes the panel and opens the ledger of the posted part', async () => {
+      ledgerAnswer = () => ({ kind: 'rows', rows: [], openingRows: [] });
+      renderBs();
+      await openResult();
+      fireEvent.click(screen.getByTestId('DynamicResultPanel__openLedger'));
+      await waitFor(() => expect(queriesTo('report-general-ledger')).toHaveLength(1));
+      expect(queriesTo('report-general-ledger')[0]).toMatchObject({ accountId: '129', dateTo: '2026-11-03' });
+      await waitFor(() => expect(screen.queryByTestId('DynamicResultPanel')).toBeNull());
+      // The ledger holds only the posted part (0): its closing is compared with that, not with the 37.504 the row shows.
+      expect(await screen.findByTestId('DynamicDrillPanel__closingCheck')).toHaveTextContent('dynamicReportClosingMatches');
+    });
+
+    it('without access to the General Ledger the panel still opens, but has no ledger button', async () => {
+      renderBs({ reportAccess: { 'balance-sheet': 'full' } });
+      await openResult();
+      expect(screen.queryByTestId('DynamicResultPanel__openLedger')).toBeNull();
+    });
+
+    it('a compared cell explains the compared figures (cells[i].result.sly / .prev) at their own date', async () => {
+      renderBs();
+      await waitFor(() => expect(ids()).toContain('129'));
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'previous' } });
+      fireEvent.click((await resultRow()).getAllByTestId('DynamicReportTable__cellLedger')[1]);
+      await screen.findByTestId('DynamicResultPanel');
+      expect(screen.getByTestId('DynamicResultPanel__posted')).toHaveTextContent('15.000,00');
+      expect(screen.getByTestId('DynamicResultPanel__onTheFly')).toHaveTextContent('5.000,00');
+      const href = new URL(screen.getByTestId('DynamicResultPanel__openPnl').getAttribute('href'), 'http://x');
+      expect(href.searchParams.get('dateTo')).toBe('2026-06-30');
+      expect(href.searchParams.get('dateFrom')).toBe('2025-07-01');
+    });
+
+    it('a compared cell under same-date-last-year uses the sly figures', async () => {
+      renderBs();
+      await waitFor(() => expect(ids()).toContain('129'));
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__compare'), { target: { value: 'same-last-year' } });
+      fireEvent.click((await resultRow()).getAllByTestId('DynamicReportTable__cellLedger')[1]);
+      await screen.findByTestId('DynamicResultPanel');
+      expect(screen.getByTestId('DynamicResultPanel__onTheFly')).toHaveTextContent('24.811,00');
+      expect(screen.getByTestId('DynamicResultPanel__posted')).toHaveTextContent('0,00');
+    });
+  });
+
+  describe('folded rows (ETP-6083: sub-accounts hidden by Cuenta / Epígrafe / Grupo)', () => {
+    // 129 and 213 are parents at the default level: their leaf accounts (12901000 carries the result) are hidden.
+    const FOLDED_ROWS = [
+      BS_ROWS[0], BS_ROWS[1],
+      row({ node_id: '213', parentId: 'A2', elementlevel: 'C', value: '213', name: 'Maquinaria', sign: 'D', group: 'Activo' }, ONE_DAY(1000, 900, 800)),
+      row({ node_id: '2130', parentId: '213', elementlevel: 'S', value: '21300', name: 'Maquinaria a', sign: 'D', group: 'Activo' }, ONE_DAY(600, 500, 400)),
+      row({ node_id: '2131', parentId: '213', elementlevel: 'S', value: '21310', name: 'Maquinaria b', sign: 'D', group: 'Activo' }, ONE_DAY(400, 400, 400)),
+      BS_ROWS[4], BS_ROWS[5],
+      row({ node_id: '129', parentId: 'P2', elementlevel: 'C', value: '129', name: 'Resultados del ejercicio', sign: 'C', group: 'Pasivo' }, ONE_DAY(37504, 24811, 20000)),
+      row({ node_id: '12901', parentId: '129', elementlevel: 'S', value: '12901000', name: 'Resumen', sign: 'C', group: 'Pasivo', result: { onTheFly: 37504, posted: 0 } }, RESULT_CELL),
+    ];
+    beforeEach(() => { queryAnswer = (params) => json({ kind: 'tree', periods: [{ idx: 0, dateFrom: params.dateFrom, dateTo: params.dateTo, partial: false }], hiddenCount: 0, rows: FOLDED_ROWS, balance: BALANCED }); });
+
+    it('a folded row whose hidden account carries the result opens the result panel, at every fold level', async () => {
+      renderBs();
+      for (const level of ['C', 'P', 'G']) {
+        fireEvent.change(screen.getByTestId('DynamicReportPanel__level'), { target: { value: level } });
+        const id = { C: '129', P: 'P2', G: 'P1' }[level];
+        fireEvent.click((await openNode(id)).getByTestId('DynamicReportTable__ledger'));
+        await screen.findByTestId('DynamicResultPanel');
+        expect(screen.getByTestId('DynamicResultPanel__onTheFly')).toHaveTextContent('37.504,00');
+        expect(screen.getByTestId('DynamicResultPanel__posted')).toHaveTextContent('0,00');
+        expect(screen.getByTestId('DynamicResultPanel__total')).toHaveTextContent('37.504,00');
+        fireEvent.keyDown(screen.getByTestId('DynamicResultPanel'), { key: 'Escape' });
+        await waitFor(() => expect(screen.queryByTestId('DynamicResultPanel')).toBeNull());
+      }
+    });
+
+    it('a folded account opens the ledger of its sub-accounts as a code range', async () => {
+      ledgerAnswer = () => ({ kind: 'rows', rows: [], openingRows: [] });
+      renderBs();
+      fireEvent.click((await openNode('213')).getByTestId('DynamicReportTable__ledger'));
+      await waitFor(() => expect(queriesTo('report-general-ledger')).toHaveLength(1));
+      expect(queriesTo('report-general-ledger')[0]).toMatchObject({ accountId: '', fromAccountId: '21300', toAccountId: '21310', dateTo: '2026-11-03' });
+    });
+
+    it('a row that holds the result and other accounts opens the ledger, compared without the calculated part', async () => {
+      // P1 = 129's 37.504 + a capital account with 100 posted.
+      const mixed = FOLDED_ROWS.map((r) => (r.node_id === 'P1' || r.node_id === 'P2' ? { ...r, amount: 37604, cells: [{ ...ONE_DAY(37604, 24811, 20000) }] } : r));
+      mixed.push(row({ node_id: '100', parentId: 'P2', elementlevel: 'C', value: '100', name: 'Capital', sign: 'C', group: 'Pasivo' }, ONE_DAY(100, 100, 100)));
+      queryAnswer = (params) => json({ kind: 'tree', periods: [{ idx: 0, dateFrom: params.dateFrom, dateTo: params.dateTo, partial: false }], hiddenCount: 0, rows: mixed, balance: BALANCED });
+      ledgerAnswer = () => ({ kind: 'rows', rows: [], openingRows: [{ openingtotal: -100 }] });
+      renderBs();
+      fireEvent.change(screen.getByTestId('DynamicReportPanel__level'), { target: { value: 'G' } });
+      fireEvent.click((await openNode('P1')).getByTestId('DynamicReportTable__ledger'));
+      await waitFor(() => expect(queriesTo('report-general-ledger')).toHaveLength(1));
+      expect(queriesTo('report-general-ledger')[0]).toMatchObject({ accountId: '', fromAccountId: '100', toAccountId: '12901000' });
+      expect(screen.queryByTestId('DynamicResultPanel')).toBeNull();
+      expect(await screen.findByTestId('DynamicDrillPanel__closingCheck')).toHaveTextContent('dynamicReportClosingMatches'); // 100 = 37.604 - 37.504
+      expect(screen.getByTestId('DynamicDrillPanel__calculatedNote')).toBeInTheDocument();
+    });
+
+    it('a heading with no account under it stays plain text', async () => {
+      renderBs();
+      expect((await openNode('A1')).queryByTestId('DynamicReportTable__ledger')).toBeNull();
+    });
+  });
+
+  describe('Profit & Loss is unchanged', () => {
+    it('keeps Mes / Trimestre / Año, the period chip and the plain Desde, and opens no result panel', async () => {
+      queryAnswer = () => json({ kind: 'tree', periods: TOTAL_PERIOD, rows: withVariation(TREE) }); // the P&L answer, not the Balance's
+      renderView();
+      await waitFor(() => expect(queries()).toHaveLength(1));
+      for (const kind of ['month', 'quarter', 'year']) expect(screen.getByTestId(`DynamicReportPanel__shortcut-${kind}`)).toBeInTheDocument();
+      expect(screen.queryByTestId('DynamicReportPanel__shortcut-today')).toBeNull();
+      expect(screen.queryByTestId('DynamicReportPanel__ledgerStartHint')).toBeNull();
+      expect(screen.getByTestId('DynamicReportView__chip-period')).toHaveTextContent('dynamicReportPeriodChip');
+      expect(screen.queryByTestId('DynamicReportBalance__ok')).toBeNull();
+      const options = [...screen.getByTestId('DynamicReportPanel__level').querySelectorAll('option')].map((o) => o.value);
+      expect(options).toEqual(['E', 'C', 'S']);
+      // A row is explained only when it carries a `result`: the P&L ledger link opens the ledger.
+      fireEvent.click(screen.getByTestId('DynamicReportPanel__expandAll'));
+      fireEvent.click(await screen.findByTestId('DynamicReportTable__ledger'));
+      await waitFor(() => expect(queriesTo('report-general-ledger')).toHaveLength(1));
+      expect(screen.queryByTestId('DynamicResultPanel')).toBeNull();
+      expect(queriesTo('report-general-ledger')[0].openingEntryAmount).toBeUndefined();
+    });
+  });
+});
+
+describe('DynamicReportBalance — both balance shapes (ETP-6083, ETP-6084)', () => {
+  it('Trial Balance shape: balanced, out of balance (alert) and partial (note) with its two differences', () => {
+    const { rerender } = render(<DynamicReportBalance balance={{ balanced: true, debitCreditDiff: 0, closingDiff: 0 }} />);
+    expect(screen.getByTestId('DynamicReportBalance__ok')).toHaveTextContent('dynamicReportBalanced');
+    const off = { balanced: false, debitCreditDiff: 12.5, closingDiff: 3 };
+    rerender(<DynamicReportBalance balance={off} />);
+    expect(screen.getByTestId('DynamicReportBalance__error')).toHaveTextContent('dynamicReportUnbalanced');
+    expect(screen.getByTestId('DynamicReportBalance__error')).toHaveTextContent('dynamicReportBalanceDiff:12,50,3,00');
+    rerender(<DynamicReportBalance balance={off} partial />);
+    expect(screen.getByTestId('DynamicReportBalance__partial')).toHaveTextContent('dynamicReportBalancePartial');
+    expect(screen.queryByTestId('DynamicReportBalance__error')).toBeNull();
+  });
+
+  it('Balance Sheet shape: its own keys, and the product note only when partial AND product-filtered', () => {
+    const off = { balanced: false, activo: 10, pnPasivo: 7, diff: 3 };
+    const { rerender } = render(<DynamicReportBalance balance={off} productFiltered />);
+    expect(screen.getByTestId('DynamicReportBalance__error')).toHaveTextContent('dynamicReportSheetUnbalanced');
+    expect(screen.getByTestId('DynamicReportBalance__error')).not.toHaveTextContent('dynamicReportSheetProductNote'); // not partial: an error
+    rerender(<DynamicReportBalance balance={off} partial />);
+    expect(screen.getByTestId('DynamicReportBalance__partial')).toHaveTextContent('dynamicReportSheetPartial');
+    expect(screen.getByTestId('DynamicReportBalance__partial')).not.toHaveTextContent('dynamicReportSheetProductNote');
+    rerender(<DynamicReportBalance balance={off} partial productFiltered />);
+    expect(screen.getByTestId('DynamicReportBalance__partial')).toHaveTextContent('dynamicReportSheetProductNote');
+    rerender(<DynamicReportBalance balance={{ balanced: true, activo: 5, pnPasivo: 5, diff: 0 }} />);
+    expect(screen.getByTestId('DynamicReportBalance__ok')).toHaveTextContent('dynamicReportSheetBalanced');
   });
 });

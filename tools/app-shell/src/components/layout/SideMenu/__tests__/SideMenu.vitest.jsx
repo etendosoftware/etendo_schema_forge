@@ -168,7 +168,7 @@ vi.mock('@/components/UserAvatarButton.jsx', () => ({
 vi.mock('@phosphor-icons/react', async (importOriginal) =>
   allIconsAs(({ className, weight }) => <span className={className} data-weight={weight} />, importOriginal));
 
-import SideMenu from '../SideMenu.jsx';
+import SideMenu, { findActiveGroup } from '../SideMenu.jsx';
 import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
 import { buildMenuGroups, filterMenuGroupsByAccess } from '@/windows/registry.js';
 import { defaultNavigation, optionalNavigation, hiddenNavigation, navigationProfiles, expectedNavigation, navigationPermissions, catalogFeatureFlags } from '@/windows/__tests__/navigationExpectations.js';
@@ -215,6 +215,133 @@ describe('SideMenu shipped navigation profiles (ETP-5240)', () => {
     const absent = [...hiddenNavigation, ...[...defaultNavigation, ...optionalNavigation]
       .filter(entry => !expected.some(candidate => candidate.name === entry.name)).map(entry => entry.name)];
     for (const name of absent) expect(screen.queryByTestId(`menu-item-${name}`), name).not.toBeInTheDocument();
+  });
+});
+
+// A report-category entry (`report-viewer?category=<cat>`) is matched by its pathname plus every
+// query param it declares; extra params of the current URL (`&report=<id>`) do not break the match.
+// Runs against the shipped menu so the Treasury / Finance split is the real one.
+describe('findActiveGroup — report-category entries', () => {
+  beforeEach(() => { menuFixture.useShippedMenu = true; });
+  afterEach(() => { menuFixture.useShippedMenu = false; });
+  const groups = () => buildMenuGroups();
+  const activeGroupName = (pathname, search) => findActiveGroup(groups(), pathname, search)?.group ?? null;
+
+  it.each([
+    ['?category=treasury&report=aging-payable', 'Treasury'],
+    ['?category=treasury&report=aging-receivable', 'Treasury'],
+    ['?category=treasury', 'Treasury'],
+    ['?category=finance&report=tax-report', 'Finance'],
+    ['?category=finance', 'Finance'],
+    ['?category=inventory&report=inventory-stock-report', 'Inventory'],
+  ])('/report-viewer%s resolves to %s', (search, expected) => {
+    expect(activeGroupName('/report-viewer', search)).toBe(expected);
+  });
+
+  it('a category=finance URL never matches the Treasury entry, even for an aging report id', () => {
+    const treasury = groups().find(g => g.group === 'Treasury');
+    expect(findActiveGroup([treasury], '/report-viewer', '?category=finance&report=aging-payable')).toBeNull();
+    expect(findActiveGroup([treasury], '/report-viewer', '?category=finance')).toBeNull();
+  });
+
+  it('a report-viewer URL without the category param matches no report-category entry', () => {
+    expect(activeGroupName('/report-viewer', '?report=aging-payable')).toBeNull();
+    expect(activeGroupName('/report-viewer', '')).toBeNull();
+  });
+
+  it('a different pathname with the same query never matches a report-category entry', () => {
+    expect(activeGroupName('/report-viewer-x', '?category=treasury')).toBeNull();
+  });
+
+  it.each([
+    ['/payment-in', 'Treasury'],
+    ['/payment-in/ABC123', 'Treasury'],
+    ['/financial-account', 'Treasury'],
+    ['/chart-of-accounts', 'Finance'],
+  ])('non-query target %s keeps resolving by path (%s)', (pathname, expected) => {
+    expect(activeGroupName(pathname, '')).toBe(expected);
+  });
+
+  it('a non-query target does not match a longer slug that only shares its prefix', () => {
+    expect(activeGroupName('/payment-input', '')).toBeNull();
+  });
+});
+
+// Generic matching rules on a synthetic menu (moved here from the retired findActiveGroup.test.js,
+// which exercised a hand-copied version of the function rather than this one).
+describe('findActiveGroup — generic matching', () => {
+  const SAMPLE = [
+    { group: 'Home', items: [{ name: 'dashboard', label: 'Dashboard' }] },
+    { group: 'Sales', items: [{ name: 'sales-order', label: 'Sales Order' }, { name: 'sales-invoice', label: 'Sales Invoice' }] },
+    { group: 'Purchases', items: [{ name: 'purchase-order', label: 'Purchase Order' }, { name: 'report-viewer-purchases', label: 'Reports', path: 'report-viewer?category=purchases' }] },
+  ];
+
+  it('matches a plain item by name, with or without a search argument', () => {
+    expect(findActiveGroup(SAMPLE, '/sales-order')?.group).toBe('Sales');
+    expect(findActiveGroup(SAMPLE, '/sales-invoice', '')?.group).toBe('Sales');
+    expect(findActiveGroup(SAMPLE, '/dashboard', undefined)?.group).toBe('Home');
+  });
+
+  it('matches a query-string item only when its params are in the current URL', () => {
+    expect(findActiveGroup(SAMPLE, '/report-viewer', '?category=purchases')?.group).toBe('Purchases');
+    expect(findActiveGroup(SAMPLE, '/report-viewer', '?category=sales')).toBeNull();
+  });
+
+  it('returns null when nothing matches, and for an empty menu', () => {
+    expect(findActiveGroup(SAMPLE, '/nonexistent')).toBeNull();
+    expect(findActiveGroup([], '/dashboard')).toBeNull();
+  });
+
+  it('returns the first matching group when two groups hold the same item', () => {
+    const groups = [
+      { group: 'A', items: [{ name: 'shared', label: 'A' }] },
+      { group: 'B', items: [{ name: 'shared', label: 'B' }] },
+    ];
+    expect(findActiveGroup(groups, '/shared')?.group).toBe('A');
+  });
+
+  it('never returns the Favorites group, even when one of its entries matches', () => {
+    const groups = [
+      { group: 'Favorites', items: [{ name: 'sales-order', label: 'Fav' }] },
+      ...SAMPLE,
+    ];
+    expect(findActiveGroup(groups, '/sales-order')?.group).toBe('Sales');
+    expect(findActiveGroup([groups[0]], '/sales-order')).toBeNull();
+  });
+});
+
+describe('SideMenu — Treasury entry highlighting', () => {
+  beforeEach(() => {
+    menuFixture.useShippedMenu = true;
+    mockUseFavorites.mockReturnValue({ favorites: [] });
+  });
+
+  afterEach(() => {
+    menuFixture.useShippedMenu = false;
+    mockUseLocation.mockReturnValue({ pathname: '/dashboard', search: '' });
+  });
+
+  const ACTIVE = /ring-border-control/;
+
+  it('an open aging report highlights Tesorería › Informes and not Finanzas › Informes', () => {
+    mockUseLocation.mockReturnValue({ pathname: '/report-viewer', search: '?category=treasury&report=aging-payable' });
+    render(<SideMenu menuGroups={buildMenuGroups()} expanded onToggle={vi.fn()} />);
+    // The active group opens on mount, so the Treasury item is rendered without a click.
+    expect(screen.getByTestId('menu-item-report-viewer-treasury').className).toMatch(ACTIVE);
+    expect(screen.queryByTestId('menu-item-report-viewer-finance')?.className ?? '').not.toMatch(ACTIVE);
+  });
+
+  it('a finance report highlights Finanzas › Informes and not Tesorería › Informes', () => {
+    mockUseLocation.mockReturnValue({ pathname: '/report-viewer', search: '?category=finance&report=tax-report' });
+    render(<SideMenu menuGroups={buildMenuGroups()} expanded onToggle={vi.fn()} />);
+    expect(screen.getByTestId('menu-item-report-viewer-finance').className).toMatch(ACTIVE);
+    expect(screen.queryByTestId('menu-item-report-viewer-treasury')?.className ?? '').not.toMatch(ACTIVE);
+  });
+
+  it('a payment-in record highlights Tesorería › Cobro', () => {
+    mockUseLocation.mockReturnValue({ pathname: '/payment-in/ABC123', search: '' });
+    render(<SideMenu menuGroups={buildMenuGroups()} expanded onToggle={vi.fn()} />);
+    expect(screen.getByTestId('menu-item-payment-in').className).toMatch(ACTIVE);
   });
 });
 

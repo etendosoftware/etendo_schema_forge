@@ -11,9 +11,10 @@ import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkAct
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { filterPostingActions } from '@/lib/capabilityVisibility.js';
+import { isCompletedStatus, isDraftStatus } from '../../lib/docStatus.js';
 
 export const buildInOutActions = (rows) => {
-  const hasDraft = rows.some((r) => (r.documentStatus || r.docStatus) === 'DR');
+  const hasDraft = rows.some((r) => isDraftStatus(r.documentStatus || r.docStatus));
   return hasDraft ? [{ value: 'CO', labelKey: 'confirm' }] : [];
 };
 
@@ -73,8 +74,8 @@ export const postRowFilter = (row, action, ui) => {
 function buildBulkActions(selectedRows, buildActions) {
   if (buildActions) return buildActions(selectedRows);
   const statusOf = (r) => r.documentStatus || r.docStatus;
-  const hasDraft = selectedRows.some((r) => statusOf(r) === 'DR');
-  const hasCompleted = selectedRows.some((r) => statusOf(r) === 'CO');
+  const hasDraft = selectedRows.some((r) => isDraftStatus(statusOf(r)));
+  const hasCompleted = selectedRows.some((r) => isCompletedStatus(statusOf(r)));
   const out = [];
   if (hasDraft) out.push({ value: 'CO', labelKey: 'confirm' });
   if (hasCompleted) out.push({ value: 'RE', labelKey: 'reactivate' });

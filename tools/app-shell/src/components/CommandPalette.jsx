@@ -13,7 +13,8 @@ import {
   resolveWindowSearchSuggestions,
 } from '@/lib/vectorSearchConfig.js';
 import { rankVectorMatches } from '@/lib/vectorSearchRanking.js';
-import { filterMenuGroups, splitSearchHighlight } from '@/lib/globalSearchMenu.js';
+import { filterMenuGroups, isSearchableMenuItem, splitSearchHighlight } from '@/lib/globalSearchMenu.js';
+import { hasAccessibleReportInGroup } from '@/windows/registry.js';
 import {
   GlobalSearchDialog as CommandDialog,
   GlobalSearchEmpty as CommandEmpty,
@@ -39,6 +40,7 @@ import {
   XIcon,
   ClockIcon,
   SparkleIcon,
+  WalletIcon,
 } from '@phosphor-icons/react';
 
 const ICON_MAP = {
@@ -50,6 +52,7 @@ const ICON_MAP = {
   Users: UsersIcon,
   FolderKanban: KanbanIcon,
   Settings: GearIcon,
+  Wallet: WalletIcon,
 };
 
 function HighlightedQuery({ text, query }) {
@@ -76,7 +79,14 @@ function resolveVectorSearchScopeLabel(selectedTargets, tMenu, ui) {
   return ui('allWindows');
 }
 
-export function CommandPalette() {
+/**
+ * @param {{reportAccess?: Record<string, string>|null}} props
+ *   `reportAccess` — the caller's per-report grants (id -> tier, from `fetchMyReportAccess()`,
+ *   owned by AppLayout). Gates the hidden report rows listed while searching and the
+ *   `requiresGroupReport` links, the same way the sidebar does (ETP-6389). `null`/omitted fails
+ *   closed for both; admins/client-admins bypass.
+ */
+export function CommandPalette({ reportAccess = null } = {}) {
   const { open, setOpen, query, setQuery, registerKeyboardHandler } = useGlobalSearch();
   const { recentSearches, addRecentSearch } = useRecentSearches();
   const [keyboardIndex, setKeyboardIndex] = useState(-1);
@@ -325,9 +335,11 @@ export function CommandPalette() {
     setSelectedVectorTargetKeys([currentWindowVectorTarget.target]);
   }, [currentWindowVectorTarget, open, scopeOverrideTargets]);
 
-  const handleSelect = (name) => {
+  // `path` wins over `name`: a report-category link (`report-viewer?category=…`) or a report row
+  // (`report-viewer?category=…&report=…`) is not a route of its own name (ETP-6389).
+  const handleSelect = (item) => {
     setQuery('');
-    navigate(`/${name}`);
+    navigate(`/${item.path || item.name}`);
     setOpen(false);
   };
 
@@ -375,11 +387,18 @@ export function CommandPalette() {
     [PROOF_OF_CONCEPT_MENU]: proofOfConceptMenuEnabled,
     [UNIFIED_CALENDAR_POC]: unifiedCalendarPocEnabled,
   };
+  const isAdminOrClientAdmin = capabilities?.isAdminOrClientAdmin === true;
+  // ETP-6389 — report rows are listed only while searching, and only those the caller may open.
+  const searchableItemOptions = {
+    includeReports: query.trim().length > 0,
+    canOpenReport: (reportId) => isAdminOrClientAdmin || reportAccess?.[reportId] !== undefined,
+  };
   const visibleMenuGroups = menuConfig.menu
     .filter((group) => !group.hidden)
     .map((group) => ({
       ...group,
-      items: group.items.filter((i) => !i.hidden
+      items: group.items.filter((i) => isSearchableMenuItem(i, searchableItemOptions)
+        && (!i.requiresGroupReport || isAdminOrClientAdmin || hasAccessibleReportInGroup(group.group, reportAccess))
         && (!i.featureFlag || featureFlagValues[i.featureFlag] === true)
         && (!i.capability || capabilities?.[i.capability] === true)
         && !(isSupportMode && isSupportRestrictedMenuItem(i))),
@@ -566,7 +585,7 @@ export function CommandPalette() {
                   <CommandItem
                     key={item.name}
                     value={`${translatedLabel} ${item.label} ${item.name}`}
-                    onSelect={() => handleSelect(item.name)}
+                    onSelect={() => handleSelect(item)}
                     data-testid="CommandItem__73263e">
                     <Icon className="mr-2 h-4 w-4" data-testid="Icon__73263e" />
                     <span><HighlightedQuery

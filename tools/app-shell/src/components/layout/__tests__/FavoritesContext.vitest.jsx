@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/layout/FavoritesContext.jsx
 // --- Mocks (before imports) ---
 
 vi.mock('@/auth/AuthContext.jsx', () => ({
@@ -169,6 +170,63 @@ describe('FavoritesContext', () => {
         expect(result.current.favorites).toHaveLength(1);
       });
       expect(result.current.favorites[0].name).toBe('remote-fav');
+    });
+
+    // removeFavorite also takes an array: every listed key goes in ONE update (one state change,
+    // one localStorage write, one server PUT). Calling it once per key would each start from the
+    // same stale list and keep only the last removal.
+    describe('removeFavorite with several keys', () => {
+      const SAVED = [
+        { name: 'report-viewer?category=treasury&report=aging-receivable', label: 'Aging' },
+        { name: 'report-viewer?category=finance&report=aging-receivable', label: 'Aging' },
+        { name: 'sales-order', label: 'Sales Order' },
+      ];
+      const putBodies = () => globalThis.fetch.mock.calls
+        .filter(([, init]) => init?.method === 'PUT')
+        .map(([, init]) => JSON.parse(init.body).map((f) => f.name));
+
+      async function renderWithSaved() {
+        globalThis.fetch.mockResolvedValueOnce({ ok: true, json: async () => SAVED });
+        const hook = renderHook(() => useFavorites(), { wrapper });
+        await waitFor(() => expect(hook.result.current.favorites).toHaveLength(3));
+        return hook;
+      }
+
+      it('removes every listed key at once and persists the result locally and to the server', async () => {
+        const { result } = await renderWithSaved();
+        act(() => {
+          result.current.removeFavorite([SAVED[0].name, SAVED[1].name]);
+        });
+        expect(result.current.favorites.map((f) => f.name)).toEqual(['sales-order']);
+        expect(JSON.parse(localStorage.getItem('sf_favorites_testuser')).map((f) => f.name)).toEqual(['sales-order']);
+        expect(putBodies()).toEqual([['sales-order']]);
+      });
+
+      it('still removes a single key passed as a string', async () => {
+        const { result } = await renderWithSaved();
+        act(() => {
+          result.current.removeFavorite(SAVED[1].name);
+        });
+        expect(result.current.favorites.map((f) => f.name)).toEqual([SAVED[0].name, 'sales-order']);
+        expect(putBodies()).toEqual([[SAVED[0].name, 'sales-order']]);
+      });
+
+      it('ignores unknown and empty keys in the list', async () => {
+        const { result } = await renderWithSaved();
+        act(() => {
+          result.current.removeFavorite(['no-such-key', '', null, 'sales-order']);
+        });
+        expect(result.current.favorites.map((f) => f.name)).toEqual([SAVED[0].name, SAVED[1].name]);
+      });
+
+      it.each([[[]], [['', null]], [undefined]])('does nothing for %j (no write, no PUT)', async (arg) => {
+        const { result } = await renderWithSaved();
+        act(() => {
+          result.current.removeFavorite(arg);
+        });
+        expect(result.current.favorites).toHaveLength(3);
+        expect(putBodies()).toEqual([]);
+      });
     });
 
     it('handles server fetch error gracefully', async () => {
