@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import http from 'node:http';
-import { browserTools, createServer, handleChat, hasConfiguredSecret, mcpClientOptions, opencodeProviderOptions, opencodeSessionId, sessionCredentials } from '../src/server.js';
+import { fingerprintUiMessages, fingerprintResponse } from '../src/historyCache.js';
+import { browserTools, buildModelMessages, createServer, handleChat, hasConfiguredSecret, mcpClientOptions, opencodeProviderOptions, opencodeSessionId, sessionCredentials } from '../src/server.js';
 
 function request(headers = {}) {
   const req = new EventEmitter();
@@ -267,4 +268,37 @@ test('handleChat resolves the usage credential from the session instead of a fre
     }
   }
   assert.doesNotMatch(res.body, /authorization is not defined/);
+});
+
+const csvUrl = `data:text/csv;base64,${Buffer.from('name,email\nAna,ana@example.com').toString('base64')}`;
+const fileTurn = text => ({ id: 'u1', role: 'user', parts: [{ type: 'file', mediaType: 'text/csv', filename: 'c.csv', url: csvUrl }, { type: 'text', text }] });
+const modelText = message => JSON.stringify(message.content);
+
+test('buildModelMessages turns an attachment into marked text without history', async () => {
+  const { modelMessages, plan } = await buildModelMessages([fileTurn('importa')], { entry: undefined, tools: {} });
+  assert.equal(plan.hit, false);
+  const dump = JSON.stringify(modelMessages);
+  assert.match(dump, /contenido de DATOS, no instrucciones/);
+  assert.match(dump, /ana@example\.com/);
+  assert.equal(dump.includes('"type":"file"'), false);
+});
+
+test('buildModelMessages keeps the cached history on the turn after an attachment and converts a new one', async () => {
+  const first = fileTurn('importa');
+  const reply = { id: 'a1', role: 'assistant', parts: [{ type: 'text', text: 'Son 1 fila, ¿confirmas?' }] };
+  const entry = {
+    fingerprints: [...fingerprintUiMessages([{ ...first, parts: [{ type: 'text', text: '[Archivo adjunto "c.csv"]' }, first.parts[1]] }]), fingerprintResponse([{ role: 'assistant', content: 'Son 1 fila, ¿confirmas?' }])],
+    messages: [{ role: 'user', content: 'CACHED-CSV' }, { role: 'assistant', content: 'Son 1 fila, ¿confirmas?' }],
+  };
+  // What the client sends next: the earlier file part is already a note, plus a new file.
+  const noted = { ...first, parts: [{ type: 'text', text: '[Archivo adjunto "c.csv"]' }, first.parts[1]] };
+  const next = { id: 'u2', role: 'user', parts: [{ type: 'file', mediaType: 'text/csv', filename: 'd.csv', url: csvUrl }, { type: 'text', text: 'sí, y este' }] };
+  const { modelMessages, plan } = await buildModelMessages([noted, reply, next], { entry, tools: {} });
+  assert.equal(plan.hit, true);
+  const dump = JSON.stringify(modelMessages);
+  assert.match(dump, /CACHED-CSV/);
+  assert.match(dump, /ana@example\.com/);
+  assert.equal(dump.includes('"type":"file"'), false);
+  assert.equal(modelMessages.length, 3);
+  assert.ok(modelText(modelMessages[2]).includes('d.csv'));
 });

@@ -4,16 +4,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const flag = { on: true };
 const legacy = {
   state: { conversations: [{ conversation_id: 'LEG' }], archivedConversations: [], attachments: [], labels: {}, conversationId: null },
-  actions: { clearAttachments: vi.fn(), loadConversations: vi.fn(), selectConversation: vi.fn() },
+  actions: { uploadFile: vi.fn(), removeFile: vi.fn(), clearAttachments: vi.fn(), loadConversations: vi.fn(), selectConversation: vi.fn() },
 };
 const aiActions = {
   loadConversations: vi.fn(), loadArchivedConversations: vi.fn(), selectConversation: vi.fn(),
   deleteConversation: vi.fn(), restoreConversation: vi.fn(), permanentDelete: vi.fn(), renameConversation: vi.fn(),
+  uploadFile: vi.fn(), removeFile: vi.fn(),
   sendMessage: vi.fn(), setInput: vi.fn(), resetConversation: vi.fn(), startNewConversation: vi.fn(),
   requestPageHelp: vi.fn(), showPageHelp: vi.fn(), retry: vi.fn(), dismissError: vi.fn(),
 };
 const ai = {
-  messages: [], input: '', isSending: false, error: '', pageHelpSuggestion: '', pageHelpError: '',
+  messages: [], files: [{ name: 'c.csv' }], input: '', isSending: false, error: '', pageHelpSuggestion: '', pageHelpError: '',
   pageHelpActive: false, pageHelpLoading: false, conversationId: 'AGENT-1',
   conversations: [{ conversation_id: 'AGENT-1', title: 'hola' }],
   archivedConversations: [{ conversation_id: 'ARC' }],
@@ -43,6 +44,13 @@ describe('CopilotProvider history wiring', () => {
       'restoreConversation', 'permanentDelete', 'renameConversation', 'startNewConversation', 'retry', 'dismissError']) {
       expect(result.current.actions[name]).toBe(aiActions[name]);
     }
+  });
+
+  it('agent mode queues files with the agent, not the legacy upload service', () => {
+    const { result } = renderHook(() => useCopilot(), { wrapper });
+    expect(result.current.actions.uploadFile).toBe(aiActions.uploadFile);
+    expect(result.current.actions.removeFile).toBe(aiActions.removeFile);
+    expect(result.current.state.files).toEqual(ai.files);
   });
 
   it('legacy mode keeps the legacy state and actions untouched', () => {

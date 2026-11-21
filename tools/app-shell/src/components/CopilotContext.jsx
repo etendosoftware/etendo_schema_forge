@@ -35,6 +35,7 @@ export function CopilotProvider({ children, menuGroups }) {
       },
       messages: ai.messages,
       input: ai.input,
+      files: ai.files,
       isSending: ai.isSending,
       error: ai.error,
       pageHelpSuggestion: ai.pageHelpSuggestion,
@@ -42,7 +43,7 @@ export function CopilotProvider({ children, menuGroups }) {
       pageHelpActive: ai.pageHelpActive,
       pageHelpLoading: ai.pageHelpLoading,
     };
-  }, [agentEnabled, ai.archivedConversations, ai.conversationId, ai.conversations, ai.error, ai.input, ai.isLoadingArchivedConversations, ai.isLoadingConversations, ai.isLoadingMessages, ai.isSending, ai.messages, ai.pageHelpActive, ai.pageHelpError, ai.pageHelpLoading, ai.pageHelpSuggestion, legacy.state]);
+  }, [agentEnabled, ai.archivedConversations, ai.conversationId, ai.conversations, ai.error, ai.files, ai.input, ai.isLoadingArchivedConversations, ai.isLoadingConversations, ai.isLoadingMessages, ai.isSending, ai.messages, ai.pageHelpActive, ai.pageHelpError, ai.pageHelpLoading, ai.pageHelpSuggestion, legacy.state]);
   const actions = useMemo(() => {
     if (!agentEnabled) return legacy.actions;
     return {
@@ -59,6 +60,9 @@ export function CopilotProvider({ children, menuGroups }) {
       retry: ai.actions.retry,
       dismissError: ai.actions.dismissError,
       sendMessage: ai.actions.sendMessage,
+      // The clip must queue files for the agent, not upload them to the legacy copilot service.
+      uploadFile: ai.actions.uploadFile,
+      removeFile: ai.actions.removeFile,
       setInput: ai.actions.setInput,
       resetConversation: ai.actions.resetConversation,
       startNewConversation: ai.actions.startNewConversation,

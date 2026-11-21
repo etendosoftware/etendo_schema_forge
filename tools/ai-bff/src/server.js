@@ -7,6 +7,7 @@ import { convertToModelMessages, pipeUIMessageStreamToResponse, stepCountIs, str
 import { z } from 'zod';
 import { createTurnRecorder, usageEndpoint } from './usage.js';
 import { buildSystemPrompt } from './systemPrompt.js';
+import { attachmentNotes, tabularAttachmentsToText } from './attachments.js';
 import {
   createHistoryStore, elideOldToolResults, fingerprintResponse, fingerprintUiMessages,
   historyConfigFromEnv, resolveHistory,
@@ -253,6 +254,29 @@ function trace(stage, payload) {
 const historyConfig = historyConfigFromEnv();
 export const historyStore = createHistoryStore(historyConfig);
 
+/**
+ * Attachments become text first (so the model never gets a file part), on both
+ * the cached and uncached history paths. History is matched on the notes form
+ * of the messages, which is what the client sends on later turns.
+ */
+export async function buildModelMessages(clientMessages, { entry, tools }) {
+  const converted = await tabularAttachmentsToText(clientMessages);
+  const keyMessages = attachmentNotes(clientMessages);
+  const plan = entry ? resolveHistory(entry, keyMessages) : { hit: false, reason: 'miss' };
+  if (plan.hit) {
+    const trailing = converted.slice(entry.fingerprints.length);
+    return {
+      plan,
+      keyMessages,
+      modelMessages: elideOldToolResults(
+        [...entry.messages, ...await convertToModelMessages(trailing, { tools })],
+        historyConfig.toolResultBudget,
+      ),
+    };
+  }
+  return { plan, keyMessages, modelMessages: await convertToModelMessages(converted, { tools }) };
+}
+
 export async function handleChat(req, res) {
   if (!hasConfiguredSecret(process.env.OPENCODE_API_KEY)) {
     return json(res, 503, { error: 'OPENCODE_API_KEY is not configured' });
@@ -289,19 +313,13 @@ export async function handleChat(req, res) {
       ...browserTools(),
     };
     trace('tools', { mode: isPageHelpRequest ? 'page-help' : 'chat', available: Object.keys(tools) });
-    const uiMessages = body.messages || [];
-    let modelMessages;
+    const { modelMessages, keyMessages, plan } = await buildModelMessages(body.messages || [], {
+      entry: cacheKey ? historyStore.get(cacheKey) : undefined,
+      tools,
+    });
     if (cacheKey) {
-      const plan = resolveHistory(historyStore.get(cacheKey), uiMessages);
       trace('history', { session: cacheKey, cache: plan.hit ? 'hit' : plan.reason === 'miss' ? 'miss' : 'ignored', reason: plan.reason });
-      if (plan.hit) {
-        modelMessages = elideOldToolResults(
-          [...historyStore.get(cacheKey).messages, ...await convertToModelMessages(plan.trailing, { tools })],
-          historyConfig.toolResultBudget,
-        );
-      }
     }
-    modelMessages ??= await convertToModelMessages(uiMessages, { tools });
     const result = streamText({
       model: provider.chatModel(modelId),
       // Server-side only. A client-supplied system field is never read: the client must not be able to override it.
@@ -357,7 +375,7 @@ export async function handleChat(req, res) {
       // Recording is fire-and-forget: usage.finish() never awaits the POST.
       onFinish: async event => {
         usage.finish(event);
-        rememberTurn(cacheKey, uiMessages, modelMessages, event);
+        rememberTurn(cacheKey, keyMessages, modelMessages, event);
         await mcpClient?.close();
       },
     });
