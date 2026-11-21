@@ -27,6 +27,7 @@ Show the accounting movements of `fact_acct` grouped by account, with an opening
 - `fromAccountId` / `toAccountId` (section *Scope*) depend on `acctSchemaId`, so the selector lists accounts of the chosen schema; the range compares account codes (`ev.value`).
 - Dimension filters live in the *Dimensions* section; `groupBy` in *Grouping*.
 - `showOpenBalances` is declared but hidden.
+- `openingEntryAmount` (ETP-6084) is a hidden toggle, default **false**: when false the report behaves exactly as before (R/C entries stay in the opening balance, correct after a year-end close). The Trial Balance drill sends its own value so the ledger opening matches the row clicked. The MCP `GeneralLedgerReportHandler.java` does not mirror it, by design.
 
 ## Gap assessment
 - The report assumes a single accounting schema per run.

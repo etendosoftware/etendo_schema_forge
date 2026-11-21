@@ -4,7 +4,7 @@
 // The remittance loader test below resolves the route guard, not the generated window behind it:
 // stubbing the generated module keeps that import light (the full window timed out under suite load).
 vi.mock('@generated/remittance/generated/web/remittance/index.jsx', () => ({ default: () => null }));
-import { buildMenuGroups, getAllWindowNames, apiOnlyWindows, buildWindowMap, filterMenuGroupsByAccess } from '../registry';
+import { buildMenuGroups, getAllWindowNames, apiOnlyWindows, buildWindowMap, filterMenuGroupsByAccess, hasAccessibleReportInGroup } from '../registry';
 import menuConfig from '../../menu.json';
 import { defaultNavigation, optionalNavigation, hiddenNavigation, navigationProfiles, expectedNavigation, navigationPermissions, expectNavigation } from './navigationExpectations.js';
 
@@ -486,7 +486,7 @@ describe('registry', () => {
         { isAdminOrClientAdmin: false },
         {},
         undefined,
-        { 'aging-payable': 'full' },
+        { 'tax-report': 'full' },
       );
       const finance = result.find(g => g.group === 'Finance');
       expect(finance).toBeDefined();
@@ -521,6 +521,89 @@ describe('registry', () => {
       );
       const finance = result.find(g => g.group === 'Finance');
       expect(finance?.items.map(i => i.name) ?? []).not.toContain('report-viewer-finance');
+    });
+  });
+
+  // `requiresGroupReport` — a report-category link (Tesorería › Informes) shows only when at least
+  // one report of its OWN menu.json group is granted. The shared Financial Reports anchor window is
+  // not enough on its own: that would open an empty catalog. Uses the real Treasury group because
+  // REPORT_IDS_BY_GROUP is keyed off menu.json's group names.
+  describe('filterMenuGroupsByAccess — requiresGroupReport axis', () => {
+    const FINANCIAL_REPORTS_WINDOW = 'D647D118F5014D00AF47A636B2CD0DD3';
+    const treasuryNames = result => result.find(g => g.group === 'Treasury')?.items.map(i => i.name) ?? [];
+    const run = ({ capabilities = { isAdminOrClientAdmin: false }, windowAccess = {}, reportAccess, allowedIds = new Set() }) =>
+      filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, undefined, reportAccess);
+
+    it('hides the Treasury Reports link for a role with the anchor window but no grant on any Treasury report', () => {
+      const result = run({ windowAccess: { [FINANCIAL_REPORTS_WINDOW]: 'full' }, reportAccess: { 'tax-report': 'full' } });
+      expect(treasuryNames(result)).not.toContain('report-viewer-treasury');
+      // The same anchor still reveals the Finance link: the axis is scoped to its own item.
+      expect(result.find(g => g.group === 'Finance')?.items.map(i => i.name)).toContain('report-viewer-finance');
+    });
+
+    it.each(['aging-receivable', 'aging-payable'])('shows the Treasury Reports link with a grant on %s', reportId => {
+      const result = run({ windowAccess: { [FINANCIAL_REPORTS_WINDOW]: 'full' }, reportAccess: { [reportId]: 'read-only' } });
+      expect(treasuryNames(result)).toContain('report-viewer-treasury');
+    });
+
+    it('shows the Treasury Reports link with an aging grant even without the anchor window', () => {
+      const result = run({ windowAccess: {}, reportAccess: { 'aging-payable': 'full' } });
+      expect(treasuryNames(result)).toContain('report-viewer-treasury');
+    });
+
+    it('shows the Treasury Reports link for an admin/client-admin with no report grant at all', () => {
+      const result = run({ capabilities: { isAdminOrClientAdmin: true }, windowAccess: {}, reportAccess: {} });
+      expect(treasuryNames(result)).toContain('report-viewer-treasury');
+    });
+
+    it('hides the Treasury Reports link when reportAccess is null (fails closed), even with the anchor window', () => {
+      const result = run({ windowAccess: { [FINANCIAL_REPORTS_WINDOW]: 'full' }, reportAccess: null });
+      expect(treasuryNames(result)).not.toContain('report-viewer-treasury');
+    });
+
+    it('drops the Treasury group entirely when the role reaches none of its entries', () => {
+      const result = run({ windowAccess: { [FINANCIAL_REPORTS_WINDOW]: 'full' }, reportAccess: { 'tax-report': 'full' } });
+      expect(result.find(g => g.group === 'Treasury')).toBeUndefined();
+    });
+
+    it('keeps the Treasury group with only its window entries when no Treasury report is granted', () => {
+      const paymentIn = menuConfig.menu.find(g => g.group === 'Treasury').items.find(i => i.name === 'payment-in');
+      const result = run({ allowedIds: new Set([paymentIn.windowId]), reportAccess: {} });
+      expect(treasuryNames(result)).toEqual(['payment-in']);
+    });
+
+    // Condiciones de pago (window 141) is the last Treasury entry and no longer a Settings one.
+    it('a role whose only grant is window 141 sees Treasury with just payment-term, and no Settings entry for it', () => {
+      const result = run({ allowedIds: new Set(['141']), reportAccess: {} });
+      expect(treasuryNames(result)).toEqual(['payment-term']);
+      const settings = result.find(g => g.group === 'Settings')?.items.map(i => i.name) ?? [];
+      expect(settings).not.toContain('payment-term');
+    });
+
+    it('lists payment-term last among the visible Treasury entries', () => {
+      const result = run({ capabilities: { isAdminOrClientAdmin: true }, allowedIds: null, reportAccess: {} });
+      expect(treasuryNames(result)).toEqual(['payment-in', 'payment-out', 'financial-account', 'report-viewer-treasury', 'payment-term']);
+    });
+  });
+
+  describe('hasAccessibleReportInGroup', () => {
+    it('answers true when reportAccess holds a grant on a report of the group', () => {
+      expect(hasAccessibleReportInGroup('Treasury', { 'aging-receivable': 'full' })).toBe(true);
+      expect(hasAccessibleReportInGroup('Finance', { 'tax-report': 'read-only' })).toBe(true);
+    });
+
+    it('is scoped to the named group: a Finance grant does not open Treasury and vice versa', () => {
+      expect(hasAccessibleReportInGroup('Treasury', { 'tax-report': 'full' })).toBe(false);
+      expect(hasAccessibleReportInGroup('Finance', { 'aging-payable': 'full' })).toBe(false);
+    });
+
+    it.each([null, undefined, {}])('answers false for reportAccess %j (fails closed)', reportAccess => {
+      expect(hasAccessibleReportInGroup('Treasury', reportAccess)).toBe(false);
+    });
+
+    it('answers false for a group with no report rows or an unknown group', () => {
+      expect(hasAccessibleReportInGroup('Sales', { 'aging-receivable': 'full' })).toBe(false);
+      expect(hasAccessibleReportInGroup('NoSuchGroup', { 'aging-receivable': 'full' })).toBe(false);
     });
   });
 
@@ -583,8 +666,8 @@ describe('registry', () => {
     });
 
     it.each(gated)('single grant: $name', entry => {
-      const { allowedIds, capabilities, windowAccess } = navigationPermissions([entry]);
-      const groups = filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED);
+      const { allowedIds, capabilities, windowAccess, reportAccess } = navigationPermissions([entry]);
+      const groups = filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED, reportAccess);
       const bypassedAnchors = entry.capability === 'isAdminOrClientAdmin'
         // The admin bypass only waives the accessWindowId axis; an entry that ALSO declares its own
         // capability (invoice-inbox -> invoiceInbox) stays hidden until that capability is granted.
@@ -604,8 +687,8 @@ describe('registry', () => {
     it.each(gated)('revoked grant: $name', entry => {
       // Non-admin exercises anchor denial rather than its admin bypass.
       const remaining = defaultNavigation.filter(candidate => candidate !== entry && !candidate.capability);
-      const { allowedIds, capabilities, windowAccess } = navigationPermissions(remaining);
-      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED), [...remaining, ...proof]);
+      const { allowedIds, capabilities, windowAccess, reportAccess } = navigationPermissions(remaining);
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED, reportAccess), [...remaining, ...proof]);
     });
 
     // ETP-5395 — `isOwner` is a distinct capability name from
@@ -624,8 +707,8 @@ describe('registry', () => {
     });
 
     it.each(defaultNavigation.filter(entry => entry.accessWindowId))('read-only anchor grant: $name', entry => {
-      const { allowedIds, capabilities, windowAccess } = navigationPermissions([entry], 'read-only');
-      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED), [...ungated, ...proof, entry]);
+      const { allowedIds, capabilities, windowAccess, reportAccess } = navigationPermissions([entry], 'read-only');
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED, reportAccess), [...ungated, ...proof, entry]);
     });
 
     it.each([{}, null])('admin bypass with window map %j preserves the entire catalog', windowAccess => {

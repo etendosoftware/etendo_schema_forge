@@ -1,13 +1,13 @@
 // @covers artifacts/remittance/custom/sepaFileDataApi.js
 //
-// «Datos para el fichero SEPA»: the read action behind RemittanceSepaFileData and the IBAN save on
-// the financial account. `apiFetch` is the injected boundary (docs/request-policy.md); the save's
-// refusal goes through the real throwHttpError.
+// «Datos para el fichero SEPA»: the read action behind RemittanceSepaFileData (the IBAN is no longer saved
+// here: it travels with the header). `apiFetch` is the injected boundary (docs/request-policy.md).
 import {
   NEW_RECORD_SEGMENT,
+  fetchAccountLogo,
+  fetchRemittanceTypeDirection,
   fetchSepaFileData,
   normalizeSepaFileData,
-  saveAccountIban,
 } from '@generated/remittance/custom/sepaFileDataApi.js';
 
 function jsonResponse(body, { ok = true, status = 200 } = {}) {
@@ -21,14 +21,20 @@ function brokenJsonResponse({ ok = false, status = 500 } = {}) {
 const bodyOf = (apiFetch, call = 0) => JSON.parse(apiFetch.mock.calls[call][1].body);
 
 const FULL = {
+  remittanceCreditorId: 'ES12000B12345678', remittanceCreditorIdValid: true, accountCreditorId: null, accountCreditorIdValid: null,
+  directDebitScheme: 'B2B', financed: true, collection: true, suggestedCreditorId: null, creditorIdSource: 'remittance',
   accountId: 'acc-1', accountName: 'Santander', iban: 'ES9121000418450200051332', ibanValid: true,
+  remittanceIban: 'ES9121000418450200051332', remittanceIbanValid: true, accountIban: null, accountIbanValid: null, ibanSource: 'remittance',
   organizationId: 'org-1', country: 'ES', creditorId: 'ES12000B12345678', creditorIdAvailable: true, missing: [],
 };
 
 describe('normalizeSepaFileData', () => {
   it('defaults every key for an empty or missing payload', () => {
     const empty = {
+      remittanceCreditorId: null, remittanceCreditorIdValid: null, accountCreditorId: null, accountCreditorIdValid: null,
+      directDebitScheme: null, financed: false, collection: null, suggestedCreditorId: null, creditorIdSource: 'missing',
       accountId: null, accountName: '', organizationId: null, iban: null, ibanValid: false,
+      remittanceIban: null, remittanceIbanValid: null, accountIban: null, accountIbanValid: null, ibanSource: 'missing',
       country: null, creditorId: null, creditorIdAvailable: false, missing: [],
     };
     expect(normalizeSepaFileData(undefined)).toEqual(empty);
@@ -57,6 +63,23 @@ describe('normalizeSepaFileData', () => {
   it('defaults a non-array `missing` to an empty list, and keeps its order otherwise', () => {
     expect(normalizeSepaFileData({ missing: 'iban' }).missing).toEqual([]);
     expect(normalizeSepaFileData({ missing: ['iban', 'orgTaxId', 'country'] }).missing).toEqual(['iban', 'orgTaxId', 'country']);
+  });
+});
+
+describe('normalizeSepaFileData — IBAN of the remittance', () => {
+  it('infers the source when the backend omits it, and ignores an unknown one', () => {
+    expect(normalizeSepaFileData({ remittanceIban: 'ES91' }).ibanSource).toBe('remittance');
+    expect(normalizeSepaFileData({ accountIban: 'ES91' }).ibanSource).toBe('account');
+    expect(normalizeSepaFileData({ iban: 'ES91' }).ibanSource).toBe('account');
+    expect(normalizeSepaFileData({ ibanSource: 'weird' }).ibanSource).toBe('missing');
+    expect(normalizeSepaFileData({ ibanSource: 'account', remittanceIbanValid: 'x' })).toMatchObject({ ibanSource: 'account', remittanceIbanValid: null });
+  });
+});
+
+describe('normalizeSepaFileData — collection options', () => {
+  it('keeps only CORE | B2B as the scheme and a real boolean true as financed', () => {
+    expect(normalizeSepaFileData({ directDebitScheme: 'B2B', financed: true })).toMatchObject({ directDebitScheme: 'B2B', financed: true });
+    expect(normalizeSepaFileData({ directDebitScheme: 'SCT', financed: 'Y' })).toMatchObject({ directDebitScheme: null, financed: false });
   });
 });
 
@@ -103,47 +126,39 @@ describe('fetchSepaFileData', () => {
   });
 });
 
-describe('saveAccountIban', () => {
-  const URL_ = '/sws/neo/financial-account/account/acc%2F1';
+describe('fetchRemittanceTypeDirection', () => {
+  const items = (list) => vi.fn().mockResolvedValue(jsonResponse({ response: { data: { items: list } } }));
 
-  function accountsFetch({ read = jsonResponse({ response: { data: [{ id: 'acc/1', updated: '2026-11-12T10:00:00Z' }] } }), write = jsonResponse({ response: { data: [{ id: 'acc/1' }] } }) } = {}) {
-    return vi.fn((url, init) => Promise.resolve(init?.method === 'PATCH' ? write : read));
-  }
-
-  it('reads the account for its `updated` token, then PATCHes the IBAN with it', async () => {
-    const apiFetch = accountsFetch();
-    await saveAccountIban(apiFetch, 'acc/1', 'ES9121000418450200051332');
-    expect(apiFetch).toHaveBeenCalledTimes(2);
-    expect(apiFetch.mock.calls[0]).toEqual([URL_]);
-    expect(apiFetch.mock.calls[1][0]).toBe(URL_);
-    expect(apiFetch.mock.calls[1][1].method).toBe('PATCH');
-    expect(bodyOf(apiFetch, 1)).toEqual({ iBAN: 'ES9121000418450200051332', updated: '2026-11-12T10:00:00Z' });
+  it('reads the `direction` of the chosen type from the account\'s type selector', async () => {
+    const apiFetch = items([{ id: 't1', label: 'A', direction: 'payment' }, { id: 't2', label: 'B', direction: 'collection' }]);
+    await expect(fetchRemittanceTypeDirection(apiFetch, 'acc 1', 't2')).resolves.toBe('collection');
+    expect(apiFetch).toHaveBeenCalledWith('/remittance/selectors/remittanceType?FIN_Financial_Account_ID=acc%201');
   });
 
-  it('reads `updated` from a single-object envelope too', async () => {
-    const apiFetch = accountsFetch({ read: jsonResponse({ response: { data: { id: 'acc/1', updated: 'T2' } } }) });
-    await saveAccountIban(apiFetch, 'acc/1', 'ES9121000418450200051332');
-    expect(bodyOf(apiFetch, 1).updated).toBe('T2');
+  it('is null when the backend sends no direction, the type is unknown, or the request fails', async () => {
+    await expect(fetchRemittanceTypeDirection(items([{ id: 't1', label: 'A' }]), 'a', 't1')).resolves.toBeNull();
+    await expect(fetchRemittanceTypeDirection(items([{ id: 't1', direction: 'collection' }]), 'a', 'other')).resolves.toBeNull();
+    await expect(fetchRemittanceTypeDirection(items([{ id: 't1', direction: 'weird' }]), 'a', 't1')).resolves.toBeNull();
+    await expect(fetchRemittanceTypeDirection(vi.fn().mockResolvedValue(jsonResponse({}, { ok: false, status: 500 })), 'a', 't1')).resolves.toBeNull();
+    await expect(fetchRemittanceTypeDirection(vi.fn().mockRejectedValue(new Error('net')), 'a', 't1')).resolves.toBeNull();
+  });
+});
+
+describe('fetchAccountLogo', () => {
+  it('reads the account record\'s providerLogoUrl and type', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(jsonResponse({ response: { data: { providerLogoUrl: 'https://cdn/b.svg', type: 'B' } } }));
+    await expect(fetchAccountLogo(apiFetch, 'acc 1')).resolves.toEqual({ providerLogoUrl: 'https://cdn/b.svg', type: 'B' });
+    expect(apiFetch).toHaveBeenCalledWith('/sws/neo/financial-account/account/acc%201');
   });
 
-  it('never sends a `country` key, even when the read record carries one', async () => {
-    const apiFetch = accountsFetch({ read: jsonResponse({ response: { data: [{ id: 'acc/1', updated: 'T', country: null }] } }) });
-    await saveAccountIban(apiFetch, 'acc/1', 'ES9121000418450200051332');
-    expect(Object.keys(bodyOf(apiFetch, 1)).sort()).toEqual(['iBAN', 'updated']);
+  it('answers null for a refusal or a broken body (the avatar then shows its generic icon)', async () => {
+    await expect(fetchAccountLogo(vi.fn().mockResolvedValue(jsonResponse({}, { ok: false, status: 403 })), 'a')).resolves.toBeNull();
+    await expect(fetchAccountLogo(vi.fn().mockResolvedValue(brokenJsonResponse({ ok: true, status: 200 })), 'a')).resolves.toBeNull();
+    await expect(fetchAccountLogo(vi.fn().mockRejectedValue(new Error('net')), 'a')).resolves.toBeNull();
   });
 
-  it('does not PATCH when the read fails, and throws with status and body', async () => {
-    const body = { error: { message: 'Account not found' } };
-    const apiFetch = accountsFetch({ read: jsonResponse(body, { ok: false, status: 404 }) });
-    await expect(saveAccountIban(apiFetch, 'acc/1', 'ES91')).rejects.toMatchObject({ status: 404, body });
-    expect(apiFetch).toHaveBeenCalledTimes(1);
-  });
-
-  it('throws a refusal in the throwHttpError shape (message, status, code, body)', async () => {
-    const body = { error: { status: 400, message: 'Se necesita el País para una cuenta IBAN.', messageKeys: ['ETGO_FinAccIbanRequiresCountry'] } };
-    const apiFetch = accountsFetch({ write: jsonResponse(body, { ok: false, status: 400 }) });
-    const err = await saveAccountIban(apiFetch, 'acc/1', 'XX00').catch((e) => e);
-    expect(err).toBeInstanceOf(Error);
-    expect(err).toMatchObject({ status: 400, code: null, body, message: 'Se necesita el País para una cuenta IBAN.' });
+  it('a record without a logo yields a null providerLogoUrl', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(jsonResponse({ response: { data: [{ type: 'C' }] } }));
+    await expect(fetchAccountLogo(apiFetch, 'a')).resolves.toEqual({ providerLogoUrl: null, type: 'C' });
   });
 });

@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/components/reports/dynamic/reportUrlState.js
-import { MAX_PICKER_IDS, readReportUrlState, reportUrlKeys, urlStateSpec, writeReportUrlState } from '../reportUrlState.js';
+import { MAX_PICKER_IDS, readReportUrlState, reportOffers, reportUrlKeys, urlStateSpec, writeReportUrlState } from '../reportUrlState.js';
 
 // The P&L's own definition (the contract's parameters), and a synthetic one that shares no
 // parameter set with it: the helper must serve both with no change.
@@ -9,6 +9,7 @@ const PL = {
     { name: 'yearId', type: 'search', selector: 'year' },
     { name: 'dateFrom', type: 'date' }, { name: 'dateTo', type: 'date' },
     { name: 'compareTo', type: 'toggle' },
+    { name: 'columns', type: 'string', hidden: true },
     { name: 'bPartnerId', type: 'search', selector: 'bpartner' },
     { name: 'productId', type: 'search', selector: 'product' },
     { name: 'splitBy', type: 'string', hidden: true },
@@ -123,5 +124,65 @@ describe('readReportUrlState', () => {
   it('keeps picker ids as strings and takes no display names from the URL', () => {
     const patch = readReportUrlState('?bPartnerId=0123,ABC&_display_bPartnerId=Spoofed', PL);
     expect(patch).toEqual({ bPartnerId: '0123,ABC' });
+  });
+});
+
+// ETP-6084: the period columns have their own marker, and the Trial Balance's pickers are persisted too.
+describe('reportOffers / pickers of a chart-tree report (ETP-6084)', () => {
+  const TB = {
+    parameters: [
+      { name: 'orgId', type: 'search', selector: 'org', hidden: true },
+      { name: 'dateFrom', type: 'date' }, { name: 'dateTo', type: 'date' },
+      { name: 'compareTo', type: 'toggle' },
+      { name: 'fromAccountId', type: 'search', selector: 'account' },
+      { name: 'projectId', type: 'search', selector: 'project' },
+      { name: 'costCenterId', type: 'search', selector: 'costcenter' },
+    ],
+  };
+
+  it('offers the comparison without the period columns when only compareTo is declared', () => {
+    expect(reportOffers(TB)).toEqual({ columns: false, compare: true, splitBy: false });
+    expect(reportOffers(PL)).toEqual({ columns: true, compare: true, splitBy: true });
+    expect(urlStateSpec(TB).controls).toEqual(['compare']);
+  });
+
+  it('persists the project, cost centre and account pickers', () => {
+    expect(urlStateSpec(TB).pickers.map((p) => p.name)).toEqual(['fromAccountId', 'projectId', 'costCenterId']);
+    const state = { orgId: 'ORG1', dateFrom: '2026-01-01', dateTo: '2026-11-17', compare: 'previous', fromAccountId: 'A1', projectId: 'P1,P2', costCenterId: '' };
+    const search = writeReportUrlState('', state, TB, DEFAULTS);
+    expect(Object.fromEntries(new URLSearchParams(search))).toEqual({ compare: 'previous', fromAccountId: 'A1', projectId: 'P1,P2' });
+    expect(readReportUrlState(search, TB, { orgIds: ORGS })).toEqual({ compare: 'previous', fromAccountId: 'A1', projectId: 'P1,P2' });
+    expect(readReportUrlState('?columns=month', TB, { orgIds: ORGS })).toEqual({}); // not offered: ignored
+  });
+});
+
+describe('chart-tree options in the URL (ETP-6084)', () => {
+  const TB = {
+    tree: 'chart',
+    amountColumns: [{ field: 'debit', compare: 'optional' }],
+    parameters: [
+      { name: 'dateFrom', type: 'date' }, { name: 'dateTo', type: 'date' },
+      { name: 'compareTo', type: 'toggle' },
+      { name: 'bPartnerId', type: 'search', selector: 'bpartner', groupByValue: 'bpartner' },
+      { name: 'groupBy', type: 'select' },
+      { name: 'openingEntryAmount', type: 'toggle', default: true },
+      { name: 'showOnlyAccountsWithValue', type: 'toggle', default: true },
+    ],
+  };
+  const state = { ...BASE, groupBy: 'bpartner', openingEntryAmount: false, showOnlyAccountsWithValue: true, compareMovements: true };
+
+  it('writes only what differs from the defaults and reads it back', () => {
+    const search = writeReportUrlState('', state, TB, DEFAULTS);
+    expect(Object.fromEntries(new URLSearchParams(search))).toEqual({ groupBy: 'bpartner', openingEntryAmount: 'false', compareMovements: 'true' });
+    expect(readReportUrlState(search, TB, { orgIds: ORGS })).toEqual({ groupBy: 'bpartner', openingEntryAmount: false, compareMovements: true });
+  });
+
+  it('ignores a grouping the report does not offer and a malformed toggle', () => {
+    expect(readReportUrlState('?groupBy=drop&openingEntryAmount=maybe', TB, { orgIds: ORGS })).toEqual({});
+  });
+
+  it('a non-chart report keeps its URL: none of these keys are owned or read', () => {
+    expect(writeReportUrlState('', state, PL, DEFAULTS)).toBe('');
+    expect(readReportUrlState('?groupBy=bpartner&openingEntryAmount=false&compareMovements=true', PL, { orgIds: ORGS })).toEqual({});
   });
 });

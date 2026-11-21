@@ -4,6 +4,7 @@
     "agentPrompt": "#REF#agent-prompts/financial-account/spec.md",
     "category": "finance",
     "name": "Accounts",
+    "breadcrumb": "Treasury / Accounts",
     "detailEntity": null,
     "customComponents": {
       "headerTable": "AccountsHeaderTable"

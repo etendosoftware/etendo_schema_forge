@@ -20,6 +20,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
 import SharedInvoicePickerModal from '@/components/contract-ui/InvoicePickerModal.jsx';
 import { useFiscalModelsCatalog, isModelActive } from '@/windows/custom/fiscal-models/useFiscalModelsCatalog.js';
+import { isVoidedStatus } from '../../../lib/docStatus.js';
 /* eslint-disable react/prop-types */
 
 // ETP-5059 — the 349 period of a corrective is NOT free: AEAT349_CINVREV_TRG0 (module
@@ -1103,7 +1104,7 @@ export default function ReversedInvoicesPanel({
 
   // ── read-only check ────────────────────────────────────────────────────────
   const processed = data?.processed === 'Y' || data?.processed === true;
-  const isVoid = data?.documentStatus === 'VO';
+  const isVoid = isVoidedStatus(data?.documentStatus);
   // TC-13: non-rectificative invoices (isRectificative explicitly false) never
   // get add/edit/delete — only explicit false blocks, so unsaved records
   // (field not yet enriched by the backend) keep the actions

@@ -98,10 +98,14 @@ export function FavoritesProvider({ children }) {
     [favorites, username, syncToServer]
   );
 
+  // Accepts one key or an array of keys: several removals in one call are applied together,
+  // where calling it once per key would each start from the same stale `favorites` and keep only
+  // the last removal (ETP-6389: a report favourited under both its old and its new category).
   const removeFavorite = useCallback(
-    (name) => {
-      if (!name) return;
-      const next = favorites.filter((f) => f.name !== name);
+    (nameOrNames) => {
+      const names = (Array.isArray(nameOrNames) ? nameOrNames : [nameOrNames]).filter(Boolean);
+      if (names.length === 0) return;
+      const next = favorites.filter((f) => !names.includes(f.name));
       setFavorites(next);
       writeFavorites(username, next);
       syncToServer(next);

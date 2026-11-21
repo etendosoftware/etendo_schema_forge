@@ -130,7 +130,13 @@ test.describe('Company user invitation accepted through SSO — ETP-4960', () =>
     await expect(acceptButton).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('action-login-submit')).toHaveCount(0);
 
-    expect(ssoRequestBody).toEqual({ credential: SSO_CREDENTIAL });
+    // ETP-6363: the sign-in also carries the lead attribution (the page, without the invitation
+    // token or any other non-campaign parameter).
+    expect(ssoRequestBody).toEqual({
+      credential: SSO_CREDENTIAL,
+      hubspotContext: expect.objectContaining({ pageUri: expect.any(String) }),
+    });
+    expect(ssoRequestBody.hubspotContext.pageUri).not.toContain('token');
 
     await acceptButton.click();
 

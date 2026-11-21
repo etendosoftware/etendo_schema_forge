@@ -4,6 +4,7 @@ import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { cn } from '@/lib/utils';
 import { canSplit } from './reportTree.js';
+import { canDrill } from './drillDown.js';
 import { cellParts, columnCount } from './reportColumns.js';
 import { rowShares, splitShares } from './reportVisuals.js';
 import StickyHScroll from './StickyHScroll.jsx';
@@ -18,6 +19,12 @@ const NUM = 'px-3 py-1.5 text-right tabular-nums whitespace-nowrap';
 const STICKY = 'sticky left-0 z-10';
 // The compared period is the reference, not the figure being read: a quieter column.
 const REF = 'bg-muted/30 text-muted-foreground';
+
+/** A dimension row is named by its contact / product / project / cost centre; an account row by "value - name". */
+function rowDisplayName(row, ui) {
+  if (row.isDimension) return row.dimension_name || row.name || ui('dynamicReportSplitNone');
+  return row.value ? `${row.value} - ${row.name}` : row.name;
+}
 
 function VariationCells({ parts }) {
   const moved = Number(parts.variationAmount) || 0;
@@ -81,28 +88,45 @@ function SplitRows({ split, groups, mode, depth, ui }) {
     <tr key={part.node_id ?? '∅'} className="text-muted-foreground text-xs" data-testid="DynamicReportTable__splitRow">
       <td className="px-3 py-1.5 bg-card sticky left-0 z-10" style={pad}>{part.name || ui('dynamicReportSplitNone')}</td>
       {groups.map((g) => {
-        const parts = cellParts(part, g.pos, mode);
         return (
-          <GroupCells key={g.pos} parts={parts} group={g} share={g.pos === 0 ? shares[i] : 0} data-testid="GroupCells__2e8fe9" />
+          <GroupRowCells key={g.pos} row={part} group={g} mode={mode} share={g.pos === 0 ? shares[i] : 0} data-testid="GroupRowCells__2e8fe9" />
         );
       })}
     </tr>
   ));
 }
 
-/** The cells of one period group in one row: the amount, and with a comparison its compared amount and variation. */
-function GroupCells({ parts, group, share, onOpenCurrent, onOpenCompared }) {
+/**
+ * The cells of one amount column of one period group in one row: the amount, and with a comparison (`kinds`
+ * holds 'compared') its compared amount and variation. `kinds` is the group's, or the amount column's (ETP-6084).
+ */
+function GroupCells({ parts, kinds, share, onOpenCurrent, onOpenCompared }) {
   return (
     <>
-      <AmountCell value={parts.amount} share={share} onOpen={onOpenCurrent} data-testid="AmountCell__2e8fe9" />
-      {group.compared && (
+      <AmountCell value={parts.amount} share={share} onOpen={onOpenCurrent && (() => onOpenCurrent(parts.amount))} data-testid="AmountCell__2e8fe9" />
+      {kinds.includes('compared') && (
         <>
-          <AmountCell value={parts.compared} className={REF} onOpen={onOpenCompared} data-testid="AmountCell__2e8fe9" />
+          <AmountCell value={parts.compared} className={REF} onOpen={onOpenCompared && (() => onOpenCompared(parts.compared))} data-testid="AmountCell__2e8fe9" />
           <VariationCells parts={parts} data-testid="VariationCells__2e8fe9" />
         </>
       )}
     </>
   );
+}
+
+/** Every cell of one period group in one row: the single amount column, or one cell set per contract amount column. */
+function GroupRowCells({ row, group, mode, share, onOpenCurrent, onOpenCompared }) {
+  const amounts = group.amounts ?? [{ field: null, columns: group.columns }];
+  return amounts.map((a) => (
+    <GroupCells
+      key={a.field ?? 'amount'}
+      parts={cellParts(row, group.pos, mode, a.field)}
+      kinds={a.columns}
+      share={group.amounts ? 0 : share}
+      onOpenCurrent={onOpenCurrent}
+      onOpenCompared={onOpenCompared}
+      data-testid="GroupCells__2e8fe9" />
+  ));
 }
 
 /** Chevron that folds a parent row, or shows the split parts of a leaf account. */
@@ -131,8 +155,8 @@ function RowToggle({ row, name, open, split, splittable, onToggle, onToggleSplit
 }
 
 /** A leaf account's name opens its ledger (F9); any other row's name is plain text. */
-function RowName({ row, name, onOpenLedger }) {
-  if (!(onOpenLedger && canSplit(row) && row.value)) return <span>{name}</span>;
+function RowName({ drillable, name, onOpenLedger }) {
+  if (!(onOpenLedger && drillable)) return <span>{name}</span>;
   return (
     <button
       type="button"
@@ -146,6 +170,25 @@ function RowName({ row, name, onOpenLedger }) {
 }
 
 /**
+ * The click handler of one amount cell: the income-summary row (`explainable`) opens its explanation, an account (`drillable`)
+ * its ledger, anything else nothing. `which` is 'current' or 'compared'; the handler receives the cell's amount.
+ */
+function foldedCalculated(row, pos, which, mode) {
+  const part = row.foldedOnTheFly?.[pos];
+  return (which === 'compared' ? part?.[mode] : part?.amount) || 0;
+}
+
+function cellOpener({ row, group, which, explainable, drillable, mode, onOpenResult, onOpenLedger }) {
+  const range = which === 'compared' ? group.compared : group.current;
+  if (!range) return null;
+  if (explainable) return (amount) => onOpenResult(row, { pos: group.pos, which, range, amount, mode });
+  if (!drillable) return null;
+  // ETP-6083: a ledger holds posted lines only; a folded row that includes a calculated result is compared without it.
+  const calculated = foldedCalculated(row, group.pos, which, mode);
+  return (amount) => onOpenLedger(row, range, calculated ? amount - calculated : amount, calculated);
+}
+
+/**
  * ETP-6080 — the account tree: one row per visible node, a chevron to fold it, and with a split
  * dimension chosen, a split toggle on every leaf account that lists its parts underneath. A leaf
  * account's name opens its ledger in the drill-down panel (F9).
@@ -153,40 +196,63 @@ function RowName({ row, name, onOpenLedger }) {
  * ETP-6239: one column group per period (`groups`, from `columnModel`), each with its comparison
  * (`mode` none / sly / prev). A current cell opens the ledger for its period, a Comparado cell for
  * the compared range (`onOpenLedger(row, range)`); the variation cells are not clickable.
+ *
+ * ETP-6084: groups with `amounts` (the contract's amount columns) show one cell set per amount, headed by its
+ * label; `totals` (the answer's per-period cells) adds the TOTALES row.
  */
-export default function DynamicReportTable({ rows, groups, mode, expanded, onToggle, splitBy, splits, onToggleSplit, onOpenLedger }) {
+export default function DynamicReportTable({ rows, groups, mode, expanded, onToggle, splitBy, splits, onToggleSplit, onOpenLedger, onOpenResult = null, totals = null }) {
   const ui = useUI();
   const shares = useMemo(() => rowShares(rows), [rows]);
   const th = 'px-3 py-2 font-medium uppercase tracking-wide';
+  const amountsMode = groups.some((g) => g.amounts);
+  const withSubLabels = !amountsMode || groups.some((g) => g.columns.length > (g.amounts?.length ?? 1));
+  const periodRow = !amountsMode || groups.length > 1;
+  const headRows = (periodRow ? 1 : 0) + (amountsMode ? 1 : 0) + (withSubLabels ? 1 : 0);
   const subLabels = { current: ui('dynamicReportAmount'), compared: ui('dynamicReportCompared'), variation: ui('dynamicReportVariation'), variationPct: ui('dynamicReportVariationPct') };
   return (
     <StickyHScroll data-testid="StickyHScroll__2e8fe9">
       <table className="w-full border-collapse text-sm" data-testid="DynamicReportTable">
         <thead>
           <tr className="text-xs text-muted-foreground bg-muted border-b border-border/60">
-            <th scope="col" rowSpan={2} className={cn(th, STICKY, 'bg-muted text-left align-bottom rounded-tl-lg min-w-[16rem]')}>{ui('dynamicReportConcept')}</th>
-            {groups.map((g) => (
+            <th scope="col" rowSpan={headRows} className={cn(th, STICKY, 'bg-muted text-left align-bottom rounded-tl-lg min-w-[16rem]')}>{ui('dynamicReportConcept')}</th>
+            {periodRow && groups.map((g) => (
               <th key={g.pos} scope="colgroup" colSpan={g.columns.length} className={cn(th, 'text-center border-l border-border/60 whitespace-nowrap')} data-testid="DynamicReportTable__group">{g.label}</th>
             ))}
-          </tr>
-          <tr className="text-xs text-muted-foreground bg-muted/40 border-b border-border">
-            {groups.map((g) => g.columns.map((c, i) => (
-              <th key={`${g.pos}-${c}`} scope="col" className={cn(th, 'text-right whitespace-nowrap', i === 0 && 'border-l border-border/60')}>
-                {subLabels[c]}{c === 'compared' && g.comparedLabel ? ' ' : ''}
-                {c === 'compared' && g.comparedLabel && (
-                  <span className="block text-[10px] font-normal normal-case tracking-normal" data-testid="DynamicReportTable__comparedLabel">({g.comparedLabel})</span>
-                )}
-              </th>
+            {!periodRow && groups.flatMap((g) => g.amounts.map((a) => (
+              <th key={`${g.pos}-${a.field}`} scope="colgroup" colSpan={a.columns.length} className={cn(th, 'text-center border-l border-border/60 whitespace-nowrap')} data-testid="DynamicReportTable__amount">{ui(a.labelKey)}</th>
             )))}
           </tr>
+          {periodRow && amountsMode && (
+            <tr className="text-xs text-muted-foreground bg-muted/60 border-b border-border/60">
+              {groups.flatMap((g) => g.amounts.map((a) => (
+                <th key={`${g.pos}-${a.field}`} scope="colgroup" colSpan={a.columns.length} className={cn(th, 'text-center border-l border-border/60 whitespace-nowrap')} data-testid="DynamicReportTable__amount">{ui(a.labelKey)}</th>
+              )))}
+            </tr>
+          )}
+          {withSubLabels && (
+            <tr className="text-xs text-muted-foreground bg-muted/40 border-b border-border">
+              {groups.map((g) => (g.amounts ?? [{ field: 'amount', columns: g.columns }]).map((a) => a.columns.map((c, i) => (
+                <th key={`${g.pos}-${a.field}-${c}`} scope="col" className={cn(th, 'text-right whitespace-nowrap', i === 0 && 'border-l border-border/60')}>
+                  {subLabels[c]}{c === 'compared' && g.comparedLabel ? ' ' : ''}
+                  {c === 'compared' && g.comparedLabel && (
+                    <span className="block text-[10px] font-normal normal-case tracking-normal" data-testid="DynamicReportTable__comparedLabel">({g.comparedLabel})</span>
+                  )}
+                </th>
+              ))))}
+            </tr>
+          )}
         </thead>
         <tbody>
           {rows.map((row) => {
             const open = expanded.has(row.node_id);
             const splittable = Boolean(splitBy) && canSplit(row);
             const split = splits[row.node_id];
-            const name = row.value ? `${row.value} - ${row.name}` : row.name;
-            const drillable = Boolean(onOpenLedger) && canSplit(row) && Boolean(row.value);
+            // A dimension row (ETP-6084) is named by its contact / product / project / cost centre; none = "Sin asignar".
+            const name = rowDisplayName(row, ui);
+            const drillable = Boolean(onOpenLedger) && canDrill(row);
+            // ETP-6083: a row that carries `result` (the income-summary account) explains its posted / calculated parts instead.
+            const explainable = Boolean(onOpenResult) && Boolean(row.result);
+            const opener = (group, which) => cellOpener({ row, group, which, explainable, drillable, mode, onOpenResult, onOpenLedger });
             return [
               <tr
                 key={row.node_id}
@@ -212,18 +278,23 @@ export default function DynamicReportTable({ rows, groups, mode, expanded, onTog
                       onToggle={onToggle}
                       onToggleSplit={onToggleSplit}
                       data-testid="RowToggle__2e8fe9" />
-                    <RowName row={row} name={name} onOpenLedger={onOpenLedger && (() => onOpenLedger(row, null))} data-testid="RowName__2e8fe9" />
+                    <RowName
+                      drillable={drillable || explainable}
+                      name={name}
+                      onOpenLedger={explainable ? () => opener(groups.find((g) => g.pos === 0), 'current')(row.amount) : onOpenLedger && (() => { const calc = foldedCalculated(row, 0, 'current', mode); onOpenLedger(row, null, row.amount - calc, calc); })}
+                      data-testid="RowName__2e8fe9" />
                   </div>
                 </td>
                 {groups.map((g) => (
-                  <GroupCells
+                  <GroupRowCells
                     key={g.pos}
-                    parts={cellParts(row, g.pos, mode)}
+                    row={row}
                     group={g}
+                    mode={mode}
                     share={g.pos === 0 ? shares.get(row.node_id) : 0}
-                    onOpenCurrent={drillable ? () => onOpenLedger(row, g.current) : null}
-                    onOpenCompared={drillable && g.compared ? () => onOpenLedger(row, g.compared) : null}
-                    data-testid="GroupCells__2e8fe9" />
+                    onOpenCurrent={opener(g, 'current')}
+                    onOpenCompared={opener(g, 'compared')}
+                    data-testid="GroupRowCells__2e8fe9" />
                 ))}
               </tr>,
               split && <SplitRows
@@ -237,6 +308,16 @@ export default function DynamicReportTable({ rows, groups, mode, expanded, onTog
             ];
           })}
         </tbody>
+        {totals && (
+          <tfoot>
+            <tr className="font-semibold border-t-2 border-border bg-muted/40" data-testid="DynamicReportTable__totals">
+              <td className={cn('px-3 py-2', STICKY, 'bg-muted')}>{ui('dynamicReportTotalRow')}</td>
+              {groups.map((g) => (
+                <GroupRowCells key={g.pos} row={{ cells: totals }} group={g} mode={mode} share={0} data-testid="GroupRowCells__2e8fe9" />
+              ))}
+            </tr>
+          </tfoot>
+        )}
       </table>
     </StickyHScroll>
   );

@@ -21,6 +21,7 @@ import GoodsShipmentConfirmModal from '@generated/goods-shipment/custom/GoodsShi
 import { useShipmentPdf } from './useShipmentPdf';
 import GoodsShipmentPreview from './GoodsShipmentPreview';
 import { ACCOUNTING_CAPABILITY } from '@/lib/capabilityVisibility.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 const LABEL_OVERRIDES = {
   es_ES: { InvoiceStatus: 'Estado de facturación' },
@@ -194,7 +195,7 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
           // not-fully-invoiced path only opens a modal and leaves `detail.promise`
           // undefined, which the core treats exactly as the previous fire-and-forget call.
           draftMode={{ enabled: true, label: 'Confirm', style: 'positive', onConfirm: () => dispatchConfirmModalEvent() }}
-          hideMoreMenu={({ data }) => data?.documentStatus !== 'CO'}
+          hideMoreMenu={({ data }) => !isCompletedStatus(data?.documentStatus)}
           autoSaveOnBlur={true}
           // ETP-5058 — GoodsShipmentHeaderHandler.afterHandle only enriches linkedInvoices/
           // linkedOrders/invoiceStatus/etc. on GET responses (NeoHandlerUtils.extractGetDataArray
