@@ -578,6 +578,20 @@ function AppLayoutInner({ menuGroups, embedded, reportAccess = null }) {
 
   return (
     <>
+      {/* ETP-5792 — first tab stop, before the sidebar: jumps over the chrome to the <main> landmark. */}
+      {!embedded && (
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[100] focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:ring-2 focus:ring-ring"
+          onClick={(e) => {
+            e.preventDefault();
+            document.getElementById('main-content')?.focus();
+          }}
+          data-testid="SkipLink__5792"
+        >
+          {ui('skipToMainContent')}
+        </a>
+      )}
       {!embedded && (
         <SideMenu
           menuGroups={menuGroups}
@@ -594,19 +608,6 @@ function AppLayoutInner({ menuGroups, embedded, reportAccess = null }) {
       >
         {/* ETP-5351 — first row of the content column, so it never covers the sidebar or the page
             and stays in view on every route. Renders nothing outside a support session. */}
-        {/* ETP-5792 — first tab stop: jumps over the chrome to the <main> landmark. */}
-        {!embedded && (
-          <a
-            href="#main-content"
-            className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[100] focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:ring-2 focus:ring-ring"
-            onClick={(e) => {
-              e.preventDefault();
-              document.getElementById('main-content')?.focus();
-            }}
-          >
-            {ui('skipToMainContent')}
-          </a>
-        )}
         {!embedded && <SupportSessionBanner data-testid="SupportSessionBanner__488148" />}
         {/* ETP-5049 — failed-payment warning during the grace period, above the whole chrome. */}
         {!embedded && !isSupportMode && <BillingStatusBanner data-testid="BillingStatusBanner__488148" />}
@@ -644,8 +645,8 @@ function AppLayoutInner({ menuGroups, embedded, reportAccess = null }) {
               className="relative flex-1 min-h-0 flex flex-col page-transition pr-3 pb-3 focus:outline-none"
             >
               <div className="flex-1 flex flex-col min-h-0 bg-card rounded-xl border border-border/30 overflow-hidden">
-                {/* ETP-5792 — keyed by page so navigating away clears a caught error. */}
-                <ErrorBoundary key={pageKey} fallback={<ErrorPage />}>
+                {/* ETP-5792 — the surrounding <main key> remounts this on navigation, clearing a caught error. */}
+                <ErrorBoundary fallback={<ErrorPage />}>
                   <Outlet data-testid="Outlet__488148" />
                 </ErrorBoundary>
               </div>

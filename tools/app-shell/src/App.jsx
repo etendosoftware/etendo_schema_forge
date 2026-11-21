@@ -482,9 +482,9 @@ export default function App() {
   // The message is resolved when the error is built, which is always after a request settles,
   // so this effect is in place before any request of the same commit can fail.
   useEffect(() => installErrorTranslator(dictionaries[renderedLocale]), [dictionaries, renderedLocale]);
-  // ETP-5792 — index.html ships lang="en"; keep the document language in step with the UI locale.
+  // ETP-5792 — index.html ships lang="en"; keep the document language (BCP 47, e.g. es-ES) in step with the UI locale.
   useEffect(() => {
-    document.documentElement.lang = String(renderedLocale || 'en').split(/[_-]/)[0];
+    document.documentElement.lang = String(renderedLocale || 'en_US').replace('_', '-');
   }, [renderedLocale]);
 
   // ETP-5022 — changing the language must reload the page. Translated reference data

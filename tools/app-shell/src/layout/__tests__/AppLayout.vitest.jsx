@@ -329,6 +329,24 @@ describe('AppLayout — normal mode', () => {
     expect(useSessionStartTracking).toHaveBeenCalled();
   });
 
+  // ETP-5792 — keyboard users must be able to jump over the chrome to the page content.
+  it('puts the skip link before the sidebar and moves focus to <main> when activated', async () => {
+    render(<AppLayout {...defaultProps} />);
+    const skip = screen.getByTestId('SkipLink__5792');
+    const sideMenu = screen.getByTestId('side-menu');
+    expect(skip.compareDocumentPosition(sideMenu) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(skip).toHaveAttribute('href', '#main-content');
+    await userEvent.click(skip);
+    const main = document.getElementById('main-content');
+    expect(main?.tagName).toBe('MAIN');
+    expect(main).toHaveFocus();
+  });
+
+  it('renders the page inside a <main> landmark', () => {
+    render(<AppLayout {...defaultProps} />);
+    expect(screen.getByRole('main')).toContainElement(screen.getByTestId('outlet'));
+  });
+
   it('renders SideMenu when not embedded', () => {
     render(<AppLayout {...defaultProps} />);
     expect(screen.getByTestId('side-menu')).toBeInTheDocument();
