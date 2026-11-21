@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { formatGroupedNumber } from '@/lib/formatCurrency.js';
 import { formatMoney } from './invoiceInboxMoney.js';
 import {
-  buildOp, hasMissingLineField, hasMissingTax, joinMeta, lineAmount, lineFieldMissing, lineKey, lineRate, MAX_LINES, MAX_TEXT, missingSet,
+  buildOp, hasMissingLineField, hasMissingTax, joinMeta, lineAmount, lineFieldMissing, lineKey, lineRate, linkedProductSimilarity, MAX_LINES, MAX_TEXT, missingSet,
   newProductName, productView, unresolvedProductCount,
 } from './invoiceInboxReviewModel.js';
 import { AiChip, FieldError, OptionRow, ReviewTag, SectionTitle } from './InvoiceInboxReviewParts.jsx';
@@ -53,6 +53,7 @@ const PRODUCT_MATCHED_BY_KEYS = Object.freeze({
   exact: 'invoiceInboxReviewProductMatchExact',
   similarity: 'invoiceInboxReviewProductMatchSimilarity',
   manual: 'invoiceInboxReviewProductMatchManual',
+  suggested: 'invoiceInboxReviewProductMatchSuggested',
 });
 
 let opSequence = 0;
@@ -329,6 +330,21 @@ function ProductPanel({ line, position, lineIndex, readOnly, state, missing, api
   );
 }
 
+/**
+ * ETP-6051: the "Chosen by OCR · 72 %" tag of a product the OCR picked among doubtful candidates. The
+ * similarity is the search's, read from the candidate that is linked; without a number it is only the label.
+ */
+function SuggestedChip({ product, position }) {
+  const ui = useUI();
+  const similarity = linkedProductSimilarity(product);
+  const label = similarity == null
+    ? ui('invoiceInboxReviewProductMatchSuggested')
+    : ui('invoiceInboxReviewProductMatchSuggestedSimilarity', {
+      similarity: formatGroupedNumber(similarity, { maximumFractionDigits: 0 }),
+    });
+  return <AiChip label={label} testId={`invoice-inbox-review-line-${position}-product-suggested`} data-testid="AiChip__suggested" />;
+}
+
 /** The chip body per state: linked, ambiguous (pick), new, none. */
 function ChipBody({ line, state, position }) {
   const ui = useUI();
@@ -339,9 +355,17 @@ function ChipBody({ line, state, position }) {
     return (
       <>
         <PackageIcon className="h-3.5 w-3.5 flex-none text-muted-foreground" aria-hidden="true" data-testid={`Package__review-line-${position}`} />
-        <span className="min-w-0 truncate text-xs font-medium" data-testid={`invoice-inbox-review-line-${position}-product-name`}>{details.name}</span>
-        {details.searchKey && <span className="whitespace-nowrap font-mono text-[11px] text-muted-foreground">{details.searchKey}</span>}
-        {matchedKey && <span className="whitespace-nowrap text-[11px] text-muted-foreground">· {ui(matchedKey)}</span>}
+        {/* The chip is narrow (it shares its row with the tax picker). The name and key stay on one line
+            (the name truncates) and the "Chosen by OCR · 72 %" tag of ETP-6051 goes under them, so the tag
+            can never squeeze the name to nothing. */}
+        <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
+          <span className="flex w-full min-w-0 items-center gap-2">
+            <span className="min-w-0 truncate text-xs font-medium" data-testid={`invoice-inbox-review-line-${position}-product-name`}>{details.name}</span>
+            {details.searchKey && <span className="whitespace-nowrap font-mono text-[11px] text-muted-foreground">{details.searchKey}</span>}
+            {product.matchedBy !== 'suggested' && matchedKey && <span className="whitespace-nowrap text-[11px] text-muted-foreground">· {ui(matchedKey)}</span>}
+          </span>
+          {product.matchedBy === 'suggested' && <SuggestedChip product={product} position={position} data-testid="SuggestedChip__review" />}
+        </span>
       </>
     );
   }
@@ -395,7 +419,7 @@ function ProductChip({ line, position, state, open, onToggle }) {
       data-testid={`invoice-inbox-review-line-${position}-product`}
       data-state={state}>
       <ChipBody line={line} state={state} position={position} data-testid="ChipBody__review" />
-      <span className="flex-1" />
+      {state !== 'ok' && <span className="flex-1" />}
       <Chevron className="h-3.5 w-3.5 flex-none text-muted-foreground" aria-hidden="true" data-testid={`Chevron__review-line-${position}`} />
     </button>
   );

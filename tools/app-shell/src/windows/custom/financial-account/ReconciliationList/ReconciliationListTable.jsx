@@ -14,6 +14,7 @@ import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHea
 import { ClearedItemsInline } from './ClearedItemsInline.jsx';
 import { RowExpandToggle } from '@/components/contract-ui/RowExpandToggle.jsx';
 import { postedStatusTone, resolvePostedStatus, postedStatusLabel } from '@/lib/postedStatus.js';
+import { isCompletedStatus } from '../../../../lib/docStatus.js';
 
 /**
  * Read-only list of the reconciliation documents of an account (ETP-4795) — Classic's
@@ -82,7 +83,7 @@ const CELL_RENDERERS = {
     render: (r, ctx) => (
       <span>
         <StatusTag
-          tone={r.documentStatus === 'CO' ? 'success' : 'neutral'}
+          tone={isCompletedStatus(r.documentStatus) ? 'success' : 'neutral'}
           label={ctx.ui(`financeAccountReconciliationsDocStatus_${r.documentStatus}`) || r.documentStatus || '—'}
           data-testid="StatusTag__d80a75" />
       </span>

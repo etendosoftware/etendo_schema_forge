@@ -556,7 +556,7 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
 
   describe('report-api.js source — wiring', () => {
     it('resolves the /query route and the org check from the shared core modules (ETP-6080)', () => {
-      assert.match(PLUGIN_SRC, /const \{ handleReportQuery, runReportSql \} = await loadReportCli\('report-query'\)/);
+      assert.match(PLUGIN_SRC, /const \{ handleReportQuery, runReportSql(?:, isChartTreeRender = \(\) => false)? \} = await loadReportCli\('report-query'\)/);
       assert.match(PLUGIN_SRC, /assertReportOrgAccess, assertReportAccess \} = await loadReportCli\('report-auth'\)/);
       const render = PLUGIN_SRC.indexOf("path.match(/^\\/api\\/reports\\/([\\w-]+)\\/render$/)");
       assert.ok(render > 0, 'render route not found');

@@ -27,8 +27,9 @@ import { useFavorites } from '@/components/layout/FavoritesContext';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { fetchMyReportAccess } from '@/lib/rolesApi.js';
-import { useFeatureFlag, DYNAMIC_REPORTS } from '@/lib/flags';
+import { useFeatureFlag, DYNAMIC_REPORTS, DYNAMIC_BALANCE_REPORTS } from '@/lib/flags';
 import { opensDynamicView } from '@/components/reports/dynamic/dynamicReports.js';
+import { CATEGORY_LABELS } from '@/components/reports/reportCategories.js';
 import { cn } from '@/lib/utils';
 import DynamicReportBadge, { DYNAMIC_REPORT_CARD_CLASS } from '@/components/reports/dynamic/DynamicReportBadge.jsx';
 import { reportDocumentUrl } from '@/components/reports/reportDocumentUrl.js';
@@ -64,6 +65,9 @@ export function buildReportFilename(reportId, format, suffix = '') {
 // menu-hidden only, a deliberate decision made earlier in this same ticket.
 const REPORT_CATEGORY_WINDOW_IDS = {
   finance: 'D647D118F5014D00AF47A636B2CD0DD3',
+  // ETP-6389 — Tesorería › Informes shares the Financial Reports anchor window: the aging reports
+  // moved out of the finance category, not out of that permission.
+  treasury: 'D647D118F5014D00AF47A636B2CD0DD3',
   inventory: '6346B88619F948F9A42224BDB0B239FA',
 };
 
@@ -77,14 +81,51 @@ const REPORT_CATEGORY_WINDOW_IDS = {
 // report row is ever added, removed, or moved between categories.
 const REPORT_CATEGORY_REPORT_IDS = {
   finance: [
-    'tax-report', 'aging-receivable', 'aging-payable', 'balance-sheet', 'profit-loss',
+    'tax-report', 'balance-sheet', 'profit-loss',
     'report-general-ledger', 'report-journal-entries', 'report-trial-balance',
   ],
+  // ETP-6389 — the aging reports live under Tesorería › Informes. A category missing here is
+  // UNGATED, so this entry is what keeps the treasury catalog behind the per-report grants.
+  treasury: ['aging-receivable', 'aging-payable'],
   inventory: ['inventory-stock-report'],
 };
 
 /** Flattened union of every REPORT_CATEGORY_REPORT_IDS id, for the category-agnostic filter below. */
 const ALL_CATALOG_REPORT_IDS = new Set(Object.values(REPORT_CATEGORY_REPORT_IDS).flat());
+
+/**
+ * The category a catalog report belongs to, from REPORT_CATEGORY_REPORT_IDS — known before the
+ * report catalogue loads (and even when the URL's category gate denies the fetch), which is what
+ * lets a legacy `category=finance&report=aging-receivable` link be re-pointed to `treasury`
+ * before the gate is evaluated (ETP-6389). `null` for a report outside the catalog.
+ */
+export function catalogCategoryOf(reportId) {
+  if (!reportId) return null;
+  for (const [category, ids] of Object.entries(REPORT_CATEGORY_REPORT_IDS)) {
+    if (ids.includes(reportId)) return category;
+  }
+  return null;
+}
+
+/**
+ * Every saved favourite that opens report `reportId`, whatever its category — a favourite is
+ * stored under its exact `report-viewer?category=<cat>&report=<id>` key, so one saved before the
+ * report changed category (ETP-6389: `category=finance&report=aging-receivable`) no longer equals
+ * the key the page builds today. Matching on the `report` param keeps the star lit for it and lets
+ * pressing the star remove it instead of adding a duplicate.
+ *
+ * @param {Array<{name?: string}>|undefined} favorites
+ * @param {string} reportId
+ * @returns {string[]} the matching favourite keys
+ */
+export function findReportFavoriteKeys(favorites, reportId) {
+  if (!reportId || !Array.isArray(favorites)) return [];
+  const prefix = 'report-viewer?';
+  return favorites
+    .map((favorite) => favorite?.name)
+    .filter((name) => typeof name === 'string' && name.startsWith(prefix)
+      && new URLSearchParams(name.slice(prefix.length)).get('report') === reportId);
+}
 
 // Static skeleton placeholders shown while a report renders — fixed-length, never reordered.
 const SKELETON_COLUMN_WIDTHS = [40, 15, 15, 15, 15, 15].map((w, i) => ({ id: i, w }));
@@ -239,7 +280,14 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
   );
 }
 
-// ETP-6080: loaded only when the `dynamic-reports` flag opens it.
+// ETP-6083: the flags that open the interactive reports (P&L and the two balances apart), keyed by flag.
+function useDynamicReportFlags() {
+  const pnl = useFeatureFlag(DYNAMIC_REPORTS);
+  const balances = useFeatureFlag(DYNAMIC_BALANCE_REPORTS);
+  return useMemo(() => ({ [DYNAMIC_REPORTS]: pnl, [DYNAMIC_BALANCE_REPORTS]: balances }), [pnl, balances]);
+}
+
+// ETP-6080: loaded only when its flag opens it.
 const DynamicReportView = lazy(() => import('@/components/reports/dynamic/DynamicReportView.jsx'));
 
 // Dropdown / search-as-you-type selector.
@@ -773,7 +821,8 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
 
   const grouped = {};
   for (const p of report.parameters || []) {
-    if (p.hidden || !isParamVisible(p, params)) continue;
+    // `dynamicOnly` (ETP-6084): a control only the interactive view acts on; here it would do nothing.
+    if (p.hidden || p.dynamicOnly || !isParamVisible(p, params)) continue;
     const sec = p.section || 'primary';
     if (!grouped[sec]) grouped[sec] = [];
     grouped[sec].push(p);
@@ -883,8 +932,9 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
     // No "None" row: the base/empty entry (value '') is dropped from the list entirely —
     // clearing a selection is done via the chip's "×" (CreatableSearchSelect's clearable
     // behavior), not via a pinned empty option.
+    // `dynamicOnly` options (ETP-6083, the Balance's Grupo / Epígrafe folds) only exist in the interactive view.
     const staticOpts = resolvedOptions
-      .filter(o => o.value !== '')
+      .filter(o => o.value !== '' && !o.dynamicOnly)
       .map(o => ({ id: o.value, name: resolveOptLabel(o) }));
     const selectedOpt = staticOpts.find(o => o.id === (params[p.name] || ''));
     return (
@@ -1042,7 +1092,8 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
       </div>
       <div className="flex-1 overflow-y-auto">
         {useAccordion ? (
-          report.sections.map(({ id, label, visibleIf }) => {
+          report.sections.map(({ id, label, visibleIf, dynamicOnly }) => {
+            if (dynamicOnly) return null;
             // A section carrying `visibleIf` (same {param, equals} shape as a
             // field's own, ETP-5128) disappears ENTIRELY while the condition
             // doesn't hold — e.g. Trial Balance's "Dimensions" section only
@@ -1111,12 +1162,13 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
 /**
  * The message of a failed render. The org and report access checks (ETP-6080) answer
  * `ORG_ACCESS_DENIED` / `REPORT_ACCESS_DENIED` with an
- * English text, so those codes are shown translated; anything else keeps the server's message.
+ * English text (and a query past the statement timeout, `REPORT_TIMEOUT`, ETP-6146), so those codes are shown translated; anything else keeps the server's message.
  */
 async function renderErrorMessage(res, ui) {
   const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
   if (data?.code === 'ORG_ACCESS_DENIED') return ui('reportErrorOrgAccess');
   if (data?.code === 'REPORT_ACCESS_DENIED') return ui('reportErrorReportAccess');
+  if (data?.code === 'REPORT_TIMEOUT') return ui('reportErrorTimeout');
   return data?.error || `Render failed: ${res.status}`;
 }
 
@@ -1199,7 +1251,9 @@ function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReport
     const basePath = window.location.pathname.replace(/\/[^/]*$/, ''); // same pattern as the invoice iframe (below)
     const qs = new URLSearchParams();
     qs.set('report', reportId);
-    qs.set('category', 'finance');
+    // The opened report's own category (ETP-6389: the aging reports live under treasury); the
+    // drill-down target is a catalog report, so the static catalog answers first.
+    qs.set('category', catalogCategoryOf(reportId) || report?.category || 'finance');
     // Only forward filled-in values — an empty/undefined one would otherwise
     // stringify as the literal "undefined" and needlessly override the target
     // report's own default for that parameter.
@@ -1208,7 +1262,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReport
     }
     window.open(`${window.location.origin}${basePath}/report-viewer?${qs.toString()}`, '_blank');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportId, JSON.stringify(drillParams)]);
+  }, [reportId, report?.category, JSON.stringify(drillParams)]);
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-2">
@@ -1250,6 +1304,17 @@ const TRIAL_BALANCE_DIMENSION_PARAM_NAMES = {
   project: 'projectId',
   costcenter: 'costCenterId',
 };
+
+/** A parameter's initial value from its contract default; the `__TODAY__`-style tokens resolve against now. */
+function contractDefaultOf(p) {
+  const now = new Date();
+  const isoDay = (d) => d.toISOString().split('T')[0];
+  if (p.default === '__TODAY__') return isoDay(now);
+  if (p.default === '__FIRST_OF_PREV_MONTH__') return isoDay(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  if (p.default === '__FIRST_OF_YEAR__') return isoDay(new Date(now.getFullYear(), 0, 1));
+  if (p.default !== undefined && p.default !== null && p.default !== false) return String(p.default);
+  return '';
+}
 
 function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, roleOrgIds, categoryFilter }) {
   const iframeRef = useRef(null);
@@ -1325,18 +1390,8 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
   const getDefaultParams = useCallback(() => {
     const defaults = {};
     for (const p of report.parameters || []) {
-      if (p.default === '__TODAY__') {
-        defaults[p.name] = new Date().toISOString().split('T')[0];
-      } else if (p.default === '__FIRST_OF_PREV_MONTH__') {
-        const now = new Date();
-        defaults[p.name] = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
-      } else if (p.default === '__FIRST_OF_YEAR__') {
-        defaults[p.name] = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
-      } else if (p.default !== undefined && p.default !== null && p.default !== false) {
-        defaults[p.name] = String(p.default);
-      } else {
-        defaults[p.name] = '';
-      }
+      if (p.dynamicOnly) continue; // not shown here, so never seeded (its default would print in the export header)
+      defaults[p.name] = contractDefaultOf(p);
       // A deep-link query-string value (e.g. the "open in new tab" drill-down
       // button, ETP-4898) overrides the contract default for that same
       // parameter name — this is what lets a new tab land pre-filled instead
@@ -1593,7 +1648,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
     loadAutoDefaults();
   };
 
-  const { toggleFavorite, isFavorite } = useFavorites();
+  const { toggleFavorite, isFavorite, favorites, removeFavorite } = useFavorites();
   const title = report.title?.[locale] || report.title?.en_US || report.title?.es_ES || report.id;
   const categoryLabel = categoryFilter && CATEGORY_LABELS[categoryFilter]
     ? tMenu(CATEGORY_LABELS[categoryFilter].en)
@@ -1612,13 +1667,24 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
   const favKey = categoryFilter
     ? `report-viewer?category=${categoryFilter}&report=${report.id}`
     : `report-viewer?report=${report.id}`;
-  const favActive = isFavorite(favKey);
+  // ETP-6389 — a favourite saved under another category for this same report (before it moved)
+  // counts as this one: the star is lit, and un-favouriting removes EVERY favourite of this report
+  // (current key and legacy ones together, in one call), so a user holding both is not left with
+  // the star still lit. Favouriting is unchanged: it adds the current key.
+  const reportFavKeys = findReportFavoriteKeys(favorites, report.id);
+  const hasLegacyFav = reportFavKeys.some((key) => key !== favKey);
+  const favActive = isFavorite(favKey) || hasLegacyFav;
 
   const favLabel = report.title?.en_US || report.title?.en || report.id;
   const favLabels = report.title && typeof report.title === 'object' ? report.title : undefined;
+  const onToggleFavorite = () => {
+    // `favorites` missing (a context without the list) still knows the current key via isFavorite.
+    if (favActive && removeFavorite) removeFavorite(reportFavKeys.length > 0 ? reportFavKeys : [favKey]);
+    else toggleFavorite(favKey, favLabel, favLabels);
+  };
   // ETP-5519: no `onBack` here — the report view does not show the TopBar ← button. The
   // in-page Cancel button (`action-cancel`) is the way back to the report catalog.
-  useSetPageMeta({ title, breadcrumb, onAddToFavorites: () => toggleFavorite(favKey, favLabel, favLabels), isFavorite: favActive }, [favActive]);
+  useSetPageMeta({ title, breadcrumb, onAddToFavorites: onToggleFavorite, isFavorite: favActive }, [favActive, reportFavKeys.join('|')]);
 
   // document.title (ETP-5013) — this page never set one, so the browser's
   // OWN native print (Cmd/Ctrl+P on the live preview — a different path
@@ -1869,14 +1935,6 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
   );
 }
 
-const CATEGORY_LABELS = {
-  purchases: { en: 'Purchases', es: 'Compras' },
-  finance: { en: 'Finance', es: 'Finanzas' },
-  sales: { en: 'Sales', es: 'Ventas' },
-  inventory: { en: 'Inventory', es: 'Inventario' },
-  other: { en: 'Other', es: 'Otros' },
-};
-
 // One row of the "list" view (ETP-5013) — the table equivalent of ReportCard.
 // Deliberately just Reporte + Formato: unlike a real AD window's list, a
 // report has no secondary identifiers (SKU, category, stock...) worth a
@@ -1905,7 +1963,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
   const tMenu = useMenuLabel();
   const ui = useUI();
   const { toggleFavorite, isFavorite } = useFavorites();
-  const dynamicReportsOn = useFeatureFlag(DYNAMIC_REPORTS);
+  const dynamicFlags = useDynamicReportFlags();
   const favKey = categoryFilter ? `report-viewer?category=${categoryFilter}` : 'report-viewer';
   const favActive = isFavorite(favKey);
   // Same list/gallery switch as the Product window (ListView.jsx's ViewToggle,
@@ -1982,7 +2040,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 <ReportListRow
                   key={r.id}
                   report={r}
-                  interactive={opensDynamicView(r.id, dynamicReportsOn)}
+                  interactive={opensDynamicView(r.id, dynamicFlags, r)}
                   onRun={selectReport}
                   locale={locale}
                   data-testid="ReportListRow__3c998a" />
@@ -2007,7 +2065,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 <ReportCard
                   key={r.id}
                   report={r}
-                  interactive={opensDynamicView(r.id, dynamicReportsOn)}
+                  interactive={opensDynamicView(r.id, dynamicFlags, r)}
                   onRun={selectReport}
                   data-testid="ReportCard__3c998a" />
               ))}
@@ -2043,9 +2101,9 @@ export default function ReportViewerPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { locale } = useLocaleSwitch();
   const localeLangKey = locale === 'es_ES' ? 'es' : 'en';
-  const categoryFilter = searchParams.get('category');
+  const urlCategory = searchParams.get('category');
   const reportId = searchParams.get('report');
-  const dynamicReportsOn = useFeatureFlag(DYNAMIC_REPORTS);
+  const dynamicFlags = useDynamicReportFlags();
 
   // ETP-5402 QA follow-up — the caller's own per-report tiers (id -> 'full'|'read-only', a
   // missing key means no access), fetched once on mount. `null` means "not resolved yet" —
@@ -2059,6 +2117,27 @@ export default function ReportViewerPage() {
       .catch(() => { if (!cancelled) setReportAccess({}); });
     return () => { cancelled = true; };
   }, []);
+
+  // ETP-6389 — a report opens under its OWN category. A legacy link or favourite
+  // (`category=finance&report=aging-receivable`, from before the aging reports moved to
+  // Tesorería) is re-pointed to the report's category, replacing the history entry, so the
+  // breadcrumb, Cancel, the favourite star and the highlighted menu entry all say Tesorería.
+  // The static catalog answers first — it is known before `/api/reports` loads, and the gate
+  // below must be evaluated on the right category (the old one may deny the fetch outright);
+  // the report contract's own `category` covers reports outside the catalog once it loads.
+  // A contract without `category` reaches the page as 'other' (report-descriptor default): that is
+  // "unknown", not a home, so it never triggers a rewrite.
+  const contractCategory = reportId ? (reports.find((r) => r.id === reportId)?.category ?? null) : null;
+  const knownContractCategory = contractCategory && contractCategory !== 'other' ? contractCategory : null;
+  const reportCategory = catalogCategoryOf(reportId) ?? knownContractCategory;
+  const categoryMismatch = Boolean(urlCategory && reportCategory && reportCategory !== urlCategory);
+  const categoryFilter = categoryMismatch ? reportCategory : urlCategory;
+  useEffect(() => {
+    if (!categoryMismatch) return;
+    const params = new URLSearchParams(searchParams);
+    params.set('category', reportCategory);
+    setSearchParams(params, { replace: true });
+  }, [categoryMismatch, reportCategory, searchParams, setSearchParams]);
 
   // ETP-5116 — computed before the effect below so the effect can short-circuit
   // the catalog fetch (and any other gated side effect added later) whenever
@@ -2159,7 +2238,7 @@ export default function ReportViewerPage() {
     );
   }
 
-  if (selectedReport && opensDynamicView(selectedReport.id, dynamicReportsOn)) {
+  if (selectedReport && opensDynamicView(selectedReport.id, dynamicFlags, selectedReport)) {
     return (
       <Suspense
         fallback={<CircleNotchIcon

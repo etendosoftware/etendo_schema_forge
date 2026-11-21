@@ -9,6 +9,7 @@ import LinesForm from './LinesForm';
 import RemittanceSepaFileData from '../../../custom/RemittanceSepaFileData';
 import { AttachmentsTab } from '@/components/attachments';
 import RemittanceBottomPanel from '../../../custom/RemittanceBottomPanel';
+import RemittanceStatusSelector from '../../../custom/RemittanceStatusSelector';
 import RemittanceStatusBanner from '../../../custom/RemittanceStatusBanner';
 import RemittanceProcessConfirmModal from '../../../custom/RemittanceProcessConfirmModal';
 import catalogs from './mockCatalogs';
@@ -33,10 +34,10 @@ const extraBadges = [
 
 // @sf-generated-start processes:remittance
 const processes = [
-  { name: 'process', label: 'process', style: 'positive',
-    displayLogicRaw: "@Processed@='N'", requiresLines: true, params: [{"key":"grouping","type":"select","label":"remittanceGrouping","required":true,"defaultValue":"P","options":[{"value":"P","label":"remittanceGroupingNone"},{"value":"GGPD","label":"remittanceGroupingByBpAndDueDate"}]}] },
   { name: 'reactivate', label: 'reactivate', style: 'primary-danger',
-    displayLogicRaw: "@Processed@='Y'" },
+    displayLogicRaw: "@RemittanceStatus@!='PE' & @RemittanceStatus@!='CT' & @RemittanceStatus@!='PT' & @RemittanceStatus@!='CP' & @RemittanceStatus@!='PP' & @RemittanceStatus@!='AN'" },
+  { name: 'returnLines', label: 'remittanceReturnAction', style: 'primary-danger',
+    displayLogicRaw: "@RemittanceStatus@!='PE' & @RemittanceStatus@!='PR' & @RemittanceStatus@!='SB' & @RemittanceStatus@!='PT' & @RemittanceStatus@!='PP' & @RemittanceStatus@!='AN'", requiresLines: true, confirmModal: true },
 ];
 // @sf-generated-end processes:remittance
 
@@ -299,13 +300,14 @@ export default function RemittancePage({ windowName, recordId, ...props }) {
         noHeaderBorder
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "REM_Remittance", config: {} } }]}
         bottomSection={RemittanceBottomPanel}
+        topbarExtra={RemittanceStatusSelector}
         headerContent={(data) => <RemittanceStatusBanner data={data} />}
         processConfirmModal={RemittanceProcessConfirmModal}
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 0}
         detailSortBy="lineNo asc"
-        titleField="name"
-        statusEnumLabels={{"PE":"remittanceStatusPe","PR":"remittanceStatusPr","CT":"remittanceStatusCt","PT":"remittanceStatusPt","CP":"remittanceStatusCp","PP":"remittanceStatusPp","AN":"remittanceStatusAn"}}
+        titleField="documentNo"
+        statusEnumLabels={{"PE":"remittanceStatusPe","PR":"remittanceStatusPr","SB":"remittanceStatusSb","CT":"remittanceStatusCt","PT":"remittanceStatusPt","CP":"remittanceStatusCp","PP":"remittanceStatusPp","AN":"remittanceStatusAn"}}
         labelOverrides={labelOverrides}
         sendDocument={{"enabled":false}}
         {...props} window={effectiveWindow}

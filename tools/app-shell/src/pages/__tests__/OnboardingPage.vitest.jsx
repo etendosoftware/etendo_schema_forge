@@ -1890,6 +1890,8 @@ describe('OnboardingPage', () => {
       const { container } = await renderAtRegister();
       // ETP-6082: the business sector is required too; choose it so only the email is left.
       fireEvent.change(container.querySelector('#reg-sector'), { target: { value: 'servicios' } });
+      // ETP-6363: the country is required too.
+      fireEvent.change(screen.getByTestId('country-select'), { target: { value: 'ES' } });
 
       expect(screen.getByTestId('action-register-submit')).toBeDisabled();
       ['ada', 'ada@', 'ada@example'].forEach((value) => {

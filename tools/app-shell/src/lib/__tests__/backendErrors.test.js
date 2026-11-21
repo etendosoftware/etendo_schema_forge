@@ -1480,11 +1480,22 @@ describe('translateBackendError — SEPA remittance refusals (ETP-6148)', () => 
     ['ETGO_SepaRemittancesDisabled', 'backendError.sepaRemittancesDisabled'],
     ['ETGO_RemittanceAccountNotBank', 'backendError.remittanceAccountNotBank'],
     ['ETGO_RemittanceAccountIbanRequired', 'backendError.remittanceAccountIbanRequired'],
+    ['ETGO_RemittanceIbanInvalid', 'backendError.remittanceIbanInvalid'],
+    ['ETGO_RemittanceSchemeInvalid', 'backendError.remittanceSchemeInvalid'],
+    ['ETGO_RemittanceOptionsCollectionOnly', 'backendError.remittanceOptionsCollectionOnly'],
     ['ETGO_RemittanceMethodAccountNotAllowed', 'backendError.remittanceMethodAccountNotAllowed'],
     // RemittanceHeaderHandler: an account with no remittance payment methods linked (422), and the
     // Bank-account create racing on that provisioning (409, retry).
     ['ETGO_RemittanceAccountNotAllowed', 'backendError.remittanceAccountNotAllowed'],
     ['ETGO_RemittanceProvisioningConflict', 'backendError.remittanceProvisioningConflict'],
+    // ETP-6148 — the creditor identifier saved on the account (saveCreditorId 422s and the two readiness problem codes).
+    ['ETGO_SepaCreditorIdRequired', 'backendError.sepaCreditorIdRequired'],
+    ['ETGO_SepaCreditorIdInvalidFormat', 'backendError.sepaCreditorIdInvalidFormat'],
+    ['ETGO_SepaCreditorIdInvalidCheckDigits', 'backendError.sepaCreditorIdInvalidCheckDigits'],
+    ['ETGO_RemittanceCreditorIdNotApplicable', 'backendError.remittanceCreditorIdNotApplicable'],
+    ['ETGO_RemittanceCreditorIdNeedsAccount', 'backendError.remittanceCreditorIdNeedsAccount'],
+    ['ETGO_RemittanceFileAccountNoCreditorId', 'backendError.remittanceFileAccountNoCreditorId'],
+    ['ETGO_RemittanceFileAccountInvalidCreditorId', 'backendError.remittanceFileAccountInvalidCreditorId'],
     // RemittanceHeaderHandler: a new or changed due date earlier than today (422), the safety
     // net behind the dueDate field's `minDate`.
     ['ETGO_RemittanceDueDatePast', 'backendError.remittanceDueDatePast'],
@@ -1498,6 +1509,10 @@ describe('translateBackendError — SEPA remittance refusals (ETP-6148)', () => 
     ['ETGO_RemittanceAlreadyProcessed', 'backendError.remittanceAlreadyProcessed'],
     ['ETGO_RemittanceNoLines', 'backendError.remittanceNoLines'],
     ['ETGO_RemittanceNotProcessed', 'backendError.remittanceNotProcessed'],
+    // ETP-6247 — markSent / markCollected / reactivate refusals (the step-by-step flow).
+    ['ETGO_RemittanceMarkSentNotAllowed', 'backendError.remittanceMarkSentNotAllowed'],
+    ['ETGO_RemittanceMarkCollectedNotAllowed', 'backendError.remittanceMarkCollectedNotAllowed'],
+    ['ETGO_RemittanceReactivateNotAllowed', 'backendError.remittanceReactivateNotAllowed'],
     // syncDueItems / the in-place «A remesar» cell (422).
     ['ETGO_RemittanceLineAmountInvalid', 'backendError.remittanceLineAmountInvalid'],
     ['ETGO_RemittanceLineAmountNotEditable', 'backendError.remittanceLineAmountNotEditable'],
@@ -1510,6 +1525,7 @@ describe('translateBackendError — SEPA remittance refusals (ETP-6148)', () => 
     ['ETGO_RemittanceDueItemsSelectionFailed', 'backendError.remittanceDueItemsSelectionFailed'],
     ['ETGO_RemittanceProcessFailed', 'backendError.remittanceProcessFailed'],
     ['ETGO_RemittanceReactivateFailed', 'backendError.remittanceReactivateFailed'],
+    ['ETGO_RemittanceMarkCollectedFailed', 'backendError.remittanceMarkCollectedFailed'],
   ];
   const LOCALES = ['en_US', 'es_ES', 'es_AR'];
   const labels = Object.fromEntries(LOCALES.map((loc) => [

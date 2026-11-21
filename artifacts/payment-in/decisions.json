@@ -3,6 +3,7 @@
   "window": {
     "category": "finance",
     "name": "Payment In",
+    "breadcrumb": "Treasury / Payment In",
     "salesTheme": false,
     "relatedDocuments": true,
     "notesField": "description",

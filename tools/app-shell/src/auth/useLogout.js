@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useAuthOptional, notifyAmbientUnauthorized } from '@etendosoftware/app-shell-core/auth';
 import { clearStoredDateRange } from '@/components/dashboard/DashboardDateRangeContext.jsx';
 import { reset } from '../lib/observability.js';
+import { pushLogout } from '../lib/marketing/dataLayer.js';
 import { forgetSupportSessionMarker } from '../lib/supportSession.js';
 import { setEnvironmentAccessDecision } from '@/lib/environmentAccessGate.js';
 
@@ -33,6 +34,8 @@ export function useLogout() {
     // inside the Mixpanel SDK and can leak into events fired by the NEXT
     // login in this same browser (see providers/mixpanel.js). Fire-and-forget
     // so a slow/failed provider never blocks the actual logout.
+    // ETP-6363 — marketing's `logout` (GTM's dataLayer), which clears the user GTM holds.
+    pushLogout();
     void reset(); // NOSONAR -- intentional fire-and-forget, same pattern as health-events.js's void track()/group() calls.
     // ETP-5351 — a support session's marker must not outlive an explicit logout, or the next load
     // of this browser would start in support mode until /me said otherwise. Only the persisted

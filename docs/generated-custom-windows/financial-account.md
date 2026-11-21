@@ -236,7 +236,7 @@ Display the full detail of a financial account: a summary strip with KPIs, and t
 ## What this view does
 
 - Navigate to `/financial-account/:id` from the Cuentas list (row click).
-- Topbar shows `{accountName}` as title and `Finanzas / Cuentas / {accountName}` as breadcrumb via `useSetPageMeta` (inlined in `index.jsx` — no per-window header bar).
+- Topbar shows `{accountName}` as title and `Tesorería / Cuentas / {accountName}` as breadcrumb (Treasury section since ETP-6389; the list view's generated breadcrumb is `Treasury / Accounts`, declared in `decisions.json → window.breadcrumb`) via `useSetPageMeta` (inlined in `index.jsx` — no per-window header bar).
 - Account Summary Strip (single horizontal bar inside the Movements tab body): avatar + IBAN (chunked in groups of 4, with copy-to-clipboard) — or card number, or the bank logo alone for an offline card; see the `AccountSummaryStrip` rules under `AccountLogoAvatar` | Saldo total | Entradas (30D) | Salidas (30D). The three KPI sections use `flex-1` so they spread evenly.
 - Three tabs with counts: Movements (live data), Reconciliation (live data — manual reconciliation split panel, T6 + automatch engine, T7), Imported Statements (live data).
 - **Editar** button (ETP-4530) sits to the left of the contextual tab-strip action, always visible regardless of the active tab — opens `EditAccountModal` (see below) so editing no longer requires going back to the Cuentas list.
@@ -1697,7 +1697,7 @@ The Movimientos row kebab (`MovementRowKebab.jsx`) mirrors the existing Post act
 ## Routing
 
 - URL: `/financial-account/:id` — catch-all route `/:windowName/:recordId` in `App.jsx` → `WindowLoader` → `customLoaders['financial-account']`.
-- Entry in `menu.json` under the Finance group (`hidden: true`) so `buildWindowMap()` registers it.
+- Entry in `menu.json` under the Treasury group (Finance until ETP-6389): a visible item (`windowId` `94EAA455D2644E04AB25D93BE5157B6D`, label "Cuentas"), so `buildWindowMap()` registers it.
 - Entry in `registry.js` `customLoaders`: `'financial-account': () => import('./custom/financial-account/index.jsx')`.
 
 ## Component tree
@@ -3983,6 +3983,40 @@ one disables Save (`saveBlocked`) instead of persisting an empty value. Test ids
 `field-edit-account-type[-chip]` / `field-edit-account-currency[-chip]` and
 `option-edit-account-{type|currency}-<id>`; the `edit-account-type` / `edit-account-currency` ids sit on
 the selector wrapper.
+
+## Edit account modal — «Remesas» section, SEPA creditor identifier (ETP-6247)
+
+«Editar cuenta» shows a **«Remesas»** section (`SepaCreditorIdSection.jsx`,
+`data-testid="sepa-remittances-section"`) with one field, **«Identificador del acreedor»** (the SEPA
+creditor identifier, AT-02). The full contract lives in
+[financial-account-management.md → SEPA remittances on Bank accounts](financial-account-management.md#sepa-remittances-on-bank-accounts-etp-6148);
+the remittance side in [remittance.md → SEPA creditor identifier](remittance.md#sepa-creditor-identifier).
+What this window does:
+
+- **When it is shown.** Only for a **Bank** account (the pending «Tipo de cuenta» selection) and only
+  when the role has the `sepaRemittances` capability, which the backend derives from the
+  `sepa-remittances` feature flag. The value is read once per opening, the first time the Type is
+  Bank; if that read is refused (no remittance payment methods, flag off) the section stays hidden.
+  State lives in `useAccountCreditorId.js`; the section only renders it.
+- **What it shows.** Only the value stored on the account (`accountCreditorId` of the remittance
+  `sepaFileData` action), **empty** when the account has none. The placeholder is neutral
+  (`sepaCreditorIdPlaceholder`, same style as BIC/SWIFT) and the (i) tooltip (`sepaCreditorIdInfo`)
+  explains what it is and that the bank assigns it, with no example value. No proposal computed
+  from the organization is offered here.
+- **Inline format check** (`lib/sepaCreditorId.js`, mirror of the backend `SepaCreditorId`):
+  country (2 letters) + check digits (2) + business code (3) + national id, validated mod 97. An
+  invalid value shows its error under the input and blocks «Guardar cambios». The server remains
+  the authority.
+- **Saving.** No button of its own: the modal's general «Guardar cambios» saves it **after** the
+  account update, only when the normalized value changed and is not empty, through the remittance
+  `saveCreditorId` action on record `new` with `accountId` and `saveToAccount: true`. That call
+  requires write access to the `financial-account` spec; without it the backend answers 403
+  `ETGO_RemittanceCreditorIdAccountWriteDenied`. Any refusal is shown as a translated toast and the
+  modal stays open.
+- **A saved value cannot be cleared** (the backend has no delete): emptying it shows the hint
+  `sepaCreditorIdCannotClear` and blocks the save. An account that never had one may stay empty.
+- **Effect.** The account value is the default copied into each new **collection** remittance; the
+  remittance keeps its own copy, so a later change here affects future collections only.
 
 ## Accounting visibility — "Show Accounting Fields" (ETP-5684)
 

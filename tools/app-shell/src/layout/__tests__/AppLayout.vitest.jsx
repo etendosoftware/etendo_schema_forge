@@ -569,7 +569,9 @@ describe('AppLayout — access load error (ETP-5489)', () => {
 
 describe('AppLayout shipped permission-anchor menu (ETP-5240)', () => {
   // The third column is the capability an entry ALSO needs (invoice-inbox: `invoiceInbox`), or null.
-  const anchors = defaultNavigation.filter(entry => entry.accessWindowId)
+  // A `requiresGroupReport` entry (ETP-6389, report-viewer-treasury) is revealed by a report grant,
+  // not by its anchor window — the window-grant lifecycle below does not describe it.
+  const anchors = defaultNavigation.filter(entry => entry.accessWindowId && !entry.requiresGroupReport)
     .map(entry => [entry.name, entry.accessWindowId, entry.capability ?? null]);
 
   beforeEach(() => {

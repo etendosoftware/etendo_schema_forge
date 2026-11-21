@@ -446,6 +446,48 @@ Content-Type: application/vnd.api+json
 - **Tax of a line (foreign key).** `tax` on `sales-order-lines`, `purchase-order-lines` and `sales-quotation-quotationLine` points to `tax`. It stays writable: send it under `relationships` as `{ "data": { "type": "tax", "id": "..." } }` and find the ids with `GET /api/v1/tax`. Before `tax` was published it was a plain id attribute.
 - Linkage types are validated on write: a relationship whose `type` is not the related resource returns `409`.
 
+#### 4.6.1 Relations between documents (technical debt)
+
+V1 publishes no relation between two business documents: an integrator cannot read which shipment delivered an order line, which invoice billed it or which quotation an order came from, and cannot create one document from another. This is out of V1 by the scope agreed on 2026-11-06 (shipments, receipts and invoices are not published, see [3](#manifest-generate-base-public-api-manifestmjs-to-basev1json)) and is planned for the next quarter. The rule that decides the work is parity: a relation is published exactly as the app shows and creates it, and a relation the app does not offer is not published.
+
+**What V1 carries today.** No relationship in `public-api/base.v1.json` points to a document, and `sales-order`, `purchase-order`, `sales-quotation` and their lines publish no quotation, shipment, receipt or invoice field. The only downstream trace is a set of read-only integer status fields with no linkage: `delivery_status` and `invoice_status` on `sales-order`, `deliv_status_purchase` and `invoice_status` on `purchase-order` (the stored computed columns `EM_ETGO_Delivery_Status`, `EM_ETGO_Invoice_Status` and `EM_ETGO_Deliv_Status_Purchase` of `C_Order`).
+
+**Limits of the current contract.** Any document relation runs into these, in addition to its target not being published:
+
+| Limit | Where |
+|-------|-------|
+| One level of nesting. Routes are `/api/v1/{resource}` and `/api/v1/{parent}/{parentId}/{child}`; a tab under a child tab (AD tab level 2, `level: subline`) is not published. This is why the order's *Line Tax* is not published (ETP-6012, see [3](#manifest-generate-base-public-api-manifestmjs-to-basev1json)). | `gateway/src/public-api/public-api.controller.ts`, `scripts/generate-base-public-api-manifest.mjs` |
+| To-one only. The generator writes `cardinality: 'one'` on every relationship, and a write that sends an array as relationship `data` is refused with `400` ([4.3](#43-fields-and-fail-closed-filtering)). | `scripts/generate-base-public-api-manifest.mjs`, `gateway/src/public-api/json-api-request.ts` |
+| A relationship exists only when its target is a published resource. A reference to an unpublished resource stays a plain id attribute (for example `warehouse` and `price_list` on the orders). | `scripts/generate-base-public-api-manifest.mjs` |
+| The target is found by entity name. The generator matches the field's `reference` (the Java entity: `Order`, `OrderLine`, `GoodsShipmentLine`) against the `entityName` of the published resources, ignoring case and punctuation. The order resources are the entities `header` and `lines`, so a reference to `Order` or `OrderLine` would not become a relationship even with both ends published. | `scripts/generate-base-public-api-manifest.mjs` |
+| One table, several resources. `C_Order` holds sales orders, purchase orders and quotations (a quotation is a `C_Order` whose target document type has `DocSubTypeSO = 'OB'`), while `relationship.resource` names one resource. The `C_Order_ID` of a sales invoice points to an order or to a quotation, and the app probes both. | `go: schemaforge/SalesQuotations.java`, `tools/app-shell/src/components/related-documents/salesRelatedDocs.js` |
+| `links.related` is `/api/v1/<resource>/<id>`. For a child resource that path answers `404 Child resource must be addressed through its master`, so a line-to-line link also needs the master id. | `gateway/src/public-api/public-api.controller.ts` |
+| The link columns are hidden in the windows. In `decisions.json`, `salesOrder` (header) and `salesOrderLine` (lines) of `goods-shipment`, and `salesOrder`, `salesOrderLine` and `goodsShipmentLine` of `sales-invoice`, have `visibility: system`, which the generator never publishes, even when curated ([2](#field-rules-applied-by-the-manifest-generator)). In `goods-receipt` and `purchase-invoice` the same fields are not shown by the form (`form: false` in the contract), so the window-form default does not publish them either. | `artifacts/<window>/decisions.json`, `artifacts/<window>/contract.json` |
+
+**Relations, as stored in Etendo and as the app uses them.** The table covers every relation of the sales and purchase document flow that the app's related-documents definitions read (`tools/app-shell/src/components/related-documents/salesRelatedDocs.js`, `purchaseRelatedDocs.js` and `relatedSources.js`), plus the core match tables. Two other related-documents panels exist and are not document-to-document relations of that flow: a payment's invoices (`artifacts/payment-in/custom/RelatedDocuments.jsx`, `artifacts/payment-out/custom/RelatedDocuments.jsx`, read through the invoice's payment plan) and an amortization's assets (`artifacts/amortization/custom/RelatedDocuments.jsx`); payments are never listed as related documents of an order or an invoice. Columns and fields come from `AD_COLUMN`, `AD_FIELD`, `AD_TAB` and `AD_WINDOW`; the third column lists the field in the windows the app also has (Classic-only windows such as Business Partner Info are left out) and says when the field is not displayed or not active. Every link column lives on a header or lines table, or on a level-1 tab of the invoice, so none of them needs deeper nesting. No side of any of these relations is published in V1.
+
+| Relation | Column | AD field (window › tab) | How the app creates and reads it |
+|----------|--------|-------------------------|----------------------------------|
+| Shipment or receipt line → order line | `M_InOutLine.C_OrderLine_ID` | Lines of Goods Shipment, Goods Receipt, Return Material Receipt and Return to Vendor Shipment; displayed in all four | Created by the order actions `createShipment` (`go: schemaforge/CreateShipmentHandler.java`) and `createGoodsReceipt` (`go: schemaforge/CreateGoodsReceiptHandler.java`), and by `importOrderLines` on a draft shipment or receipt (`go: schemaforge/ImportOrderLinesIntoInOutHandler.java`). Read as the movement's `linkedOrders`. |
+| Shipment or receipt → order | `M_InOut.C_Order_ID` | Header of Goods Shipment, Goods Receipt and Return Material Receipt, displayed; Header of Return to Vendor Shipment, not displayed | The order lists its shipments or receipts with a criteria query on `salesOrder` (`criteriaSource` in `salesRelatedDocs.js` and `purchaseRelatedDocs.js`). The movement's `linkedOrders` is the header order plus every order its lines point to (`go: schemaforge/GoodsShipmentHeaderHandler.java`, `go: schemaforge/GoodsReceiptHeaderHandler.java`), so the header column alone does not list every order of a movement. |
+| Invoice → order | `C_Invoice.C_Order_ID` | Header of Sales Invoice and Purchase Invoice; displayed | Created by `createDraftInvoice` from a sales order, a quotation or a goods shipment (`go: schemaforge/CreateDraftInvoiceHandler.java`) and by `createPurchaseInvoice` from a purchase order or a goods receipt (`go: schemaforge/CreatePurchaseInvoiceHandler.java`). The order lists its invoices through the `listInvoices` header action, which also finds invoices linked only through their lines. |
+| Invoice line → order line | `C_InvoiceLine.C_OrderLine_ID` | Lines of Sales Invoice and Purchase Invoice; displayed | Created by `importOrderLines` on a draft invoice (`go: schemaforge/ImportOrderLinesIntoInvoiceHandler.java`). Read as the invoice's `linkedOrders` (`go: schemaforge/InvoiceDetailEnrichment.java`). |
+| Invoice line → shipment or receipt line | `C_InvoiceLine.M_InOutLine_ID`, plus the match tables `M_MatchSI` (sales) and `M_MatchInv` (purchase) | Lines of Sales Invoice and Purchase Invoice; Matched Sales Invoices › Matched Sales Invoice and Matched Purchase Invoices › Matched Invoice; displayed in all | The link is the union of the column and the match table (`go: schemaforge/InOutInvoiceLinks.java`); on the sales side two documents are never related through a shared order line. Created by `importShipmentLines` / `importReceiptLines` on a draft invoice (`go: schemaforge/ImportInOutLinesIntoInvoiceHandler.java`), and by `importOrderLines`, which binds the invoice line to both the order line and the movement line. Read as the invoice's `linkedShipments` / `linkedReceipts` (deliveries and returns told apart by `isReturn`) and the movement's `linkedInvoices`. The app has a read-only Matched Purchase Invoices window (`artifacts/matched-purchase-invoices`). |
+| Return → returned shipment or receipt line | `M_InOutLine.Canceled_InOutLine_ID` (a return line points at the line it returns) | Lines of Goods Shipment and Goods Receipt, not active; no field in Return Material Receipt or Return to Vendor Shipment | Created by `createReturn` on a goods shipment (`go: schemaforge/CreateReturnReceiptHandler.java`), `createPurchaseReturn` on a goods receipt (`go: schemaforge/CreatePurchaseReturnHandler.java`), and `importShipmentLines` / `importReceiptLines` on a draft return (`go: schemaforge/ReturnMaterialReceiptHeaderHandler.java`, `go: schemaforge/ReturnToVendorShipmentHeaderHandler.java`); all of them set the column through `NeoReturnReceiptService.createReturnLineShell`. Read as the shipment's `returnReceipts`, the receipt's `linkedReturns` and the return's `sourceShipments` / `sourceReceipts` (`go: schemaforge/ReturnShipmentUtils.java`). The credit invoice of a return (`createReturnInvoice`, read as `returnInvoices`) is linked through `C_InvoiceLine.M_InOutLine_ID` on the return's lines, the row above. |
+| Rectifying invoice → origin invoice | `C_Invoice_Reverse` (`C_Invoice_ID` the rectifying invoice, `Reversed_C_Invoice_ID` the origin); line level: `C_InvoiceLine.EM_Etgo_Source_Invoiceline_ID` | Sales Invoice and Purchase Invoice › Reversed Invoices (level 1): `Reversed_C_Invoice_ID` displayed, `C_Invoice_ID` not displayed. The app does not show that tab (it is not in `secondaryTabs`). `EM_Etgo_Source_Invoiceline_ID` has no field in any window | Created by "Import from source invoice": `importOriginInvoiceLines` (`go: schemaforge/ImportOriginInvoiceLinesHandler.java`) writes one `C_Invoice_Reverse` row per origin and the source line on each new line; an `originInvoices` value sent on an invoice write is persisted by `go: schemaforge/InvoiceRectificationLinkSupport.java`. Read from `C_Invoice_Reverse` in both directions: `originInvoices`, what the invoice rectifies (`go: schemaforge/InvoiceRectificationLinkSupport.java`), and `rectifyingInvoices`, what rectifies it (`go: schemaforge/AbstractInvoiceHeaderHandler.java`). |
+| Sales order → quotation | `C_Order.Quotation_ID`, `C_OrderLine.Quotationline_ID` | Header and Lines of Sales Order, displayed; the same fields in Purchase Order are not active | Set by Etendo core's `ConvertQuotationIntoOrder` (`setQuotation`, `setQuotationLine`), which the quotation's `Convertquotation` action calls (`go: schemaforge/SalesQuotationHeaderHandler.java`). The order shows its quotation; the quotation lists its orders with a criteria query on `quotation` and its invoices through `listInvoices`, and never lists shipments. |
+| Matched purchase orders | `M_MatchPO` (`C_OrderLine_ID`, `M_InOutLine_ID`, `C_InvoiceLine_ID`) | Matched Purchase Orders › Matched Purchase Order; displayed | No app window (no artifact) and not read by the related-documents code, so by the parity rule it is not a candidate. |
+
+**What supporting them takes.**
+
+1. **Publish the targets.** The shipment, receipt and invoice windows, with their lines, have to enter `publicApiV1Entities` (a scope decision, [3](#manifest-generate-base-public-api-manifestmjs-to-basev1json)).
+2. **Resolve targets by document, not by entity name.** The generator has to map `Order` and `OrderLine` to the order resources, and a `C_Order` reference whose record can be an order or a quotation needs either one relationship per target or a relationship whose `type` is taken from the record.
+3. **Publish the link fields.** The `system` link fields of the sales windows need a visibility or curation decision that the generator honours; the purchase ones need `publicApi.exposed`.
+4. **Line-to-line links.** `links.related` to a child has to carry its master (`/api/v1/{master}/{masterId}/{child}/{id}`), or line resources have to be addressable without one.
+5. **The reverse direction is to-many and derived.** An order's shipments, receipts and invoices are the union the app computes on the server (header column, line columns, match tables, `listInvoices`). Exposing them needs to-many relationships (related links or `include`) or a documented filter, and either way it must reuse that server-side definition: a filter on `C_Order_ID` alone would miss documents linked only through their lines.
+6. **Creating a document from another is a business action.** `createShipment`, `createGoodsReceipt`, `createDraftInvoice`, `createPurchaseInvoice`, `Convertquotation`, `createReturn`, `createPurchaseReturn`, `createReturnInvoice`, `importOrderLines`, `importShipmentLines`, `importReceiptLines` and `importOriginInvoiceLines` would each be a declared public action ([4.2.1](#421-business-actions)); today `complete` is the only one.
+7. **Deeper nesting** is needed only for level-2 tabs such as *Line Tax*, either with two-level routes or by publishing those tabs as resources filtered by their line. No document relation listed here depends on it: the rectification link is itself a level-1 tab of the invoice (*Reversed Invoices*).
+
 ### 4.7 Content negotiation
 
 - Responses (success and error) are `Content-Type: application/vnd.api+json`, with no media-type parameters. `204` has no body and no `Content-Type`. `/api/v1/openapi.json`, `/api` and `/docs` are not part of the resource API and keep their own types.
@@ -622,6 +664,53 @@ X-RateLimit-Reset: 23
 Configuration (environment of the gateway): `PUBLIC_API_RATE_LIMIT` (requests, default 100) and `PUBLIC_API_RATE_WINDOW_SECONDS` (default 60); an invalid value falls back to the default. The counters live in memory of each gateway process: with N gateway tasks the effective limit per key is up to N times the configured one until a shared store is introduced. Requests with invalid keys are not limited by this guard; limiting them (per IP) belongs to the load balancer or WAF.
 
 ---
+
+### 4.12 Document currency, exchange rate and line prices
+
+`sales-quotation`, `sales-order` and `purchase-order` publish the header's `currency` (`inout`, the
+id of a currency) and `currency_rate` (`inout`, number, internal `eTGOCurrencyRate`): the
+organization-to-document multiply rate, the one the application shows next to the currency as
+"USD — 1,47" and lets the user edit with the pencil. One unit of the organization's currency is
+`currency_rate` units of the document's currency. It is `1` or empty on a document in the
+organization's own currency. The API applies the application's rules (Etendo enforces them, the
+gateway only maps the name):
+
+- **Recalculated** on a create, and on a write that changes `currency` or `order_date` without
+  sending `currency_rate`: the tenant's conversion rate valid on `order_date`, replacing a rate set
+  earlier by hand.
+- **A rate sent is kept**: a write that sends a positive `currency_rate` (alone, or together with a
+  new currency or date) saves it as sent, as when the user types it.
+- **Kept** by a write that changes neither the currency nor the date and does not send it.
+- **Back to the organization currency** sets it to `1`.
+- **Locked once completed**: a write that changes `currency_rate` on a completed document is
+  refused with `422` (nothing saved), whatever its currency, as in the application, where the rate
+  cannot be edited once the document is processed. Sending the stored value back is not a change.
+- **Refused without one** (`422`, nothing saved): a write that sends both `currency` and
+  `order_date` (or an update, which knows them from the stored document) and leaves a
+  foreign-currency document with an empty rate, because no conversion rate is configured for
+  `order_date` and none was sent, or because the write sent `null`/`0`. Completing such a
+  document is refused too.
+- **Exception, a create that omits `currency` or `order_date`.** Etendo fills them after the
+  record is saved, so it cannot refuse the create any more: when no rate is configured, the
+  document is created (`201`) without a rate. Etendo attaches a warning to its answer, which the
+  gateway does not relay. The document's next write and its completion are refused with `422`
+  until it has a rate. Send both fields on create to get the refusal up front.
+
+**Line prices in the document currency.** A line created without a price (`list_price` absent) is
+priced from the document's price list, as in the application. When the document is in a foreign
+currency and its price list is in the organization's currency, those prices are converted with the
+document's `currency_rate` (price × rate, rounded to the currency's price precision, 2 for EUR and
+USD). Every new line for a product takes the document's currency, whether its price came from the
+price list or from the caller. With a rate of 1.47, a product priced 12 EUR is created at 17.64 USD, the same
+line the application creates. That holds when the product's list price equals its standard price.
+When they differ, the API converts each one separately and keeps the discount between them, while
+the application sets both to the converted price. A `list_price` sent by the caller is taken as a
+price in the document's currency and is never converted. When the document has no rate, or the
+price list is in a third currency, the line takes the document's currency but keeps the price
+list's prices unconverted (a foreign-currency document without a rate is normally refused, see
+above). Changing the
+header's `currency` or `currency_rate` later does not re-price existing lines (neither does the
+application); delete and re-create a line to price it at the new rate.
 
 ## 5. API key management contract (`/oauth2/api-keys`)
 
@@ -887,6 +976,7 @@ Testable statements derived from this document, each linked to its section.
 - [ ] `GET /api/v1/contacts/{id}` calls `/sws/neo/contacts/businessPartner/{id}` ([4.2](#42-routes))
 - [ ] Flat and JSON:API request bodies are both accepted; a JSON:API body with only `relationships` (no `attributes`) is accepted ([4.3](#43-fields-and-fail-closed-filtering))
 - [ ] A relationship sent as an attribute returns `400`; a wrong `type` or a different `id` returns `409` ([4.3](#43-fields-and-fail-closed-filtering), [4.6](#46-relationships))
+- [ ] Every relationship in the manifest has `cardinality` `one`, none points to a business document (order, quotation, shipment, receipt, invoice), and no order or quotation resource publishes its quotation, shipment, receipt or invoice link ([4.6.1](#461-relations-between-documents-technical-debt))
 - [ ] A single-record `GET`, `POST`, `PUT` and `PATCH` return `data` as one object; a collection returns an array; an empty read is `404`; an empty write answer, or several records, is `502` ([4.3](#43-fields-and-fail-closed-filtering))
 - [ ] Responses are `application/vnd.api+json` without parameters; `Accept` that excludes JSON returns `406`; an unsupported body type returns `415` ([4.7](#47-content-negotiation))
 - [ ] A list query with an unknown parameter, field, operator or invalid value returns `400` with `source.parameter`; `page[size]` above 100 is refused ([4.10](#410-list-queries-pagination-sorting-and-filtering))
@@ -905,6 +995,9 @@ Testable statements derived from this document, each linked to its section.
 - [ ] `PUT` or `PATCH` with the current ETag succeeds and returns an `ETag` equal to the updated record's `meta.etag` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] Sending `updated` in a write body returns `400` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] `DELETE` succeeds without `If-Match` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
+- [ ] A `PATCH` that changes `currency_rate` on a completed order answers `422` and leaves the rate unchanged, also on an order in the organization's currency ([4.12](#412-document-currency-exchange-rate-and-line-prices))
+- [ ] On a foreign-currency order, a line created without `list_price` is priced from the price list converted by the header's `currency_rate`, in the order's currency; a `list_price` sent is kept as sent ([4.12](#412-document-currency-exchange-rate-and-line-prices))
+- [ ] `currency_rate` sent with a currency change is kept; a currency or `order_date` change without it recalculates it; a write that sends `currency` and `order_date` (or an update) leaving a foreign-currency order with no rate is refused with `422`; a create omitting either is saved without a rate and its next write is refused ([4.12](#412-document-currency-exchange-rate-and-line-prices))
 - [ ] `GET /api/v1/{resource}/lookups/{field}` of a declared lookup calls `/sws/neo/{spec}/{entity}/selectors/{selector}` with `limit`, `offset`, `q` and only the manifest's fixed context, and answers `data` items of the lookup `type` with `attributes.label` plus `meta.page` and `links` ([4.2.2](#422-lookups))
 - [ ] A lookup with any parameter other than `filter[search]`, `page[number]`, `page[size]` returns `400`; an undeclared lookup returns `404 unknown_lookup`; neither reaches Etendo ([4.2.2](#422-lookups))
 - [ ] A lookup Etendo answers with `404` returns `502`; a `403` passes through; a `401` evicts the cached token ([4.2.2](#422-lookups))

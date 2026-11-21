@@ -151,6 +151,7 @@ test.describe('Onboarding — Register new user (integration)', () => {
     await slow(page);
     await page.locator('#reg-email').fill(userEmail);
     await page.getByTestId('sector-select').selectOption('servicios');
+    await page.getByTestId('country-select').selectOption('ES');
     await slow(page);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -301,6 +302,7 @@ test.describe('Onboarding — Register new user (integration)', () => {
     await page.locator('#reg-name').fill('Dup User');
     await page.locator('#reg-email').fill(email);
     await page.getByTestId('sector-select').selectOption('servicios');
+    await page.getByTestId('country-select').selectOption('ES');
     await page.getByTestId('action-register-submit').click();
     // ETP-4798: this test is about the SECOND registration being refused, so it only needs the
     // first one to have gone through. Either landing screen proves that, and accepting both keeps
@@ -317,6 +319,7 @@ test.describe('Onboarding — Register new user (integration)', () => {
     await page.locator('#reg-name').fill('Dup User Again');
     await page.locator('#reg-email').fill(email);
     await page.getByTestId('sector-select').selectOption('servicios');
+    await page.getByTestId('country-select').selectOption('ES');
     await slow(page);
     await page.getByTestId('action-register-submit').click();
 
@@ -346,6 +349,7 @@ test.describe('Onboarding — Register new user (integration)', () => {
     await page.locator('#reg-name').fill(userName);
     await page.locator('#reg-email').fill(userEmail);
     await page.getByTestId('sector-select').selectOption('servicios');
+    await page.getByTestId('country-select').selectOption('ES');
     await page.getByTestId('action-register-submit').click();
 
     await passEmailConfirmationWall(page, request, userEmail);
