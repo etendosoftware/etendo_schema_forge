@@ -481,6 +481,11 @@ export default function App() {
   // The message is resolved when the error is built, which is always after a request settles,
   // so this effect is in place before any request of the same commit can fail.
   useEffect(() => installErrorTranslator(dictionaries[renderedLocale]), [dictionaries, renderedLocale]);
+  // ETP-6404 — keep the declared document language equal to the rendered one. A mismatch makes the
+  // browser offer machine translation, which rewraps React-managed text nodes and breaks reconciliation.
+  useEffect(() => {
+    document.documentElement.lang = (renderedLocale || locale).replace('_', '-');
+  }, [renderedLocale, locale]);
 
   // ETP-5022 — changing the language must reload the page. Translated reference data
   // (country names, UoMs, AD_Ref_List labels) is resolved server-side from the request's
