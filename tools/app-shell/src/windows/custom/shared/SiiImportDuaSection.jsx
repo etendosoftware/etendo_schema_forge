@@ -5,6 +5,7 @@ import { DateField } from '@/components/ui/date-field';
 import RequiredMark from '@/components/ui/required-mark.jsx';
 import { Switch } from '@/components/ui/switch';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
+import { parseCalendarDate } from '@/lib/dateOnly.js';
 import SiiPanelCard from '@/windows/custom/shared/SiiPanelCard.jsx';
 import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
 
@@ -33,6 +34,12 @@ import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
  *
  * DUA format: a DUA has 18 characters. The counter and the warning are a hint only — the SII
  * module checks the DUA format for IGIC organizations only, so for IVA it must never block a save.
+ *
+ * DUA date vs accounting register date: a non-blocking warning when the DUA date is later than
+ * Fecha registro contable (`aeatsiiFechaRegCont`). Classic checks it only at send time
+ * (`SIIUtils.invoicePreviousValidations`), and the automatic background send skips the invoice
+ * without a message, so the user is told here. With Multiple DUA the same warning is shown by the
+ * import-taxes card over its rows' dates (`isDuaDateAfterAccountingDate`).
  *
  * Writes go through `onChange` into DetailView's shared editing state, like every other SIF
  * field; the header save persists them.
@@ -69,6 +76,16 @@ export function lcHintKey(taxType) {
   if (taxType === 'IGIC') return 'sifDataTabs.dua.lcHintIgic';
   if (taxType === 'IVA') return 'sifDataTabs.dua.lcHintIva';
   return 'sifDataTabs.dua.lcHintAny';
+}
+
+/**
+ * True when both dates are set and the DUA date is a later calendar day than the accounting
+ * register date (hint only, never blocks). Compared as calendar dates, never as instants.
+ */
+export function isDuaDateAfterAccountingDate(duaDate, accountingRegisterDate) {
+  const dua = parseCalendarDate(duaDate);
+  const reg = parseCalendarDate(accountingRegisterDate);
+  return Boolean(dua && reg) && dua.getTime() > reg.getTime();
 }
 
 /** True when a non-empty DUA does not have its 18 characters (hint only, never blocks). */
@@ -112,6 +129,7 @@ export default function SiiImportDuaSection({
   const isLc = siiTypeKey === 'LC';
   const showLengthHint = !isLc && isDuaLengthOff(dua);
   const showLcHint = isLc && isLcNumberPrefixOff(dua, siiTaxType);
+  const showDateHint = isDuaDateAfterAccountingDate(duaDate, getDateVal('aeatsiiFechaRegCont'));
 
   const modeControl = (
     <div className="flex items-center gap-2" data-testid="SiiImportDuaSection__mode">
@@ -194,6 +212,16 @@ export default function SiiImportDuaSection({
               className="col-span-2"
               data-testid="SiiImportDuaSection__lcHint">
               {ui(lcHintKey(siiTaxType))}
+            </InfoBanner>
+          )}
+          {showDateHint && (
+            <InfoBanner
+              tone="warning"
+              icon={TriangleAlert}
+              dismissible={false}
+              className="col-span-2"
+              data-testid="SiiImportDuaSection__dateHint">
+              {ui('sifDataTabs.dua.dateAfterAccountingDate')}
             </InfoBanner>
           )}
         </div>

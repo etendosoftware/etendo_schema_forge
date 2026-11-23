@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, TriangleAlert } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,8 @@ import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { translateBackendErrorResponse } from '@/lib/backendErrors.js';
 import { normalizeDateInputValue } from '@/windows/custom/fiscal-config/fiscalConfig.utils.js';
 import SiiPanelCard from '@/windows/custom/shared/SiiPanelCard.jsx';
+import { InfoBanner } from '@/components/InfoBanner.jsx';
+import { isDuaDateAfterAccountingDate } from '@/windows/custom/shared/SiiImportDuaSection.jsx';
 import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
 
 /**
@@ -55,7 +57,7 @@ import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
  * hidden committed item). Its items carry the rate shown in the Tipo column (`labelPrefix`, the same
  * rate the line pickers show); a saved row falls back to `tax.rate`.
  */
-const DUA_TYPE_KEYS = new Set(['F5', 'LC']);
+export const DUA_TYPE_KEYS = new Set(['F5', 'LC']);
 // The card is mounted on purchase invoices only (SifTab's `isPurchaseInvoice` gate).
 const WINDOW_CATEGORY = 'purchases';
 const CATALOG_PAGE = 100;
@@ -554,8 +556,37 @@ function useTaxRateCatalog(apiFetch, selectorUrl, selectorContext) {
   return catalogState;
 }
 
+/**
+ * ETP-6284 — whether the saved purchase invoice is an import of deferred VAT (F5/LC, IVA
+ * organization in SII, `SIIUtils.isDeferredVATInvoice`), which is when the card offers the
+ * compensatory line. Served by `GET <neo>/purchase-invoice/header/{id}/action/siiDeferredVat`
+ * (com.etendoerp.go, body `{ deferredVat }` at the top level). Fetched while `enabled`, refetched
+ * whenever `refreshKey` changes; `false` while loading or on any failure.
+ */
+export function useSiiDeferredVat({ apiBaseUrl, recordId, enabled, refreshKey }) {
+  const apiFetch = useApiFetch(apiBaseUrl);
+  const [deferredVat, setDeferredVat] = useState(false);
+  useEffect(() => {
+    if (!enabled || !recordId || !apiBaseUrl) {
+      setDeferredVat(false);
+      return undefined;
+    }
+    let cancelled = false;
+    apiFetch(`/header/${encodeURIComponent(recordId)}/action/siiDeferredVat`)
+      .then(async res => {
+        if (!res.ok) throw new Error(String(res.status));
+        const body = await res.json();
+        if (!cancelled) setDeferredVat(body?.deferredVat === true);
+      })
+      .catch(() => { if (!cancelled) setDeferredVat(false); });
+    return () => { cancelled = true; };
+  }, [apiFetch, apiBaseUrl, recordId, enabled, refreshKey]);
+  return deferredVat;
+}
+
 function ImportTaxesBlock({
   ui, multiDua, recordId, data, apiBaseUrl, token, readOnly, onHeaderRefresh, step, deferredVat = false,
+  accountingRegisterDate = null,
 }) {
   const apiFetch = useApiFetch(apiBaseUrl);
   const { locale } = useLocaleSwitch();
@@ -803,6 +834,15 @@ function ImportTaxesBlock({
               </table>
             </div>
           )}
+          {multiDua && rows.some(r => isDuaDateAfterAccountingDate(r.aeatsiiFechaDua, accountingRegisterDate)) && (
+            <InfoBanner
+              tone="warning"
+              icon={TriangleAlert}
+              dismissible={false}
+              data-testid="SiiImportTaxesSection__dateHint">
+              {ui('sifDataTabs.dua.dateAfterAccountingDate')}
+            </InfoBanner>
+          )}
           {rows.length === 0 && !editable && (
             <p className="text-xs text-muted-foreground" data-testid="SiiImportTaxesSection__empty">
               {ui('sifDataTabs.importTaxes.empty')}
@@ -870,7 +910,7 @@ function ImportTaxesBlock({
 
 export default function SiiImportTaxesSection({
   ui, siiTypeKey, multiDua, recordId, data, apiBaseUrl, token, readOnly, onHeaderRefresh, step,
-  deferredVat = false,
+  deferredVat = false, accountingRegisterDate = null,
 }) {
   const enabled = useFeatureFlag(SII_IMPORT_DUA) === true;
   if (!enabled || !DUA_TYPE_KEYS.has(siiTypeKey)) return null;
@@ -886,6 +926,7 @@ export default function SiiImportTaxesSection({
       onHeaderRefresh={onHeaderRefresh}
       step={step}
       deferredVat={deferredVat}
+      accountingRegisterDate={accountingRegisterDate}
       data-testid="ImportTaxesBlock__siiImportTax" />
   );
 }
