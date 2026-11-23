@@ -416,4 +416,30 @@ describe('SiiImportTaxesSection — the card', () => {
     await waitFor(() => expect(button).toBeEnabled());
     expect(toast.success).not.toHaveBeenCalled();
   });
+
+  it('Multiple DUA: warns when any row has a DUA date after the accounting register date', async () => {
+    const dated = (id, date) => ({ ...SERVER_ROW, id, aeatsiiDua: `DUA-${id}`, aeatsiiFechaDua: date });
+    const hint = () => screen.queryByTestId('SiiImportTaxesSection__dateHint');
+    const cases = [
+      { rows: [dated('a', '2026-11-04'), dated('b', '2026-11-06')], reg: '2026-11-05', shown: true },
+      { rows: [dated('a', '2026-11-04'), dated('b', '2026-11-05')], reg: '2026-11-05', shown: false },
+      { rows: [dated('a', '2026-11-06')], reg: null, shown: false },
+      { rows: [dated('a', '')], reg: '2026-11-05', shown: false },
+    ];
+    for (const { rows, reg, shown } of cases) {
+      serverRows = [...rows, AUTO_ROW];
+      const { unmount } = renderCard({ multiDua: true, readOnly: true, accountingRegisterDate: reg });
+      await screen.findByTestId('SiiImportTaxesSection__row_a');
+      if (shown) expect(hint()).toHaveTextContent('sifDataTabs.dua.dateAfterAccountingDate');
+      else expect(hint()).toBeNull();
+      unmount();
+    }
+  });
+
+  it('without Multiple DUA the per-row date warning is never shown', async () => {
+    serverRows = [{ ...SERVER_ROW, id: 'a', aeatsiiFechaDua: '2026-11-06' }, AUTO_ROW];
+    renderCard({ multiDua: false, readOnly: true, accountingRegisterDate: '2026-11-05' });
+    await screen.findByTestId('SiiImportTaxesSection__row_a');
+    expect(screen.queryByTestId('SiiImportTaxesSection__dateHint')).toBeNull();
+  });
 });
