@@ -1560,7 +1560,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
     // parent crumb of a generated window's detail (TopBar breadcrumb item `{ label, onClick }`);
     // it takes the same path as "Cancelar".
     breadcrumb: [
-      ui('finance'),
+      ui('taxes'),
       { label: ui('fm.breadcrumb.section'), onClick: handleCancel },
       declTitle,
     ],

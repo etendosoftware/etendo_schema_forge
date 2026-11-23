@@ -119,7 +119,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Manual verification path:**
   1. Sign in and open `/dashboard`.
   2. Confirm the side menu, top bar, command palette, and copilot widget are visible.
-  3. Use an accessible Finance, Treasury or Inventory Reports menu entry and confirm the URL keeps `?category=finance`, `?category=treasury` or `?category=inventory`, and that the entry stays highlighted after opening a report from it. The Purchases Reports entry remains deliberately hidden in `menu.json`.
+  3. Use an accessible Finance, Treasury, Taxes or Inventory Reports menu entry and confirm the URL keeps `?category=finance`, `?category=treasury`, `?category=taxes` or `?category=inventory`, and that the entry stays highlighted after opening a report from it. The Purchases Reports entry remains deliberately hidden in `menu.json`.
   4. Re-open the same route with `?embedded=1` and confirm the shell chrome is hidden while the routed page still renders.
   5. Sign in as a role with restricted `AD_Window_Access`/`AD_Process_Access` grants and confirm the sidebar shows visibly fewer items than a role with full access (e.g. GOClient Admin).
   6. Sign in as a user with no role assigned (or a role with zero window/process access) and confirm the "No access" screen renders instead of the sidebar, and that navigating directly to a known window URL (e.g. `/sales-order`) also lands on the blocking screen rather than the window.
@@ -634,7 +634,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
     because the old category's gate could deny the catalogue fetch before the contract is known.
     A category missing from `REPORT_CATEGORY_WINDOW_IDS`/`REPORT_CATEGORY_REPORT_IDS` is ungated,
     so `treasury` is declared in both (same Financial Reports anchor as `finance`; reports
-    `aging-receivable`, `aging-payable`). The favourite star matches any saved favourite for the
+    `aging-receivable`, `aging-payable`). ETP-6380 did the same for `taxes` (Impuestos › Informes,
+    same anchor, report `tax-report`): an old `category=finance&report=tax-report` link or
+    favourite is re-pointed to `category=taxes`. The favourite star matches any saved favourite for the
     same report id whatever its category (`findReportFavoriteKeys()`): an old-category favourite
     shows the star lit, and un-favouriting removes every favourite of that report (current and
     old-category keys, in one `removeFavorite([...keys])` call) instead of adding a duplicate or
@@ -677,6 +679,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
      becomes `category=treasury` without a new history entry, the breadcrumb reads
      Tesorería / Informes / Antigüedad de Cobros, and Tesorería › Informes is highlighted. A
      favourite saved under the old URL shows the star lit; pressing it removes that favourite.
+     The same holds for `/report-viewer?category=finance&report=tax-report` → `category=taxes`,
+     Impuestos / Informes / Informe de Impuestos, Impuestos › Informes highlighted (ETP-6380).
   7. Widen past 1366px and confirm any page quick actions come back inline and the right `⋯`
      disappears.
 

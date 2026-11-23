@@ -448,34 +448,10 @@
           "routeOnly": true
         },
         {
-          "name": "fiscal-monitor",
-          "label": "Fiscal Monitor",
-          "favname": "Fiscal Monitor",
-          "windowId": "FEF76C3E0F104F06A89AAD15A4A4A35C"
-        },
-        {
           "name": "conversion-rates",
           "label": "Conversion Rates",
           "favname": "Conversion Rates",
           "windowId": "116"
-        },
-        {
-          "name": "fiscal-models",
-          "label": "Fiscal Models",
-          "favname": "Fiscal Models",
-          "windowId": "3E8FEA1EA7404D979306C9EE7FD2E7E8"
-        },
-        {
-          "name": "tax",
-          "label": "Tax",
-          "favname": "Tax",
-          "windowId": "137"
-        },
-        {
-          "name": "tax-category",
-          "label": "Tax Category",
-          "favname": "Tax Category",
-          "windowId": "138"
         },
         {
           "name": "report-viewer-finance",
@@ -483,14 +459,6 @@
           "favname": "Finance Reports",
           "path": "report-viewer?category=finance",
           "accessWindowId": "D647D118F5014D00AF47A636B2CD0DD3"
-        },
-        {
-          "name": "tax-report",
-          "label": "Tax Report",
-          "favname": "Tax Report",
-          "hidden": true,
-          "reportId": "tax-report",
-          "path": "report-viewer?category=finance&report=tax-report"
         },
         {
           "name": "balance-sheet",
@@ -531,6 +499,59 @@
           "hidden": true,
           "reportId": "report-trial-balance",
           "path": "report-viewer?category=finance&report=report-trial-balance"
+        }
+      ]
+    },
+    {
+      "group": "Taxes",
+      "icon": "Percent",
+      "section": "Finance",
+      "items": [
+        {
+          "name": "tax",
+          "label": "Tax",
+          "favname": "Tax",
+          "windowId": "137"
+        },
+        {
+          "name": "tax-category",
+          "label": "Tax Category",
+          "favname": "Tax Category",
+          "windowId": "138"
+        },
+        {
+          "name": "fiscal-monitor",
+          "label": "Fiscal Monitor",
+          "favname": "Fiscal Monitor",
+          "windowId": "FEF76C3E0F104F06A89AAD15A4A4A35C"
+        },
+        {
+          "name": "report-viewer-taxes",
+          "label": "Reports",
+          "favname": "Taxes Reports",
+          "path": "report-viewer?category=taxes",
+          "accessWindowId": "D647D118F5014D00AF47A636B2CD0DD3",
+          "requiresGroupReport": true
+        },
+        {
+          "name": "fiscal-config",
+          "label": "Fiscal Configuration",
+          "favname": "Fiscal Configuration",
+          "windowId": "C1D3A2A017AC4B82B9FEE6F4D2A0C55A"
+        },
+        {
+          "name": "fiscal-models",
+          "label": "Fiscal Models",
+          "favname": "Fiscal Models",
+          "windowId": "3E8FEA1EA7404D979306C9EE7FD2E7E8"
+        },
+        {
+          "name": "tax-report",
+          "label": "Tax Report",
+          "favname": "Tax Report",
+          "hidden": true,
+          "reportId": "tax-report",
+          "path": "report-viewer?category=taxes&report=tax-report"
         }
       ]
     },
@@ -618,12 +639,6 @@
           "icon": "FileText",
           "featureFlag": "doc-template-selection",
           "capability": "isAdminOrClientAdmin"
-        },
-        {
-          "name": "fiscal-config",
-          "label": "Fiscal Configuration",
-          "favname": "Fiscal Configuration",
-          "windowId": "C1D3A2A017AC4B82B9FEE6F4D2A0C55A"
         }
       ]
     },

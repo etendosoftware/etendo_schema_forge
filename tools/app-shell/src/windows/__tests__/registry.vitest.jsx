@@ -6,6 +6,7 @@
 vi.mock('@generated/remittance/generated/web/remittance/index.jsx', () => ({ default: () => null }));
 import { buildMenuGroups, getAllWindowNames, apiOnlyWindows, buildWindowMap, filterMenuGroupsByAccess, hasAccessibleReportInGroup } from '../registry';
 import menuConfig from '../../menu.json';
+import { filterMenuGroups, isSearchableMenuItem } from '../../lib/globalSearchMenu.js';
 import { defaultNavigation, optionalNavigation, hiddenNavigation, navigationProfiles, expectedNavigation, navigationPermissions, expectNavigation } from './navigationExpectations.js';
 
 describe('registry', () => {
@@ -486,7 +487,7 @@ describe('registry', () => {
         { isAdminOrClientAdmin: false },
         {},
         undefined,
-        { 'tax-report': 'full' },
+        { 'balance-sheet': 'full' },
       );
       const finance = result.find(g => g.group === 'Finance');
       expect(finance).toBeDefined();
@@ -586,15 +587,70 @@ describe('registry', () => {
     });
   });
 
+  // ETP-6380 — Impuestos › Informes follows the Treasury rule: only a grant on the Tax Report
+  // reveals it, and the Taxes group lists its entries in the agreed order.
+  describe('filterMenuGroupsByAccess — Taxes group (ETP-6380)', () => {
+    const FINANCIAL_REPORTS_WINDOW = 'D647D118F5014D00AF47A636B2CD0DD3';
+    const taxesNames = result => result.find(g => g.group === 'Taxes')?.items.map(i => i.name) ?? [];
+    const run = ({ capabilities = { isAdminOrClientAdmin: false }, windowAccess = {}, reportAccess, allowedIds = new Set() }) =>
+      filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, undefined, reportAccess);
+
+    it('sits in the Finance section right after the Finance group', () => {
+      const names = menuConfig.menu.map(g => g.group);
+      expect(names.indexOf('Taxes')).toBe(names.indexOf('Finance') + 1);
+      expect(menuConfig.menu.find(g => g.group === 'Taxes').section).toBe('Finance');
+    });
+
+    it('lists its entries in order for an admin', () => {
+      const result = run({ capabilities: { isAdminOrClientAdmin: true }, allowedIds: null, reportAccess: {} });
+      expect(taxesNames(result)).toEqual(['tax', 'tax-category', 'fiscal-monitor', 'report-viewer-taxes', 'fiscal-config', 'fiscal-models']);
+    });
+
+    it('hides the Taxes Reports link with the anchor window but no Tax Report grant', () => {
+      const result = run({ windowAccess: { [FINANCIAL_REPORTS_WINDOW]: 'full' }, reportAccess: { 'balance-sheet': 'full' } });
+      expect(taxesNames(result)).not.toContain('report-viewer-taxes');
+    });
+
+    it('shows the Taxes Reports link with a Tax Report grant, and not the Finance one', () => {
+      const result = run({ reportAccess: { 'tax-report': 'full' } });
+      expect(taxesNames(result)).toEqual(['report-viewer-taxes']);
+      expect(result.find(g => g.group === 'Finance')?.items.map(i => i.name) ?? []).not.toContain('report-viewer-finance');
+    });
+
+    it('global search: "Impuestos" lists the Taxes section and its windows', () => {
+      const translate = label => ({ Taxes: 'Impuestos' }[label] ?? label);
+      const groups = menuConfig.menu.filter(g => !g.hidden)
+        .map(g => ({ ...g, items: g.items.filter(i => isSearchableMenuItem(i)) }));
+      const result = filterMenuGroups(groups, 'impuestos', translate);
+      const taxes = result.find(g => g.group === 'Taxes');
+      expect(taxes.items.map(i => i.name)).toEqual(['tax', 'tax-category', 'fiscal-monitor', 'report-viewer-taxes', 'fiscal-config', 'fiscal-models']);
+      // A moved window is found under Taxes, not under its old group.
+      const byName = filterMenuGroups(groups, 'Fiscal Configuration', translate);
+      expect(byName.map(g => g.group)).toEqual(['Taxes']);
+    });
+
+    it('no longer lists the moved windows under Finance or Settings', () => {
+      const result = run({ capabilities: { isAdminOrClientAdmin: true }, allowedIds: null, reportAccess: {} });
+      const moved = ['tax', 'tax-category', 'fiscal-monitor', 'fiscal-config', 'fiscal-models'];
+      for (const group of ['Finance', 'Settings']) {
+        const names = result.find(g => g.group === group)?.items.map(i => i.name) ?? [];
+        for (const name of moved) expect(names).not.toContain(name);
+      }
+    });
+  });
+
   describe('hasAccessibleReportInGroup', () => {
     it('answers true when reportAccess holds a grant on a report of the group', () => {
       expect(hasAccessibleReportInGroup('Treasury', { 'aging-receivable': 'full' })).toBe(true);
-      expect(hasAccessibleReportInGroup('Finance', { 'tax-report': 'read-only' })).toBe(true);
+      expect(hasAccessibleReportInGroup('Finance', { 'balance-sheet': 'read-only' })).toBe(true);
+      expect(hasAccessibleReportInGroup('Taxes', { 'tax-report': 'read-only' })).toBe(true);
     });
 
     it('is scoped to the named group: a Finance grant does not open Treasury and vice versa', () => {
       expect(hasAccessibleReportInGroup('Treasury', { 'tax-report': 'full' })).toBe(false);
       expect(hasAccessibleReportInGroup('Finance', { 'aging-payable': 'full' })).toBe(false);
+      // ETP-6380 — the Tax Report moved to Impuestos: it no longer opens the Finance link.
+      expect(hasAccessibleReportInGroup('Finance', { 'tax-report': 'full' })).toBe(false);
     });
 
     it.each([null, undefined, {}])('answers false for reportAccess %j (fails closed)', reportAccess => {

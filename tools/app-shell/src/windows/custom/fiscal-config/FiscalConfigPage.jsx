@@ -193,7 +193,7 @@ function FiscalConfigPageContent({ token, apiBaseUrl }) {
 
   const profileLabel = PROFILE_LABEL[effectiveProfile];
   const pageTitle = resolvePageTitle(ui, profileLabel);
-  useSetPageMeta({ title: pageTitle, breadcrumb: `${ui('settings')} / ${ui('fiscal.monitor.nav')} / ${pageTitle}` });
+  useSetPageMeta({ title: pageTitle, breadcrumb: `${ui('taxes')} / ${pageTitle}` });
   const [effectiveSii, effectiveTbai, effectiveVerifactu] = mockOverride
     ? [mockOverride.sii, mockOverride.tbai, mockOverride.verifactu]
     : [siiRecord, tbaiRecord, verifactuRecord];

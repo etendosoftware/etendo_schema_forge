@@ -68,6 +68,9 @@ const REPORT_CATEGORY_WINDOW_IDS = {
   // ETP-6389 — Tesorería › Informes shares the Financial Reports anchor window: the aging reports
   // moved out of the finance category, not out of that permission.
   treasury: 'D647D118F5014D00AF47A636B2CD0DD3',
+  // ETP-6380 — Impuestos › Informes shares it too: the Tax Report moved out of the finance
+  // category, not out of that permission.
+  taxes: 'D647D118F5014D00AF47A636B2CD0DD3',
   inventory: '6346B88619F948F9A42224BDB0B239FA',
 };
 
@@ -81,12 +84,14 @@ const REPORT_CATEGORY_WINDOW_IDS = {
 // report row is ever added, removed, or moved between categories.
 const REPORT_CATEGORY_REPORT_IDS = {
   finance: [
-    'tax-report', 'balance-sheet', 'profit-loss',
+    'balance-sheet', 'profit-loss',
     'report-general-ledger', 'report-journal-entries', 'report-trial-balance',
   ],
   // ETP-6389 — the aging reports live under Tesorería › Informes. A category missing here is
   // UNGATED, so this entry is what keeps the treasury catalog behind the per-report grants.
   treasury: ['aging-receivable', 'aging-payable'],
+  // ETP-6380 — the Tax Report lives under Impuestos › Informes; same UNGATED-if-missing rule.
+  taxes: ['tax-report'],
   inventory: ['inventory-stock-report'],
 };
 

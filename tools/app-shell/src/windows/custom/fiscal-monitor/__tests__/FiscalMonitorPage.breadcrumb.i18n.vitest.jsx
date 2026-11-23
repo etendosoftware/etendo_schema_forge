@@ -4,7 +4,7 @@
 // FiscalMonitorPage.jsx used to build a 4-segment breadcrumb
 // (`${ui('settings')} / ${ui('fiscal.monitor.nav')} / ${ui('fiscalMonitor.systemFiscal')} / ${PROFILE_LABELS[profile]}`)
 // rooted under "Configuración" instead of "Finanzas". The fix collapsed it to
-// `${ui('finance')} / ${ui('fiscal.monitor.nav')}`. Since this is a template
+// `${ui('taxes')} / ${ui('fiscal.monitor.nav')}`. Since this is a template
 // literal (not a pure exported helper), the sibling
 // FiscalMonitorPage.vitest.jsx's identity `useUI` mock (`(key) => key`) can't
 // catch a real-locale regression — this file renders with `useUI` backed by
@@ -119,7 +119,7 @@ beforeEach(() => {
 });
 
 describe('FiscalMonitorPage — breadcrumb against the real locale dictionary (ETP-4945)', () => {
-  it('resolves the es_ES breadcrumb to the 2-segment "Finanzas / Monitor fiscal" (not the stale 4-level "Configuración / Monitor de facturas / Sistema fiscal activo / SII")', async () => {
+  it('resolves the es_ES breadcrumb to the 2-segment "Impuestos / Monitor fiscal" (not the stale 4-level "Configuración / Monitor de facturas / Sistema fiscal activo / SII")', async () => {
     activeUi = realUiEs;
     render(<FiscalMonitorPage {...baseProps} />);
     await waitFor(() => {
@@ -127,11 +127,11 @@ describe('FiscalMonitorPage — breadcrumb against the real locale dictionary (E
     });
 
     const lastCall = setMetaMock.mock.calls.at(-1)[0];
-    expect(lastCall.breadcrumb).toBe('Finanzas / Monitor fiscal');
+    expect(lastCall.breadcrumb).toBe('Impuestos / Monitor fiscal');
     expect(lastCall.breadcrumb.split(' / ')).toHaveLength(2);
   });
 
-  it('resolves the en_US breadcrumb to "Finance / Fiscal Monitor"', async () => {
+  it('resolves the en_US breadcrumb to "Taxes / Fiscal Monitor"', async () => {
     activeUi = realUiEn;
     render(<FiscalMonitorPage {...baseProps} />);
     await waitFor(() => {
@@ -139,6 +139,6 @@ describe('FiscalMonitorPage — breadcrumb against the real locale dictionary (E
     });
 
     const lastCall = setMetaMock.mock.calls.at(-1)[0];
-    expect(lastCall.breadcrumb).toBe('Finance / Fiscal Monitor');
+    expect(lastCall.breadcrumb).toBe('Taxes / Fiscal Monitor');
   });
 });

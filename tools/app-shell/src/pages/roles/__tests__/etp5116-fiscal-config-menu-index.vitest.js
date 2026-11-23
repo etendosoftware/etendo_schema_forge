@@ -29,22 +29,23 @@ import { buildMenuWindowIndex } from '../useRolesOverviewData.js';
  * import chain — this test never calls `fetchRolesOverview`.
  */
 describe('ETP-5116 — fiscal-config menu.json windowId (roles matrix override)', () => {
-  it('indexes fiscal-monitor by its real windowId, resolving to Finance/"Fiscal Monitor" (pre-existing, proven mechanism)', () => {
+  it('indexes fiscal-monitor by its real windowId, resolving to Taxes/"Fiscal Monitor" (pre-existing, proven mechanism)', () => {
     const index = buildMenuWindowIndex();
     const entry = index.get('FEF76C3E0F104F06A89AAD15A4A4A35C');
     expect(entry, 'fiscal-monitor windowId must still be indexed').toBeTruthy();
-    expect(entry.group).toBe('Finance');
+    // ETP-6380 — the fiscal windows live in the Impuestos group.
+    expect(entry.group).toBe('Taxes');
     expect(entry.label).toBe('Fiscal Monitor');
   });
 
-  it('indexes fiscal-config by its real windowId (SII Configuration), resolving to Settings/"Fiscal Configuration"', () => {
+  it('indexes fiscal-config by its real windowId (SII Configuration), resolving to Taxes/"Fiscal Configuration"', () => {
     const index = buildMenuWindowIndex();
     const entry = index.get('C1D3A2A017AC4B82B9FEE6F4D2A0C55A');
     expect(
       entry,
       'fiscal-config windowId must be indexed — without it, the 3 fiscal-config windows leak into the matrix as separate rows under their native Finance category'
     ).toBeTruthy();
-    expect(entry.group).toBe('Settings');
+    expect(entry.group).toBe('Taxes');
     expect(entry.label).toBe('Fiscal Configuration');
   });
 });

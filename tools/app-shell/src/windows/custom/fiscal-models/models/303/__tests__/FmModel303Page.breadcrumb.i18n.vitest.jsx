@@ -4,7 +4,7 @@
 //
 // FmModel303Page.jsx used to render `Tesorería / Modelo 303 - {periodLabel}` —
 // a raw hardcoded Spanish literal. The fix is
-// `${ui('finance')} / ${ui('fm.breadcrumb.section')} / Modelo 303 - {periodLabel}`,
+// `${ui('taxes')} / ${ui('fm.breadcrumb.section')} / Modelo 303 - {periodLabel}`,
 // 3 segments, matching the fm-list breadcrumb's root+section. Since ETP-5584 the
 // title and breadcrumb are published to the app TopBar through useSetPageMeta
 // (no in-page title row), so this asserts the published meta, following the
@@ -89,11 +89,11 @@ const defaultProps = {
 
 
 describe('FmModel303Page — breadcrumb against the real locale dictionary (ETP-4945)', () => {
-  it('resolves the es_ES breadcrumb to "Finanzas / Modelos Fiscales / Modelo 303 - 2026/T2", not the stale "Tesorería"', () => {
+  it('resolves the es_ES breadcrumb to "Impuestos / Modelos Fiscales / Modelo 303 - 2026/T2", not the stale "Tesorería"', () => {
     activeUi = realUiEs;
     renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
 
-    expect(breadcrumbToText(lastMeta.breadcrumb)).toBe('Finanzas / Modelos Fiscales / Modelo 303 - 2026/T2');
+    expect(breadcrumbToText(lastMeta.breadcrumb)).toBe('Impuestos / Modelos Fiscales / Modelo 303 - 2026/T2');
     expect(lastMeta.title).toBe('Modelo 303 - 2026/T2');
   });
 
@@ -102,19 +102,19 @@ describe('FmModel303Page — breadcrumb against the real locale dictionary (ETP-
   // the root/section segments. Now resolved via the shared 'fm.config.m303.title'
   // key (already used by the catalog config section header), which translates
   // "Modelo" to "Form" — the term AEAT-form-aware English UI copy uses.
-  it('resolves the en_US breadcrumb to "Finance / Fiscal Models / Form 303 - 2026/T2", not the stale "Modelo"', () => {
+  it('resolves the en_US breadcrumb to "Taxes / Fiscal Models / Form 303 - 2026/T2", not the stale "Modelo"', () => {
     activeUi = realUiEn;
     activeLocale = 'en_US';
     renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
     activeLocale = 'es_ES';
 
-    expect(breadcrumbToText(lastMeta.breadcrumb)).toBe('Finance / Fiscal Models / Form 303 - 2026/T2');
+    expect(breadcrumbToText(lastMeta.breadcrumb)).toBe('Taxes / Fiscal Models / Form 303 - 2026/T2');
     expect(lastMeta.title).toBe('Form 303 - 2026/T2');
   });
 
   // ETP-5597 — like the parent crumb of a generated window's detail, the "Modelos Fiscales" level
   // of the TopBar breadcrumb is a link back to the declarations list: the published item carries an
-  // `onClick` (the TopBar renders it as a button); "Finanzas" and the current page stay plain text.
+  // `onClick` (the TopBar renders it as a button); "Impuestos" and the current page stay plain text.
   it('the "Modelos Fiscales" crumb is a link back to the list (onBack); the others are not', () => {
     activeUi = realUiEs;
     const onBack = vi.fn();
@@ -142,7 +142,7 @@ describe('FmModel303Page — app TopBar meta (ETP-5584)', () => {
     activeUi = realUiEs;
     const { container } = renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
     expect(container.textContent).not.toContain('Modelo 303 - 2026/T2');
-    expect(container.textContent).not.toContain('Finanzas / Modelos Fiscales');
+    expect(container.textContent).not.toContain('Impuestos / Modelos Fiscales');
     expect(container.querySelector('[data-testid="fm-more-options-trigger"]')).toBeNull();
   });
 
