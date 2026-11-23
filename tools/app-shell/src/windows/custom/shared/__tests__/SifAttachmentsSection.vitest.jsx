@@ -81,11 +81,35 @@ describe('SifAttachmentsSection', () => {
     );
   });
 
-  it('passes isActive: false to useAttachments when recordId is absent', () => {
+  it('does not query attachments when recordId is absent', () => {
     render(<SifAttachmentsSection {...baseProps} recordId={undefined} />);
-    expect(useAttachmentsSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ isActive: false }),
-    );
+    expect(useAttachmentsSpy).not.toHaveBeenCalled();
+  });
+
+  // ── several sub-records (ETP-6284: SII F1 + one F5 per DUA) ─────────────────
+
+  it('with a single id in recordIds renders exactly like the single-recordId form', () => {
+    render(<SifAttachmentsSection {...baseProps} recordId={undefined} recordIds={['sub-001']} />);
+    expect(screen.getByTestId('attachments-table')).toBeInTheDocument();
+    expect(screen.queryByText('sifAttachmentsRecordLabel')).not.toBeInTheDocument();
+    expect(useAttachmentsSpy).toHaveBeenCalledTimes(1);
+    expect(useAttachmentsSpy).toHaveBeenCalledWith(expect.objectContaining({ recordId: 'sub-001' }));
+  });
+
+  it('lists the attachments of every record in recordIds, one labelled group each', () => {
+    render(<SifAttachmentsSection {...baseProps} recordIds={['sub-001', 'sub-002', 'sub-003']} />);
+    expect(screen.getAllByText('attachments')).toHaveLength(1);
+    expect(screen.getByTestId('SifAttachmentsSection__record-1')).toBeInTheDocument();
+    expect(screen.getByTestId('SifAttachmentsSection__record-3')).toBeInTheDocument();
+    expect(screen.getAllByText('sifAttachmentsRecordLabel')).toHaveLength(3);
+    const queried = useAttachmentsSpy.mock.calls.map(([opts]) => opts.recordId);
+    expect(queried).toEqual(expect.arrayContaining(['sub-001', 'sub-002', 'sub-003']));
+  });
+
+  it('falls back to recordId when recordIds is empty', () => {
+    render(<SifAttachmentsSection {...baseProps} recordIds={[]} />);
+    expect(useAttachmentsSpy).toHaveBeenCalledWith(expect.objectContaining({ recordId: 'sub-001' }));
+    expect(screen.queryByText('sifAttachmentsRecordLabel')).not.toBeInTheDocument();
   });
 
   // ── list rendering ───────────────────────────────────────────────────────────

@@ -22866,6 +22866,7 @@
     "oauthRevokeDesc": "Esto invalidará todos los tokens activos de este cliente. Los agentes deberán volver a autenticarse.",
     "firstStepsCompleted": "Completados",
     "attachments": "Adjuntos",
+    "sifAttachmentsRecordLabel": "Registro {index} de {total}",
     "attachmentsDropHere": "Arrastra tu archivo aquí",
     "attachmentsOr": "o",
     "attachmentsBrowse": "selecciona un archivo",

@@ -22630,6 +22630,7 @@
     "oauthRevokeDesc": "This will invalidate all active tokens for this client. Agents will need to re-authenticate.",
     "firstStepsCompleted": "Completed",
     "attachments": "Attachments",
+    "sifAttachmentsRecordLabel": "Record {index} of {total}",
     "attachmentsDropHere": "Drop your file here",
     "attachmentsOr": "or",
     "attachmentsBrowse": "select a file",

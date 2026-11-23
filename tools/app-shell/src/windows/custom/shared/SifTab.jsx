@@ -751,6 +751,7 @@ export default function SifTab({
             <SifAttachmentsSection
               tableName="aeatsii_facturas"
               recordId={data?.aeatsiiFacturaId}
+              recordIds={data?.aeatsiiFacturaIds}
               token={token}
               apiBaseUrl={apiBaseUrl}
               data-testid="SifAttachmentsSection__sii" />
