@@ -5,7 +5,51 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockApiFetch = vi.fn();
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => mockApiFetch }));
 
-import { renderHook, waitFor } from '@testing-library/react';
+const flag = { enabled: true };
+vi.mock('@/lib/flags', () => ({ SII_IMPORT_DUA: 'sii-import-dua', useFeatureFlag: () => flag.enabled }));
+vi.mock('@/i18n', () => ({
+  useLabel: () => key => key,
+  useMenuLabel: () => key => key,
+  useUI: () => key => key,
+  useLocale: () => ({ genericLabels: {}, statuses: {} }),
+  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
+}));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
+vi.mock('@/lib/backendErrors.js', () => ({ translateBackendErrorResponse: async () => 'backend-error' }));
+
+// Child controls stubbed at their contract: the picker reports a tax, the amount input commits a
+// parsed number, the delete dialog confirms.
+vi.mock('@/components/contract-ui/SelectorInput.jsx', async () => {
+  const { createElement } = await import('react');
+  return {
+    SelectorInput: ({ onChange, 'data-testid': testId }) => createElement('button', {
+      type: 'button', 'data-testid': 'stub-selector-pick', 'data-root': testId,
+      onClick: () => onChange('imp21', 'Importaciones 21%'),
+    }, testId),
+  };
+});
+vi.mock('@/components/forms/fields.jsx', async () => {
+  const { createElement } = await import('react');
+  return {
+    MaskedAmountInput: ({ onCommit, 'aria-invalid': invalid, 'data-testid': testId }) => createElement('input', {
+      'data-testid': testId, 'aria-invalid': invalid,
+      onChange: e => onCommit(e.target.value === '' ? null : Number(e.target.value)),
+    }),
+  };
+});
+vi.mock('@/components/contract-ui/DeleteConfirmDialog.jsx', async () => {
+  const { createElement } = await import('react');
+  return {
+    DeleteConfirmDialog: ({ open, onConfirm }) => (open
+      ? createElement('button', { type: 'button', 'data-testid': 'stub-delete-confirm', onClick: onConfirm }, 'confirm')
+      : null),
+  };
+});
+
+import { createElement as h } from 'react';
+import { render, renderHook, screen, fireEvent, waitFor } from '@testing-library/react';
+import { toast } from 'sonner';
+import SiiImportTaxesSection from '../SiiImportTaxesSection.jsx';
 import {
   selectImportTaxOptions, isImportTaxName, isCompensatoryTaxName, compensatoryBaseName,
   compensatoryNameRate, findCompensatoryTax, planCompensatoryLines, parseRate, rateLabel,
@@ -215,5 +259,161 @@ describe('useSiiDeferredVat — the compensatory line is offered only on deferre
     await waitFor(() => expect(mockApiFetch).toHaveBeenCalledTimes(2));
     rerender({ ...props, refreshKey: 'k2', enabled: false });
     await waitFor(() => expect(result.current).toBe(false));
+  });
+});
+
+describe('SiiImportTaxesSection — the card', () => {
+  const ui = key => key;
+  const RECORD = 'inv-1';
+  const SERVER_ROW = {
+    id: 'tl-1', tax: 'imp21', 'tax$_identifier': 'Importaciones 21%', 'tax$rate': 21,
+    taxableAmount: 100, taxAmount: 21, recalculate: false, lineNo: 20,
+  };
+  const AUTO_ROW = { id: 'tl-auto', tax: 'iva21', recalculate: true, lineNo: 30, taxableAmount: 5, taxAmount: 1 };
+  let serverRows;
+  let writeResponses;
+
+  function respond(body, ok = true) {
+    return Promise.resolve({ ok, status: ok ? 200 : 500, json: async () => body });
+  }
+
+  function routeApi() {
+    mockApiFetch.mockImplementation((url, opts = {}) => {
+      const method = opts.method ?? 'GET';
+      if (url.includes('/lines/selectors/tax')) {
+        return respond({ items: [
+          { id: 'imp21', label: 'Importaciones 21%', labelPrefix: '21%' },
+          { id: 'comp21', label: 'Importaciones 21%=0%', labelPrefix: '0%' },
+        ] });
+      }
+      if (url.startsWith('/tax?parentId=')) return respond({ response: { data: serverRows } });
+      if (url === '/tax/callout') return respond({ updates: { taxAmount: { value: 21 } } });
+      const custom = writeResponses[method];
+      if (custom) return custom(url, opts);
+      return respond({ response: { data: [{ id: 'tl-new' }] } });
+    });
+  }
+
+  function renderCard(props = {}) {
+    const onHeaderRefresh = vi.fn();
+    const utils = render(h(SiiImportTaxesSection, {
+      ui, siiTypeKey: 'F5', multiDua: false, recordId: RECORD, data: { id: RECORD }, apiBaseUrl: '/api/purchase-invoice',
+      token: 't', readOnly: false, onHeaderRefresh, step: 2, ...props,
+    }));
+    return { ...utils, onHeaderRefresh };
+  }
+
+  const writes = method => mockApiFetch.mock.calls.filter(([, o]) => o?.method === method);
+
+  beforeEach(() => {
+    flag.enabled = true;
+    serverRows = [AUTO_ROW];
+    writeResponses = {};
+    mockApiFetch.mockReset();
+    toast.success.mockReset();
+    toast.error.mockReset();
+    routeApi();
+  });
+
+  it('renders nothing with the flag off or a type other than F5/LC', () => {
+    flag.enabled = false;
+    expect(renderCard().container).toBeEmptyDOMElement();
+    flag.enabled = true;
+    expect(renderCard({ siiTypeKey: 'F1' }).container).toBeEmptyDOMElement();
+    expect(renderCard({ siiTypeKey: 'F6' }).container).toBeEmptyDOMElement();
+  });
+
+  it('asks to save the invoice first while it is unsaved, with no request', () => {
+    renderCard({ recordId: null });
+    expect(screen.getByTestId('SiiImportTaxesSection__saveFirst')).toHaveTextContent('sifDataTabs.importTaxes.saveFirst');
+    expect(mockApiFetch).not.toHaveBeenCalled();
+  });
+
+  it('read-only invoice: manual rows render as text, with no inputs, add or delete', async () => {
+    serverRows = [SERVER_ROW, AUTO_ROW];
+    renderCard({ readOnly: true });
+    expect(await screen.findByTestId('SiiImportTaxesSection__row_tl-1')).toHaveTextContent('Importaciones 21%');
+    expect(screen.queryByTestId('SiiImportTaxesSection__row_tl-auto')).toBeNull();
+    expect(screen.queryByTestId('SelectorInput__siiImportTax')).toBeNull();
+    expect(screen.queryByTestId('MaskedAmountInput__siiImportTaxBase')).toBeNull();
+    expect(screen.queryByTestId('Button__siiImportTaxAdd')).toBeNull();
+    expect(screen.queryByTestId('Button__siiImportTaxDelete')).toBeNull();
+  });
+
+  it('a draft row stays local and marked until complete, then is POSTed once', async () => {
+    const { onHeaderRefresh } = renderCard();
+    await waitFor(() => expect(mockApiFetch).toHaveBeenCalledWith(expect.stringMatching(/^\/tax\?parentId=inv-1/)));
+    fireEvent.click(screen.getByTestId('Button__siiImportTaxAdd'));
+    // Tax picked, base still empty: nothing is sent, the base cell is flagged.
+    fireEvent.click(screen.getByTestId('stub-selector-pick'));
+    await waitFor(() => expect(screen.getByTestId('MaskedAmountInput__siiImportTaxBase')).toHaveAttribute('aria-invalid', 'true'));
+    expect(writes('POST').filter(([u]) => u === '/tax')).toHaveLength(0);
+
+    serverRows = [AUTO_ROW, { ...SERVER_ROW, id: 'tl-new', lineNo: 40 }];
+    fireEvent.change(screen.getByTestId('MaskedAmountInput__siiImportTaxBase'), { target: { value: '100' } });
+    await waitFor(() => expect(onHeaderRefresh).toHaveBeenCalledTimes(1));
+    const posts = writes('POST').filter(([u]) => u === '/tax');
+    expect(posts).toHaveLength(1);
+    expect(JSON.parse(posts[0][1].body)).toEqual({
+      tax: 'imp21', taxableAmount: 100, taxAmount: 21, parentId: 'inv-1', lineNo: 40, recalculate: false,
+    });
+  });
+
+  it('a saved row PATCHes only when a value really changed', async () => {
+    serverRows = [SERVER_ROW, AUTO_ROW];
+    const { onHeaderRefresh } = renderCard();
+    const base = await screen.findByTestId('MaskedAmountInput__siiImportTaxBase');
+    fireEvent.change(base, { target: { value: '100' } });
+    expect(writes('PATCH')).toHaveLength(0);
+
+    fireEvent.change(base, { target: { value: '200' } });
+    await waitFor(() => expect(writes('PATCH')).toHaveLength(1));
+    expect(writes('PATCH')[0][0]).toBe('/tax/tl-1');
+    expect(JSON.parse(writes('PATCH')[0][1].body)).toEqual({ tax: 'imp21', taxableAmount: 200, taxAmount: 21 });
+    await waitFor(() => expect(onHeaderRefresh).toHaveBeenCalledTimes(1));
+  });
+
+  it('deletes a saved row only after confirmation, then refreshes the header', async () => {
+    serverRows = [SERVER_ROW, AUTO_ROW];
+    const { onHeaderRefresh } = renderCard();
+    fireEvent.click(await screen.findByTestId('Button__siiImportTaxDelete'));
+    expect(writes('DELETE')).toHaveLength(0);
+    serverRows = [AUTO_ROW];
+    fireEvent.click(screen.getByTestId('stub-delete-confirm'));
+    await waitFor(() => expect(onHeaderRefresh).toHaveBeenCalledTimes(1));
+    expect(writes('DELETE').map(([u]) => u)).toEqual(['/tax/tl-1']);
+    expect(toast.success).toHaveBeenCalledWith('sifDataTabs.importTaxes.deleted');
+    await waitFor(() => expect(screen.queryByTestId('SiiImportTaxesSection__row_tl-1')).toBeNull());
+  });
+
+  it('offers the compensatory line only on deferred VAT and POSTs it with a negative base', async () => {
+    serverRows = [SERVER_ROW, AUTO_ROW];
+    const { unmount } = renderCard({ deferredVat: false });
+    await screen.findByTestId('SiiImportTaxesSection__row_tl-1');
+    expect(screen.queryByTestId('Button__siiImportTaxCompensate')).toBeNull();
+    unmount();
+
+    const { onHeaderRefresh } = renderCard({ deferredVat: true });
+    const button = await screen.findByTestId('Button__siiImportTaxCompensate');
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    await waitFor(() => expect(onHeaderRefresh).toHaveBeenCalled());
+    const posts = writes('POST').filter(([u]) => u === '/tax');
+    expect(JSON.parse(posts[0][1].body)).toEqual({
+      tax: 'comp21', taxableAmount: -100, taxAmount: 0, parentId: 'inv-1', lineNo: 40, recalculate: false,
+    });
+    expect(toast.success).toHaveBeenCalledWith('sifDataTabs.importTaxes.compensatoryAdded');
+  });
+
+  it('a failed compensatory POST shows the error and no success toast', async () => {
+    serverRows = [SERVER_ROW, AUTO_ROW];
+    writeResponses.POST = () => respond({ error: 'x' }, false);
+    renderCard({ deferredVat: true });
+    const button = await screen.findByTestId('Button__siiImportTaxCompensate');
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('backend-error'));
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });
