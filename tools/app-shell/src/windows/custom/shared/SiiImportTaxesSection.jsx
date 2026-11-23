@@ -114,10 +114,34 @@ export function compensatoryBaseName(name) {
   return collapse(String(name ?? '').replace(/=\s*0\s*%/g, ''));
 }
 
+const COMPENSATORY_SUFFIX = '%=0%';
+const RATE_TEXT = /^\d+(?:[.,]\d+)?$/;
+
+function isRateChar(ch) {
+  return (ch >= '0' && ch <= '9') || ch === '.' || ch === ',';
+}
+
+/** The longest number ("21", "10,5") that ends `text`, or null. Linear scan, no backtracking. */
+function trailingRate(text) {
+  let start = text.length;
+  while (start > 0 && isRateChar(text[start - 1])) start -= 1;
+  for (let i = start; i < text.length; i += 1) {
+    const candidate = text.slice(i);
+    if (RATE_TEXT.test(candidate)) return Number(candidate.replace(',', '.'));
+  }
+  return null;
+}
+
 /** The rate in a compensatory name ("Importaciones 21%=0%" → 21), or null. */
 export function compensatoryNameRate(name) {
-  const match = normalizeTaxName(name).replace(/\s/g, '').match(/(\d+(?:[.,]\d+)?)%=0%/);
-  return match ? Number(match[1].replace(',', '.')) : null;
+  const text = normalizeTaxName(name).replace(/\s/g, '');
+  let at = text.indexOf(COMPENSATORY_SUFFIX);
+  while (at !== -1) {
+    const rate = trailingRate(text.slice(0, at));
+    if (rate !== null) return rate;
+    at = text.indexOf(COMPENSATORY_SUFFIX, at + 1);
+  }
+  return null;
 }
 
 /**
@@ -142,6 +166,27 @@ function round2(value) {
   return Math.round((Number(value) || 0) * 100) / 100;
 }
 
+function hasPositiveRate(rate) {
+  return rate > 0;
+}
+
+/** Saved import-tax rows with a positive rate, grouped by tax (and DUA with Multiple DUA). */
+function groupImportTaxRows(rows, rateOf, duaOf, multiDua) {
+  const groups = new Map();
+  for (const row of rows ?? []) {
+    const rate = rateOf(row);
+    if (!row?.id || !row.tax || !isImportTaxName(row.taxLabel) || !hasPositiveRate(rate)) continue;
+    const key = `${row.tax}|${duaOf(row)}`;
+    const group = groups.get(key) ?? {
+      tax: row.tax, name: row.taxLabel, rate, base: 0,
+      aeatsiiDua: duaOf(row), aeatsiiFechaDua: multiDua ? (row.aeatsiiFechaDua ?? '') : '',
+    };
+    group.base += Number(row.taxableAmount) || 0;
+    groups.set(key, group);
+  }
+  return groups;
+}
+
 /**
  * ETP-6284 (alcance 5) — the compensatory lines a deferred-VAT import invoice still needs: one per
  * import tax (saved manual rows whose tax isImportTaxName with rate > 0), base = minus the sum of
@@ -158,19 +203,8 @@ function round2(value) {
  * @returns {{ groups: number, toCreate: object[], missing: string[] }}
  */
 export function planCompensatoryLines(rows, rateOf, catalog, multiDua = false) {
-  const groups = new Map();
   const duaOf = row => (multiDua ? String(row?.aeatsiiDua ?? '').trim() : '');
-  for (const row of rows ?? []) {
-    const rate = rateOf(row);
-    if (!row?.id || !row.tax || !isImportTaxName(row.taxLabel) || !(rate > 0)) continue;
-    const key = `${row.tax}|${duaOf(row)}`;
-    const group = groups.get(key) ?? {
-      tax: row.tax, name: row.taxLabel, rate, base: 0,
-      aeatsiiDua: duaOf(row), aeatsiiFechaDua: multiDua ? (row.aeatsiiFechaDua ?? '') : '',
-    };
-    group.base += Number(row.taxableAmount) || 0;
-    groups.set(key, group);
-  }
+  const groups = groupImportTaxRows(rows, rateOf, duaOf, multiDua);
   const toCreate = [];
   const missing = [];
   for (const group of groups.values()) {
