@@ -19,9 +19,14 @@ import AttachmentsTable from '@/components/attachments/AttachmentsTable';
  * invoice with DUA import lines is sent as one F1 plus one F5 per DUA, each an
  * `aeatsii_facturas` row with its own request/response XML. The backend then also stamps
  * the full list (`aeatsiiFacturaIds`, oldest first); pass it as `recordIds` and the section
- * lists every record's files, each group labelled "Record N of M". The sub-record row carries
- * nothing that tells F1 from F5 (that lives only inside the XML), so the label is ordinal.
- * With a single record the output is identical to the single-`recordId` form.
+ * shows the files of every record merged into ONE table, sorted by upload date then name.
+ * A record with no files contributes nothing; the empty state shows only when the merged
+ * list is empty. Each record is still read through the shared `useAttachments` hook (one
+ * call per record, see `CollectAttachments`), and per-file download works for any of them
+ * (the file endpoint is keyed on the attachment id alone). "Download all (ZIP)" is per
+ * record on the server, so it is offered only while every listed file belongs to a single
+ * record; with files from several records it is hidden. With one record the output is
+ * identical to the single-`recordId` form.
  *
  * Renders nothing when no sub-record id has been resolved yet (e.g. the invoice has
  * never been sent to that fiscal target), keeping every panel's layout stable — `AttachmentsTable`
@@ -47,28 +52,9 @@ export default function SifAttachmentsSection({ tableName, recordId, recordIds, 
   return (
     <div className="col-span-2 pt-2 mt-1 border-t border-border/40 space-y-2">
       <span className="text-xs font-semibold text-foreground">{ui('attachments')}</span>
-      {ids.length === 1 ? (
-        <SubRecordAttachments
-          tableName={tableName}
-          recordId={ids[0]}
-          token={token}
-          apiBaseUrl={apiBaseUrl}
-          testId="AttachmentsTable__sif" />
-      ) : (
-        ids.map((id, index) => (
-          <div key={id} className="space-y-1" data-testid={`SifAttachmentsSection__record-${index + 1}`}>
-            <span className="text-xs font-medium text-muted-foreground">
-              {ui('sifAttachmentsRecordLabel', { index: index + 1, total: ids.length })}
-            </span>
-            <SubRecordAttachments
-              tableName={tableName}
-              recordId={id}
-              token={token}
-              apiBaseUrl={apiBaseUrl}
-              testId={`AttachmentsTable__sif-${index + 1}`} />
-          </div>
-        ))
-      )}
+      <CollectAttachments ids={ids} hookArgs={{ tableName, token, apiBaseUrl }}>
+        {(results) => <MergedAttachmentsTable results={results} />}
+      </CollectAttachments>
     </div>
   );
 }
@@ -87,24 +73,56 @@ function resolveRecordIds(recordIds, recordId) {
   return recordId ? [recordId] : [];
 }
 
-/** Read-only attachments table of one sub-record (one `useAttachments` per record). */
-function SubRecordAttachments({ tableName, recordId, token, apiBaseUrl, testId }) {
-  const { items, loading, uploadingFiles, download, downloadAll, formatBytes } = useAttachments({
-    tableName,
-    recordId,
-    token,
-    apiBaseUrl,
-    isActive: Boolean(recordId),
-  });
+/**
+ * Calls `useAttachments` once per id, one component level per id, so the number of hook
+ * calls per component never changes, and hands every record's result to `children`.
+ */
+function CollectAttachments({ ids, hookArgs, acc = [], children }) {
+  const [currentId, ...rest] = ids;
+  const result = useAttachments({ ...hookArgs, recordId: currentId, isActive: Boolean(currentId) });
+  const collected = [...acc, { recordId: currentId, ...result }];
+  if (rest.length === 0) {
+    return children(collected);
+  }
+  return (
+    <CollectAttachments ids={rest} hookArgs={hookArgs} acc={collected}>
+      {children}
+    </CollectAttachments>
+  );
+}
+
+function uploadTime(item) {
+  const raw = item.uploadedAt || item.createdAt || item.creationDate;
+  const time = raw ? Date.parse(raw) : Number.NaN;
+  return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time;
+}
+
+/** Upload date ascending, then name; files without a date go last. */
+function compareAttachments(a, b) {
+  const byTime = uploadTime(a) - uploadTime(b);
+  if (byTime !== 0 && !Number.isNaN(byTime)) {
+    return byTime;
+  }
+  return String(a.name || a.fileName || '').localeCompare(String(b.name || b.fileName || ''));
+}
+
+/** One read-only table with the files of every record. */
+function MergedAttachmentsTable({ results }) {
+  const [first] = results;
+  const items = results.length === 1
+    ? first.items
+    : results.flatMap((r) => r.items).sort(compareAttachments);
+  const owners = results.filter((r) => r.items.length > 0);
+  const downloadAll = owners.length === 1 ? owners[0].downloadAll : undefined;
 
   return (
     <AttachmentsTable
       items={items}
-      loading={loading}
-      uploadingFiles={uploadingFiles}
-      onDownload={download}
+      loading={results.some((r) => r.loading)}
+      uploadingFiles={first.uploadingFiles}
+      onDownload={first.download}
       onDownloadAll={items.length > 0 ? downloadAll : undefined}
-      formatBytes={formatBytes}
-      data-testid={testId} />
+      formatBytes={first.formatBytes}
+      data-testid="AttachmentsTable__sif" />
   );
 }
