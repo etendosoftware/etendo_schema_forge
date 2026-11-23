@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Plus, Trash2 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
@@ -47,9 +47,13 @@ import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
  * this card is the only place it holds.
  *
  * Tax picker: the purchase-line tax selector (`/lines/selectors/tax`, `C_Tax_IsSOTrx_Date` rule:
- * purchase or both, valid at the invoice date), with the import taxes first (`isImportTaxName`,
- * Classic's name heuristic; ordering only). Its items carry the rate shown in the Tipo column
- * (`labelPrefix`, the same rate the line pickers show); a saved row falls back to `tax.rate`.
+ * purchase or both, valid at the invoice date), restricted to import taxes only
+ * (`selectImportTaxOptions`: "import" in the name, Classic's heuristic, compensatory "=0%" ones
+ * included). It is fed from the card's full tax catalog (`useTaxRateCatalog`, up to 500) filtered,
+ * not from the selector's own 50-row pages: filtering a page could leave it empty with no way to
+ * scroll to the next one. A saved row whose tax is not an import tax keeps its label (SelectorInput's
+ * hidden committed item). Its items carry the rate shown in the Tipo column (`labelPrefix`, the same
+ * rate the line pickers show); a saved row falls back to `tax.rate`.
  */
 const DUA_TYPE_KEYS = new Set(['F5', 'LC']);
 // The card is mounted on purchase invoices only (SifTab's `isPurchaseInvoice` gate).
@@ -85,10 +89,13 @@ export function isImportTaxName(name) {
   return normalized.includes('import') && !normalized.replace(/\s/g, '').includes('=0%');
 }
 
-/** Import taxes first, then the rest, each group in its original order (ordering, not filtering). */
-export function orderImportTaxesFirst(options) {
+/**
+ * The tax picker's options: import taxes only, the compensatory "=0%" ones included (a deferred-VAT
+ * user may pick one by hand), in their original order. Non-import taxes are not offered.
+ */
+export function selectImportTaxOptions(options) {
   const list = Array.isArray(options) ? options : [];
-  return [...list.filter(o => isImportTaxName(o?.name)), ...list.filter(o => !isImportTaxName(o?.name))];
+  return list.filter(o => o?.id && normalizeTaxName(o.name).includes('import'));
 }
 
 /** A compensatory import tax of deferred VAT: "import" in the name and a "=0%" suffix. */
@@ -415,7 +422,7 @@ function DuaSubRow({ ui, row, editable, locale, missing, disabled, colSpan, onDu
 }
 
 function ImportTaxRow({
-  ui, row, multiDua, editable, currency, locale, rateMap, selectorUrl, selectorContext, token,
+  ui, row, multiDua, editable, currency, locale, rateMap, taxCatalogs, token,
   onTaxChange, onBaseCommit, onDuaChange, onDuaBlur, onDateChange, onDelete,
 }) {
   const cell = `${CELL_X} py-2 align-middle`;
@@ -464,12 +471,10 @@ function ImportTaxRow({
             value={row.tax}
             displayValue={row.taxLabel}
             onChange={(val, lbl) => onTaxChange(row, val ?? '', lbl ?? '')}
-            catalogs={null}
+            catalogs={taxCatalogs}
             resolvedLabel={ui('tax')}
-            selectorUrl={selectorUrl}
-            selectorContext={selectorContext}
+            selectorUrl={null}
             token={token}
-            orderOptions={orderImportTaxesFirst}
             compact
             triggerClassName={`w-full ${CONTROL} text-text-primary bg-card ${missing.has('tax') ? ERROR_OUTLINE : ''}`}
             data-testid="SelectorInput__siiImportTax" />
@@ -567,6 +572,8 @@ function ImportTaxesBlock({
   const selectorUrl = apiBaseUrl ? `${apiBaseUrl}/lines/selectors/tax` : null;
   const selectorContext = buildLineSelectorContext({ windowCategory: WINDOW_CATEGORY, parentId: recordId, headerRecord: data });
   const { rateMap, catalog } = useTaxRateCatalog(apiFetch, editable ? selectorUrl : null, selectorContext);
+  // The picker offers the catalog's import taxes (keyed as SelectorInput's `tax:tax` catalog).
+  const taxCatalogs = useMemo(() => ({ [`tax:${TAX_FIELD.column}`]: selectImportTaxOptions(catalog) }), [catalog]);
   const [compensating, setCompensating] = useState(false);
 
   const load = useCallback(async () => {
@@ -783,8 +790,7 @@ function ImportTaxesBlock({
                       currency={currency}
                       locale={locale}
                       rateMap={rateMap}
-                      selectorUrl={selectorUrl}
-                      selectorContext={selectorContext}
+                      taxCatalogs={taxCatalogs}
                       token={token}
                       onTaxChange={onTaxChange}
                       onBaseCommit={onBaseCommit}
