@@ -2154,6 +2154,13 @@ Customer/Vendor Accounting, etc.).
    tooltip — always declare both. The component should still guard its own panel, since
    `location.state.openSecondaryTab` can open it. `AttachmentsTab` is the reference: it requires a
    saved record unless its `config.saveBeforeAttach` is set.
+   **Refreshing the header after a child write (ETP-6284).** Every `placement: 'tab'` custom
+   component also receives `onHeaderRefresh()`: a tab that persists child rows on its own (outside
+   the header save) calls it after each write so the header is re-read with
+   `useEntity#refreshHeaderTotals` — totals and other server-derived values update while pending
+   header edits are kept (unlike `onRefresh`/`fetchById({ force: true })`, which discards them).
+   `SiiImportTaxesSection` (SIF tab → SII panel) is the reference: adding an import tax changes the
+   invoice grand total.
 2. **Runtime prop, hand-written `windows/custom/{window}/index.jsx`** (documented below) — a
    `Panel`-backed tab with freeform fetch-and-render content that doesn't map to any generated
    entity at all, passed to the generated `<Page>` component from a hand-written wrapper. Requires

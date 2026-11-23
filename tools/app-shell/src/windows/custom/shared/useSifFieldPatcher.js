@@ -123,7 +123,9 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   const orgId = resolveInvoiceOrgId(data, selectedOrg?.id);
   const specName = apiBaseUrl?.split('/').filter(Boolean).pop() || 'sales-invoice';
 
-  const { profile, tbaiRecord, earliestSiiCutoverDate } = useFiscalConfig(orgId, apiBaseUrl);
+  const { profile, tbaiRecord, siiRecord, earliestSiiCutoverDate } = useFiscalConfig(orgId, apiBaseUrl);
+  // ETP-6284: 'IVA' | 'IGIC' (AEATSII_CONFIG.TAXTYPE), null while unknown — drives the LC prefix hint.
+  const siiTaxType = siiRecord?.taxtype ? String(siiRecord.taxtype).toUpperCase() : null;
   const territory = tbaiRecord?.etsgSifTerritory ?? null;
   const { showSii, showTbai, showVerifactu } = getInvoiceFiscalTargets(specName, profile, territory);
   // ETP-5432: `showSii` only says the SII SYSTEM applies to this org/territory —
@@ -339,5 +341,6 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
     getVal,
     getDateVal,
     setSiiType,
+    siiTaxType,
   };
 }

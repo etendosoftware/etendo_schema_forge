@@ -1884,7 +1884,7 @@ export function DetailView({
           token={token}
           apiBaseUrl={apiBaseUrl}
           api={api} isDocumentReadOnly={isDocumentReadOnly} accessReadOnly={menuActionsReadOnly}
-          isActive={isActive}
+          isActive={isActive} onHeaderRefresh={() => hook.refreshHeaderTotals?.(data?.id || recordId)}
           isNew={isNew}
           onSaveHeader={isNew ? saveHeaderForCustomTab : undefined}
           onGoToSavedRecord={isNew ? goToSavedRecord : undefined}

@@ -94,7 +94,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { toast } from 'sonner';
 import {
   handlePostSaveNavigation, reportUnnavigableSave, renderSaveActions,
-  runAfterSaveHook, buildUnsavedChangesSaver,
+  runAfterSaveHook, buildUnsavedChangesSaver, isConfirmBlockedWhenEmpty, emptyConfirmTitle,
 } from '../saveActions.jsx';
 
 describe('handlePostSaveNavigation', () => {
@@ -713,5 +713,39 @@ describe('renderSaveActions — existing-record Save look (primarySave)', () => 
     const save = screen.getByTestId('action-save');
     expect(save.classList.contains('bg-primary')).toBe(true);
     expect(save.className).toContain('hover:!bg-[var(--primary-hover-strong)]');
+  });
+});
+
+describe('isConfirmBlockedWhenEmpty — draftMode.disableWhenEmpty / allowEmptyWhen', () => {
+  const empty = { childrenLoading: false, children: [] };
+
+  it('never blocks without disableWhenEmpty, with lines, or while lines load', () => {
+    expect(isConfirmBlockedWhenEmpty({}, empty)).toBe(false);
+    expect(isConfirmBlockedWhenEmpty(undefined, empty)).toBe(false);
+    expect(isConfirmBlockedWhenEmpty({ disableWhenEmpty: true }, { children: [{ id: 'l1' }] })).toBe(false);
+    expect(isConfirmBlockedWhenEmpty({ disableWhenEmpty: true }, { childrenLoading: true, children: [] })).toBe(false);
+  });
+
+  it('blocks an empty document when no allowEmptyWhen is declared', () => {
+    expect(isConfirmBlockedWhenEmpty({ disableWhenEmpty: true }, empty)).toBe(true);
+  });
+
+  it('allowEmptyWhen unblocks only when it returns exactly true for the edited record', () => {
+    const allowEmptyWhen = vi.fn(record => (record?.hasManualTaxLines === true ? true : 'Y'));
+    const draftMode = { disableWhenEmpty: true, allowEmptyWhen };
+    const editing = { hasManualTaxLines: true };
+    expect(isConfirmBlockedWhenEmpty(draftMode, { ...empty, editing, selected: { hasManualTaxLines: false } })).toBe(false);
+    expect(allowEmptyWhen).toHaveBeenLastCalledWith(editing);
+    // Falls back to the selected record; a truthy non-true answer still blocks.
+    expect(isConfirmBlockedWhenEmpty(draftMode, { ...empty, selected: { hasManualTaxLines: false } })).toBe(true);
+    expect(isConfirmBlockedWhenEmpty(draftMode, empty)).toBe(true);
+    expect(allowEmptyWhen).toHaveBeenLastCalledWith(null);
+  });
+
+  it('the disabledEmptyTitleKey tooltip follows the same block: none when allowEmptyWhen unblocks', () => {
+    const ui = key => `t:${key}`;
+    const draftMode = { disableWhenEmpty: true, disabledEmptyTitleKey: 'addLines', allowEmptyWhen: r => r?.ok === true };
+    expect(emptyConfirmTitle(draftMode, { ...empty, editing: { ok: false } }, ui)).toBe('t:addLines');
+    expect(emptyConfirmTitle(draftMode, { ...empty, editing: { ok: true } }, ui)).toBeNull();
   });
 });

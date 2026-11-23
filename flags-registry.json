@@ -3103,6 +3103,88 @@
         ]
       },
       "$pathsComment": "Backend owned files added with ETP-6236 (com.etendoerp.go). The mcp-tests harness support (routines = true targets, the child KR) lives in this repo and reads no flag."
+    },
+    {
+      "id": "sii-import-dua",
+      "description": "Purchase invoice imports with DUA for SII. Backend-only flag evaluated per account. On: the SII panel of the purchase-invoice SIF tab shows an \"Importación (DUA)\" card with DUA (C_Invoice.EM_Aeatsii_Dua), DUA date (EM_Aeatsii_Fecha_Dua) and Multiple DUA (EM_Aeatsii_Multi_Dua) when the SII invoice type key is F5 or LC, mirroring the Classic display logic, and an \"Impuestos de importación\" card: add / edit / delete the manual import tax lines of the invoice (C_InvoiceTax with Recalculate=N: tax, taxable base, tax amount computed by the Classic SL_InvoiceTax_Amt callout), with DUA and DUA date per line while Multiple DUA is checked; the picker offers import taxes only, and on a deferred-VAT import (siiDeferredVat header action) an \"Añadir línea compensatoria\" button adds the compensatory =0% rows. Both cards warn, without blocking, when a DUA date is later than the accounting register date. Confirm is let through on a purchase invoice without lines that carries manual tax lines (draftMode.allowEmptyWhen on the header's hasManualTaxLines). Off: no DUA / import-tax cards, Confirm keeps requiring invoice lines, and the purchase-invoice tax-line writes and the siiDeferredVat action answer 403 feature_disabled on every channel. NOT gated: the reads of the tax entity, the header DUA fields (Classic columns), hasManualTaxLines, and the SII Adjuntos section listing the XMLs of every aeatsii_facturas record of the invoice (aeatsiiFacturaIds), which applies to every SII invoice by user decision.",
+      "owner": "AyelenGarcia01",
+      "jira": "ETP-6284",
+      "created": "2026-11-17",
+      "flag": {
+        "key": "sii-import-dua",
+        "defaultValue": false,
+        "ttl": "2027-03-31",
+        "ttlNote": "PLACEHOLDER, not a commitment: end of Q1 2027. Revisit once the feature is validated on a real import client. Retirement means imports with DUA ship to everyone: unwrap the SiiImportDuaFlag checks in PurchaseInvoiceTaxExtension.handle and PurchaseInvoiceSiiDeferredVat.handleIfDeferredVat, delete SiiImportDuaFlag.java (and its test), FLAG_SII_IMPORT_DUA from GoFeatureFlags, the ETGO_SiiImportDuaDisabled texts, the siiImportDua capability of SFWindowAccessMap (SII_IMPORT_DUA constant and its put) and the com.etendoerp.go docs section; in the SPA delete useSiiImportDuaEnabled and its three callers' conditions (SiiImportDuaSection, SiiImportTaxesSection, SifTab useSiiDeferredVat gate, purchase-invoice index.jsx allowEmptyWhen) and SII_IMPORT_DUA_CAPABILITY; drop the feature_disabled sentence from the header and tax agentPrompts (decisions.json and ETGO_SF_ENTITY.xml); delete the hosted Datadog setting; delete the flag object, keep this entry.",
+        "symbols": [
+          "sii-import-dua",
+          "FLAG_SII_IMPORT_DUA",
+          "ETGO_FLAG_SII_IMPORT_DUA",
+          "etendo.go.flags.sii-import-dua",
+          "SiiImportDuaFlag",
+          "ETGO_SiiImportDuaDisabled",
+          "siiImportDua",
+          "SII_IMPORT_DUA_CAPABILITY",
+          "SII_IMPORT_DUA",
+          "useSiiImportDuaEnabled"
+        ],
+        "$symbolsComment": "Backend-only flag: no key in flag-keys.js, on purpose (docs/feature-flags.md, backend-only flags). The frontend trail is the capability: the browser reads capabilities.siiImportDua off SFWindowAccessMap through useSiiImportDuaEnabled (SiiImportDuaSection.jsx; SII_IMPORT_DUA_CAPABILITY in lib/capabilityVisibility.js). The property and env-var spellings are listed because a grep for the bare key misses Openbravo.properties and the ECS task definition. Per-account enablement leaves no grep trail: it is a targeting rule on the hosted control plane.",
+        "capability": {
+          "field": "siiImportDua",
+          "sources": [
+            "com.etendoerp.go SFWindowAccessMap webhook response (capabilities.siiImportDua, ETP-6284) -- SiiImportDuaFlag.isEnabledFor(account email) evaluated per account with the tenant as clientId, admins included"
+          ]
+        }
+      },
+      "$gatingComment": "ONE evaluator, the backend (SiiImportDuaFlag), evaluated at REQUEST ENTRY. Targeted PER ACCOUNT: FeatureFlagContext.forAccount(<ETGO_ACCOUNT email of the request user, via GoAccountResolver.currentAccountEmail()>).with(clientId); the targeting key, Email and lowercase email carry the account. Datadog/ConfigCat rules are written on the lowercase email attribute only. With no resolvable account the context carries clientId only and the default stays off; never throws. Local: etendo.go.flags.sii-import-dua / ETGO_FLAG_SII_IMPORT_DUA (Tomcat restart). Hosted rollout: create the boolean setting sii-import-dua (default false) BEFORE targeting anyone. Toggle points: (1) PurchaseInvoiceTaxExtension (@NeoExtension(spec=purchase-invoice, entity=tax)) -- POST/PUT/PATCH/DELETE answer 403 feature_disabled (ETGO_SiiImportDuaDisabled) when off, on every channel (REST single, batch, MCP); reads pass; (2) PurchaseInvoiceSiiDeferredVat, called by PurchaseInvoiceHeaderHandler -- the siiDeferredVat action answers the same 403 when off; (3) SFWindowAccessMap publishes capabilities.siiImportDua; the SPA (useSiiImportDuaEnabled) mounts the DUA and import-taxes cards, runs the deferred-VAT check and passes draftMode.allowEmptyWhen only when it is true, failing hidden while the map is not loaded. NOT gated: tax-entity reads, the header DUA fields (Classic columns, decisions.json), hasManualTaxLines (PurchaseInvoiceManualTaxLines), aeatsiiFacturaIds (SifSubRecordAttachments, every SII invoice).",
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/windows/custom/shared/SiiImportDuaSection.jsx",
+          "tools/app-shell/src/windows/custom/shared/SiiImportTaxesSection.jsx",
+          "tools/app-shell/src/windows/custom/shared/SiiPanelCard.jsx"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/SiiImportDuaFlag.java",
+          "src/com/etendoerp/go/schemaforge/PurchaseInvoiceSiiDeferredVat.java",
+          "src/com/etendoerp/go/schemaforge/PurchaseInvoiceTaxExtension.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. PurchaseInvoiceTaxExtension stays after retirement (its DUA guards are not flag code; only the SiiImportDuaFlag check unwraps). Shared toggle points, not listed (removal cost): SifTab.jsx (mount + useSiiDeferredVat gate), purchase-invoice/index.jsx (allowEmptyWhen), lib/capabilityVisibility.js (SII_IMPORT_DUA_CAPABILITY), SFWindowAccessMap.java (capability), PurchaseInvoiceHeaderHandler.java (siiDeferredVat dispatch), neo_hints_{en,es}.properties (ETGO_SiiImportDuaDisabled), the header/tax agentPrompts (decisions.json, ETGO_SF_ENTITY.xml); GoFeatureFlags.java is framework. Not flag code and not removal cost: the decisions.json header DUA fields and writable tax entity, PurchaseInvoiceManualTaxLines (hasManualTaxLines), SifAttachmentsSection recordIds / SifSubRecordAttachments.aeatsiiFacturaIds (every SII invoice), the generic draftMode.allowEmptyWhen in saveActions.jsx.",
+      "testSpecs": {
+        "$testSpecsComment": "Backend specs are tester-go's, frontend specs tester-functional's. Existing files that already cover the feature with the flag pinned on are listed as present.",
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/SiiImportDuaSection.vitest.js",
+            "note": "DUA card helpers and rendering; capability off (or unknown) renders nothing."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/SiiImportTaxesSection.vitest.js",
+            "note": "Import-taxes card helpers and rendering; capability off renders nothing."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/SiiImportDuaFlagTest.java",
+            "expected": true,
+            "note": "Copy SepaRemittancesFlagTest: isEnabled(email, clientId) publishes the targeting key, Email and lowercase email plus clientId into a capturing provider; targeted account true, other false; blank or null email -> clientId only, default false; isEnabled() passes GoAccountResolver.currentAccountEmail() and the OBContext tenant; no OBContext -> null client id, no throw; unset, non-boolean and failing provider read false; local property arm true/false; featureDisabled() is 403 feature_disabled with messageKeys [ETGO_SiiImportDuaDisabled]."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/PurchaseInvoiceTaxExtensionTest.java",
+            "note": "Existing cases pin the flag on. Off-state cases expected (tester-go): POST/PUT/PATCH/DELETE -> 403 feature_disabled before any read; a GET (or non-CRUD) is not gated."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/PurchaseInvoiceSiiDeferredVatTest.java",
+            "note": "Existing cases pin the flag on. Off-state case expected (tester-go): siiDeferredVat -> 403 feature_disabled; another action is not judged (null)."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/webhooks/SFWindowAccessMapTest.java",
+            "note": "Expected extension (tester-go): capabilities.siiImportDua on and off for a restricted role and the admin branch, an explicit false when off."
+          }
+        ]
+      }
     }
   ]
 }
