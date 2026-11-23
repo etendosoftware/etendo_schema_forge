@@ -52,8 +52,11 @@ export default function SifAttachmentsSection({ tableName, recordId, recordIds, 
   return (
     <div className="col-span-2 pt-2 mt-1 border-t border-border/40 space-y-2">
       <span className="text-xs font-semibold text-foreground">{ui('attachments')}</span>
-      <CollectAttachments ids={ids} hookArgs={{ tableName, token, apiBaseUrl }}>
-        {(results) => <MergedAttachmentsTable results={results} />}
+      <CollectAttachments
+        ids={ids}
+        hookArgs={{ tableName, token, apiBaseUrl }}
+        data-testid="CollectAttachments__ec5f20">
+        {(results) => <MergedAttachmentsTable results={results} data-testid="MergedAttachmentsTable__ec5f20" />}
       </CollectAttachments>
     </div>
   );
@@ -85,7 +88,11 @@ function CollectAttachments({ ids, hookArgs, acc = [], children }) {
     return children(collected);
   }
   return (
-    <CollectAttachments ids={rest} hookArgs={hookArgs} acc={collected}>
+    <CollectAttachments
+      ids={rest}
+      hookArgs={hookArgs}
+      acc={collected}
+      data-testid="CollectAttachments__ec5f20">
       {children}
     </CollectAttachments>
   );
