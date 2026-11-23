@@ -18,10 +18,9 @@ import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import RequiredMark from '@/components/ui/required-mark.jsx';
 // The one rule that says which SIF fields are mandatory, shared with the "Datos fiscales" step.
 import { isSifFieldRequired } from '@/windows/custom/shared/sifRequiredFields.js';
-// ETP-6284: purchase imports with DUA, behind the sii-import-dua flag (renders nothing when off).
-import SiiImportDuaSection from '@/windows/custom/shared/SiiImportDuaSection.jsx';
+// ETP-6284: purchase imports with DUA, behind the siiImportDua capability (renders nothing when off).
+import SiiImportDuaSection, { useSiiImportDuaEnabled } from '@/windows/custom/shared/SiiImportDuaSection.jsx';
 import SiiImportTaxesSection, { useSiiDeferredVat, DUA_TYPE_KEYS } from '@/windows/custom/shared/SiiImportTaxesSection.jsx';
-import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { isVoidedStatus } from '../../../lib/docStatus.js';
@@ -346,9 +345,9 @@ export default function SifTab({
   } = useSifFieldPatcher({ data, recordId, token, apiBaseUrl, onChange, locked: accessReadOnly });
   const apiFetch = useApiFetch(apiBaseUrl);
 
-  // ETP-6284: deferred VAT of a purchase import (flag, F5/LC) — the import-taxes card offers the
+  // ETP-6284: deferred VAT of a purchase import (siiImportDua capability, F5/LC) — the import-taxes card offers the
   // compensatory line only then. Refetched on every header save (the record's `updated` changes).
-  const importDuaEnabled = useFeatureFlag(SII_IMPORT_DUA) === true;
+  const importDuaEnabled = useSiiImportDuaEnabled();
   const deferredVat = useSiiDeferredVat({
     apiBaseUrl,
     recordId: isNew ? null : (data?.id || recordId),

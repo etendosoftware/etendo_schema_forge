@@ -19,12 +19,11 @@ import { translateBackendErrorResponse } from '@/lib/backendErrors.js';
 import { normalizeDateInputValue } from '@/windows/custom/fiscal-config/fiscalConfig.utils.js';
 import SiiPanelCard from '@/windows/custom/shared/SiiPanelCard.jsx';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
-import { isDuaDateAfterAccountingDate } from '@/windows/custom/shared/SiiImportDuaSection.jsx';
-import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
+import { isDuaDateAfterAccountingDate, useSiiImportDuaEnabled } from '@/windows/custom/shared/SiiImportDuaSection.jsx';
 
 /**
  * ETP-6284 — "Impuestos de importación" card of the purchase-invoice SII panel, right after
- * "Importación (DUA)" and behind the same `sii-import-dua` flag.
+ * "Importación (DUA)" and behind the same `siiImportDua` capability (`useSiiImportDuaEnabled`).
  *
  * Classic parity (module SII, purchase invoice "Tax" tab): an import is declared by adding manual
  * tax lines (`C_InvoiceTax` with `Recalculate = 'N'`) next to the ones the invoice lines generate.
@@ -924,7 +923,7 @@ export default function SiiImportTaxesSection({
   ui, siiTypeKey, multiDua, recordId, data, apiBaseUrl, token, readOnly, onHeaderRefresh, step,
   deferredVat = false, accountingRegisterDate = null,
 }) {
-  const enabled = useFeatureFlag(SII_IMPORT_DUA) === true;
+  const enabled = useSiiImportDuaEnabled();
   if (!enabled || !DUA_TYPE_KEYS.has(siiTypeKey)) return null;
   return (
     <ImportTaxesBlock

@@ -7,11 +7,13 @@ import { Switch } from '@/components/ui/switch';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { parseCalendarDate } from '@/lib/dateOnly.js';
 import SiiPanelCard from '@/windows/custom/shared/SiiPanelCard.jsx';
-import { useFeatureFlag, SII_IMPORT_DUA } from '@/lib/flags';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { SII_IMPORT_DUA_CAPABILITY, isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 
 /**
  * ETP-6284 — "Importación (DUA)" card of the purchase-invoice SII panel (SifTab.jsx), behind the
- * `sii-import-dua` flag. Renders nothing when the flag is off, so the SIF tab stays as it was.
+ * `siiImportDua` capability (backend flag `sii-import-dua`, see `useSiiImportDuaEnabled`).
+ * Renders nothing while it is off or unknown, so the SIF tab stays as it was.
  *
  * Mirrors the Classic display logic of the purchase invoice header (C_Invoice, module SII):
  *   - Multiple DUA (`aeatsiiMultiDua`): org in SII AND invoice type key is F5 or LC. Shown as the
@@ -113,10 +115,19 @@ function DuaField({ label, htmlFor, required, aside, helper, children }) {
   );
 }
 
+/**
+ * Whether imports with DUA are on for this user: `capabilities.siiImportDua` off
+ * `SFWindowAccessMap`, which mirrors the backend-only `sii-import-dua` flag. Fails closed (an
+ * unloaded map or no AuthProvider reads off). The one reader of the capability on the SPA side.
+ */
+export function useSiiImportDuaEnabled() {
+  return isCapabilityVisible(useCapabilitiesSafe(), SII_IMPORT_DUA_CAPABILITY);
+}
+
 export default function SiiImportDuaSection({
   ui, siiTypeKey, getVal, getDateVal, onChange, readOnly, step, siiTaxType = null,
 }) {
-  const enabled = useFeatureFlag(SII_IMPORT_DUA) === true;
+  const enabled = useSiiImportDuaEnabled();
   if (!enabled || !DUA_TYPE_KEYS.has(siiTypeKey)) return null;
 
   const multiDua = isChecked(getVal('aeatsiiMultiDua'));

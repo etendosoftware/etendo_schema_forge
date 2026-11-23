@@ -108,14 +108,6 @@ export const DYNAMIC_BALANCE_REPORTS = 'dynamic-balance-reports';
 export const PSD2_STATEMENT_IMPORT_SETTINGS = 'psd2-statement-import-settings';
 
 /**
- * ETP-6284 — purchase-invoice imports with DUA for SII. On: the SII panel of the purchase invoice
- * SIF tab shows the "Importación (DUA)" block (DUA, DUA date, Multiple DUA) when the SII invoice
- * type key is F5 or LC, mirroring the Classic display logic. Off: today's SIF tab, byte for byte.
- * Per account/user. Visual gating only: the SII module validates DUA/DUA date on its own.
- */
-export const SII_IMPORT_DUA = 'sii-import-dua';
-
-/**
  * Telemetry kill switches (ETP-4578, D2). They are "kill" flags: `true` STOPS telemetry, so the
  * safe default is `false` (today's shipped behaviour: providers run as configured). They are
  * read by `observability/killSwitch.js`, never rendered by the UI, and are excluded from flag
@@ -151,7 +143,6 @@ export const FLAG_DEFAULTS = Object.freeze({
   [DYNAMIC_REPORTS]: false,
   [DYNAMIC_BALANCE_REPORTS]: false,
   [PSD2_STATEMENT_IMPORT_SETTINGS]: false,
-  [SII_IMPORT_DUA]: false,
   [TELEMETRY_KILL_ALL]: false,
   ...Object.fromEntries(Object.values(TELEMETRY_KILL_PROVIDER_FLAGS).map((key) => [key, false])),
 });

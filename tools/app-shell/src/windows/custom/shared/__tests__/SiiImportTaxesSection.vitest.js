@@ -6,7 +6,8 @@ const mockApiFetch = vi.fn();
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => mockApiFetch }));
 
 const flag = { enabled: true };
-vi.mock('@/lib/flags', () => ({ SII_IMPORT_DUA: 'sii-import-dua', useFeatureFlag: () => flag.enabled }));
+// The feature is the `siiImportDua` capability (backend flag sii-import-dua), read off the auth map.
+vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({ useCapabilitiesSafe: () => ({ siiImportDua: flag.enabled }) }));
 vi.mock('@/i18n', () => ({
   useLabel: () => key => key,
   useMenuLabel: () => key => key,

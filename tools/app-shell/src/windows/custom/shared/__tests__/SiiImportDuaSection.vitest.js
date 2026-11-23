@@ -2,7 +2,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const flag = { enabled: true };
-vi.mock('@/lib/flags', () => ({ SII_IMPORT_DUA: 'sii-import-dua', useFeatureFlag: () => flag.enabled }));
+// The feature is the `siiImportDua` capability (backend flag sii-import-dua), read off the auth map.
+vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({ useCapabilitiesSafe: () => ({ siiImportDua: flag.enabled }) }));
 
 import { createElement as h } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
