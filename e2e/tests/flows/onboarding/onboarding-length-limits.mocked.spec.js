@@ -19,6 +19,8 @@ import { declareNoSession } from '../../helpers/auth.js';
  *               instead of being silently truncated — ETP-5638)
  *   fiscalId    20  → C_BPARTNER.TAXID
  *   address     60  → C_LOCATION.ADDRESS1
+ *   streetName  60  → STREET_NAME_MAX_LENGTH (ETP-5806; composed into C_LOCATION.ADDRESS1,
+ *               so it is capped at that column's 60, not at EM_OBSEPA_StrtNm's 70)
  *
  * Mock mode only — no backend required.
  */
@@ -35,8 +37,12 @@ const LIMITS = {
   address: 60,
   // ETP-5806 — the free-text address field was replaced by structured Street/Number/Building
   // Name/City cells; streetName is the closest conceptual replacement for this length-limit
-  // check (`ETGO_CORE` ships maxLength === the AD column limit, same as the old address field).
-  streetName: 70,
+  // check. The input's maxLength is `STREET_NAME_MAX_LENGTH` from
+  // `@etendosoftware/app-shell-core` (`lib/locationAddress.js`), which is deliberately 60 — the
+  // width of `C_LOCATION.ADDRESS1`, the column the composed address line lands in — and NOT the
+  // 70 of `EM_OBSEPA_StrtNm`. e2e specs never import app code, so the value is mirrored here:
+  // when the constant moves, this literal moves with it.
+  streetName: 60,
 };
 
 // ── Mock installer ───────────────────────────────────────────────────────────
@@ -101,6 +107,7 @@ async function registerAndReachProfile(page, ts) {
   await page.locator('#reg-name').fill('QA User');
   await page.locator('#reg-email').fill(`qa-len-${ts}@example.com`);
   await page.getByTestId('sector-select').selectOption('servicios');
+  await page.getByTestId('country-select').selectOption('ES');
   await page.getByTestId('action-register-submit').click();
   await expect(page.getByText(/vamos a dejar todo listo/i)).toBeVisible({ timeout: 5_000 });
 }
@@ -148,6 +155,7 @@ test.describe('ETP-4665 — Step 1 length limits', () => {
     await page.locator('#reg-name').fill('QA User');
     await page.locator('#reg-email').fill('qa@example.com');
     await page.getByTestId('sector-select').selectOption('servicios');
+    await page.getByTestId('country-select').selectOption('ES');
     await page.getByTestId('action-register-submit').click();
 
     await expect(page.getByText(`El campo no puede superar los ${LIMITS.email} caracteres.`))
@@ -178,6 +186,7 @@ test.describe('ETP-4665 — Step 2 length limits', () => {
 
     await page.locator('#reg-email').fill(`qa-prefill-${ts}@example.com`);
     await page.getByTestId('sector-select').selectOption('servicios');
+    await page.getByTestId('country-select').selectOption('ES');
       await page.getByTestId('action-register-submit').click();
     await expect(page.getByText(/vamos a dejar todo listo/i)).toBeVisible({ timeout: 5_000 });
 

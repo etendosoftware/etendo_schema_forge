@@ -10,6 +10,7 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { openCenteredPopup } from '@/lib/popupWindow.js';
 import { isPaymentProcessed, paymentDisplayState } from './paymentStatuses';
 import NewPaymentEntryModal from './NewPaymentEntryModal.jsx';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 function fmtDate(raw) {
   if (!raw) return '—';
@@ -454,7 +455,7 @@ export default function InvoicePaymentHistoryModal({
   const grandTotal = parseFloat(invoiceData?.grandTotalAmount ?? 0);
   const bpName = invoiceData?.['businessPartner$_identifier'] || invoiceData?.businessPartner || '';
   const docNo = invoiceData?.documentNo || '';
-  const isCompleted = invoiceData?.documentStatus === 'CO';
+  const isCompleted = isCompletedStatus(invoiceData?.documentStatus);
 
   // Credit instruments (credit notes / returns) carry negative totals end to end. Their
   // history lists the payments that CONSUMED the note (showing how much each one used),

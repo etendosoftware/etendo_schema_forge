@@ -15,9 +15,12 @@ const groups = {
   Sales: 'sales-quotation sales-order goods-shipment sales-invoice return-material-receipt',
   Purchases: 'purchase-order goods-receipt purchase-invoice return-to-vendor-shipment matched-purchase-invoices invoice-inbox',
   Inventory: 'product product-category price-list warehouse physical-inventory goods-movements internal-consumption report-viewer-inventory',
-  Finance: 'payment-in payment-out financial-account remittance chart-of-accounts cost-center service-project general-ledger-configuration calendar assets asset-group amortization not-posted-documents manual-journals fiscal-monitor conversion-rates fiscal-models tax tax-category report-viewer-finance',
+  // ETP-6389 — Tesorería: Cobro, Pago, Cuentas, an Informes link holding only the aging reports,
+  // and Condiciones de pago (moved from Settings).
+  Treasury: 'payment-in payment-out financial-account report-viewer-treasury payment-term',
+  Finance: 'remittance chart-of-accounts cost-center service-project general-ledger-configuration calendar assets asset-group amortization not-posted-documents manual-journals fiscal-monitor conversion-rates fiscal-models tax tax-category report-viewer-finance',
   Connections: 'authorize',
-  Settings: 'organization document-sequence payment-term business-partner-category user roles api-keys document-templates acct-process-monitor fiscal-config',
+  Settings: 'organization document-sequence business-partner-category user roles api-keys document-templates acct-process-monitor fiscal-config',
 };
 
 // Composition aliases documented in calendar/fiscal-monitor/fiscal-config guides.
@@ -60,6 +63,14 @@ const exceptions = {
   // Independent content gates: ReportViewerPage.jsx and SmartScanPage.jsx.
   'report-viewer-finance': { accessWindowId: 'D647D118F5014D00AF47A636B2CD0DD3', path: 'report-viewer?category=finance' },
   'report-viewer-inventory': { accessWindowId: '6346B88619F948F9A42224BDB0B239FA', path: 'report-viewer?category=inventory' },
+  // ETP-6389 — shares the Financial Reports anchor, but `requiresGroupReport` makes a grant on one
+  // of its group's reports (`reportIds`) the condition that reveals it; the anchor alone does not.
+  'report-viewer-treasury': {
+    accessWindowId: 'D647D118F5014D00AF47A636B2CD0DD3',
+    path: 'report-viewer?category=treasury',
+    requiresGroupReport: true,
+    reportIds: ['aging-receivable', 'aging-payable'],
+  },
 };
 
 export const defaultNavigation = Object.entries(groups).flatMap(([group, names]) => names.split(' ').map(name => {
@@ -116,11 +127,17 @@ export function expectedNavigation({ apps = [], marketplace = false, proof = fal
 // Build typed identities FIRST, then use the same flattening boundary as the
 // role-menu hook. Never union raw cache IDs: window 800001 (Service Project)
 // collides with the unrelated General Ledger Report process 800001 there.
+// A `requiresGroupReport` entry (ETP-6389) is granted through its group's reports (`reportAccess`),
+// not through its anchor window: it shares that anchor with another entry (Treasury and Finance
+// Reports both use the Financial Reports window), so modelling it as a window grant would reveal
+// the sibling too, and the window alone does not reveal it anyway.
 export function navigationPermissions(entries = defaultNavigation, tier = 'full') {
   return {
     allowedIds: collectAllowedIds(entries.map(({ windowId, processId, obuiappProcessId }) => ({ windowId, processId, obuiappProcessId }))),
-    windowAccess: Object.fromEntries(entries.filter(entry => entry.accessWindowId).map(entry => [entry.accessWindowId, tier])),
+    windowAccess: Object.fromEntries(entries.filter(entry => entry.accessWindowId && !entry.requiresGroupReport)
+      .map(entry => [entry.accessWindowId, tier])),
     capabilities: Object.fromEntries(entries.filter(entry => entry.capability).map(entry => [entry.capability, true])),
+    reportAccess: Object.fromEntries(entries.flatMap(entry => entry.reportIds ?? []).map(id => [id, tier])),
   };
 }
 

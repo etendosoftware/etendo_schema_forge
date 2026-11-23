@@ -1,8 +1,12 @@
+// @covers tools/app-shell/src/lib/observability/providers/mixpanel.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createObservability } from '../observability/core.js';
 import { createMixpanelProvider } from '../observability/providers/mixpanel.js';
+
+// ETP-5466 — Mixpanel only emits from a production host.
+const PROD_HOST = 'app.etendo.software';
 
 // Regression guard for the round-1 bug: an external, browser.js-level orchestration
 // of the Mixpanel stale-identity reset (run once, right after initObservability()
@@ -77,6 +81,7 @@ describe('Mixpanel reset survives the RouteTracker race (core.js + real provider
     const calls = [];
     const obs = createObservability({ logger: { warn() {} } });
     const mixpanel = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       storage: createFakeStorage(),
@@ -114,6 +119,7 @@ describe('Mixpanel reset survives the RouteTracker race (core.js + real provider
     const calls = [];
     const obs = createObservability({ logger: { warn() {} } });
     const mixpanel = createMixpanelProvider({
+      hostname: PROD_HOST,
       enabled: 'true',
       token: 'token-123',
       storage: createFakeStorage(),

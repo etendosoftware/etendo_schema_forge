@@ -23,6 +23,7 @@ import ConfirmGoodsReceiptModal from '@generated/goods-receipt/custom/ConfirmGoo
 
 import { buildHeaders } from '@/auth/api.js';
 import { ACCOUNTING_CAPABILITY } from '@/lib/capabilityVisibility.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 const HEADER_COLUMNS = [
   { key: 'movementDate', column: 'MovementDate', type: 'date', dot: false, required: true },
   { key: 'orderReference', column: 'POReference', type: 'string' },
@@ -157,7 +158,7 @@ export default function GoodsReceiptWindow(props) {
   ]), [ui]);
 
   const menuActionsForForm = useCallback(({ status, data }) => {
-    if (status !== 'CO') return [];
+    if (!isCompletedStatus(status)) return [];
     const isPosted = data?.posted === 'Y' || data?.posted === true;
     return [
       // ETP-5291 — "Descargar PDF" removed from the kebab menu; the stored
@@ -235,7 +236,7 @@ export default function GoodsReceiptWindow(props) {
         bottomSection={GoodsReceiptBottomPanel}
         customTabs={customTabs}
         menuActions={menuActionsForForm}
-        hideMoreMenu={({ data }) => data?.documentStatus !== 'CO'}
+        hideMoreMenu={({ data }) => !isCompletedStatus(data?.documentStatus)}
         rowQuickActions={rowQuickActions}
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         refreshTrigger={refreshKey}

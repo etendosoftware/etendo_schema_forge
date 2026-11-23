@@ -150,6 +150,7 @@
   },
   "entities": {
     "header": {
+      "agentPrompt": "Import with DUA (aeatsiiClaveTipoFc F5 Import (DUA) or LC customs complementary settlement): with a single DUA set aeatsiiDua and aeatsiiFechaDua (yyyy-MM-dd, not later than aeatsiiFechaRegCont) on this header; with several DUAs set aeatsiiMultiDua=true and put the DUA and its date on each tax line instead. The import VAT goes as manual rows of the tax entity (see its agentPrompt), and such an invoice can be completed without invoice lines. With deferred VAT (header action siiDeferredVat, read-only, answers deferredVat=true) each import tax also needs its compensatory manual tax row (see the tax agentPrompt). When imports with DUA are not enabled for the account, siiDeferredVat and tax-line writes answer 403 feature_disabled.",
       "namedFilters": [
         {
           "name": "completed",
@@ -582,6 +583,18 @@
           "visibility": "editable",
           "form": false
         },
+        "aeatsiiDua": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiFechaDua": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiMultiDua": {
+          "visibility": "editable",
+          "form": false
+        },
         "aeatsiiEjercicio": {
           "visibility": "discarded"
         },
@@ -861,29 +874,37 @@
       }
     },
     "tax": {
-      "readOnly": true,
+      "agentPrompt": "Tax lines of the purchase invoice. Rows with recalculate=true are derived from the invoice lines: they cannot be changed or deleted, change the invoice lines instead. Create a row only for a manual import tax (an import with DUA, invoice type aeatsiiClaveTipoFc F5 or LC): send parentId (the invoice), tax (prefer an import tax), taxableAmount and taxAmount; recalculate is not settable, every created row is manual. When the invoice has aeatsiiMultiDua=true and type F5 or LC, every row must carry aeatsiiDua and aeatsiiFechaDua (yyyy-MM-dd); with a single DUA put them on the invoice header instead. Rows can only be written while the invoice is a draft not sent to SII. When etendo_action(spec:'purchase-invoice', entity:'header', id:'<invoiceId>', action:'siiDeferredVat') answers deferredVat=true, add for each import tax a compensatory row: the matching '=0%' import tax, taxableAmount = minus that tax's taxable amount, taxAmount 0 (with Multiple DUA one per tax and DUA, carrying that DUA and its date). When imports with DUA are not enabled for the account, tax-line writes and siiDeferredVat answer 403 feature_disabled.",
       "fields": {
         "lineNo": {
           "visibility": "readOnly",
           "grid": true
         },
         "tax": {
-          "visibility": "readOnly",
-          "grid": true,
-          "readOnlyLogic": null
+          "visibility": "editable",
+          "grid": true
         },
         "taxableAmount": {
-          "visibility": "readOnly",
-          "grid": true,
-          "readOnlyLogic": null
+          "visibility": "editable",
+          "grid": true
         },
         "taxAmount": {
-          "visibility": "readOnly",
-          "grid": true,
-          "readOnlyLogic": null
+          "visibility": "editable",
+          "grid": true
         },
         "recalculate": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "form": false
+        },
+        "aeatsiiDua": {
+          "visibility": "editable",
+          "form": false,
+          "displayLogic": null
+        },
+        "aeatsiiFechaDua": {
+          "visibility": "editable",
+          "form": false,
+          "displayLogic": null
         }
       }
     },

@@ -6,23 +6,27 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate, todayCalendarISO } from '@/lib/dateOnly.js';
 import { buildReportFilename } from '@/pages/ReportViewerPage.jsx';
+import { reportCategoryMenuKey } from '@/components/reports/reportCategories.js';
 import DynamicReportPanel from './DynamicReportPanel.jsx';
 import DynamicReportTable from './DynamicReportTable.jsx';
 import DynamicReportKpis from './DynamicReportKpis.jsx';
 import { RESULT_REPORT_IDS } from './dynamicReports.js';
 import { kpiCards, reportKpis } from './reportVisuals.js';
 import DynamicDrillPanel from './DynamicDrillPanel.jsx';
-import { ENTRY_REPORT_ID, LEDGER_REPORT_ID } from './drillDown.js';
+import DynamicResultPanel from './DynamicResultPanel.jsx';
+import { ENTRY_REPORT_ID, LEDGER_REPORT_ID, drillRowOf } from './drillDown.js';
+import DynamicReportBalance from './DynamicReportBalance.jsx';
 import { useReportQuery } from './useReportQuery.js';
 import { useReportPanelCollapsed } from './useReportPanelCollapsed.js';
 import { useReportDefaults } from './useReportDefaults.js';
 import { useAccountSplit } from './useAccountSplit.js';
+import { useBalanceAtDate } from './useBalanceAtDate.js';
 import { REPORT_EVENTS, filterTypeOf, useReportTelemetry } from './reportTelemetry.js';
-import { matchingShortcut, matchingYear, openingPeriod, periodBuckets, pickedYearPeriod, serializePeriods, shortcutPeriod } from './dynamicDates.js';
+import { endShortcutDate, ledgerStartFor, matchingShortcut, matchingYear, openingPeriod, periodBuckets, pickedYearPeriod, serializePeriods, shortcutPeriod } from './dynamicDates.js';
 import { modeHiddenCount, periodLimit, exportTooLong as isExportTooLong, columnModel, modeOf, rowsForMode } from './reportColumns.js';
 import { readReportUrlState, reportOffers, urlStateSpec, writeReportUrlState } from './reportUrlState.js';
 import { useRestoredPickerNames } from './useRestoredPickerNames.js';
-import { expandedNodeIdsParam, foldExpansion, visibleRows } from './reportTree.js';
+import { expandedNodeIdsParam, foldExpansion, levelHiddenIds, visibleRows } from './reportTree.js';
 
 const EXPORTS = [
   { format: 'pdf', label: 'PDF', icon: DownloadSimpleIcon },
@@ -36,7 +40,7 @@ function splitDimensionsFor(multiOrg, label) {
   return SPLIT_DIMENSIONS.filter(([value]) => value !== 'org' || multiOrg).map(([value, name]) => ({ value, label: label(name) }));
 }
 const COLUMN_LABELS = { total: 'dynamicReportColumnsTotal', month: 'dynamicReportColumnsMonth', quarter: 'dynamicReportColumnsQuarter' };
-const ERROR_KEYS = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess',
+const ERROR_KEYS = { org_access_denied: 'reportErrorOrgAccess', report_access_denied: 'reportErrorReportAccess', report_timeout: 'reportErrorTimeout',
   period_range_too_long: 'reportErrorPeriodRangeTooLong', invalid_periods: 'reportErrorInvalidPeriods',
 };
 
@@ -67,29 +71,178 @@ async function downloadRender(apiFetch, reportId, format, body) {
 }
 
 /** The chips under the title: the active filters, each one with a `clear` removable. */
-function buildChips({ state, ui, label, fmt, orgName, multiOrg, reference, splitDimensions }) {
+function buildChips({ state, ui, label, fmt, orgName, multiOrg, reference, splitDimensions, pickers, groupByOptions, asOf = false }) {
   return [
-    { key: 'period', label: ui('dynamicReportPeriodChip'), value: `${fmt(state.dateFrom)} – ${fmt(state.dateTo)}` },
+    // A balance at a date (ETP-6083) has no period: the chip names the date.
+    asOf
+      ? { key: 'period', label: ui('dynamicReportAsOfChip'), value: fmt(state.dateTo) }
+      : { key: 'period', label: ui('dynamicReportPeriodChip'), value: `${fmt(state.dateFrom)} – ${fmt(state.dateTo)}` },
     // The org has no `clear` on purpose: the query requires one, so it is changed in the panel, never removed.
     // Shown only for a multi-org role (the export header keeps the name regardless).
     multiOrg && orgName && { key: 'org', label: label('orgId'), value: orgName },
-    state.bPartnerId && { key: 'bp', label: label('bPartnerId'), value: state._display_bPartnerId || state.bPartnerId, clear: { bPartnerId: '', _display_bPartnerId: '', _names_bPartnerId: null } },
-    state.productId && { key: 'product', label: label('productId'), value: state._display_productId || state.productId, clear: { productId: '', _display_productId: '', _names_productId: null } },
+    // One chip per filter the contract declares; the P&L's two keep their historical keys.
+    ...pickers.map(({ name }) => state[name] && { key: CHIP_KEYS[name] ?? name, label: label(name), value: state[`_display_${name}`] || state[name], clear: { [name]: '', [`_display_${name}`]: '', [`_names_${name}`]: null } }),
+    state.groupBy && { key: 'groupBy', label: label('groupBy'), value: groupByOptions?.find((o) => o.value === state.groupBy)?.label ?? state.groupBy, clear: { groupBy: '' } },
     state.columns !== 'total' && { key: 'columns', label: ui('dynamicReportColumns'), value: ui(COLUMN_LABELS[state.columns]), clear: { columns: 'total' } },
-    reference && { key: 'compare', label: ui('dynamicReportComparedWith'), value: `${fmt(reference.from)} – ${fmt(reference.to)}`, clear: { compare: '' } },
+    reference && { key: 'compare', label: ui('dynamicReportComparedWith'), value: reference.from === reference.to ? fmt(reference.to) : `${fmt(reference.from)} – ${fmt(reference.to)}`, clear: { compare: '' } },
     state.splitBy && { key: 'split', label: ui('dynamicReportSplitChip'), value: splitDimensions.find((d) => d.value === state.splitBy)?.label, clear: { splitBy: '' } },
   ].filter(Boolean);
 }
 
+const CHIP_KEYS = { bPartnerId: 'bp', productId: 'product' };
+const isOn = (value) => value === true || value === 'true';
+
 const pick = (labelObj, locale) => labelObj?.[locale] || labelObj?.en_US || labelObj?.es_ES || '';
 
-/** Filters the view starts on, and goes back to with "Limpiar filtros". */
-function initialState(defaultOrgId, period, level) {
-  return {
+/**
+ * Filters the view starts on, and goes back to with "Limpiar filtros". `config` (from the contract): the pickers it
+ * declares and the option toggles with their defaults (ETP-6084: the P&L has two pickers and no toggles).
+ */
+function initialState(defaultOrgId, period, level, config) {
+  const state = {
     orgId: defaultOrgId || '', dateFrom: period?.dateFrom || '', dateTo: period?.dateTo || '',
-    bPartnerId: '', _display_bPartnerId: '', _names_bPartnerId: null, productId: '', _display_productId: '', _names_productId: null,
-    compare: '', columns: 'total', splitBy: '', level,
+    compare: '', columns: 'total', splitBy: '', level, groupBy: '', compareMovements: false,
+    ...config.toggleDefaults,
   };
+  for (const { name } of config.pickers) Object.assign(state, { [name]: '', [`_display_${name}`]: '', [`_names_${name}`]: null });
+  return state;
+}
+
+/** The fold with `id` flipped from its base (open becomes closed and back); the input is not mutated. */
+function flipFoldedRow(fold, id) {
+  const flipped = new Set(fold.flipped);
+  if (flipped.has(id)) flipped.delete(id); else flipped.add(id);
+  return { ...fold, flipped };
+}
+
+/** ETP-6084: what the contract declares drives the filters, the toggles, the grouping and the amount columns. */
+function useContractReportConfig(report, locale) {
+  const params = report.parameters || [];
+  const chartTree = report.tree === 'chart';
+  const amountColumns = report.amountColumns ?? null;
+  const pickers = useMemo(() => urlStateSpec(report).pickers, [report]);
+  const toggleParams = useMemo(
+    () => (chartTree ? params.filter((p) => p.type === 'toggle' && !p.hidden && p.name !== 'compareTo') : []),
+    [chartTree, params],
+  );
+  const config = useMemo(
+    () => ({ pickers, toggleDefaults: Object.fromEntries(toggleParams.map((p) => [p.name, isOn(p.default)])) }),
+    [pickers, toggleParams],
+  );
+  // The grouping's options: the parameter's own, or (as the old viewer) one per dimension filter that declares a `groupByValue`.
+  const groupByOptions = useMemo(() => {
+    const declared = params.find((p) => p.name === 'groupBy');
+    if (!chartTree || !declared) return null;
+    const options = declared.options ?? params.filter((p) => p.groupByValue).map((p) => ({ value: p.groupByValue, label: p.label }));
+    return options.map((o) => ({ value: o.value, label: pick(o.label, locale) }));
+  }, [chartTree, params, locale]);
+  const levelParam = params.find((p) => p.name === 'accountLevel');
+  const defaultLevel = levelParam?.default || 'C';
+  // ETP-6083: an option only the old viewer acts on (`legacyOnly`) is not offered here; `maxIndent` folds by listed-row indent.
+  const levelOptions = (levelParam?.options || []).filter((o) => !o.legacyOnly).map((o) => ({ value: o.value, label: pick(o.label, locale), maxIndent: o.maxIndent ?? null }));
+  // ETP-6083: a report that is a balance AT A DATE says so in its contract: Desde is the ledger start, Hasta has end-date
+  // shortcuts, and the comparisons are one day (`compareTo.compareModes`).
+  const ledgerStart = params.find((p) => p.name === 'dateFrom')?.role === 'ledgerStart';
+  const endShortcuts = params.find((p) => p.name === 'dateTo')?.shortcuts ?? null;
+  const compareModes = params.find((p) => p.name === 'compareTo')?.compareModes ?? null;
+  return { chartTree, amountColumns, pickers, toggleParams, config, groupByOptions, defaultLevel, levelOptions, ledgerStart, endShortcuts, compareModes };
+}
+
+/** Writes the view state back to the URL (minus the defaults); a no-op when the address already says it. */
+function syncReportUrl({ state, report, selectedOrgId, opening, current, onSearchChange }) {
+  const next = writeReportUrlState(current, state, report, { orgId: selectedOrgId, dateFrom: opening?.dateFrom, dateTo: opening?.dateTo });
+  if (next.replace(/^\?/, '') === current.replace(/^\?/, '')) return;
+  if (onSearchChange) onSearchChange(next);
+  else window.history.replaceState(window.history.state, '', `${window.location.pathname}${next}${window.location.hash}`);
+}
+
+/** The export buttons of the top bar. */
+function ExportButtons({ exporting, disabled, exportTooLong, onExport }) {
+  return (
+    <div className="flex items-center gap-1">
+      {EXPORTS.map(({ format, label: text, icon: Icon }) => (
+        <Button
+          key={format}
+          variant="ghost"
+          className="h-9 px-3 gap-1.5 text-sm"
+          disabled={disabled || exporting !== null || (exportTooLong && format !== 'pdf')}
+          onClick={() => onExport(format)}
+          data-testid={`DynamicReportView__export-${format}`}
+        >
+          {exporting === format ? <CircleNotchIcon className="w-4 h-4 animate-spin" data-testid="Loader2__c51cea" /> : <Icon className="w-4 h-4" data-testid="Icon__c51cea" />}
+          {text}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+/** The active-filter chips under the title; each one with a `clear` can be removed. */
+function ReportChips({ chips, ui, onClear }) {
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1 my-3 text-xs text-muted-foreground" data-testid="DynamicReportView__chips">
+      {chips.map((c) => (
+        <span key={c.key} className="inline-flex items-center gap-1" data-testid={`DynamicReportView__chip-${c.key}`}>
+          {c.label}: <b className="text-foreground font-semibold">{c.value}</b>
+          {c.clear && (
+            <button
+              type="button"
+              className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-muted"
+              aria-label={ui('dynamicReportRemoveFilter', { label: c.label })}
+              onClick={() => onClear(c.clear)}
+              data-testid={`DynamicReportView__chipRemove-${c.key}`}
+            >
+              <XIcon className="w-3 h-3" data-testid="X__c51cea" />
+            </button>
+          )}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** The notes under the table: periods hidden by the cap and partial periods. */
+function PeriodNotes({ hiddenCount, hasPartial, ui }) {
+  if (hiddenCount <= 0 && !hasPartial) return null;
+  return (
+    <div className="mt-2 text-xs text-muted-foreground" data-testid="DynamicReportView__periodNotes">
+      {hiddenCount > 0 && <p data-testid="DynamicReportView__hiddenNote">{ui(hiddenCount === 1 ? 'dynamicReportHiddenPeriodsOne' : 'dynamicReportHiddenPeriods', { count: hiddenCount })}</p>}
+      {hasPartial && <p data-testid="DynamicReportView__partialNote">{ui('dynamicReportPartialPeriods')}</p>}
+    </div>
+  );
+}
+
+/** The body under the filters: the empty note, or the balance, the KPIs, the table and the period notes. */
+function ReportResults({ ui, data, rows, shown, noSchema, loading, chartTree, partialFilters, productFiltered, onOpenResult, kpis, compare, groups, mode, expanded, onToggle, splitBy, splits, hasRange, onToggleSplit, onOpenLedger, hiddenCount, hasPartial }) {
+  return (
+    <>
+      {(noSchema || (data && !rows.length)) && <p className="text-sm text-muted-foreground" data-testid="DynamicReportView__empty">{ui('noResults')}</p>}
+      {rows.length > 0 && (
+        <div className={loading ? 'opacity-60 transition-opacity' : undefined}>
+          {data?.balance && <DynamicReportBalance balance={data.balance} partial={partialFilters} productFiltered={productFiltered} data-testid="DynamicReportBalance__c51cea" />}
+          {kpis && <DynamicReportKpis kpis={kpis} compare={compare} data-testid="DynamicReportKpis__c51cea" />}
+          <DynamicReportTable
+            rows={shown}
+            groups={groups}
+            mode={mode}
+            expanded={expanded}
+            onToggle={onToggle}
+            splitBy={splitBy}
+            splits={splits}
+            onToggleSplit={hasRange ? onToggleSplit : undefined}
+            onOpenLedger={onOpenLedger}
+            onOpenResult={onOpenResult}
+            totals={chartTree ? (data?.totals ?? null) : null}
+            data-testid="DynamicReportTable__c51cea" />
+          <PeriodNotes
+            hiddenCount={hiddenCount}
+            hasPartial={hasPartial}
+            ui={ui}
+            data-testid="PeriodNotes__c51cea" />
+        </div>
+      )}
+    </>
+  );
 }
 
 /**
@@ -118,9 +271,7 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const label = (name) => pick(paramOf(name)?.label, locale) || name;
   const selectorOf = (name) => paramOf(name)?.selector;
   const sectionLabel = (id) => pick((report.sections || []).find((s) => s.id === id)?.label, locale);
-  const levelParam = paramOf('accountLevel');
-  const defaultLevel = levelParam?.default || 'C';
-  const levelOptions = (levelParam?.options || []).map((o) => ({ value: o.value, label: pick(o.label, locale) }));
+  const { chartTree, amountColumns, pickers, toggleParams, config, groupByOptions, defaultLevel, levelOptions, ledgerStart, endShortcuts, compareModes } = useContractReportConfig(report, locale);
   // Q7: the org picker only when the role reaches more than one org; `0` (*) is not an org to pick.
   const orgs = useMemo(() => roleOrgs.filter((o) => o?.id && o.id !== '0'), [roleOrgs]);
   // Same rule for the Organización split and chip: with one org there is nothing to tell apart.
@@ -129,7 +280,8 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
 
   useSetPageMeta({
     title,
-    breadcrumb: [{ label: tMenu('Finance') }, { label: tMenu('Reports'), href: `/report-viewer?category=${report.category || 'finance'}` }, { label: title }],
+    // The report's own category names the first level (ETP-6389), Finance when it has none.
+    breadcrumb: [{ label: tMenu(reportCategoryMenuKey(report.category, 'Finance')) }, { label: tMenu('Reports'), href: `/report-viewer?category=${report.category || 'finance'}` }, { label: title }],
   }, [title]);
 
   const defaults = useReportDefaults(selectedOrgId);
@@ -138,21 +290,17 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   // The selections come back from the URL before the first query (no request with the defaults, then a second one).
   // `search` / `onSearchChange` are the router's (the page passes them); on its own the view uses the address bar.
   const [state, setState] = useState(() => ({
-    ...initialState(selectedOrgId, null, defaultLevel),
+    ...initialState(selectedOrgId, null, defaultLevel, config),
     ...readReportUrlState(search ?? window.location.search, report, { orgIds: orgs.map((o) => o.id) }),
   }));
-  useRestoredPickerNames(useMemo(() => urlStateSpec(report).pickers, [report]), state, setState);
+  useRestoredPickerNames(pickers, state, setState);
   // Every change goes back to the URL, minus the defaults (replace: filter tweaks do not fill the back history).
   // Not while the defaults reload (the opening period is unknown then, and the defaults would be written).
   const searchRef = useRef(search);
   searchRef.current = search;
   useEffect(() => {
     if (defaults.loading) return;
-    const current = searchRef.current ?? window.location.search;
-    const next = writeReportUrlState(current, state, report, { orgId: selectedOrgId, dateFrom: opening?.dateFrom, dateTo: opening?.dateTo });
-    if (next.replace(/^\?/, '') === current.replace(/^\?/, '')) return;
-    if (onSearchChange) onSearchChange(next);
-    else window.history.replaceState(window.history.state, '', `${window.location.pathname}${next}${window.location.hash}`);
+    syncReportUrl({ state, report, selectedOrgId, opening, current: searchRef.current ?? window.location.search, onSearchChange });
   }, [state, report, selectedOrgId, opening, defaults.loading, onSearchChange]);
   // The opening period lands once the years have loaded; a user edit before that is kept.
   useEffect(() => {
@@ -162,29 +310,45 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const change = useCallback((patch) => setState((s) => ({ ...s, ...patch })), []);
   const mode = modeOf(state.compare);
   // ETP-6239: every request carries both compared ranges and the most periods any mode shows, so the comparison is a display choice, not a request.
-  const range = useMemo(() => ({ dateFrom: state.dateFrom, dateTo: state.dateTo }), [state.dateFrom, state.dateTo]);
-  const hasRange = Boolean(state.dateFrom && state.dateTo && state.dateFrom <= state.dateTo);
+  // ETP-6083: a report whose Desde is the ledger start asks for the balance at Hasta from the start of its fiscal year, whatever
+  // Desde says (the amounts never depend on it): changing Desde sends no request, it only moves where the ledger drill starts.
+  const fmt = useCallback((d) => (d ? formatCalendarDate(d, locale.replace('_', '-')) : ''), [locale]);
+  const atDate = useBalanceAtDate({ ledgerStart, endShortcuts, compareModes, years: defaults.years, state, today, fmt, ui });
+  const { rules, queryFrom, withLedgerStart } = atDate;
+  // A deep link's Desde is clamped like an edit is, once the fiscal years are known (they load after the first render).
+  useEffect(() => {
+    if (!ledgerStart || defaults.loading) return;
+    setState((s) => {
+      const from = s.dateFrom && s.dateTo ? ledgerStartFor(defaults.years, s.dateFrom, s.dateTo) : s.dateFrom;
+      return from === s.dateFrom ? s : { ...s, dateFrom: from };
+    });
+  }, [ledgerStart, defaults.loading, defaults.years]);
+  const range = useMemo(() => ({ dateFrom: queryFrom, dateTo: state.dateTo }), [queryFrom, state.dateTo]);
+  const hasRange = Boolean(queryFrom && state.dateTo && queryFrom <= state.dateTo);
   const plan = useMemo(
-    () => (hasRange ? periodBuckets(range, state.columns, { maxShown: periodLimit(state.columns, 'none') }) : null),
-    [hasRange, range, state.columns],
+    () => (hasRange ? periodBuckets(range, state.columns, { maxShown: periodLimit(state.columns, 'none'), rules }) : null),
+    [hasRange, range, state.columns, rules],
   );
+  const filterValues = JSON.stringify([pickers.map(({ name }) => state[name]), state.groupBy, toggleParams.map((p) => state[p.name])]);
   const queryParams = useMemo(() => ({
     acctSchemaId: defaults.acctSchemaId || '',
     orgId: state.orgId,
     // An invalid range (from > to) leaves the dates blank, so the query, the split and the exports stay idle.
-    dateFrom: hasRange ? state.dateFrom : '',
+    dateFrom: hasRange ? queryFrom : '',
     dateTo: hasRange ? state.dateTo : '',
-    bPartnerId: state.bPartnerId,
-    productId: state.productId,
+    ...Object.fromEntries(pickers.map(({ name }) => [name, state[name]])),
     showOnlyAccountsWithValue: 'true',
+    // A chart tree (ETP-6084) sends its own options: the grouping and the toggles, `showOnlyAccountsWithValue` included.
+    ...(chartTree && { groupBy: state.groupBy, ...Object.fromEntries(toggleParams.map((p) => [p.name, String(Boolean(state[p.name]))])) }),
     columns: state.columns,
     periods: plan ? serializePeriods(plan.buckets) : '',
     hiddenCount: String(plan?.hiddenCount ?? 0),
-  }), [defaults.acctSchemaId, state.orgId, state.dateFrom, state.dateTo, hasRange, state.bPartnerId, state.productId, state.columns, plan]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the picker / toggle values are listed as `filterValues`
+  }), [defaults.acctSchemaId, state.orgId, queryFrom, state.dateTo, hasRange, filterValues, state.columns, plan]);
 
   const { data: queried, loading, error: queryError, errorCode: queryErrorCode, settled } = useReportQuery(report.id, queryParams, { locale });
   // From after to is a user error: say so, and show nothing of the previous period under the new one.
-  const reversed = Boolean(state.dateFrom && state.dateTo && state.dateFrom > state.dateTo);
+  const reversed = Boolean(queryFrom && state.dateTo && queryFrom > state.dateTo);
   const data = reversed ? null : queried;
   const error = queryError;
   const errorCode = queryErrorCode; // telemetry reads this: a client-side refusal is not a server error class
@@ -214,11 +378,15 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   }, [panel.collapsed]);
   // A user's change: marked for report_filter_applied. The defaults and "Limpiar filtros" are not.
   // The comparison sends no request, so there is no result to time: it is emitted here, like `setLevel`.
-  const userChange = (patch) => {
+  const userChange = (rawPatch) => {
+    const patch = withLedgerStart(rawPatch);
     // D8: picking Mes/Trimestre hides the panel for this session only (nothing is saved).
     if (patch.columns && patch.columns !== 'total' && !panel.collapsed) togglePanel(true, 'auto_columns', { persist: false });
     if ('compare' in patch) telemetry.emit(REPORT_EVENTS.FILTER_APPLIED, { type: 'comparison', outcome: 'success' });
-    else telemetry.markFilter(filterTypeOf(patch));
+    // A Desde-only change of a ledger-start report sends no request: nothing to time.
+    else if (!(ledgerStart && 'dateFrom' in patch && !('dateTo' in patch))) telemetry.markFilter(filterTypeOf(patch));
+    // A new grouping brings dimension rows: its accounts start open (the level base), or the change looks like it did nothing.
+    if ('groupBy' in patch) refold('level');
     change(patch);
   };
   const groupToggled = (type) => telemetry.emit(REPORT_EVENTS.GROUP_TOGGLED, { type, outcome: 'success' });
@@ -233,8 +401,8 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   const quarterPrefix = ui('dynamicReportQuarterPrefix');
   const totalLabel = ui('dynamicReportColumnsTotal');
   const groups = useMemo(
-    () => columnModel({ periods: answered.periods, grain: answered.grain, mode, locale, quarterPrefix, totalLabel }),
-    [answered, mode, locale, quarterPrefix, totalLabel],
+    () => columnModel({ periods: answered.periods, grain: answered.grain, mode, locale, quarterPrefix, totalLabel, amountColumns, compareMovements: state.compareMovements, rules }),
+    [answered, mode, locale, quarterPrefix, totalLabel, amountColumns, state.compareMovements, rules],
   );
   const reference = compare ? groups.find((g) => g.pos === 0)?.compared : null;
   const hiddenCount = answered.hiddenCount + modeHiddenCount(answered.periods, answered.grain, mode);
@@ -243,17 +411,16 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
   // Folding: a base (the level, expand all, collapse all) plus the rows the user flipped since,
   // applied to every result, so rows a new filter brings in follow the base.
   const [fold, setFold] = useState(() => ({ base: 'level', flipped: new Set() }));
-  const expandedSet = useMemo(() => foldExpansion(rows, fold, state.level), [rows, fold, state.level]);
+  // A mixed-level chart (ETP-6084 D6) shows nested same-level nodes at the chosen level and folds their deeper children.
+  const maxIndent = levelOptions.find((o) => o.value === state.level)?.maxIndent ?? null;
+  const expandedSet = useMemo(() => foldExpansion(rows, fold, state.level, { nested: chartTree, maxIndent }), [rows, fold, state.level, chartTree, maxIndent]);
+  const levelHidden = useMemo(() => (chartTree && fold.base === 'level' ? levelHiddenIds(rows, state.level) : null), [chartTree, fold.base, rows, state.level]);
   const kpis = useMemo(() => (RESULT_REPORT_IDS.has(report.id) ? reportKpis(rows) : null), [report.id, rows]);
-  const shown = useMemo(() => visibleRows(rows, expandedSet), [rows, expandedSet]);
+  const shown = useMemo(() => visibleRows(rows, expandedSet, levelHidden, { foldedSummary: ledgerStart }), [rows, expandedSet, levelHidden, ledgerStart]);
   const refold = (base) => setFold({ base, flipped: new Set() });
   const toggleRow = (id) => {
     groupToggled(expandedSet.has(id) ? 'collapse' : 'expand');
-    setFold((f) => {
-      const flipped = new Set(f.flipped);
-      if (flipped.has(id)) flipped.delete(id); else flipped.add(id);
-      return { ...f, flipped };
-    });
+    setFold((f) => flipFoldedRow(f, id));
   };
   // The level folds on screen: nothing loads, so the change is applied at once.
   const setLevel = (level) => {
@@ -262,28 +429,42 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
     refold('level');
   };
 
-  const [drill, setDrill] = useState(null); // { row, range }: the account whose ledger is open, and the cell's range (null = the view's period)
-  const openLedger = useCallback((row, cellRange) => setDrill({ row, range: cellRange }), []);
+  const [drill, setDrill] = useState(null); // { row, range, clicked, calculated }: the account whose ledger is open, the cell's range (null = the view's period) and the amount clicked
+  const openLedger = useCallback((row, cellRange, clicked, calculated = 0) => setDrill({ row: drillRowOf(row), range: cellRange, clicked, calculated }), []);
+  // ETP-6083: the ledger of a balance reads from the ledger start (Desde, inside the fiscal year of the cell's date) to that date.
+  const drillRange = useMemo(() => atDate.drillRange(drill), [atDate.drillRange, drill]);
+  // ETP-6083: the income-summary row's explanation: { row, pos, which, range }.
+  const [resultInfo, setResultInfo] = useState(null);
+  const openResult = useCallback((row, cell) => {
+    setResultInfo({ row, ...cell });
+    telemetry.emit(REPORT_EVENTS.DRILLDOWN, { type: 'result', outcome: 'success' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- telemetry.emit is stable per session
+  }, [telemetry.emit]);
   const { splits, toggle: toggleSplit } = useAccountSplit(report.id, queryParams, state.splitBy, { locale });
 
-  const shortcut = matchingShortcut(state, defaults.years, today);
+  const shortcut = endShortcuts ? atDate.shortcut : matchingShortcut(state, defaults.years, today);
   const onShortcut = (kind) => {
+    if (endShortcuts) {
+      const dateTo = endShortcutDate(kind, today, defaults.years);
+      if (dateTo) userChange({ dateTo });
+      return;
+    }
     const { dateFrom, dateTo } = kind === 'year' ? openingPeriod(defaults.years, today) : shortcutPeriod(kind, today);
     userChange({ dateFrom, dateTo });
   };
-  const reset = () => { setState(initialState(selectedOrgId, opening, defaultLevel)); refold('level'); };
+  const reset = () => { setState(initialState(selectedOrgId, opening, defaultLevel, config)); refold('level'); };
 
   const orgName = orgs.find((o) => o.id === state.orgId)?.name;
   const [exporting, setExporting] = useState(null);
   const [exportError, setExportError] = useState(null);
   // PDF prints what the screen shows; Excel / CSV print every period, up to the cap (D5).
-  const fullPlan = useMemo(() => (hasRange ? periodBuckets(range, state.columns) : null), [hasRange, range, state.columns]);
+  const fullPlan = useMemo(() => (hasRange ? periodBuckets(range, state.columns, { rules }) : null), [hasRange, range, state.columns, rules]);
   const exportTooLong = hasRange && isExportTooLong(fullPlan, state.columns);
   const exportAs = async (format) => {
     setExporting(format);
     setExportError(null);
     // The PDF prints what the screen shows in this mode (a comparison shows fewer periods).
-    const exportPlan = format === 'pdf' ? periodBuckets(range, state.columns, { maxShown: periodLimit(state.columns, mode) }) : fullPlan;
+    const exportPlan = format === 'pdf' ? periodBuckets(range, state.columns, { maxShown: periodLimit(state.columns, mode), rules }) : fullPlan;
     try {
       await downloadRender(apiFetch, report.id, format, {
         format,
@@ -297,10 +478,11 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
           kpis: format === 'pdf' && kpis ? JSON.stringify(kpiCards(kpis, compare)) : undefined,
           accountLevel: state.level,
           expandedNodeIds: expandedNodeIdsParam(expandedSet),
+          // A chart tree prints exactly the rows on screen (level fold, expansion and mode included), by node id.
+          ...(chartTree && { visibleNodeIds: shown.length ? shown.map((r) => r.node_id).join(',') : undefined, compareMovements: String(Boolean(state.compareMovements)) }),
           // The exported header names the filters, not their ids (report-filters.js reads `_display_*`).
           _display_orgId: orgName,
-          _display_bPartnerId: state._display_bPartnerId,
-          _display_productId: state._display_productId,
+          ...Object.fromEntries(pickers.map(({ name }) => [`_display_${name}`, state[`_display_${name}`]])),
         },
       });
     } catch (err) {
@@ -309,12 +491,16 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
     setExporting(null);
   };
 
-  const fmt = (d) => (d ? formatCalendarDate(d, locale.replace('_', '-')) : '');
-  const chips = buildChips({ state, ui, label, fmt, orgName, multiOrg, reference, splitDimensions });
+  const chips = buildChips({ state, ui, label, fmt, orgName, multiOrg, reference, splitDimensions, pickers, groupByOptions, asOf: ledgerStart });
+  // D8: with any dimension filter or an account range the debits and credits of the shown accounts need not balance.
+  const partialFilters = pickers.some(({ name }) => Boolean(state[name]));
+  // Opening balances carry no product (ETP-6083): with a product filter the balance of a closed year loses its prior years.
+  const productFiltered = pickers.some(({ name, selector }) => String(selector).startsWith('product') && Boolean(state[name]));
 
   // The strip's badge counts what the user chose to narrow; the period and the (required) org are always on.
   const activeFilterCount = chips.filter((c) => c.clear).length;
   const errorText = reversed ? ui('dynamicReportErrorReversedDates') : queryErrorText(error, errorCode, ui);
+  const shownError = errorText || exportError;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-testid="DynamicReportView">
@@ -322,21 +508,12 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
         <Button variant="outline" className="h-9 px-3 rounded-lg" data-testid="action-cancel" onClick={onBack}>
           {ui('cancel')}
         </Button>
-        <div className="flex items-center gap-1">
-          {EXPORTS.map(({ format, label: text, icon: Icon }) => (
-            <Button
-              key={format}
-              variant="ghost"
-              className="h-9 px-3 gap-1.5 text-sm"
-              disabled={!data || !hasRange || exporting !== null || (exportTooLong && format !== 'pdf')}
-              onClick={() => exportAs(format)}
-              data-testid={`DynamicReportView__export-${format}`}
-            >
-              {exporting === format ? <CircleNotchIcon className="w-4 h-4 animate-spin" data-testid="Loader2__c51cea" /> : <Icon className="w-4 h-4" data-testid="Icon__c51cea" />}
-              {text}
-            </Button>
-          ))}
-        </div>
+        <ExportButtons
+          exporting={exporting}
+          disabled={!data || !hasRange}
+          exportTooLong={exportTooLong}
+          onExport={exportAs}
+          data-testid="ExportButtons__c51cea" />
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row">
@@ -354,7 +531,10 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
           onLevel={setLevel}
           onExpandAll={() => { groupToggled('expand_all'); refold('all'); }}
           onCollapseAll={() => { groupToggled('collapse_all'); refold('none'); }}
-          offers={reportOffers(report)}
+          offers={{ ...reportOffers(report), movements: Boolean(amountColumns?.some((a) => a.compare === 'optional')) }}
+          pickers={pickers}
+          toggles={toggleParams.map((p) => p.name)}
+          groupByOptions={groupByOptions}
           onReset={reset}
           shortcut={shortcut}
           yearId={matchingYear(state, defaults.years, today)?.id}
@@ -362,6 +542,10 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
           orgs={orgs}
           splitDimensions={splitDimensions}
           levelOptions={levelOptions}
+          endShortcuts={endShortcuts}
+          endShortcutDates={atDate.endShortcutDates}
+          ledgerStart={ledgerStart}
+          compareOptions={atDate.compareOptions}
           label={label}
           sectionLabel={sectionLabel}
           noFiscalYear={Boolean(opening?.noFiscalYear)}
@@ -374,65 +558,65 @@ export default function DynamicReportView({ report, onBack, selectedOrgId, roleO
               {loading && <CircleNotchIcon className="w-4 h-4 animate-spin text-muted-foreground" data-testid="DynamicReportView__loading" />}
             </div>
 
-            <div className="flex flex-wrap gap-x-4 gap-y-1 my-3 text-xs text-muted-foreground" data-testid="DynamicReportView__chips">
-              {chips.map((c) => (
-                <span key={c.key} className="inline-flex items-center gap-1" data-testid={`DynamicReportView__chip-${c.key}`}>
-                  {c.label}: <b className="text-foreground font-semibold">{c.value}</b>
-                  {c.clear && (
-                    <button
-                      type="button"
-                      className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-muted"
-                      aria-label={ui('dynamicReportRemoveFilter', { label: c.label })}
-                      onClick={() => userChange(c.clear)}
-                      data-testid={`DynamicReportView__chipRemove-${c.key}`}
-                    >
-                      <XIcon className="w-3 h-3" data-testid="X__c51cea" />
-                    </button>
-                  )}
-                </span>
-              ))}
-            </div>
+            <ReportChips
+              chips={chips}
+              ui={ui}
+              onClear={userChange}
+              data-testid="ReportChips__c51cea" />
 
             {exportTooLong && <p className="text-xs text-muted-foreground mb-3" data-testid="DynamicReportView__exportTooLong">{ui('dynamicReportExportTooLong')}</p>}
-            {(errorText || exportError) && (
-              <p role="alert" className="text-sm text-destructive mb-3" data-testid="DynamicReportView__error">{errorText || exportError}</p>
+            {shownError && (
+              <p role="alert" className="text-sm text-destructive mb-3" data-testid="DynamicReportView__error">{shownError}</p>
             )}
 
-            {(noSchema || (data && !rows.length)) && <p className="text-sm text-muted-foreground" data-testid="DynamicReportView__empty">{ui('noResults')}</p>}
-            {rows.length > 0 && (
-              <div className={loading ? 'opacity-60 transition-opacity' : undefined}>
-                {kpis && <DynamicReportKpis kpis={kpis} compare={compare} data-testid="DynamicReportKpis__c51cea" />}
-                <DynamicReportTable
-                  rows={shown}
-                  groups={groups}
-                  mode={mode}
-                  expanded={expandedSet}
-                  onToggle={toggleRow}
-                  splitBy={state.splitBy}
-                  splits={splits}
-                  onToggleSplit={hasRange ? toggleSplit : undefined}
-                  onOpenLedger={canOpen(LEDGER_REPORT_ID) ? openLedger : null}
-                  data-testid="DynamicReportTable__c51cea" />
-                {(hiddenCount > 0 || hasPartial) && (
-                  <div className="mt-2 text-xs text-muted-foreground" data-testid="DynamicReportView__periodNotes">
-                    {hiddenCount > 0 && <p data-testid="DynamicReportView__hiddenNote">{ui(hiddenCount === 1 ? 'dynamicReportHiddenPeriodsOne' : 'dynamicReportHiddenPeriods', { count: hiddenCount })}</p>}
-                    {hasPartial && <p data-testid="DynamicReportView__partialNote">{ui('dynamicReportPartialPeriods')}</p>}
-                  </div>
-                )}
-              </div>
-            )}
+            <ReportResults
+              ui={ui}
+              data={data}
+              rows={rows}
+              shown={shown}
+              noSchema={noSchema}
+              loading={loading}
+              chartTree={chartTree}
+              partialFilters={partialFilters}
+              productFiltered={productFiltered}
+              onOpenResult={openResult}
+              kpis={kpis}
+              compare={compare}
+              groups={groups}
+              mode={mode}
+              expanded={expandedSet}
+              onToggle={toggleRow}
+              splitBy={state.splitBy}
+              splits={splits}
+              hasRange={hasRange}
+              onToggleSplit={toggleSplit}
+              onOpenLedger={canOpen(LEDGER_REPORT_ID) ? openLedger : null}
+              hiddenCount={hiddenCount}
+              hasPartial={hasPartial}
+              data-testid="ReportResults__c51cea" />
           </div>
         </main>
       </div>
       <DynamicDrillPanel
         reportTitle={title}
         account={drill?.row ?? null}
-        range={drill?.range ?? null}
+        range={drillRange}
+        atDate={ledgerStart}
+        clicked={drill?.clicked ?? null}
+        calculated={drill?.calculated ?? 0}
         queryParams={queryParams}
         session={telemetry.session}
         canOpenEntry={canOpen(ENTRY_REPORT_ID)}
         onClose={() => setDrill(null)}
         data-testid="DynamicDrillPanel__c51cea" />
+      <DynamicResultPanel
+        info={resultInfo}
+        years={defaults.years}
+        state={state}
+        pickers={pickers}
+        onOpenLedger={canOpen(LEDGER_REPORT_ID) ? (row, range, clicked, calculated) => { setResultInfo(null); openLedger(row, range, clicked, calculated); } : null}
+        onClose={() => setResultInfo(null)}
+        data-testid="DynamicResultPanel__c51cea" />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { isCompletedStatus } from '../lib/docStatus.js';
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -91,7 +92,7 @@ async function loadFromAPI(apiFetch, poPath) {
       apiFetch,
       `${poPath}/header?_sortBy=creationDate desc&_startRow=0&_endRow=19&documentStatus=CO`,
     );
-    const rawHeaders = parseEntityRows(headersRes).filter(h => h.documentStatus === 'CO');
+    const rawHeaders = parseEntityRows(headersRes).filter(h => isCompletedStatus(h.documentStatus));
     if (rawHeaders.length === 0) {
       console.warn('[QPO] No completed PO headers found');
     }

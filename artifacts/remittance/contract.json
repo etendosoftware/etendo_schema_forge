@@ -1,21 +1,22 @@
 {
-  "version": "0.24.0",
+  "version": "0.35.0",
   "generatedAt": "2026-11-05T18:53:39.346Z",
-  "updatedAt": "2026-11-19T18:55:29.103Z",
-  "checksum": "52ddf1db4cc05ee5",
+  "updatedAt": "2026-11-20T15:38:53.482Z",
+  "checksum": "53c97ec8ec0b3806",
   "frontendContract": {
     "window": {
       "id": "FF8080812E71F7C7012E71FD0499001B",
       "name": "Remittance",
       "primaryEntity": "remittance",
       "category": "finance",
-      "agentPrompt": "SEPA remittances (Etendo table REM_Remittance): a batch of customer collections (SEPA CORE direct debit) or vendor payments (SEPA credit transfer) that the company sends to its bank in one file. Only available when the account has the sepa-remittances feature enabled; otherwise every call answers 403 feature_disabled. The `remittance` entity is the header: create it with name (max 60 characters), financialAccount (only accounts with \"Allow Remittances\" are accepted), remittanceType (its name says whether it is a collection or a payment remittance; only types whose SEPA scheme is enabled on the chosen account are accepted) and dueDate (the date the bank charges or credits the remittance). documentNo, transactionDate and the document type are assigned by the server, and remittanceStatus (PE Pending, PR Processed, CT/PT Collected/Paid, CP/PP partially, AN Voided) is set by the remittance processes and never written. A processed remittance cannot be edited. The `lines` entity is read-only: each line is one due item (paymentScheduleDetail, whose identifier shows the invoice, due date and amount) or payment (payment) of the remittance with its amount; lines cannot be created, edited or deleted through this spec yet, and the Classic remittance processes (select payments, process remittance, create remittance file) are not exposed. To remit a given invoice, set the remittance dueDate on or after that invoice's due date (its paymentPlan dueDate): availableDueItems only offers dues expected on or before the remittance due date. If the invoice the user named is not offered, say why and fix the date; never select another customer's due instead.",
+      "agentPrompt": "SEPA remittances (Etendo table REM_Remittance): a batch of customer collections (SEPA CORE direct debit) or vendor payments (SEPA credit transfer) that the company sends to its bank in one file. Only available when the account has the sepa-remittances feature enabled; otherwise every call answers 403 feature_disabled. The `remittance` entity is the header: create it with name (max 60 characters), financialAccount (only a Bank account with a valid IBAN that has the SEPA remittance payment methods, which Bank accounts get automatically when they are created with the feature on), remittanceType (its name says whether it is a collection or a payment remittance; only the types linked to the chosen account are accepted) and dueDate (the date the bank charges or credits the remittance, never in the past). documentNo, transactionDate and the document type are assigned by the server, and remittanceStatus (PE Pending, PR Processed i.e. pending dispatch, SB Sent to bank, CT/PT Collected/Paid, CP/PP partially, AN Voided) is set by the remittance processes and never written. A confirmed remittance cannot be edited. To add lines, use the header actions (etendo_action): `availableDueItems` (body `{ search, page, pageSize }`) lists the open due items the remittance can take (the ones already in it come back marked alreadyInRemittance, with their lineAmount and lineIds), and `syncDueItems` (body `{ items: [{ id, amount }], remove: [id] }`, ids are due-item ids) adds or updates and removes them in one transaction; an amount must be greater than 0 and at most the due item's outstanding amount. To remit a given invoice, set the remittance dueDate on or after that invoice's due date (its paymentPlan dueDate): availableDueItems only offers dues expected on or before the remittance due date. If the invoice the user named is not offered, say why and fix the date; never select another customer's due instead. The `lines` entity cannot be created directly (POST answers 405): each line is one due item (paymentScheduleDetail) of the remittance, with read-only invoice, business partner and due date fields; while the remittance is pending, a line's `amount` can be updated (same limit) and a line can be deleted. The Classic remittance processes (select payments, process remittance, create remittance file) are not exposed; use these remittance actions instead (etendo_action): `fileReadiness` (read) lists what still prevents generating the SEPA file (`problems`, each with a localized `message`, grouped by organization, bank account and line) and summarizes the remittance (invoices, total, due date); `confirm` (body `{ fieldValues: { grouping: 'P' | 'GGPD' } }`, P no grouping, GGPD grouped by business partner and due date) is atomic: it processes the remittance and creates its payments as Remitted WITHOUT settling them (the invoices stay unpaid and the remittance ends PR, pending dispatch), generates the SEPA file (pain.008 for collections, pain.001 for payments), stores it as the remittance's main attachment and returns `status`, `attachmentId`, `fileName` and `downloadUrl`; if anything fails nothing is kept. After confirming, `reactivate` (no parameters) undoes it while the remittance is PR or SB. `markSent` (no parameters) records that the file was sent to the bank (PR to SB): informational only, nothing is settled. `markCollected` (no parameters, from PR or SB) settles every payment on the remittance due date (the bank transaction and the paid invoices; the remittance ends Collected, or Paid for a payment remittance); it is all or nothing and afterwards the remittance cannot be reactivated and the only way back for a collection is to register returns, below. Ask the user before marking a remittance collected. `generateFile` regenerates the file of a confirmed remittance as a new main attachment (the previous files are kept) with the same response; it is refused once a line was returned (the file would still list it). When the bank did not collect an invoice of a collected remittance (only after `markCollected`), register a return by hand with `returnState` (read: per line `state`, `returnable`, `reasonCode`, `returnDate`, and `paymentLineIds`, the lines that share a payment) and `returnLines` (body `{ fieldValues: { lineIds: [lineId], returnDate: 'yyyy-MM-dd' } }`, date optional, default today, never in the future; a payment shared by several lines must be returned with all of them): it reverses the settlement and its bank transaction, voids the line's payment so the invoice due is pending again, and moves the remittance to partially collected (CP); it is all or nothing, only for a collection remittance, and refused for lines whose settlement is posted or reconciled (the refusal lists `problems` per line). Ask the user before returning. A collection needs a SEPA creditor identifier. The remittance's `creditorIdentifier` can be sent when creating or updating an unconfirmed collection (normalized and validated); when none exists anywhere, confirmation uses the one computed from the organization and keeps it as the remittance's copy, never on the account. The account holds the default and the remittance holds its copy. `sepaFileData` (body `{ accountId, remittanceId }`) returns `remittanceCreditorId`, `accountCreditorId`, the organization suggestion `suggestedCreditorId`, which one applies (`creditorIdSource`: remittance, account, suggested or missing) and the effective `creditorId`. If readiness reports a missing or invalid identifier, ask whether to use the proposed value or the one supplied by the bank. On the saved, unconfirmed collection call `saveCreditorId` with `{ accountId, creditorId, remittanceId }` (normalized and validated: country, two check digits, 3-character business code, national id, at most 35 characters). Include `saveToAccount: true` only if the user requests changing the account default. Confirmation and regeneration use the collection's saved identifier. An older collection without a copy takes its first value from the account. Payment remittances do not need it. The remittance also keeps its own IBAN (`iBAN`), copied from its bank account when it is created or its account changes; it can be sent when creating or updating an unconfirmed remittance (normalized and validated, never written to the account) and its SEPA file always carries it. `sepaFileData` returns `remittanceIban`, `accountIban` and `ibanSource` (remittance, account or missing). A collection remittance also has `directDebitScheme` (`CORE` default, or `B2B`) and `financed` (default false), editable while it is not confirmed; they do not apply to payment remittances (B2B or financed there is refused), and the SEPA file carries them. Ask the user before choosing B2B or financed. Run `fileReadiness` before `confirm`, fix or report its problems, and ask the user before confirming.",
       "hidePrint": true,
       "hideDetailForm": true,
       "customComponents": {
         "bottomSection": "RemittanceBottomPanel",
         "subHeader": "RemittanceStatusBanner",
-        "processConfirmModal": "RemittanceProcessConfirmModal"
+        "processConfirmModal": "RemittanceProcessConfirmModal",
+        "topbarExtra": "RemittanceStatusSelector"
       },
       "processOverrides": {
         "selectpayments": {
@@ -30,12 +31,14 @@
         "processRemittance": {
           "exclude": true
         },
-        "process": {
+        "confirm": {
           "add": true,
-          "label": "process",
+          "exclude": true,
+          "label": "confirm",
           "style": "positive",
           "displayLogicRaw": "@Processed@='N'",
           "requiresLines": true,
+          "confirmModal": true,
           "params": [
             {
               "key": "grouping",
@@ -55,14 +58,43 @@
               ]
             }
           ],
-          "_note": "ETP-6148 — «Procesar»: RemittanceHeaderHandler action `process` (runs REM's REMRemittanceProcess). The params dialog asks the grouping (default P «Sin agrupar», GGPD «Agrupar por cliente y vencimiento») and posts it as fieldValues.grouping. Only while unprocessed and with lines."
+          "_note": "ETP-6247 — «Confirmar» (was ETP-6148's «Procesar»): RemittanceHeaderHandler action `confirm`, atomic: it checks fileReadiness, processes the remittance with REM's REMRemittanceProcess, leaves the payments in Remesado and the invoices uncollected (the remittance ends Pendiente de envío PR and can be reactivated until «Marcar como cobrada»), generates the SEPA file and stores it as the main attachment. `confirmModal` routes the click to customComponents.processConfirmModal (RemittanceProcessConfirmModal), which re-checks fileReadiness, asks the grouping from `params` (default P «Sin agrupar», GGPD «Agrupar por cliente y vencimiento», posted as fieldValues.grouping), warns that the payments stay in Remesado until it is marked collected, posts the action itself and offers the file in its success step. Only while unprocessed and with lines."
+        },
+        "markSent": {
+          "add": true,
+          "exclude": true,
+          "label": "remittanceAdvanceToSent",
+          "style": "positive",
+          "displayLogicRaw": "@RemittanceStatus@='PR'",
+          "requiresLines": true,
+          "confirmModal": true,
+          "_note": "ETP-6247 — NOT a header button any more (`exclude`: the generator emits no process for it): the step is chosen from the header status chip (RemittanceStatusSelector, window.customComponents.topbarExtra) and from the grid's row menu. The entry stays declared because the route and the selector read its label and displayLogicRaw as the single source of the step's visibility. «Pasar a Enviada al banco». RemittanceHeaderHandler action `markSent` (PR -> SB, informational: nothing is created or settled). Data key remittanceStatus (evalDisplayLogicRaw lower-cases the first letter). confirmModal routes it to RemittanceProcessConfirmModal -> RemittanceSentDialog (the two chips «Pendiente de envío -> Enviada al banco» and what it does), which posts the action itself."
+        },
+        "markCollected": {
+          "add": true,
+          "exclude": true,
+          "label": "remittanceAdvanceToCollected",
+          "style": "positive",
+          "displayLogicRaw": "@RemittanceStatus@='SB'",
+          "requiresLines": true,
+          "confirmModal": true,
+          "_note": "ETP-6247 — NOT a header button any more (`exclude`, see markSent): chosen from the status chip selector and the row menu. «Pasar a Cobrada». RemittanceHeaderHandler action `markCollected` (SB -> CT/PT: settles every payment at the remittance's due date and the invoices become collected). The UI no longer offers it straight from PR (the backend still allows it). confirmModal routes it to RemittanceProcessConfirmModal -> RemittanceCollectDialog (the chips «Enviada al banco -> Cobrada» and the settlement warning), which posts the action itself. The label stays «Cobrada» for a payment remittance too: the process label is static."
         },
         "reactivate": {
           "add": true,
           "label": "reactivate",
           "style": "primary-danger",
-          "displayLogicRaw": "@Processed@='Y'",
-          "_note": "ETP-6148 — «Reactivar»: RemittanceHeaderHandler action `reactivate` (deletes the payments the process created; the remittance becomes editable again). Danger style, so DetailView asks for confirmation through customComponents.processConfirmModal (RemittanceProcessConfirmModal)."
+          "displayLogicRaw": "@RemittanceStatus@!='PE' & @RemittanceStatus@!='CT' & @RemittanceStatus@!='PT' & @RemittanceStatus@!='CP' & @RemittanceStatus@!='PP' & @RemittanceStatus@!='AN'",
+          "_note": "ETP-6148 — «Reactivar»: RemittanceHeaderHandler action `reactivate` (deletes the payments the process created; the remittance becomes editable again; ETP-6247: only from Pendiente de envío PR or Enviada al banco SB, otherwise 422 ETGO_RemittanceReactivateNotAllowed). Danger style, so DetailView asks for confirmation through customComponents.processConfirmModal (RemittanceProcessConfirmModal). ETP-6247: only while the remittance is Pendiente de envío (PR) or Enviada al banco (SB); it is written as «not PE/CT/PT/CP/PP/AN» on the data key remittanceStatus (evalDisplayLogicRaw lower-cases the first letter and has no OR)."
+        },
+        "returnLines": {
+          "add": true,
+          "label": "remittanceReturnAction",
+          "style": "primary-danger",
+          "displayLogicRaw": "@RemittanceStatus@!='PE' & @RemittanceStatus@!='PR' & @RemittanceStatus@!='SB' & @RemittanceStatus@!='PT' & @RemittanceStatus@!='PP' & @RemittanceStatus@!='AN'",
+          "requiresLines": true,
+          "confirmModal": true,
+          "_note": "ETP-6247 returns — «Devolver»: the bank did not collect some receipts of a confirmed remittance. confirmModal routes the click to customComponents.processConfirmModal (RemittanceProcessConfirmModal), which opens RemittanceReturnDialog; the dialog reads returnState + the lines, picks them, and posts RemittanceHeaderHandler action `returnLines` itself. Shown only on a Cobrada (CT) or partially collected (CP) remittance, never before it is collected (data key remittanceStatus, written as «not PE/PR/SB/PT/PP/AN» because displayLogic has no OR). A payment remittance cannot be told apart from the record, so the dialog says so when returnState.collection is false."
         },
         "selectInvoicesAndOrders": {
           "exclude": true
@@ -119,7 +151,7 @@
           "Currency": "Currency"
         }
       },
-      "titleField": "name",
+      "titleField": "documentNo",
       "subsetFilters": [
         {
           "label": "remittanceTabAll"
@@ -136,6 +168,7 @@
       "statusEnumLabels": {
         "PE": "remittanceStatusPe",
         "PR": "remittanceStatusPr",
+        "SB": "remittanceStatusSb",
         "CT": "remittanceStatusCt",
         "PT": "remittanceStatusPt",
         "CP": "remittanceStatusCp",
@@ -342,6 +375,56 @@
               "required": true,
               "maxLength": 32
             },
+            "callout": {
+              "className": "org.openbravo.module.remittance.ad_callouts.RemittanceSepaDefaultsCallout"
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
+            }
+          },
+          {
+            "name": "eTARAutomaticprocess",
+            "apiKey": "eTARAutomaticprocess",
+            "column": "EM_Etar_Automaticprocess",
+            "label": "Process Automated",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
+            }
+          },
+          {
+            "name": "creditorIdentifier",
+            "apiKey": "creditorIdentifier",
+            "column": "Creditor_Identifier",
+            "label": "SEPA Creditor Identifier",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 35
+            },
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -397,6 +480,10 @@
                 "name": "remittanceStatusPr"
               },
               {
+                "value": "SB",
+                "name": "remittanceStatusSb"
+              },
+              {
                 "value": "CT",
                 "name": "remittanceStatusCt"
               },
@@ -422,7 +509,8 @@
             "seq": 70,
             "enumVariants": {
               "PE": "neutral",
-              "PR": "info",
+              "PR": "warning",
+              "SB": "info",
               "CT": "success",
               "PT": "success",
               "CP": "warning",
@@ -433,6 +521,89 @@
             "validation": {
               "required": true,
               "maxLength": 60
+            }
+          },
+          {
+            "name": "directDebitScheme",
+            "apiKey": "directDebitScheme",
+            "column": "DD_Scheme",
+            "label": "Direct Debit Scheme",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "enumValues": [
+              {
+                "value": "CORE",
+                "name": "Core",
+                "labels": {
+                  "es_ES": "Core"
+                }
+              },
+              {
+                "value": "B2B",
+                "name": "B2B",
+                "labels": {
+                  "es_ES": "B2B"
+                }
+              }
+            ],
+            "validation": {
+              "maxLength": 60
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
+            }
+          },
+          {
+            "name": "financed",
+            "apiKey": "financed",
+            "column": "IsFinanced",
+            "label": "Financed",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
+            }
+          },
+          {
+            "name": "iBAN",
+            "apiKey": "iBAN",
+            "column": "Iban",
+            "label": "IBAN",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 34
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           }
         ],
@@ -460,6 +631,13 @@
             }
           },
           {
+            "name": "eTARAutomaticprocess",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
             "name": "processed",
             "derivation": {
               "type": "computed",
@@ -471,6 +649,13 @@
             "derivation": {
               "type": "computed",
               "source": "PE"
+            }
+          },
+          {
+            "name": "financed",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
             }
           }
         ]
@@ -614,80 +799,47 @@
             "enumValues": [
               {
                 "value": "RPAP",
-                "name": "Awaiting Payment",
-                "labels": {
-                  "es_ES": "A Pagar"
-                }
+                "name": "statusRpap"
               },
               {
                 "value": "RPAE",
-                "name": "Awaiting Execution",
-                "labels": {
-                  "es_ES": "A Ejecutar"
-                }
+                "name": "statusRpae"
               },
               {
                 "value": "RPVOID",
-                "name": "Void",
-                "labels": {
-                  "es_ES": "Anulado"
-                }
+                "name": "remittanceReceiptReturned"
               },
               {
                 "value": "REM_SENT",
-                "name": "Remitted",
-                "labels": {
-                  "es_ES": "Remitted"
-                }
+                "name": "statusRemSent"
               },
               {
                 "value": "PPM",
-                "name": "Payment Made",
-                "labels": {
-                  "es_ES": "Pagado"
-                }
+                "name": "statusPpm"
               },
               {
                 "value": "RPR",
-                "name": "Payment Received",
-                "labels": {
-                  "es_ES": "Cobrado"
-                }
+                "name": "statusRpr"
               },
               {
                 "value": "REM_CANCEL",
-                "name": "Settled in Remittance",
-                "labels": {
-                  "es_ES": "Settled in Remittance"
-                }
+                "name": "statusRemCancel"
               },
               {
                 "value": "RDNC",
-                "name": "Deposited not Cleared",
-                "labels": {
-                  "es_ES": "Cobro depositado"
-                }
+                "name": "statusRdnc"
               },
               {
                 "value": "PWNC",
-                "name": "Withdrawn not Cleared",
-                "labels": {
-                  "es_ES": "Pago reintegrado"
-                }
+                "name": "statusPwnc"
               },
               {
                 "value": "RPPC",
-                "name": "Payment Cleared",
-                "labels": {
-                  "es_ES": "Conciliado"
-                }
+                "name": "statusRppc"
               },
               {
                 "value": "ETGOERR",
-                "name": "Payment Error",
-                "labels": {
-                  "es_ES": "Payment Error"
-                }
+                "name": "statusEtgoerr"
               }
             ],
             "labels": {
@@ -889,13 +1041,14 @@
       "name": "Remittance",
       "primaryEntity": "remittance",
       "category": "finance",
-      "agentPrompt": "SEPA remittances (Etendo table REM_Remittance): a batch of customer collections (SEPA CORE direct debit) or vendor payments (SEPA credit transfer) that the company sends to its bank in one file. Only available when the account has the sepa-remittances feature enabled; otherwise every call answers 403 feature_disabled. The `remittance` entity is the header: create it with name (max 60 characters), financialAccount (only accounts with \"Allow Remittances\" are accepted), remittanceType (its name says whether it is a collection or a payment remittance; only types whose SEPA scheme is enabled on the chosen account are accepted) and dueDate (the date the bank charges or credits the remittance). documentNo, transactionDate and the document type are assigned by the server, and remittanceStatus (PE Pending, PR Processed, CT/PT Collected/Paid, CP/PP partially, AN Voided) is set by the remittance processes and never written. A processed remittance cannot be edited. The `lines` entity is read-only: each line is one due item (paymentScheduleDetail, whose identifier shows the invoice, due date and amount) or payment (payment) of the remittance with its amount; lines cannot be created, edited or deleted through this spec yet, and the Classic remittance processes (select payments, process remittance, create remittance file) are not exposed. To remit a given invoice, set the remittance dueDate on or after that invoice's due date (its paymentPlan dueDate): availableDueItems only offers dues expected on or before the remittance due date. If the invoice the user named is not offered, say why and fix the date; never select another customer's due instead.",
+      "agentPrompt": "SEPA remittances (Etendo table REM_Remittance): a batch of customer collections (SEPA CORE direct debit) or vendor payments (SEPA credit transfer) that the company sends to its bank in one file. Only available when the account has the sepa-remittances feature enabled; otherwise every call answers 403 feature_disabled. The `remittance` entity is the header: create it with name (max 60 characters), financialAccount (only a Bank account with a valid IBAN that has the SEPA remittance payment methods, which Bank accounts get automatically when they are created with the feature on), remittanceType (its name says whether it is a collection or a payment remittance; only the types linked to the chosen account are accepted) and dueDate (the date the bank charges or credits the remittance, never in the past). documentNo, transactionDate and the document type are assigned by the server, and remittanceStatus (PE Pending, PR Processed i.e. pending dispatch, SB Sent to bank, CT/PT Collected/Paid, CP/PP partially, AN Voided) is set by the remittance processes and never written. A confirmed remittance cannot be edited. To add lines, use the header actions (etendo_action): `availableDueItems` (body `{ search, page, pageSize }`) lists the open due items the remittance can take (the ones already in it come back marked alreadyInRemittance, with their lineAmount and lineIds), and `syncDueItems` (body `{ items: [{ id, amount }], remove: [id] }`, ids are due-item ids) adds or updates and removes them in one transaction; an amount must be greater than 0 and at most the due item's outstanding amount. To remit a given invoice, set the remittance dueDate on or after that invoice's due date (its paymentPlan dueDate): availableDueItems only offers dues expected on or before the remittance due date. If the invoice the user named is not offered, say why and fix the date; never select another customer's due instead. The `lines` entity cannot be created directly (POST answers 405): each line is one due item (paymentScheduleDetail) of the remittance, with read-only invoice, business partner and due date fields; while the remittance is pending, a line's `amount` can be updated (same limit) and a line can be deleted. The Classic remittance processes (select payments, process remittance, create remittance file) are not exposed; use these remittance actions instead (etendo_action): `fileReadiness` (read) lists what still prevents generating the SEPA file (`problems`, each with a localized `message`, grouped by organization, bank account and line) and summarizes the remittance (invoices, total, due date); `confirm` (body `{ fieldValues: { grouping: 'P' | 'GGPD' } }`, P no grouping, GGPD grouped by business partner and due date) is atomic: it processes the remittance and creates its payments as Remitted WITHOUT settling them (the invoices stay unpaid and the remittance ends PR, pending dispatch), generates the SEPA file (pain.008 for collections, pain.001 for payments), stores it as the remittance's main attachment and returns `status`, `attachmentId`, `fileName` and `downloadUrl`; if anything fails nothing is kept. After confirming, `reactivate` (no parameters) undoes it while the remittance is PR or SB. `markSent` (no parameters) records that the file was sent to the bank (PR to SB): informational only, nothing is settled. `markCollected` (no parameters, from PR or SB) settles every payment on the remittance due date (the bank transaction and the paid invoices; the remittance ends Collected, or Paid for a payment remittance); it is all or nothing and afterwards the remittance cannot be reactivated and the only way back for a collection is to register returns, below. Ask the user before marking a remittance collected. `generateFile` regenerates the file of a confirmed remittance as a new main attachment (the previous files are kept) with the same response; it is refused once a line was returned (the file would still list it). When the bank did not collect an invoice of a collected remittance (only after `markCollected`), register a return by hand with `returnState` (read: per line `state`, `returnable`, `reasonCode`, `returnDate`, and `paymentLineIds`, the lines that share a payment) and `returnLines` (body `{ fieldValues: { lineIds: [lineId], returnDate: 'yyyy-MM-dd' } }`, date optional, default today, never in the future; a payment shared by several lines must be returned with all of them): it reverses the settlement and its bank transaction, voids the line's payment so the invoice due is pending again, and moves the remittance to partially collected (CP); it is all or nothing, only for a collection remittance, and refused for lines whose settlement is posted or reconciled (the refusal lists `problems` per line). Ask the user before returning. A collection needs a SEPA creditor identifier. The remittance's `creditorIdentifier` can be sent when creating or updating an unconfirmed collection (normalized and validated); when none exists anywhere, confirmation uses the one computed from the organization and keeps it as the remittance's copy, never on the account. The account holds the default and the remittance holds its copy. `sepaFileData` (body `{ accountId, remittanceId }`) returns `remittanceCreditorId`, `accountCreditorId`, the organization suggestion `suggestedCreditorId`, which one applies (`creditorIdSource`: remittance, account, suggested or missing) and the effective `creditorId`. If readiness reports a missing or invalid identifier, ask whether to use the proposed value or the one supplied by the bank. On the saved, unconfirmed collection call `saveCreditorId` with `{ accountId, creditorId, remittanceId }` (normalized and validated: country, two check digits, 3-character business code, national id, at most 35 characters). Include `saveToAccount: true` only if the user requests changing the account default. Confirmation and regeneration use the collection's saved identifier. An older collection without a copy takes its first value from the account. Payment remittances do not need it. The remittance also keeps its own IBAN (`iBAN`), copied from its bank account when it is created or its account changes; it can be sent when creating or updating an unconfirmed remittance (normalized and validated, never written to the account) and its SEPA file always carries it. `sepaFileData` returns `remittanceIban`, `accountIban` and `ibanSource` (remittance, account or missing). A collection remittance also has `directDebitScheme` (`CORE` default, or `B2B`) and `financed` (default false), editable while it is not confirmed; they do not apply to payment remittances (B2B or financed there is refused), and the SEPA file carries them. Ask the user before choosing B2B or financed. Run `fileReadiness` before `confirm`, fix or report its problems, and ask the user before confirming.",
       "hidePrint": true,
       "hideDetailForm": true,
       "customComponents": {
         "bottomSection": "RemittanceBottomPanel",
         "subHeader": "RemittanceStatusBanner",
-        "processConfirmModal": "RemittanceProcessConfirmModal"
+        "processConfirmModal": "RemittanceProcessConfirmModal",
+        "topbarExtra": "RemittanceStatusSelector"
       },
       "processOverrides": {
         "selectpayments": {
@@ -910,12 +1063,14 @@
         "processRemittance": {
           "exclude": true
         },
-        "process": {
+        "confirm": {
           "add": true,
-          "label": "process",
+          "exclude": true,
+          "label": "confirm",
           "style": "positive",
           "displayLogicRaw": "@Processed@='N'",
           "requiresLines": true,
+          "confirmModal": true,
           "params": [
             {
               "key": "grouping",
@@ -935,14 +1090,43 @@
               ]
             }
           ],
-          "_note": "ETP-6148 — «Procesar»: RemittanceHeaderHandler action `process` (runs REM's REMRemittanceProcess). The params dialog asks the grouping (default P «Sin agrupar», GGPD «Agrupar por cliente y vencimiento») and posts it as fieldValues.grouping. Only while unprocessed and with lines."
+          "_note": "ETP-6247 — «Confirmar» (was ETP-6148's «Procesar»): RemittanceHeaderHandler action `confirm`, atomic: it checks fileReadiness, processes the remittance with REM's REMRemittanceProcess, leaves the payments in Remesado and the invoices uncollected (the remittance ends Pendiente de envío PR and can be reactivated until «Marcar como cobrada»), generates the SEPA file and stores it as the main attachment. `confirmModal` routes the click to customComponents.processConfirmModal (RemittanceProcessConfirmModal), which re-checks fileReadiness, asks the grouping from `params` (default P «Sin agrupar», GGPD «Agrupar por cliente y vencimiento», posted as fieldValues.grouping), warns that the payments stay in Remesado until it is marked collected, posts the action itself and offers the file in its success step. Only while unprocessed and with lines."
+        },
+        "markSent": {
+          "add": true,
+          "exclude": true,
+          "label": "remittanceAdvanceToSent",
+          "style": "positive",
+          "displayLogicRaw": "@RemittanceStatus@='PR'",
+          "requiresLines": true,
+          "confirmModal": true,
+          "_note": "ETP-6247 — NOT a header button any more (`exclude`: the generator emits no process for it): the step is chosen from the header status chip (RemittanceStatusSelector, window.customComponents.topbarExtra) and from the grid's row menu. The entry stays declared because the route and the selector read its label and displayLogicRaw as the single source of the step's visibility. «Pasar a Enviada al banco». RemittanceHeaderHandler action `markSent` (PR -> SB, informational: nothing is created or settled). Data key remittanceStatus (evalDisplayLogicRaw lower-cases the first letter). confirmModal routes it to RemittanceProcessConfirmModal -> RemittanceSentDialog (the two chips «Pendiente de envío -> Enviada al banco» and what it does), which posts the action itself."
+        },
+        "markCollected": {
+          "add": true,
+          "exclude": true,
+          "label": "remittanceAdvanceToCollected",
+          "style": "positive",
+          "displayLogicRaw": "@RemittanceStatus@='SB'",
+          "requiresLines": true,
+          "confirmModal": true,
+          "_note": "ETP-6247 — NOT a header button any more (`exclude`, see markSent): chosen from the status chip selector and the row menu. «Pasar a Cobrada». RemittanceHeaderHandler action `markCollected` (SB -> CT/PT: settles every payment at the remittance's due date and the invoices become collected). The UI no longer offers it straight from PR (the backend still allows it). confirmModal routes it to RemittanceProcessConfirmModal -> RemittanceCollectDialog (the chips «Enviada al banco -> Cobrada» and the settlement warning), which posts the action itself. The label stays «Cobrada» for a payment remittance too: the process label is static."
         },
         "reactivate": {
           "add": true,
           "label": "reactivate",
           "style": "primary-danger",
-          "displayLogicRaw": "@Processed@='Y'",
-          "_note": "ETP-6148 — «Reactivar»: RemittanceHeaderHandler action `reactivate` (deletes the payments the process created; the remittance becomes editable again). Danger style, so DetailView asks for confirmation through customComponents.processConfirmModal (RemittanceProcessConfirmModal)."
+          "displayLogicRaw": "@RemittanceStatus@!='PE' & @RemittanceStatus@!='CT' & @RemittanceStatus@!='PT' & @RemittanceStatus@!='CP' & @RemittanceStatus@!='PP' & @RemittanceStatus@!='AN'",
+          "_note": "ETP-6148 — «Reactivar»: RemittanceHeaderHandler action `reactivate` (deletes the payments the process created; the remittance becomes editable again; ETP-6247: only from Pendiente de envío PR or Enviada al banco SB, otherwise 422 ETGO_RemittanceReactivateNotAllowed). Danger style, so DetailView asks for confirmation through customComponents.processConfirmModal (RemittanceProcessConfirmModal). ETP-6247: only while the remittance is Pendiente de envío (PR) or Enviada al banco (SB); it is written as «not PE/CT/PT/CP/PP/AN» on the data key remittanceStatus (evalDisplayLogicRaw lower-cases the first letter and has no OR)."
+        },
+        "returnLines": {
+          "add": true,
+          "label": "remittanceReturnAction",
+          "style": "primary-danger",
+          "displayLogicRaw": "@RemittanceStatus@!='PE' & @RemittanceStatus@!='PR' & @RemittanceStatus@!='SB' & @RemittanceStatus@!='PT' & @RemittanceStatus@!='PP' & @RemittanceStatus@!='AN'",
+          "requiresLines": true,
+          "confirmModal": true,
+          "_note": "ETP-6247 returns — «Devolver»: the bank did not collect some receipts of a confirmed remittance. confirmModal routes the click to customComponents.processConfirmModal (RemittanceProcessConfirmModal), which opens RemittanceReturnDialog; the dialog reads returnState + the lines, picks them, and posts RemittanceHeaderHandler action `returnLines` itself. Shown only on a Cobrada (CT) or partially collected (CP) remittance, never before it is collected (data key remittanceStatus, written as «not PE/PR/SB/PT/PP/AN» because displayLogic has no OR). A payment remittance cannot be told apart from the record, so the dialog says so when returnState.collection is false."
         },
         "selectInvoicesAndOrders": {
           "exclude": true
@@ -999,7 +1183,7 @@
           "Currency": "Currency"
         }
       },
-      "titleField": "name",
+      "titleField": "documentNo",
       "subsetFilters": [
         {
           "label": "remittanceTabAll"
@@ -1016,6 +1200,7 @@
       "statusEnumLabels": {
         "PE": "remittanceStatusPe",
         "PR": "remittanceStatusPr",
+        "SB": "remittanceStatusSb",
         "CT": "remittanceStatusCt",
         "PT": "remittanceStatusPt",
         "CP": "remittanceStatusCp",
@@ -1181,6 +1366,22 @@
             "required": false
           },
           {
+            "name": "eTARAutomaticprocess",
+            "apiKey": "eTARAutomaticprocess",
+            "column": "EM_Etar_Automaticprocess",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "creditorIdentifier",
+            "apiKey": "creditorIdentifier",
+            "column": "Creditor_Identifier",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -1261,12 +1462,28 @@
             "required": true
           },
           {
-            "name": "eTARAutomaticprocess",
-            "apiKey": "eTARAutomaticprocess",
-            "column": "EM_Etar_Automaticprocess",
+            "name": "directDebitScheme",
+            "apiKey": "directDebitScheme",
+            "column": "DD_Scheme",
+            "type": "enum",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "financed",
+            "apiKey": "financed",
+            "column": "IsFinanced",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": true
+          },
+          {
+            "name": "iBAN",
+            "apiKey": "iBAN",
+            "column": "Iban",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
           }
         ]
       },
@@ -1881,6 +2098,22 @@
         "description": "Default value for 'dueDate' in remittance should be a string"
       },
       {
+        "id": "t-default-value-type-remittance-eTARAutomaticprocess",
+        "category": "default-value-type",
+        "entity": "remittance",
+        "field": "eTARAutomaticprocess",
+        "runner": "node",
+        "description": "Default value for 'eTARAutomaticprocess' in remittance should be a string"
+      },
+      {
+        "id": "t-default-value-type-remittance-financed",
+        "category": "default-value-type",
+        "entity": "remittance",
+        "field": "financed",
+        "runner": "node",
+        "description": "Default value for 'financed' in remittance should be a string"
+      },
+      {
         "id": "t-default-value-type-remittance-processed",
         "category": "default-value-type",
         "entity": "remittance",
@@ -2025,6 +2258,22 @@
         "description": "Field 'status' should be present in lines"
       },
       {
+        "id": "t-field-presence-remittance-creditorIdentifier",
+        "category": "field-presence",
+        "entity": "remittance",
+        "field": "creditorIdentifier",
+        "runner": "node",
+        "description": "Field 'creditorIdentifier' should be present in remittance"
+      },
+      {
+        "id": "t-field-presence-remittance-directDebitScheme",
+        "category": "field-presence",
+        "entity": "remittance",
+        "field": "directDebitScheme",
+        "runner": "node",
+        "description": "Field 'directDebitScheme' should be present in remittance"
+      },
+      {
         "id": "t-field-presence-remittance-documentNo",
         "category": "field-presence",
         "entity": "remittance",
@@ -2041,12 +2290,36 @@
         "description": "Field 'dueDate' should be present in remittance"
       },
       {
+        "id": "t-field-presence-remittance-eTARAutomaticprocess",
+        "category": "field-presence",
+        "entity": "remittance",
+        "field": "eTARAutomaticprocess",
+        "runner": "node",
+        "description": "Field 'eTARAutomaticprocess' should be present in remittance"
+      },
+      {
+        "id": "t-field-presence-remittance-financed",
+        "category": "field-presence",
+        "entity": "remittance",
+        "field": "financed",
+        "runner": "node",
+        "description": "Field 'financed' should be present in remittance"
+      },
+      {
         "id": "t-field-presence-remittance-financialAccount",
         "category": "field-presence",
         "entity": "remittance",
         "field": "financialAccount",
         "runner": "node",
         "description": "Field 'financialAccount' should be present in remittance"
+      },
+      {
+        "id": "t-field-presence-remittance-iBAN",
+        "category": "field-presence",
+        "entity": "remittance",
+        "field": "iBAN",
+        "runner": "node",
+        "description": "Field 'iBAN' should be present in remittance"
       },
       {
         "id": "t-field-presence-remittance-name",
@@ -2209,6 +2482,22 @@
         "description": "Field 'status' should have type 'string' in lines"
       },
       {
+        "id": "t-field-type-remittance-creditorIdentifier",
+        "category": "field-type",
+        "entity": "remittance",
+        "field": "creditorIdentifier",
+        "runner": "node",
+        "description": "Field 'creditorIdentifier' should have type 'string' in remittance"
+      },
+      {
+        "id": "t-field-type-remittance-directDebitScheme",
+        "category": "field-type",
+        "entity": "remittance",
+        "field": "directDebitScheme",
+        "runner": "node",
+        "description": "Field 'directDebitScheme' should have type 'string' in remittance"
+      },
+      {
         "id": "t-field-type-remittance-documentNo",
         "category": "field-type",
         "entity": "remittance",
@@ -2225,12 +2514,36 @@
         "description": "Field 'dueDate' should have type 'string' in remittance"
       },
       {
+        "id": "t-field-type-remittance-eTARAutomaticprocess",
+        "category": "field-type",
+        "entity": "remittance",
+        "field": "eTARAutomaticprocess",
+        "runner": "node",
+        "description": "Field 'eTARAutomaticprocess' should have type 'boolean' in remittance"
+      },
+      {
+        "id": "t-field-type-remittance-financed",
+        "category": "field-type",
+        "entity": "remittance",
+        "field": "financed",
+        "runner": "node",
+        "description": "Field 'financed' should have type 'boolean' in remittance"
+      },
+      {
         "id": "t-field-type-remittance-financialAccount",
         "category": "field-type",
         "entity": "remittance",
         "field": "financialAccount",
         "runner": "node",
         "description": "Field 'financialAccount' should have type 'string' in remittance"
+      },
+      {
+        "id": "t-field-type-remittance-iBAN",
+        "category": "field-type",
+        "entity": "remittance",
+        "field": "iBAN",
+        "runner": "node",
+        "description": "Field 'iBAN' should have type 'string' in remittance"
       },
       {
         "id": "t-field-type-remittance-name",
@@ -2273,6 +2586,22 @@
         "description": "Field 'transactionDate' should have type 'string' in remittance"
       },
       {
+        "id": "t-readonlylogic-evaluable-remittance-creditorIdentifier",
+        "category": "readonlylogic-evaluable",
+        "entity": "remittance",
+        "field": "creditorIdentifier",
+        "runner": "node",
+        "description": "Read-only logic for 'creditorIdentifier' in remittance should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-remittance-directDebitScheme",
+        "category": "readonlylogic-evaluable",
+        "entity": "remittance",
+        "field": "directDebitScheme",
+        "runner": "node",
+        "description": "Read-only logic for 'directDebitScheme' in remittance should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-remittance-documentNo",
         "category": "readonlylogic-evaluable",
         "entity": "remittance",
@@ -2289,12 +2618,36 @@
         "description": "Read-only logic for 'dueDate' in remittance should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-remittance-eTARAutomaticprocess",
+        "category": "readonlylogic-evaluable",
+        "entity": "remittance",
+        "field": "eTARAutomaticprocess",
+        "runner": "node",
+        "description": "Read-only logic for 'eTARAutomaticprocess' in remittance should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-remittance-financed",
+        "category": "readonlylogic-evaluable",
+        "entity": "remittance",
+        "field": "financed",
+        "runner": "node",
+        "description": "Read-only logic for 'financed' in remittance should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-remittance-financialAccount",
         "category": "readonlylogic-evaluable",
         "entity": "remittance",
         "field": "financialAccount",
         "runner": "node",
         "description": "Read-only logic for 'financialAccount' in remittance should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-remittance-iBAN",
+        "category": "readonlylogic-evaluable",
+        "entity": "remittance",
+        "field": "iBAN",
+        "runner": "node",
+        "description": "Read-only logic for 'iBAN' in remittance should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-remittance-name",
@@ -2321,6 +2674,22 @@
         "description": "Read-only logic for 'transactionDate' in remittance should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-valid-remittance-creditorIdentifier",
+        "category": "readonlylogic-valid",
+        "entity": "remittance",
+        "field": "creditorIdentifier",
+        "runner": "node",
+        "description": "Read-only logic for 'creditorIdentifier' in remittance should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-remittance-directDebitScheme",
+        "category": "readonlylogic-valid",
+        "entity": "remittance",
+        "field": "directDebitScheme",
+        "runner": "node",
+        "description": "Read-only logic for 'directDebitScheme' in remittance should be valid JS"
+      },
+      {
         "id": "t-readonlylogic-valid-remittance-documentNo",
         "category": "readonlylogic-valid",
         "entity": "remittance",
@@ -2337,12 +2706,36 @@
         "description": "Read-only logic for 'dueDate' in remittance should be valid JS"
       },
       {
+        "id": "t-readonlylogic-valid-remittance-eTARAutomaticprocess",
+        "category": "readonlylogic-valid",
+        "entity": "remittance",
+        "field": "eTARAutomaticprocess",
+        "runner": "node",
+        "description": "Read-only logic for 'eTARAutomaticprocess' in remittance should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-remittance-financed",
+        "category": "readonlylogic-valid",
+        "entity": "remittance",
+        "field": "financed",
+        "runner": "node",
+        "description": "Read-only logic for 'financed' in remittance should be valid JS"
+      },
+      {
         "id": "t-readonlylogic-valid-remittance-financialAccount",
         "category": "readonlylogic-valid",
         "entity": "remittance",
         "field": "financialAccount",
         "runner": "node",
         "description": "Read-only logic for 'financialAccount' in remittance should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-remittance-iBAN",
+        "category": "readonlylogic-valid",
+        "entity": "remittance",
+        "field": "iBAN",
+        "runner": "node",
+        "description": "Read-only logic for 'iBAN' in remittance should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-remittance-name",
@@ -2446,11 +2839,25 @@
         "description": "Rule 'REM_Remittance-Chargedate-readOnlyLogic' (readOnlyLogic) should be declared"
       },
       {
+        "id": "t-rule-declared-REM-Remittance-Creditor-Identifier-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_Remittance-Creditor_Identifier-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance-Creditor_Identifier-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-REM-Remittance-Datetrx-readOnlyLogic",
         "category": "rule-declared",
         "rule": "REM_Remittance-Datetrx-readOnlyLogic",
         "runner": "node",
         "description": "Rule 'REM_Remittance-Datetrx-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-Remittance-DD-Scheme-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_Remittance-DD_Scheme-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance-DD_Scheme-readOnlyLogic' (readOnlyLogic) should be declared"
       },
       {
         "id": "t-rule-declared-REM-Remittance-DocumentNo-readOnlyLogic",
@@ -2486,6 +2893,20 @@
         "rule": "REM_Remittance-FIN_Payment_ID-readOnlyLogic",
         "runner": "node",
         "description": "Rule 'REM_Remittance-FIN_Payment_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-Remittance-Iban-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_Remittance-Iban-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance-Iban-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-REM-Remittance-IsFinanced-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "REM_Remittance-IsFinanced-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'REM_Remittance-IsFinanced-readOnlyLogic' (readOnlyLogic) should be declared"
       },
       {
         "id": "t-rule-declared-REM-Remittance-REM-Remittance-Type-ID-readOnlyLogic",
@@ -2640,6 +3061,13 @@
         "rule": "remittance-Settled-Undo-displayLogic",
         "runner": "node",
         "description": "Rule 'remittance-Settled-Undo-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-RemittanceSepaDefaultsCallout-FIN-Financial-Account-ID",
+        "category": "rule-declared",
+        "rule": "RemittanceSepaDefaultsCallout_FIN_Financial_Account_ID",
+        "runner": "node",
+        "description": "Rule 'RemittanceSepaDefaultsCallout_FIN_Financial_Account_ID' (callout) should be declared"
       },
       {
         "id": "t-rule-declared-Select-Invoices-and-Orders",
@@ -2894,14 +3322,6 @@
         "description": "System field 'documentType' should exist in backend but not frontend for remittance"
       },
       {
-        "id": "t-system-field-remittance-eTARAutomaticprocess",
-        "category": "system-field",
-        "entity": "remittance",
-        "field": "eTARAutomaticprocess",
-        "runner": "node",
-        "description": "System field 'eTARAutomaticprocess' should exist in backend but not frontend for remittance"
-      },
-      {
         "id": "t-system-field-remittance-getFile",
         "category": "system-field",
         "entity": "remittance",
@@ -3013,22 +3433,22 @@
       }
     ],
     "summary": {
-      "total": 158,
+      "total": 184,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 2,
-        "default-value-type": 6,
-        "field-presence": 23,
-        "field-type": 23,
-        "readonlylogic-evaluable": 6,
-        "readonlylogic-valid": 6,
-        "rule-declared": 43,
+        "default-value-type": 8,
+        "field-presence": 28,
+        "field-type": 28,
+        "readonlylogic-evaluable": 11,
+        "readonlylogic-valid": 11,
+        "rule-declared": 48,
         "selector-endpoint": 6,
-        "system-field": 35,
+        "system-field": 34,
         "visibility": 2
       },
       "byRunner": {
-        "node": 158,
+        "node": 184,
         "junit": 0
       }
     }

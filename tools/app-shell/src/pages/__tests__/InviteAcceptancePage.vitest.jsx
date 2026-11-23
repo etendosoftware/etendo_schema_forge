@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/pages/InviteAcceptancePage.jsx
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -219,7 +220,8 @@ describe('InviteAcceptancePage', () => {
         expect.stringContaining('/sws/go/session/sso/google'),
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ credential: 'google-jwt' }),
+          // ETP-6363: the body also carries the lead-attribution context (hubspotContext).
+          body: expect.stringContaining('"credential":"google-jwt"'),
         })
       );
       expect(fetchMock).toHaveBeenCalledWith(

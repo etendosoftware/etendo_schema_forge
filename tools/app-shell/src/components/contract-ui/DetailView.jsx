@@ -293,7 +293,7 @@ export function DetailView({
   // the secondary/outline look instead of competing as a second primary button.
   hasExternalPrimaryAction = false, primarySave = false, // ETP-5600 primarySave: existing-record Save keeps the primary look (saveActions.jsx)
   statusFieldLabel = null,
-  statusEnumLabels = null,
+  statusEnumLabels = null, statusEnumVariants = null, // statusEnumVariants: per-code pill tones (the status field's enumVariants)
   salesTheme = false,
   sidebarContent: sidebarContentProp = null,
   othersLabel = null,
@@ -1884,7 +1884,7 @@ export function DetailView({
           token={token}
           apiBaseUrl={apiBaseUrl}
           api={api} isDocumentReadOnly={isDocumentReadOnly} accessReadOnly={menuActionsReadOnly}
-          isActive={isActive}
+          isActive={isActive} onHeaderRefresh={() => hook.refreshHeaderTotals?.(data?.id || recordId)}
           isNew={isNew}
           onSaveHeader={isNew ? saveHeaderForCustomTab : undefined}
           onGoToSavedRecord={isNew ? goToSavedRecord : undefined}
@@ -1981,7 +1981,7 @@ export function DetailView({
       {/* Content card with rounded top-left corner */}
       <div className={`flex-1 flex flex-col ${contentBg} rounded-tl-2xl overflow-hidden min-h-0`}>
         {/* Action bar: Cancel + status | actions + save */}
-        {embedded ? renderEmbeddedStatusPill(statusField, data, statusEnumLabels) : (
+        {embedded ? renderEmbeddedStatusPill(statusField, data, statusEnumLabels, statusEnumVariants) : (
         <div className={getLinesToolbarClassName()}>
           <div className="flex items-center gap-2">
             <DetailCancelButton
@@ -1992,7 +1992,7 @@ export function DetailView({
             {statusField && data[statusField] != null && !WINDOW_HIDE_STATUS_PILL_FOR[windowName]?.has(data[statusField]) && (
               <DocumentStatusPill
                 status={data[statusField]}
-                enumLabels={statusEnumLabels}
+                enumLabels={statusEnumLabels} enumVariants={statusEnumVariants}
                 prefix={resolveStatusPrefix(statusFieldLabel, ui)}
                 data-testid="DocumentStatusPill__fa3275" />
             )}

@@ -265,6 +265,15 @@ describe('ReportViewerPage — render refused by the org check (ETP-6080)', () =
     await waitFor(() => expect(within(screen.getByTestId('dialog')).getByText('reportErrorOrgAccess')).toBeInTheDocument());
   });
 
+  it('a render past the statement timeout shows the translated message (ETP-6146)', async () => {
+    const user = userEvent.setup();
+    stubFetch(() => Promise.resolve({ ok: false, status: 504, json: () => Promise.resolve({ error: 'REPORT_TIMEOUT', code: 'REPORT_TIMEOUT' }) }));
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('Free Text')).toBeInTheDocument());
+    await user.click(screen.getByText('runReport'));
+    await waitFor(() => expect(screen.getByText('reportErrorTimeout')).toBeInTheDocument());
+  });
+
   it('any other failure keeps the server message', async () => {
     const user = userEvent.setup();
     stubFetch(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ error: 'Template missing', code: 'RENDER_FAILED' }) }));

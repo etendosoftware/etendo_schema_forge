@@ -7,6 +7,7 @@ import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.
 import { normalizeDateInputValue } from '@/windows/custom/fiscal-config/fiscalConfig.utils.js';
 import { getInvoiceFiscalTargets, isSifEligibleByDate } from '@/windows/custom/shared/fiscalTargets.js';
 import { resolveInvoiceOrgId } from '@/windows/custom/shared/resolveInvoiceOrgId.js';
+import { isDraftStatus } from '../../../lib/docStatus.js';
 
 export const CLAVE_TIPO_OPTIONS = [
   { value: 'F1', labelKey: 'sifDataTabs.option.invoice' },
@@ -122,7 +123,9 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
   const orgId = resolveInvoiceOrgId(data, selectedOrg?.id);
   const specName = apiBaseUrl?.split('/').filter(Boolean).pop() || 'sales-invoice';
 
-  const { profile, tbaiRecord, earliestSiiCutoverDate } = useFiscalConfig(orgId, apiBaseUrl);
+  const { profile, tbaiRecord, siiRecord, earliestSiiCutoverDate } = useFiscalConfig(orgId, apiBaseUrl);
+  // ETP-6284: 'IVA' | 'IGIC' (AEATSII_CONFIG.TAXTYPE), null while unknown — drives the LC prefix hint.
+  const siiTaxType = siiRecord?.taxtype ? String(siiRecord.taxtype).toUpperCase() : null;
   const territory = tbaiRecord?.etsgSifTerritory ?? null;
   const { showSii, showTbai, showVerifactu } = getInvoiceFiscalTargets(specName, profile, territory);
   // ETP-5432: `showSii` only says the SII SYSTEM applies to this org/territory —
@@ -142,7 +145,7 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
     : data?.['aeatsiiDescription$_identifier'];
   const siiTypeOptions = isPurchaseInvoice ? PURCHASE_CLAVE_TIPO_FC_OPTIONS : CLAVE_TIPO_OPTIONS;
 
-  const isDraft = data?.documentStatus === 'DR';
+  const isDraft = isDraftStatus(data?.documentStatus);
   const isSentToSii = data?.aeatsiiIssent === true || data?.aeatsiiIssent === 'Y';
   // ETP-5229 (item #3): manual testing confirmed the SII sub-panel fields (Tipo
   // factura, Descripción SII, Causa exención, Fecha registro contable,
@@ -338,5 +341,6 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange, locke
     getVal,
     getDateVal,
     setSiiType,
+    siiTaxType,
   };
 }

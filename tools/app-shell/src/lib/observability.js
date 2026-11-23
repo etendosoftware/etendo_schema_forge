@@ -1,4 +1,5 @@
 import { createObservability } from './observability/core.js';
+import { pushUserIdentified } from './marketing/dataLayer.js';
 import {
   getSupportSessionState,
   isSupportModeActive,
@@ -13,7 +14,12 @@ const observability = createObservability();
 export const initObservability = observability.initObservability;
 export const track = observability.track;
 export const page = observability.page;
-export const identify = observability.identify;
+// ETP-6363 — the account the analytics identify is also marketing's `user_identified` (GTM's
+// dataLayer; once per account and page load, nothing where GTM is not loaded).
+export const identify = (userId, traits) => {
+  pushUserIdentified(userId);
+  return observability.identify(userId, traits);
+};
 export const group = observability.group;
 export const groupSet = observability.groupSet;
 export const captureException = observability.captureException;

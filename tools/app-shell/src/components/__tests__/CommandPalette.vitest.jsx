@@ -4,7 +4,17 @@
 const MENU_TRANSLATIONS = vi.hoisted(() => ({
   'General Ledger Configuration': 'Esquema contable',
   'Fiscal Configuration': 'Configuración Fiscal',
+  // Tesorería fixture (see `treasuryFixture` below), with the real es_ES labels.
+  Treasury: 'Tesorería',
+  Reports: 'Informes',
+  'Aging Report (Receivables)': 'Antigüedad de cobros',
+  'Aging Report (Payables)': 'Antigüedad de pagos',
+  'Payment Term': 'Condiciones de pago',
 }));
+// The Tesorería group is always part of the menu fixture — registry.js indexes each group's
+// `reportId` rows once, at import — but it is `hidden` (so the palette skips it) unless a test
+// switches it on. That keeps the fixed window lists of the other tests unchanged.
+const treasuryFixture = vi.hoisted(() => ({ visible: false }));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -90,6 +100,33 @@ vi.mock('../../menu.json', () => ({
         ],
       },
       {
+        group: 'Treasury',
+        icon: 'Wallet',
+        get hidden() { return !treasuryFixture.visible; },
+        items: [
+          { name: 'payment-in', label: 'Payment In', windowId: 'W-PAYIN' },
+          { name: 'payment-out', label: 'Payment Out', windowId: 'W-PAYOUT' },
+          { name: 'financial-account', label: 'Accounts', windowId: 'W-ACCOUNT' },
+          { name: 'match-rule', label: 'Match Rule', hidden: true, routeOnly: true, windowId: 'W-MATCH' },
+          {
+            name: 'report-viewer-treasury', label: 'Reports', path: 'report-viewer?category=treasury',
+            accessWindowId: 'D647D118F5014D00AF47A636B2CD0DD3', requiresGroupReport: true,
+          },
+          // Moved from Configuración; the last visible Treasury entry, like the real menu.
+          { name: 'payment-term', label: 'Payment Term', windowId: '141' },
+          {
+            name: 'aging-receivable', label: 'Aging Report (Receivables)', hidden: true,
+            reportId: 'aging-receivable', path: 'report-viewer?category=treasury&report=aging-receivable',
+          },
+          {
+            name: 'aging-payable', label: 'Aging Report (Payables)', hidden: true,
+            reportId: 'aging-payable', path: 'report-viewer?category=treasury&report=aging-payable',
+          },
+          // A hidden report row without a path is not a link of its own: never listed.
+          { name: 'pathless-report', label: 'Pathless Aging', hidden: true, reportId: 'pathless-report' },
+        ],
+      },
+      {
         group: 'Hidden Group',
         icon: 'Package',
         hidden: true,
@@ -132,7 +169,7 @@ vi.mock('@/components/global-search/GlobalSearchPrimitives.jsx', () => ({
 import { render, screen, fireEvent, waitFor, cleanup, act, within } from '@testing-library/react';
 import { useEffect } from 'react';
 import { CommandPalette } from '../CommandPalette.jsx';
-import { splitSearchHighlight } from '@/lib/globalSearchMenu.js';
+import { isSearchableMenuItem, splitSearchHighlight } from '@/lib/globalSearchMenu.js';
 import { GlobalSearchProvider, useGlobalSearch } from '@/components/global-search/GlobalSearchContext.jsx';
 import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
 
@@ -751,5 +788,156 @@ describe('CommandPalette in a support session', () => {
     openPalette();
 
     expect(screen.getByText('translated:Public API Keys')).toBeInTheDocument();
+  });
+});
+
+describe('isSearchableMenuItem', () => {
+  const REPORT_ROW = { name: 'aging-payable', hidden: true, reportId: 'aging-payable', path: 'report-viewer?category=treasury&report=aging-payable' };
+  const canOpenAll = () => true;
+
+  it('always lists a visible item, whatever the options', () => {
+    expect(isSearchableMenuItem({ name: 'payment-in' })).toBe(true);
+    expect(isSearchableMenuItem({ name: 'payment-in', hidden: false }, { includeReports: false })).toBe(true);
+  });
+
+  it('never lists a hidden item that is not a report row', () => {
+    expect(isSearchableMenuItem({ name: 'match-rule', hidden: true }, { includeReports: true, canOpenReport: canOpenAll })).toBe(false);
+  });
+
+  it('lists a hidden report row only while searching and with a grant on it', () => {
+    expect(isSearchableMenuItem(REPORT_ROW, { includeReports: true, canOpenReport: (id) => id === 'aging-payable' })).toBe(true);
+    expect(isSearchableMenuItem(REPORT_ROW, { includeReports: false, canOpenReport: canOpenAll })).toBe(false);
+    expect(isSearchableMenuItem(REPORT_ROW, { includeReports: true, canOpenReport: () => false })).toBe(false);
+  });
+
+  it('fails closed with no options: no report row is listed', () => {
+    expect(isSearchableMenuItem(REPORT_ROW)).toBe(false);
+    expect(isSearchableMenuItem(REPORT_ROW, { includeReports: true })).toBe(false);
+  });
+
+  it('never lists a hidden report row without a path', () => {
+    expect(isSearchableMenuItem({ ...REPORT_ROW, path: undefined }, { includeReports: true, canOpenReport: canOpenAll })).toBe(false);
+  });
+
+  it('treats only a literal true from canOpenReport as a grant', () => {
+    expect(isSearchableMenuItem(REPORT_ROW, { includeReports: true, canOpenReport: () => 'full' })).toBe(false);
+  });
+});
+
+// Tesorería (Treasury): Cobro, Pago, Cuentas and an Informes link whose catalog holds only the two
+// aging reports. The palette lists the aging rows while searching, gated on the caller's own report
+// grants, and gates the Informes link on a grant to one of its group's reports — like the sidebar.
+describe('CommandPalette — Tesorería group', () => {
+  const ADMIN = { capabilities: { isAdminOrClientAdmin: true } };
+  const NON_ADMIN = { capabilities: { isAdminOrClientAdmin: false } };
+
+  function renderPalette(query, reportAccess) {
+    render(
+      <GlobalSearchProvider>
+        <SetSearchQuery value={query} />
+        <SearchInputBridge />
+        <CommandPalette reportAccess={reportAccess} />
+      </GlobalSearchProvider>,
+    );
+    openPalette();
+  }
+
+  const namesUnder = (heading) => Array.from(
+    document.querySelectorAll(`[data-testid="cmd-group-${heading}"] [data-testid^="cmd-item-"]`),
+  ).map((el) => el.dataset.testid.split(' ').at(-1));
+  const allListedNames = () => Array.from(document.querySelectorAll('[data-testid^="cmd-group-"] [data-testid^="cmd-item-"]'))
+    .map((el) => el.dataset.testid.split(' ').at(-1));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vectorSearchOverride.current = null;
+    treasuryFixture.visible = true;
+    mockUseFeatureFlag.mockReturnValue(false);
+    mockUseAuth.mockReturnValue(ADMIN);
+  });
+
+  afterEach(() => {
+    treasuryFixture.visible = false;
+    mockUseAuth.mockReturnValue(ADMIN);
+  });
+
+  it.each(['Tesorería', 'tesoreria', 'TESORERIA', 'Treasury'])('"%s" lists the Treasury entries under the Tesorería heading', async (query) => {
+    renderPalette(query, null);
+    await waitFor(() => expect(namesUnder('Tesorería')).toEqual([
+      'payment-in', 'payment-out', 'financial-account', 'report-viewer-treasury', 'payment-term', 'aging-receivable', 'aging-payable',
+    ]));
+    // match-rule is a hidden route-only window, not a report row: never offered.
+    expect(allListedNames()).not.toContain('match-rule');
+    expect(allListedNames()).not.toContain('pathless-report');
+  });
+
+  it('"Antigüedad" lists both aging reports under Tesorería for a role granted both', async () => {
+    mockUseAuth.mockReturnValue(NON_ADMIN);
+    renderPalette('Antigüedad', { 'aging-receivable': 'full', 'aging-payable': 'read-only' });
+    await waitFor(() => expect(namesUnder('Tesorería')).toEqual(['aging-receivable', 'aging-payable']));
+  });
+
+  it('lists only the aging report the role holds a grant on', async () => {
+    mockUseAuth.mockReturnValue(NON_ADMIN);
+    renderPalette('antiguedad', { 'aging-payable': 'full' });
+    await waitFor(() => expect(namesUnder('Tesorería')).toEqual(['aging-payable']));
+  });
+
+  it.each([
+    ['an empty grant map', {}],
+    ['grants not loaded (null)', null],
+    ['a grant on another report only', { 'tax-report': 'full' }],
+  ])('lists no aging report for a non-admin with %s', async (_label, reportAccess) => {
+    mockUseAuth.mockReturnValue(NON_ADMIN);
+    renderPalette('Antigüedad', reportAccess);
+    await waitForVectorSearchIdle();
+    await waitFor(() => expect(screen.getByTestId('cmd-empty')).toBeInTheDocument());
+    expect(allListedNames()).not.toContain('aging-receivable');
+    expect(allListedNames()).not.toContain('aging-payable');
+  });
+
+  it('lists every aging report for an admin without any grant', async () => {
+    renderPalette('Antigüedad', {});
+    await waitFor(() => expect(namesUnder('Tesorería')).toEqual(['aging-receivable', 'aging-payable']));
+  });
+
+  it('keeps report rows out of the empty-query listing, even for an admin', () => {
+    renderPalette('', { 'aging-receivable': 'full', 'aging-payable': 'full' });
+    expect(namesUnder('Tesorería')).toEqual(['payment-in', 'payment-out', 'financial-account', 'report-viewer-treasury', 'payment-term']);
+  });
+
+  it('hides the Informes link from a non-admin with no grant on a Treasury report', async () => {
+    mockUseAuth.mockReturnValue(NON_ADMIN);
+    renderPalette('Tesorería', { 'tax-report': 'full' });
+    await waitFor(() => expect(namesUnder('Tesorería')).toEqual(['payment-in', 'payment-out', 'financial-account', 'payment-term']));
+  });
+
+  it('shows the Informes link to a non-admin with a grant on one aging report', async () => {
+    mockUseAuth.mockReturnValue(NON_ADMIN);
+    renderPalette('Tesorería', { 'aging-receivable': 'full' });
+    await waitFor(() => expect(namesUnder('Tesorería')).toContain('report-viewer-treasury'));
+  });
+
+  it.each(['Condiciones', 'condiciones de pago'])('"%s" lists Condiciones de pago under the Tesorería heading', async (query) => {
+    mockUseAuth.mockReturnValue(NON_ADMIN);
+    renderPalette(query, {});
+    await waitFor(() => expect(namesUnder('Tesorería')).toEqual(['payment-term']));
+  });
+
+  it.each([
+    ['Condiciones de pago', 'payment-term', '/payment-term'],
+    ['Informes', 'report-viewer-treasury', '/report-viewer?category=treasury'],
+    ['Antigüedad de pagos', 'aging-payable', '/report-viewer?category=treasury&report=aging-payable'],
+    ['Payment In', 'payment-in', '/payment-in'],
+  ])('selecting the "%s" match navigates to its path', async (query, name, expectedPath) => {
+    renderPalette(query, {});
+    const item = await waitFor(() => {
+      const found = Array.from(document.querySelectorAll('[data-testid^="cmd-item-"]'))
+        .find((el) => el.dataset.testid.split(' ').at(-1) === name);
+      expect(found).toBeDefined();
+      return found;
+    });
+    fireEvent.click(item);
+    expect(mockNavigate).toHaveBeenCalledWith(expectedPath);
   });
 });

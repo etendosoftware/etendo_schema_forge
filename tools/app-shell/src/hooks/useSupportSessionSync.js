@@ -6,6 +6,10 @@ import {
   applySupportSessionFromServer,
   fetchSupportSession,
 } from '@/lib/supportSession.js';
+import { pushFirstKeyAction } from '@/lib/marketing/dataLayer.js';
+
+// ETP-6363 — the first key action rides on the same `/me` read (a no-op where GTM is not loaded).
+const reportFirstKeyAction = (account) => pushFirstKeyAction(account?.id, account?.firstKeyAction);
 
 /**
  * ETP-5351 — keeps the support-session store (lib/supportSession.js) in step with `GET /sws/go/me`: once per authenticated session and again when the
@@ -24,7 +28,7 @@ export function useSupportSessionSync() {
   useEffect(() => {
     if (!isAuthenticated || onHandoffPage) return undefined;
     let cancelled = false;
-    fetchSupportSession()
+    fetchSupportSession({ onAccount: reportFirstKeyAction })
       .then((session) => {
         if (!cancelled) applySupportSessionFromServer(session);
       })

@@ -38,11 +38,20 @@ export function buildLocationAddressLines(location, fallbackSummary = null) {
  * segments are blank — rendered verbatim by OrganizationPage/EntityForm's LocationModalField
  * call sites. Same filter(Boolean) pattern as `buildLocationAddressLines` above, applied to a
  * single pre-joined string instead of a structured location object.
+ *
+ * Splits on the separator-RUN, not the literal separator string: a run of N consecutive blank
+ * segments leaves behind N+1 repetitions of the `-` token glued together (e.g. two blanks →
+ * `" - - - "`), and splitting on the literal 3-char `" - "` under-counts those matches because
+ * consecutive tokens share boundary characters — `"Nave 3 - - Getafe".split(" - ")` finds only
+ * one match and returns `["Nave 3", "- Getafe"]`, leaving a stray `"-"` untouched. Matching
+ * `(?: -)+ ` (one-or-more `" -"` tokens plus a trailing space) collapses the whole run — of any
+ * length, including the single-separator case — in one match. Mirrors the Java-side fix in
+ * `McpResponseSanitizer.sanitizeDashJoinedIdentifier`.
  */
 export function sanitizeDashJoinedIdentifier(raw, separator = ' - ') {
   if (typeof raw !== 'string') return raw ?? '';
   return raw
-    .split(separator)
+    .split(/(?: -)+ /)
     .map((segment) => segment.trim())
     .filter(Boolean)
     .join(separator);

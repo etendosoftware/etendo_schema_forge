@@ -460,8 +460,14 @@ scrolls horizontally; the numeric line cells keep the design widths and carry th
     IVA 78 | Importe 86 | 34, header 12/600; each line has a second full-width row: the product
     chip, a BUTTON (chevron at the right) that toggles an expandable panel. Chip: linked (package
     icon, name, mono search key, "· Coincidencia exacta / Por similitud"; no "saved equivalence",
-    decision 2), ambiguous (AI chip "{n} productos posibles" ("1 producto posible" for one) + "Elige uno" in warning colour;
-    starts expanded), new ("Producto nuevo" pill + "{category} · {uom} · se creará al confirmar"),
+    decision 2; collapsed by default). A product the OCR could not settle (several same-name
+    candidates, a tie or a similarity below 90 %) arrives linked too, with `matchedBy: suggested`
+    (ETP-6051): the name and key on one row and, under them, the AI tag "Elegido por OCR · {n} %"
+    (the similarity of the linked candidate, read from the candidate list; only the label when it has
+    none). Opening it lists the candidates with the chosen one checked; choosing another one turns the
+    line into "Elegido por ti" and marks the document adjusted, choosing the same one changes nothing.
+    ambiguous (AI chip "{n} productos posibles" ("1 producto posible" for one) + "Elige uno" in warning colour;
+    starts expanded; no longer produced by the inbox matcher, but a stored document may still carry it), new ("Producto nuevo" pill + "{category} · {uom} · se creará al confirmar"),
     none (red alert + "Sin producto · vincúlalo o créalo"). Panel: "En el documento: «…»", the
     candidate list ("Más probable" on the first), "Ninguno · crear producto nuevo" and the inert
     catalogue search ("Vincular a un producto existente", "Cambiar por otro producto" when
@@ -694,7 +700,7 @@ Review panel (prefix `invoice-inbox-review-`): `-drawer`, `-veil`, `-header`, `-
 `-invoice-no`, `-invoice-date` (+ `-tag`, `-error`, `-icon`, `-raw`, `-control`; each field also `…-field`), the
 currency picker (`field-currency`, `currency-rate-readonly`); lines: `-lines`, `-lines-title`,
 `-lines-head`, `-lines-list`, `-lines-error`, `-line-{i}`,
-`-line-{i}-{description|quantity|price|discount|tax|tax-picker|tax-name|amount|detail|product|product-tag|product-name|panel|candidates|in-document|candidate-{id}|likely|none-option|search|create-new|new-product|new-name|new-category|new-uom|new-error}`,
+`-line-{i}-{description|quantity|price|discount|tax|tax-picker|tax-name|amount|detail|product|product-tag|product-suggested|product-name|panel|candidates|in-document|candidate-{id}|likely|none-option|search|create-new|new-product|new-name|new-category|new-uom|new-error}`,
 `-line-delete-{i}`, `-add-line`; totals: `-totals`, `-total-base`,
 `-total-tax-{rate}`, `-total`, `-total-label`; footer: `-footer`, `-discard`, `-pending`,
 `-reviewed`, `-mark-reviewed`, `-confirm` (also "Reintentar"), `-footer-actions`, `-invoice-link` (the

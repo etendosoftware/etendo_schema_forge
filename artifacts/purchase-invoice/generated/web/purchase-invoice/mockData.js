@@ -41,6 +41,9 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-15",
+    "aeatsiiMultiDua": "Sample aeatsiiMultiDua",
     "tbaiIssent": "Sample tbaiIssent",
     "etgoTotalDiscount": 99.44,
     "processed": "Sample processed",
@@ -98,6 +101,9 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-16",
+    "aeatsiiMultiDua": "Sample aeatsiiMultiDua",
     "tbaiIssent": "Sample tbaiIssent",
     "etgoTotalDiscount": 96.94,
     "processed": "Sample processed",
@@ -155,6 +161,9 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-17",
+    "aeatsiiMultiDua": "Sample aeatsiiMultiDua",
     "tbaiIssent": "Sample tbaiIssent",
     "etgoTotalDiscount": 12.48,
     "processed": "Sample processed",
@@ -212,6 +221,9 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-18",
+    "aeatsiiMultiDua": "Sample aeatsiiMultiDua",
     "tbaiIssent": "Sample tbaiIssent",
     "etgoTotalDiscount": 96.31,
     "processed": "Sample processed",
@@ -269,6 +281,9 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-19",
+    "aeatsiiMultiDua": "Sample aeatsiiMultiDua",
     "tbaiIssent": "Sample tbaiIssent",
     "etgoTotalDiscount": 31.27,
     "processed": "Sample processed",
@@ -326,6 +341,9 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-20",
+    "aeatsiiMultiDua": "Sample aeatsiiMultiDua",
     "tbaiIssent": "Sample tbaiIssent",
     "etgoTotalDiscount": 76.52,
     "processed": "Sample processed",
@@ -383,6 +401,9 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-21",
+    "aeatsiiMultiDua": "Sample aeatsiiMultiDua",
     "tbaiIssent": "Sample tbaiIssent",
     "etgoTotalDiscount": 2.66,
     "processed": "Sample processed",
@@ -440,6 +461,9 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-22",
+    "aeatsiiMultiDua": "Sample aeatsiiMultiDua",
     "tbaiIssent": "Sample tbaiIssent",
     "etgoTotalDiscount": 10.03,
     "processed": "Sample processed",
@@ -497,6 +521,9 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-23",
+    "aeatsiiMultiDua": "Sample aeatsiiMultiDua",
     "tbaiIssent": "Sample tbaiIssent",
     "etgoTotalDiscount": 93.97,
     "processed": "Sample processed",
@@ -554,6 +581,9 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-24",
+    "aeatsiiMultiDua": "Sample aeatsiiMultiDua",
     "tbaiIssent": "Sample tbaiIssent",
     "etgoTotalDiscount": 1.1,
     "processed": "Sample processed",
@@ -611,6 +641,9 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-25",
+    "aeatsiiMultiDua": "Sample aeatsiiMultiDua",
     "tbaiIssent": "Sample tbaiIssent",
     "etgoTotalDiscount": 79.99,
     "processed": "Sample processed",
@@ -668,6 +701,9 @@ export const header = [
     "aeatsiiErrorRegistral": "Sample aeatsiiErrorRegistral",
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "aeatsiiAuthorizationno": "Sample aeatsiiAuthorizationno",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-26",
+    "aeatsiiMultiDua": "Sample aeatsiiMultiDua",
     "tbaiIssent": "Sample tbaiIssent",
     "etgoTotalDiscount": 53.61,
     "processed": "Sample processed",
@@ -1216,6 +1252,9 @@ export const tax = [
     "tax": "VAT 21%",
     "taxAmount": "VAT 21%",
     "taxableAmount": "VAT 21%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-15",
     "headerId": "mock-header-001"
   },
   {
@@ -1224,6 +1263,9 @@ export const tax = [
     "tax": "VAT 10%",
     "taxAmount": "VAT 10%",
     "taxableAmount": "VAT 10%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-16",
     "headerId": "mock-header-002"
   },
   {
@@ -1232,6 +1274,9 @@ export const tax = [
     "tax": "VAT 0%",
     "taxAmount": "VAT 0%",
     "taxableAmount": "VAT 0%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-17",
     "headerId": "mock-header-003"
   },
   {
@@ -1240,6 +1285,9 @@ export const tax = [
     "tax": "Sales Tax 8.5%",
     "taxAmount": "Sales Tax 8.5%",
     "taxableAmount": "Sales Tax 8.5%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-18",
     "headerId": "mock-header-004"
   },
   {
@@ -1248,6 +1296,9 @@ export const tax = [
     "tax": "Exempt",
     "taxAmount": "Exempt",
     "taxableAmount": "Exempt",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-19",
     "headerId": "mock-header-005"
   },
   {
@@ -1256,6 +1307,9 @@ export const tax = [
     "tax": "Reduced Rate 5%",
     "taxAmount": "Reduced Rate 5%",
     "taxableAmount": "Reduced Rate 5%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-20",
     "headerId": "mock-header-006"
   },
   {
@@ -1264,6 +1318,9 @@ export const tax = [
     "tax": "Standard Rate 20%",
     "taxAmount": "Standard Rate 20%",
     "taxableAmount": "Standard Rate 20%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-21",
     "headerId": "mock-header-007"
   },
   {
@@ -1272,6 +1329,9 @@ export const tax = [
     "tax": "VAT 21%",
     "taxAmount": "VAT 21%",
     "taxableAmount": "VAT 21%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-22",
     "headerId": "mock-header-008"
   },
   {
@@ -1280,6 +1340,9 @@ export const tax = [
     "tax": "VAT 10%",
     "taxAmount": "VAT 10%",
     "taxableAmount": "VAT 10%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-23",
     "headerId": "mock-header-009"
   },
   {
@@ -1288,6 +1351,9 @@ export const tax = [
     "tax": "VAT 0%",
     "taxAmount": "VAT 0%",
     "taxableAmount": "VAT 0%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-24",
     "headerId": "mock-header-010"
   },
   {
@@ -1296,6 +1362,9 @@ export const tax = [
     "tax": "Sales Tax 8.5%",
     "taxAmount": "Sales Tax 8.5%",
     "taxableAmount": "Sales Tax 8.5%",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-25",
     "headerId": "mock-header-011"
   },
   {
@@ -1304,6 +1373,9 @@ export const tax = [
     "tax": "Exempt",
     "taxAmount": "Exempt",
     "taxableAmount": "Exempt",
+    "recalculate": "Sample recalculate",
+    "aeatsiiDua": "Sample aeatsiiDua",
+    "aeatsiiFechaDua": "2026-01-26",
     "headerId": "mock-header-012"
   }
 ];

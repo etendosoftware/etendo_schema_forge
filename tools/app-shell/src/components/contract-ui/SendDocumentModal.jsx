@@ -71,10 +71,8 @@ function resolveEmailSendErrorMessage(ui, data, documentType) {
   return data?.message || ui('sendModalSendFailed', { documentType });
 }
 
-function resolveEmailSendSuccessMessage(ui, status, documentType) {
-  return status === 'DUPLICATE'
-    ? ui('sendModalDuplicate', { documentType })
-    : ui('sendModalSentSuccess', { documentType });
+function resolveEmailSendSuccessMessage(ui, documentType) {
+  return ui('sendModalSentSuccess', { documentType });
 }
 
 function resolveEmailSendExceptionMessage(ui, documentType) {
@@ -115,8 +113,8 @@ async function sendDocumentFromModal({
     language,
   });
 
-  if (data.status === 'SENT' || data.status === 'DUPLICATE') {
-    const successMessage = resolveEmailSendSuccessMessage(ui, data.status, documentType);
+  if (data.status === 'SENT') {
+    const successMessage = resolveEmailSendSuccessMessage(ui, documentType);
     toast.success(successMessage);
     setSendFeedback({ type: 'success', message: successMessage });
     // ETP-5069 — a plain cancel also calls onClose(), so a caller could not tell a
@@ -494,7 +492,7 @@ function SendModalFooter({ allowEmail, onClose, sendFeedback, downloading, onDow
  * - windowName: for report ID resolution (e.g. "sales-invoice")
  * - token: auth token
  * - onClose: callback to close modal
- * - onSent: optional callback fired only on a successful send (SENT / DUPLICATE),
+ * - onSent: optional callback fired only on a successful send (SENT),
  *   just before onClose(), with `{ status, auditId, requestId }`. Lets a caller
  *   distinguish "the document was sent" from "the user cancelled" — both of which
  *   reach onClose — e.g. to invalidate the email-history card (ETP-5069).
