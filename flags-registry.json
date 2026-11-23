@@ -2952,7 +2952,7 @@
     },
     {
       "id": "sii-import-dua",
-      "description": "Purchase invoice imports with DUA for SII (step 1): the SII panel of the purchase-invoice SIF tab shows an \"Importación (DUA)\" block with DUA (C_Invoice.EM_Aeatsii_Dua), DUA date (EM_Aeatsii_Fecha_Dua) and Multiple DUA (EM_Aeatsii_Multi_Dua) when the SII invoice type key is F5 or LC, mirroring the Classic display logic, so an F5 invoice can be saved with the DUA data the SII module demands. Step 2 adds an \"Impuestos de importación\" block right after it (same F5/LC gate): add / edit / delete the manual import tax lines of the invoice (C_InvoiceTax with Recalculate=N: tax, taxable base, tax amount computed by the Classic SL_InvoiceTax_Amt callout), with DUA and DUA date per line while Multiple DUA is checked. Off: the SIF tab as before. The header fields and the now-writable tax entity are exposed by NEO regardless of the flag (decisions.json); the flag only hides the blocks.",
+      "description": "Purchase invoice imports with DUA for SII: the SII panel of the purchase-invoice SIF tab shows an \"Importación (DUA)\" block with DUA (C_Invoice.EM_Aeatsii_Dua), DUA date (EM_Aeatsii_Fecha_Dua) and Multiple DUA (EM_Aeatsii_Multi_Dua) when the SII invoice type key is F5 or LC, mirroring the Classic display logic, so an F5 invoice can be saved with the DUA data the SII module demands. It also shows an \"Impuestos de importación\" block right after it (same F5/LC gate): add / edit / delete the manual import tax lines of the invoice (C_InvoiceTax with Recalculate=N: tax, taxable base, tax amount computed by the Classic SL_InvoiceTax_Amt callout), with DUA and DUA date per line while Multiple DUA is checked; the picker offers import taxes only, and on a deferred-VAT import (siiDeferredVat header action) an \"Añadir línea compensatoria\" button adds the compensatory =0% rows. Both blocks warn, without blocking, when a DUA date is later than the accounting register date. Off: the SIF tab as before. The header fields and the now-writable tax entity are exposed by NEO regardless of the flag (decisions.json); the flag only hides the blocks.",
       "owner": "AyelenGarcia01",
       "jira": "ETP-6284",
       "created": "2026-11-17",
@@ -2960,7 +2960,7 @@
         "key": "sii-import-dua",
         "defaultValue": false,
         "ttl": "2027-03-31",
-        "ttlNote": "PLACEHOLDER, not a commitment: end of Q1 2027. Revisit once the later ETP-6284 steps (DUA per tax line, records preview, compensatory line) ship and the feature is validated on a real import client.",
+        "ttlNote": "PLACEHOLDER, not a commitment: end of Q1 2027. Revisit once the feature (DUA per tax line, compensatory line) is validated on a real import client.",
         "symbols": [
           "sii-import-dua",
           "SII_IMPORT_DUA",
@@ -2989,15 +2989,15 @@
         "unit": [
           {
             "root": "frontend",
-            "path": "tools/app-shell/src/windows/custom/shared/__tests__/SiiImportDuaSection.vitest.jsx",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/SiiImportDuaSection.vitest.js",
             "expected": true,
-            "note": "To be written by tester-functional: flag off renders nothing; F5/LC show the card, F1/F6 hide it; the Multiple DUA switch writes aeatsiiMultiDua; Multiple DUA hides DUA/date; required mark and error outline on F5 and LC; DUA length counter and non-blocking warning when length != 18; readOnly disables everything."
+            "note": "Helpers of the DUA card: the DUA date vs accounting register date hint (isDuaDateAfterAccountingDate) and the LC number prefix hint."
           },
           {
             "root": "frontend",
-            "path": "tools/app-shell/src/windows/custom/shared/__tests__/SiiImportTaxesSection.vitest.jsx",
+            "path": "tools/app-shell/src/windows/custom/shared/__tests__/SiiImportTaxesSection.vitest.js",
             "expected": true,
-            "note": "To be written by tester-functional: flag off / F1 / F6 render nothing; only Recalculate=N rows listed; a draft row saves itself only once complete (tax, base, callout amount, plus DUA/date with Multiple DUA) via POST /tax with parentId, lineNo MAX+10, recalculate false; a saved row PATCHes only on a real change; incomplete cells get the error outline; Tipo from labelPrefix or tax$rate; summary sums; delete (draft local, saved with confirm); readOnly renders plain cells; onHeaderRefresh after every write; saveFirst on an unsaved invoice."
+            "note": "Helpers of the import-taxes card: the import-only picker filter, the import / compensatory name heuristics, findCompensatoryTax, planCompensatoryLines, the Tipo column (parseRate / rateLabel) and useSiiDeferredVat."
           }
         ]
       }

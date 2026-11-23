@@ -652,10 +652,17 @@ function ImportTaxesBlock({
     }
   }, [apiFetch, recordId]);
 
+  // Rows with a write in flight, by key. `row.saving` alone is not enough: two overlapping flows
+  // (e.g. the date picker and the DUA blur) can each hold a copy taken before it was set, and
+  // would POST the same draft twice.
+  const inFlightRef = useRef(new Set());
+
   const saveRow = useCallback(async (row) => {
-    if (!row || row.saving) return;
+    if (!row || row.saving || inFlightRef.current.has(row.key)) return;
     if (missingImportTaxFields(row, multiDua).size > 0 || row.taxAmount == null) return;
     if (row.id && !isImportTaxRowDirty(row, persistedRef.current[row.id], multiDua)) return;
+    const flightKey = row.key;
+    inFlightRef.current.add(flightKey);
     patchRow(row.key, { saving: true });
     try {
       const body = buildImportTaxBody(row, multiDua);
@@ -682,6 +689,8 @@ function ImportTaxesBlock({
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
       patchRow(row.key, { saving: false });
+    } finally {
+      inFlightRef.current.delete(flightKey);
     }
   }, [multiDua, patchRow, apiFetch, recordId, allServerRows, load, onHeaderRefresh, ui]);
 
@@ -755,6 +764,7 @@ function ImportTaxesBlock({
     if (compensationHint || compensating) return;
     setCompensating(true);
     let lineNo = nextTaxLineNo(allServerRows);
+    let allCreated = true;
     try {
       for (const line of compensation.toCreate) {
         const res = await apiFetch('/tax', {
@@ -767,11 +777,13 @@ function ImportTaxesBlock({
         });
         if (!res.ok) {
           toast.error(await translateBackendErrorResponse(res, ui));
+          allCreated = false;
           break;
         }
         lineNo += 10;
       }
-      toast.success(ui('sifDataTabs.importTaxes.compensatoryAdded'));
+      // Success only when every compensatory line was created.
+      if (allCreated) toast.success(ui('sifDataTabs.importTaxes.compensatoryAdded'));
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
     } finally {
