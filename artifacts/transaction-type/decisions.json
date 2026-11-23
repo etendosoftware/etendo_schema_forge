@@ -6,7 +6,10 @@
     "name": "Transaction Type",
     "detailEntity": null,
     "layoutType": "list-modal",
-    "breadcrumb": "Finance / Transaction Type"
+    "breadcrumb": "Finance / Transaction Type",
+    "templateConfig": {
+      "viewTitleKey": "transactionTypeViewTitle"
+    }
   },
   "entities": {
     "transactionType": {

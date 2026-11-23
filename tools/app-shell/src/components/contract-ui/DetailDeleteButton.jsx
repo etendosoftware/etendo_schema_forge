@@ -1,12 +1,12 @@
 import React from 'react';
-import { IconicTrashIcon } from '@/components/ui/custom-icons';
+import { TrashIcon } from '@phosphor-icons/react';
 
 /**
  * ETP-5600 — the detail topbar's record-delete button, every window (Figma "Opciones md
  * Rounded Secondary Outline Destructive"). Lives outside DetailView.jsx because that file is
  * under a no-growth guardrail (.claude/hooks/check-detailview-growth.mjs).
  *
- * 40x40, radius md, 8px padding, 1px #FBB1C4 border on white; the 24px Iconic trash stays
+ * 40x40, radius md, 8px padding, 1px #FBB1C4 border on white; the 24px trash stays
  * #D50B3E (--status-destructive-fg) in every state. Hover: the light destructive tint
  * (--status-destructive-bg, #FEF0F4) plus a 1px/2px ink shadow at 5%, 200ms ease-in — no
  * solid red fill. Focus-visible: white fill, no drop shadow, and the two-ring halo (2px white
@@ -23,7 +23,7 @@ export const DETAIL_DELETE_BTN_CLS = [
 export function DetailDeleteButton({ onClick, title }) {
   return (
     <button type="button" onClick={onClick} className={DETAIL_DELETE_BTN_CLS} title={title} aria-label={title} data-testid="action-delete">
-      <IconicTrashIcon className="h-6 w-6 shrink-0" data-testid="IconicTrashIcon__fa3275" />
+      <TrashIcon className="h-6 w-6 shrink-0" aria-hidden="true" data-testid="IconicTrashIcon__fa3275" />
     </button>
   );
 }

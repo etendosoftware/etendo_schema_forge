@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { BadGatewayException, BadRequestException, ConflictException, NotAcceptableException, UnsupportedMediaTypeException, HttpException, PreconditionFailedException } from '@nestjs/common';
 import { PublicApiController, toEtag, versionFromIfMatch } from '../src/public-api/public-api.controller.ts';
 import { toErrorDocument } from '../src/public-api/json-api-http.ts';
+import { mapAttributes, mapRelationships } from '../src/public-api/json-api-request.ts';
 import type { PublicApiSchema } from '@etendosoftware/api-gateway-core';
 
 const schema: PublicApiSchema = {
@@ -395,6 +396,37 @@ test('an unknown action is a 404 coded unknown_action', async () => {
   const { status, errors } = toErrorDocument(refusal);
   assert.equal(status, 404);
   assert.equal(errors[0].code, 'unknown_action');
+});
+
+test('an inherited object name is an unknown resource: 404 without calling Etendo', async () => {
+  let calls = 0;
+  const controller = new PublicApiController(schema, 'http://neo.local/etendo', (async () => { calls += 1; throw new Error('no'); }) as any);
+  const req = { neoJwt: 'jwt' } as any;
+  const body = (type: string) => ({ data: { type, attributes: { name: 'x' } } });
+  for (const name of ['constructor', 'toString', '__proto__']) {
+    const attempts: Array<[string, () => Promise<unknown>]> = [
+      ['list', () => controller.list(name, req)],
+      ['get', () => controller.get(name, 'r1', req)],
+      ['create', () => controller.create(name, body(name), req)],
+      ['lookup', () => controller.lookup(name, 'name', req)],
+      ['listChild as parent', () => controller.listChild(name, 'p1', 'lines', req)],
+      ['listChild as child', () => controller.listChild('businessPartner', 'p1', name, req)],
+      ['getChild as child', () => controller.getChild('businessPartner', 'p1', name, 'r1', req)],
+    ];
+    for (const [label, attempt] of attempts) {
+      const error = await attempt().then(() => undefined, (refusal: unknown) => refusal);
+      assert.equal(statusOf(error), 404, `${label}(${name}) must answer 404, got ${String(error)}`);
+    }
+  }
+  assert.equal(calls, 0, 'Etendo is never called for an unknown resource');
+});
+
+test('an inherited object name in a request body is refused as a non-writable field', () => {
+  for (const key of ['constructor', 'toString', '__proto__']) {
+    const members = JSON.parse(`{"${key}": "x"}`);
+    assert.throws(() => mapAttributes(schema.entities.businessPartner, members), BadRequestException, `attribute ${key}`);
+    assert.throws(() => mapRelationships(schema.entities.businessPartner, members), BadRequestException, `relationship ${key}`);
+  }
 });
 
 test('updated stays read-only in the body; the version travels in If-Match', async () => {

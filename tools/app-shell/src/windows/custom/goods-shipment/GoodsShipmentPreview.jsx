@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Edit2, Mail } from 'lucide-react';
+import { DownloadSimpleIcon, PencilSimpleIcon, EnvelopeSimpleIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button.jsx';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
@@ -14,6 +14,7 @@ import EmailsCard from '../shared/preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from '../shared/preview-cards/RelatedDocumentsCard.jsx';
 
 import { SALES_RELATED_DOCS } from '@/components/related-documents/salesRelatedDocs.js';
+import { isCompletedStatus, isDraftStatus } from '../../../lib/docStatus.js';
 // ── Tab content components ────────────────────────────────────────────────────
 
 function ShipmentStatsPanel({ shipment, partnerName, movementDate, ui }) {
@@ -86,7 +87,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
   // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig below; lets
   // useShipmentPdf skip the jsreport round-trip and serve the marked attachment
   // directly when one already exists, instead of regenerating on every open.
-  const pdfCacheConfig = { tableName: 'M_InOut', storeCondition: shipment?.documentStatus !== 'DR', recordUpdated: shipment?.updated ?? null };
+  const pdfCacheConfig = { tableName: 'M_InOut', storeCondition: !isDraftStatus(shipment?.documentStatus), recordUpdated: shipment?.updated ?? null };
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useShipmentPdf(
     shipment?.id ?? null,
     apiBaseUrl,
@@ -98,10 +99,10 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
 
   // ETP-4717 — Send is only available once the shipment is Confirmed (CO),
   // matching the Grid row quick-action and Form-view topbar gates.
-  const isDownloadable = shipment.documentStatus === 'CO';
+  const isDownloadable = isCompletedStatus(shipment.documentStatus);
   // ETP-5205 — Solo-Lectura tier: Send is a write (mail + PDF attachment), Download stays.
   const isSendable = isDownloadable && !readOnly;
-  const isDraft = shipment.documentStatus === 'DR';
+  const isDraft = isDraftStatus(shipment.documentStatus);
 
   // ── Left panel ──────────────────────────────────────────────────────────────
 
@@ -158,7 +159,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
           className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[hsl(var(--foreground))] hover:bg-[hsl(var(--foreground))] text-primary-foreground [&_svg]:size-5"
           onClick={openEmailModal}
           data-testid="Button__5d626b">
-          <Mail data-testid="Mail__5d626b" />
+          <EnvelopeSimpleIcon data-testid="Mail__5d626b" />
           {ui('invoicePreviewSend')}
         </Button>
       )}
@@ -169,7 +170,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
         disabled={!pdfBlob || !isDownloadable}
         onClick={pdfBlob && isDownloadable ? handleDownload : undefined}
         data-testid="Button__5d626b">
-        <Download className="text-[hsl(var(--text-disabled))]" data-testid="Download__5d626b" />
+        <DownloadSimpleIcon className="text-[hsl(var(--text-disabled))]" data-testid="Download__5d626b" />
         {ui('invoicePreviewDownloadPdf')}
       </Button>
       <Button
@@ -178,7 +179,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] [&_svg]:size-5"
         onClick={() => modalRef.current?.triggerEdit?.()}
         data-testid="Button__5d626b">
-        <Edit2 className="text-[hsl(var(--text-disabled))]" data-testid="Edit2__5d626b" />
+        <PencilSimpleIcon className="text-[hsl(var(--text-disabled))]" data-testid="Edit2__5d626b" />
         {ui('invoicePreviewEdit')}
       </Button>
     </>

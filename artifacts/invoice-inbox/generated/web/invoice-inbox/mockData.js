@@ -21,7 +21,11 @@ export const header = [
     "status": "DR",
     "source": "Sample source",
     "errorCode": "Sample errorCode",
-    "creationDate": "Sample creationDate"
+    "creationDate": "Sample creationDate",
+    "currency": "USD",
+    "errorDetail": "Sample errorDetail",
+    "newProducts": "Laptop Pro 15",
+    "totalMismatch": "Sample totalMismatch"
   },
   {
     "id": "mock-header-002",
@@ -43,7 +47,11 @@ export const header = [
     "status": "CO",
     "source": "Sample source",
     "errorCode": "Sample errorCode",
-    "creationDate": "Sample creationDate"
+    "creationDate": "Sample creationDate",
+    "currency": "EUR",
+    "errorDetail": "Sample errorDetail",
+    "newProducts": "USB-C Cable",
+    "totalMismatch": "Sample totalMismatch"
   },
   {
     "id": "mock-header-003",
@@ -65,7 +73,11 @@ export const header = [
     "status": "VO",
     "source": "Sample source",
     "errorCode": "Sample errorCode",
-    "creationDate": "Sample creationDate"
+    "creationDate": "Sample creationDate",
+    "currency": "GBP",
+    "errorDetail": "Sample errorDetail",
+    "newProducts": "Wireless Mouse",
+    "totalMismatch": "Sample totalMismatch"
   },
   {
     "id": "mock-header-004",
@@ -87,7 +99,11 @@ export const header = [
     "status": "IP",
     "source": "Sample source",
     "errorCode": "Sample errorCode",
-    "creationDate": "Sample creationDate"
+    "creationDate": "Sample creationDate",
+    "currency": "USD",
+    "errorDetail": "Sample errorDetail",
+    "newProducts": "Mechanical Keyboard",
+    "totalMismatch": "Sample totalMismatch"
   },
   {
     "id": "mock-header-005",
@@ -109,7 +125,11 @@ export const header = [
     "status": "DR",
     "source": "Sample source",
     "errorCode": "Sample errorCode",
-    "creationDate": "Sample creationDate"
+    "creationDate": "Sample creationDate",
+    "currency": "EUR",
+    "errorDetail": "Sample errorDetail",
+    "newProducts": "Monitor 27\"",
+    "totalMismatch": "Sample totalMismatch"
   },
   {
     "id": "mock-header-006",
@@ -131,7 +151,11 @@ export const header = [
     "status": "CO",
     "source": "Sample source",
     "errorCode": "Sample errorCode",
-    "creationDate": "Sample creationDate"
+    "creationDate": "Sample creationDate",
+    "currency": "GBP",
+    "errorDetail": "Sample errorDetail",
+    "newProducts": "Webcam HD",
+    "totalMismatch": "Sample totalMismatch"
   },
   {
     "id": "mock-header-007",
@@ -153,7 +177,11 @@ export const header = [
     "status": "VO",
     "source": "Sample source",
     "errorCode": "Sample errorCode",
-    "creationDate": "Sample creationDate"
+    "creationDate": "Sample creationDate",
+    "currency": "USD",
+    "errorDetail": "Sample errorDetail",
+    "newProducts": "Headset Pro",
+    "totalMismatch": "Sample totalMismatch"
   },
   {
     "id": "mock-header-008",
@@ -175,7 +203,11 @@ export const header = [
     "status": "IP",
     "source": "Sample source",
     "errorCode": "Sample errorCode",
-    "creationDate": "Sample creationDate"
+    "creationDate": "Sample creationDate",
+    "currency": "EUR",
+    "errorDetail": "Sample errorDetail",
+    "newProducts": "Docking Station",
+    "totalMismatch": "Sample totalMismatch"
   },
   {
     "id": "mock-header-009",
@@ -197,7 +229,11 @@ export const header = [
     "status": "DR",
     "source": "Sample source",
     "errorCode": "Sample errorCode",
-    "creationDate": "Sample creationDate"
+    "creationDate": "Sample creationDate",
+    "currency": "GBP",
+    "errorDetail": "Sample errorDetail",
+    "newProducts": "SSD 1TB",
+    "totalMismatch": "Sample totalMismatch"
   },
   {
     "id": "mock-header-010",
@@ -219,7 +255,11 @@ export const header = [
     "status": "CO",
     "source": "Sample source",
     "errorCode": "Sample errorCode",
-    "creationDate": "Sample creationDate"
+    "creationDate": "Sample creationDate",
+    "currency": "USD",
+    "errorDetail": "Sample errorDetail",
+    "newProducts": "RAM 16GB",
+    "totalMismatch": "Sample totalMismatch"
   },
   {
     "id": "mock-header-011",
@@ -241,7 +281,11 @@ export const header = [
     "status": "VO",
     "source": "Sample source",
     "errorCode": "Sample errorCode",
-    "creationDate": "Sample creationDate"
+    "creationDate": "Sample creationDate",
+    "currency": "EUR",
+    "errorDetail": "Sample errorDetail",
+    "newProducts": "Power Supply 750W",
+    "totalMismatch": "Sample totalMismatch"
   },
   {
     "id": "mock-header-012",
@@ -263,6 +307,10 @@ export const header = [
     "status": "IP",
     "source": "Sample source",
     "errorCode": "Sample errorCode",
-    "creationDate": "Sample creationDate"
+    "creationDate": "Sample creationDate",
+    "currency": "GBP",
+    "errorDetail": "Sample errorDetail",
+    "newProducts": "Network Switch",
+    "totalMismatch": "Sample totalMismatch"
   }
 ];

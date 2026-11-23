@@ -5,11 +5,14 @@
  * (`docs/neo-headless.md`, "CURRENT_DATA contract") plus the enrichment the review action adds
  * (`vendor.details`, `product.details`, `candidates[].city|searchKey|category|uom`).
  */
-import { STATUS } from './invoiceInboxFilters.js';
+import { CONFIRMABLE_ERROR_CODES, STATUS } from './invoiceInboxFilters.js';
 
 /**
- * Exact-decimal money math (ETP-6050 S2, plan 9.4c). The ONE formula the backend shares
- * (`InvoiceInboxTotals`, same fixture `tools/app-shell/__tests__/fixtures/invoice-inbox-totals.json`):
+ * Exact-decimal money math (ETP-6050 S2, plan 9.4c). The formula the backend
+ * repeats in `InvoiceInboxTotals` (and the Etendo engine a third time). Each repo owns its own cases: this
+ * one pins the SPA copy with `tools/app-shell/__tests__/fixtures/invoice-inbox-totals.json`, the Java side
+ * with `invoice-inbox-totals-cases.json`. The two case files are independent copies nothing keeps in sync
+ * automatically: a change to the rounding rule must update both:
  *
  *   unit6   = round6( unitPrice x (1 - discount / 100) )        (HALF_UP away from zero)
  *   lineNet = round_scale( quantity x unit6 )                   (scale = the document currency's decimals)
@@ -123,12 +126,20 @@ export function lineAmount(line, scale = DEFAULT_SCALE) {
   return unitsToNumber(lineNetUnits(line, scale), scale);
 }
 
-/** The VAT rate of a line: the reader's `taxRate`, else the resolved tax's rate, else null. */
-export function lineRate(line) {
-  const raw = line?.taxRate ?? line?.tax?.rate;
+/** A finite number from a raw value; null for null, "" and anything not numeric. */
+function finiteRate(raw) {
   if (raw == null || raw === '') return null;
   const rate = Number(raw);
   return Number.isFinite(rate) ? rate : null;
+}
+
+/**
+ * The VAT rate of a line: the reader's `taxRate` when it is a finite number, else the resolved
+ * tax's rate, else null. A non-numeric `taxRate` ("" or text) falls back to `tax.rate`, as the
+ * backend does (SPA/backend parity on a non-numeric taxRate).
+ */
+export function lineRate(line) {
+  return finiteRate(line?.taxRate) ?? finiteRate(line?.tax?.rate);
 }
 
 /** True when the line's tax is LINE-based ('L'); the default is document-based ('D'). */
@@ -185,15 +196,21 @@ function taxOf(base, rateScaled) {
 const roundUnits = (value, scale) => Math.round((Number(value) || 0) * 10 ** scale);
 
 /**
- * The total the invoice carries: with `totalSource` `lines` the live lines total; otherwise the
- * printed one (S2-D3: a printed total stays printed after edits). Falls back to the recomputed
- * lines total when the document has none.
+ * The big Total of the review panel (owner decision 2026-11-18, supersedes S2-D3): ALWAYS the total
+ * computed from the lines, the closest to the grand total of the invoice that will be created, even
+ * when the document printed another one (that case is the non-blocking mismatch banner, see
+ * `totalMismatch`). The one exception is a CONFIRMED row: its Total is the grand total of the
+ * invoice that was created (`review.invoice.grandTotal`, read by the server at read time), whenever
+ * the answer carries it. Zero lines give 0.
+ *
+ * @param {object} totals `computeTotals(...)`
+ * @param {number|string|null} [invoiceTotal] the created invoice's grand total (confirmed rows only)
  */
-export function documentTotal(header, totals, scale = DEFAULT_SCALE) {
-  if (header?.totalSource === 'lines') return totals.linesTotal;
-  const value = header?.totalAmount;
-  if (value == null || value === '' || !Number.isFinite(Number(value))) return totals.linesTotal;
-  return Math.round(Number(value) * 10 ** scale) / 10 ** scale;
+export function documentTotal(totals, invoiceTotal = null, scale = DEFAULT_SCALE) {
+  if (invoiceTotal != null && invoiceTotal !== '' && Number.isFinite(Number(invoiceTotal))) {
+    return Math.round(Number(invoiceTotal) * 10 ** scale) / 10 ** scale;
+  }
+  return totals.linesTotal;
 }
 
 /**
@@ -205,11 +222,15 @@ export function documentTotal(header, totals, scale = DEFAULT_SCALE) {
  */
 export function totalMismatch(header, totals, scale = DEFAULT_SCALE) {
   if (header?.totalSource !== 'printed') return null;
-  const printed = Number(header?.totalAmount);
-  if (!Number.isFinite(printed)) return null;
-  const diff = Math.abs(roundUnits(printed, scale) - roundUnits(totals.linesTotal, scale));
-  if (diff <= MISMATCH_TOLERANCE_UNITS) return null;
-  return { lines: totals.linesTotal, document: Math.round(printed * 10 ** scale) / 10 ** scale };
+  // A printed total that is null, empty, text or not finite NEVER warns (`Number(null)` is 0).
+  const printed = toScaled(header?.totalAmount, scale);
+  if (printed === null) return null;
+  const lines = toScaled(totals.linesTotal, scale) ?? 0n;
+  // Strictly MORE than one minimal unit of the currency's own scale, in exact integer units
+  // (half-up away from zero, symmetric for negatives; no float `Math.round`).
+  const diff = printed > lines ? printed - lines : lines - printed;
+  if (diff <= BigInt(MISMATCH_TOLERANCE_UNITS)) return null;
+  return { lines: totals.linesTotal, document: Number(printed) / 10 ** scale };
 }
 
 /** True when line `lineIndex` lacks its `field` (`quantity`, `unitPrice`, `tax`, `product`): a `line[i].field` code. */
@@ -301,6 +322,20 @@ export function productView(line) {
   return 'none';
 }
 
+/**
+ * The similarity (0-100) the search gave the linked product of a line, read from its candidate (the
+ * backend sends it as text: "72", "96.7" or "96.7%"), or `null` when it is missing or not a number.
+ * ETP-6051: shown next to "Chosen by OCR" so the user can judge how safe the pick is.
+ */
+export function linkedProductSimilarity(product) {
+  const candidates = Array.isArray(product?.candidates) ? product.candidates : [];
+  const own = candidates.find((candidate) => candidate?.id != null && candidate.id === product?.id);
+  const raw = String(own?.similarity ?? '').replace('%', '').replace(',', '.').trim();
+  if (raw === '') return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
 /** The extracted country as text: the `countryName` of decision 8, else the reader's `country`. */
 export function extractedCountry(extracted) {
   return String(extracted?.countryName ?? extracted?.country ?? '').trim();
@@ -326,26 +361,37 @@ export function vendorView(document) {
   };
 }
 
+/**
+ * The banner of a document's stored error: unreadable (only while untouched: once the user edited
+ * it, ADJUSTED, the data on screen is theirs), a failed confirm (with the reason the server stored: `info` is its
+ * identifier `{code, params}` when it is one, `detail` the raw stored string, legacy free text included)
+ * or another error code. None for MISSING_FIELDS (the fields show it) or without an error.
+ */
+function errorBanners(review) {
+  if (review.status !== STATUS.ERROR || !review.errorCode) return [];
+  if (review.errorCode === 'UNREADABLE') return review.adjusted ? [] : [{ kind: 'unreadable' }];
+  if (review.errorCode === 'CONFIRM_FAILED') return [{ kind: 'confirmFailed', detail: review.errorDetail ?? null, info: review.errorInfo ?? null }];
+  if (review.errorCode === 'MISSING_FIELDS') return [];
+  return [{ kind: 'error', code: review.errorCode }];
+}
+
+/** Confirm blockers and duplicate warnings: only on a document that is still open. */
+function openDocumentBanners(review) {
+  const banners = confirmBlockers(review.document).map((blocker) => ({ kind: 'blocker', blocker }));
+  const duplicate = review.document?.header?.duplicate;
+  if (duplicate?.state === 'found' && duplicate.invoices?.length) {
+    banners.push({ kind: 'duplicate', invoice: duplicate.invoices[0] });
+  }
+  if (duplicate?.inbox?.length) banners.push({ kind: 'duplicateInbox', files: duplicate.inbox });
+  return banners;
+}
+
 /** The review banners to show, in order, derived from the answer. Pure so the rules are testable. */
 export function reviewBanners(review) {
-  const banners = [];
-  if (!review) return banners;
-  if (review.status === STATUS.CONFIRMED) banners.push({ kind: 'confirmed' });
-  // The unreadable banner only while the document is untouched: once the user edited it (ADJUSTED)
-  // the data on screen is theirs.
-  if (review.status === STATUS.ERROR && review.errorCode === 'UNREADABLE' && !review.adjusted) {
-    banners.push({ kind: 'unreadable' });
-  } else if (review.status === STATUS.ERROR && review.errorCode && review.errorCode !== 'UNREADABLE'
-    && review.errorCode !== 'MISSING_FIELDS') {
-    banners.push({ kind: 'error', code: review.errorCode });
-  }
-  if (!SETTLED.has(review.status)) {
-    const duplicate = review.document?.header?.duplicate;
-    if (duplicate?.state === 'found' && duplicate.invoices?.length) {
-      banners.push({ kind: 'duplicate', invoice: duplicate.invoices[0] });
-    }
-    if (duplicate?.inbox?.length) banners.push({ kind: 'duplicateInbox', files: duplicate.inbox });
-  }
+  if (!review) return [];
+  const banners = review.status === STATUS.CONFIRMED ? [{ kind: 'confirmed' }] : [];
+  banners.push(...errorBanners(review));
+  if (!SETTLED.has(review.status)) banners.push(...openDocumentBanners(review));
   return banners;
 }
 
@@ -570,6 +616,10 @@ function localNewProduct(doc, op, hint) {
     lines: mapLine(linesOf(doc), op.index, (line) => {
       const product = line.product ?? {};
       const fresh = { name: line.description ?? '', ...(product.new ?? {}) };
+      // Re-sending the committed id is a no-op (the server keeps the source); a different id is the
+      // user's choice, so its source becomes `manual` (the server does the same).
+      if ('categoryId' in op && op.categoryId !== fresh.categoryId) fresh.categorySource = 'manual';
+      if ('uomId' in op && op.uomId !== fresh.uomId) fresh.uomSource = 'manual';
       for (const key of ['name', 'categoryId', 'uomId']) if (key in op) fresh[key] = op[key];
       if ('categoryId' in op) fresh.category = pickedName(op.categoryId, hint.category, fresh.category);
       if ('uomId' in op) fresh.uom = pickedName(op.uomId, hint.uom, fresh.uom);
@@ -613,6 +663,13 @@ export const SAVE_ERROR_LABEL_KEYS = Object.freeze({
   processing: 'invoiceInboxReviewErrorProcessing',
   not_editable: 'invoiceInboxSaveErrorNotEditable',
   not_reviewable: 'invoiceInboxSaveErrorNotReviewable',
+  not_confirmable: 'invoiceInboxSaveErrorNotConfirmable',
+  duplicate_invoice: 'invoiceInboxConfirmErrorDuplicate',
+  missing_exchange_rate: 'invoiceInboxConfirmErrorExchangeRate',
+  vendor_address_missing: 'invoiceInboxConfirmErrorVendorAddress',
+  QUOTA_EXCEEDED: 'invoiceInboxConfirmErrorQuota',
+  price_list_tax_included: 'invoiceInboxConfirmErrorPriceListTax',
+  confirm_failed: 'invoiceInboxConfirmErrorFailed',
   not_valid: 'invoiceInboxSaveErrorNotValid',
   unknown_tax: 'invoiceInboxSaveErrorUnknownTax',
   invalid_value: 'invoiceInboxSaveErrorInvalidValue',
@@ -641,7 +698,7 @@ export function saveErrorKey(code) {
  * Refusals that mean "the document is not what you were editing": the SPA reloads it, drops the
  * unsaved local edits and shows a notice (S2-D4), instead of rolling back and offering a retry.
  */
-const RELOAD_CODES = new Set(['stale_document', 'processing', 'not_editable', 'not_reviewable']);
+const RELOAD_CODES = new Set(['stale_document', 'processing', 'not_editable', 'not_reviewable', 'not_confirmable']);
 
 export function isReloadCode(code) {
   return RELOAD_CODES.has(code);
@@ -650,4 +707,34 @@ export function isReloadCode(code) {
 /** The "Marcar como revisada" button is enabled only on a valid PENDING_REVIEW document. */
 export function canMarkReviewed(review) {
   return review?.status === STATUS.PENDING_REVIEW && review?.editable !== false && pendingCount(review.document) === 0;
+}
+
+/** A failed confirm the document can be retried from (stored `ERROR` / `CONFIRM_FAILED`). */
+export function isConfirmRetry(review) {
+  return review?.status === STATUS.ERROR && review?.errorCode === 'CONFIRM_FAILED';
+}
+
+/**
+ * "Confirmar factura" is enabled on a PENDING_REVIEW or READY document, or on an ERROR one whose code is
+ * CONFIRM_FAILED ("Reintentar") or MISSING_FIELDS (completed since: the server recomputes), that the user may edit and that has no required field pending. Marking as reviewed
+ * is not a precondition (ETP-6051).
+ */
+export function canConfirm(review) {
+  if (!review || review.editable === false) return false;
+  const confirmable = review.status === STATUS.PENDING_REVIEW || review.status === STATUS.READY
+    || (review.status === STATUS.ERROR && CONFIRMABLE_ERROR_CODES.has(review.errorCode));
+  return confirmable && pendingCount(review.document) === 0;
+}
+
+/** `validation.missing` codes the server adds for a confirm blocker that no input shows, by kind. */
+const BLOCKER_CODES = Object.freeze({ exchangeRate: 'exchangeRate', vendorAddress: 'vendorAddress' });
+
+/**
+ * The blockers of a confirm the server reports in `validation.missing` that no input shows (the
+ * exchange rate of the document currency, a vendor without a usable address): the kinds present, in
+ * the order of `BLOCKER_CODES`.
+ */
+export function confirmBlockers(document) {
+  const codes = missingSet(document);
+  return Object.entries(BLOCKER_CODES).filter(([, code]) => codes.has(code)).map(([kind]) => kind);
 }

@@ -72,7 +72,6 @@ Each public resource publishes its fields in one of two ways, decided per entity
 |--------|------------------|
 | Curated: at least one field declares `publicApi.exposed: true` | Exactly the curated fields. The rest of the window form is ignored. |
 | Not curated | The fields its window form shows (see [Default exposure: window form](#default-exposure-window-form)). |
-| Fiscal monitors `monitor-verifactu`, `sii-monitor`, `tbai-facturas-enviadas` | Their curation only. They never derive fields from the form; without curation they publish `id` and, when present, `updated`. |
 
 In both cases `id` and `updated` are added as described in [Field rules](#field-rules-applied-by-the-manifest-generator).
 The manifest records the rule as `policy.fieldSelection: "curated-publicApi-else-window-form"`.
@@ -91,13 +90,15 @@ Per-field key at `entities.<entity>.fields.<field>.publicApi`:
 | `name` | string | Requested public field name. The manifest generator derives the final public name from it (see [Name derivation](#name-derivation)). |
 | `readOnly` | boolean | `true` publishes the field `out` (read-only) even when the window edits it. |
 | `lookup` | `true` or `{ "context": { "<param>": "<value>" } }` | Publishes `GET /api/v1/<resource>/lookups/<field>`, the field's valid values ([4.2.2](#422-lookups)). Top-level resources, published reference fields only; read by the manifest generator straight from `decisions.json`. |
+| `description` | string | Published as the field's OpenAPI description, for rules its type cannot express (when the field is required, when it is refused). A non-empty text that cites no internal reference (a ticket or Jira); anything else fails the generation. Read by the manifest generator straight from `decisions.json`. |
 
 A public field is its NEO value under a public name: nothing transforms it. The keys `type` and `handlerId` of an earlier format promised custom field handlers that were never implemented; the manifest generator refuses them, naming the field.
 
 Examples in the repository:
 
-- `artifacts/contacts/decisions.json` (entity `businessPartner`): `name`, `searchKey`, `taxId`, `web`, `email`, `phone`, `paymentMethod`, `pOPaymentMethod` (the last two with a lookup).
+- `artifacts/contacts/decisions.json` (entity `businessPartner`): `name`, `searchKey`, `taxId`, `web`, `email`, `phone`, `paymentMethod`, `pOPaymentMethod`, `businessPartnerCategory` (the last three with a lookup); the person-or-company fields `etgoIsperson`, `etgoFirstname`, `etgoLastname` and `oBTIKTaxIDKey` (an AD list, published as an enum); and the type flags `customer` and `vendor` (public `is_customer`, `is_vendor`). `name`, `taxID`, the person fields and the type flags carry a `description`.
 - `artifacts/product/decisions.json` (entity `product`): `searchKey`, `name`, `category` (internal `productCategory`), `description`, `salePrice` (internal `eTGOSalePrice`), `stock` (internal `eTGOStock`).
+- `artifacts/conversion-rates/decisions.json` (entity `header`, contract name `conversionRate`): `currency`, `toCurrency`, `validFromDate`, `validToDate`, `multipleRateBy`, `divideRateBy`. The curation keeps the downloader's `sMFCRSynced` flag out of the API while the window still shows it.
 
 Pipeline handling: `resolve-curated.js` copies `publicApi` as a whitelisted decision property
 (`core: cli/src/resolve-curated.js`) and `generate-contract.js` stamps it onto each contract
@@ -124,7 +125,7 @@ Some fields are never published, whether curated or derived. The manifest lists 
 | `accountNo`, `bankName`, `displayedAccount`, `iBAN`, `swiftCode` | Bank account identifiers of a business partner. |
 | `etblkpAccountingstatus`, `etblkpBulkposting` | Accounting bulk-posting fields; accounting is outside the public API scope. |
 
-To configure what a window publishes (fields, read-only, input-only fields, actions, lookups) step by step, see
+To configure what a window publishes (fields, read-only, input-only fields, actions, lookups, descriptions) step by step, see
 [Public API configuration](public-api-configuration.md).
 
 ### Name derivation
@@ -146,10 +147,11 @@ absent) through `publicFieldName()`:
 - Fields with `visibility` `system` or `discarded` are skipped even when `exposed` is `true`.
 - Fields in `policy.excludedFields` are skipped even when `exposed` is `true` or the form shows them.
 - Two fields resolving to the same public name make the generator throw (`Public field name collision`).
-- `direction` is `inout` only when the entity has at least one `POST`, `PUT` or `PATCH` endpoint in `backendContract.endpoints` and the field's visibility is `editable`; otherwise `out`. The rule is the same for curated and derived fields, so a `readOnly` form field is always `out`. It is computed from those endpoints, independently of the fiscal-monitor override that fixes a resource's operations to `GET`, `LIST`.
+- `direction` is `inout` only when the entity has at least one `POST`, `PUT` or `PATCH` endpoint in `backendContract.endpoints` and the field's visibility is `editable`; otherwise `out`. The rule is the same for curated and derived fields, so a `readOnly` form field is always `out`. Entity-level and field-level read-only policies also force the corresponding fields to `out`.
 - API-only fields declared in `publicApi.inputFields` ([configuration guide](public-api-configuration.md#3-add-input-only-fields)) are `in`, or `inout` with `readable: true`, and only on a resource with a write endpoint. With `writable: false` the field is read-only (`out`, never `required`) and is published on any resource: a value the entity's handler adds on read.
 - `id` is always present and its internal path is always `id` (the NEO response key). When `id` is not curated it is added as a read-only (`out`) field; when it is curated, its curated direction is kept and only the internal path is forced to `id`.
 - `dataType` comes from the contract field `type`: `amount`, `decimal`, `price`, `quantity` and `number` give `{ "type": "number", "format": "double" }`; `integer` gives `{ "type": "integer", "format": "int32" }`; `boolean` gives `{ "type": "boolean" }`; `date` gives `{ "type": "string", "format": "date" }`; `dateTime` (and the older spelling `datetime`) gives `{ "type": "string", "format": "date-time" }`. Every other type (`string`, `text`, `textarea`, `enum`, `list`, `button`, `foreignKey`, `productAttribute`, `image`) gives `{ "type": "string" }`. The `dataType` is what the OpenAPI document declares for the field and decides which filter operators it accepts ([4.10](#410-list-queries-pagination-sorting-and-filtering)).
+- A string field that carries the values of an AD list (the contract field's `enumValues`, typically type `enum`) publishes them: the codes as `dataType.enum` and a label per code as `enumLabels` (`{ "<code>": "<label>" }`, the list value's name in the Application Dictionary). This is generic, it needs no decision and applies to every published resource. NEO reads and writes the **code**; the OpenAPI document lists the codes under `enum`, their labels as `x-enumDescriptions` and in the field description (`One of: \`1\` (NIF), ...`). A reference field (a foreign key) never publishes an enum, and a response attribute also accepts `null`. The manifest's `enum` documents the accepted values; NEO is what refuses an unknown code.
 - `updated` is added as a read-only (`out`) field only when the entity's raw schema (`schema-raw.json`) has a field named `updated`. A resource whose entity has none carries no `updated` field. A resource that publishes `updated` is a versioned resource: its updates use [optimistic concurrency](#45-optimistic-concurrency-etag-and-if-match).
 
 ---
@@ -176,14 +178,32 @@ artifacts/<window>/contract.json
 ### Manifest: `generate-base-public-api-manifest.mjs` to `base.v1.json`
 
 - The gateway loads `process.env.PUBLIC_API_SCHEMA_PATH`, defaulting to `../public-api/base.v1.json`; the Docker image sets it to `/app/public-api/base.v1.json` (`gateway/src/schema/schema.provider.ts`, `gateway/Dockerfile`).
-- The generator scans every `artifacts/*/contract.json`, skipping the windows in `excludedWindows` and the categories `accounting`, `configuration`, `crm`, `finance`, `hr`, `settings`, `setup`. `excludedWindows` includes `document`, `project` and `uom`, which have no NeoServlet spec. Projects are therefore not published in v1: the only project window with a spec, `service-project`, belongs to the excluded `finance` category until that category is curated; the getting-started text of `/api` says so. Units of measure are not published either: the `unit-of-measure` window was removed on purpose by ETP-4191, and an API-only artifact for it would break pipeline rule F3 (every window with a `contract.json` must be registered in `registry.js`). `document` is a mock window with no AD window behind it.
+- V1 publishes an explicit allowlist from `publicApiV1Entities` in the generator. It is checked before loading contracts or raw schemas, so excluded artifacts cannot block generation or silently expand the API. The manifest records this map in `policy.allowedResources`.
+
+  | Window | Published resources | Access |
+  |--------|---------------------|--------|
+  | Contacts | `contacts`, `contacts-locationAddress`, `contacts-contact` | Read and write |
+  | Products | `product`, `product-category` | Read and write |
+  | Product costs | `product-costing` | `GET`, `LIST` only |
+  | Sales orders | `sales-order`, `sales-order-lines` | Read and write; header `complete` |
+  | Purchase orders | `purchase-order`, `purchase-order-lines` | Read and write; header `complete` |
+  | Quotations | `sales-quotation`, `sales-quotation-quotationLine` | Read and write |
+  | Contact categories | `contact-category` (window and NEO spec `business-partner-category`) | Read and write; the Accounting tab is not published |
+  | Taxes | `tax` | `GET`, `LIST` only; the tax zone, translation, accounting and parameter tabs are not published |
+  | Tax categories | `tax-category` | `GET`, `LIST` only |
+  | Conversion rates | `conversion-rates` | `GET`, `LIST` only |
+
+  Invoices and their lines/exchange rates, shipments, receipts, goods movements, internal consumption, physical inventory, return receipts/shipments, warehouses, matched purchase invoices and fiscal monitors are outside V1. Contacts expose only addresses and contact persons as children. Excluded collections answer `404` (a gateway error, without `code`); removing a collection does not remove the app's corresponding window.
+
+- **The allowlist is the per-window opt-in, and it overrides the category exclusion.** The generator keeps a list of categories outside the public API scope (`accounting`, `configuration`, `crm`, `finance`, `hr`, `settings`, `setup`; `policy.excludedCategories` in the manifest), but a window listed in `publicApiV1Entities` is published whatever its category: listing it is the scope decision. `tax` (category `settings`), `tax-category` (`configuration`) and `conversion-rates` (`finance`) are published this way. Every window that is not in the allowlist stays out, whatever its category. The windows in `excludedWindows` (`policy.excludedWindows`) stay out even if someone lists them. The manifest records the rule as `policy.windowSelection: "allowlist-overrides-excluded-categories"`.
+
 - Every published window must have `artifacts/<window>/schema-raw.json`. The file is gitignored, so a clean checkout lacks it; when it is missing the generator fails and names the file, instead of producing a manifest without child resources and `updated`. Windows that are not published do not need it.
-- Resources are the primary entity of each window plus child tabs whose parent foreign key is found in `schema-raw.json`. When `decisions.window.secondaryTabs` is non-empty, only the listed tabs are published. Child tabs whose name matches `accounting`, or is exactly `Bank Account`, are skipped. The manifest lists these patterns in `policy.excludedChildTabs`. A tab under a child tab (`level: subline` in `schema-raw.json`, AD tab level 2, e.g. the order's *Line Tax*) is not published either: Etendo filters it by the child record, while the gateway nests one level and would pass the window's id, so it always read empty (ETP-6012).
-- The public resource name is `specName` for the primary entity and `specName-entityName` for the others.
-- Operations come from `backendContract.endpoints` plus a forced `GET` and `LIST`; `PATCH` is added whenever `PUT` exists. The windows `monitor-verifactu`, `sii-monitor` and `tbai-facturas-enviadas` are fixed to `GET`, `LIST`; field directions are not affected by this override (see [Field rules](#field-rules-applied-by-the-manifest-generator)). A resource with no field of direction `in` or `inout` is read-only: its operations are reduced to `GET`, `LIST`.
+- Resources must belong to the explicit allowlist. Allowed child tabs must also have their parent foreign key in `schema-raw.json`. When `decisions.window.secondaryTabs` is non-empty, only the listed tabs are published. Child tabs whose name matches `accounting`, or is exactly `Bank Account`, are skipped. The manifest lists these patterns in `policy.excludedChildTabs`. A tab under a child tab (`level: subline` in `schema-raw.json`, AD tab level 2, e.g. the order's *Line Tax*) is not published either: Etendo filters it by the child record, while the gateway nests one level and would pass the window's id, so it always read empty (ETP-6012).
+- The public resource name is `specName` for the primary entity and `specName-entityName` for the others. A window whose artifact name is not the name an integrator should see is renamed in `publicResourceNames` in the generator (`policy.publicResourceNames` in the manifest); today only `business-partner-category`, published as `contact-category`. The public name is the manifest key, the route (`/api/v1/contact-category`), the JSON:API `type`, the `parent.resource` of its children and the target of every relationship and lookup `type` that points to it. The entity keeps `specName: "business-partner-category"`, which is what the gateway sends to NEO (`/sws/neo/business-partner-category/businessPartnerCategory`); the gateway never derives the NEO spec from the public name.
+- Operations come from `backendContract.endpoints` plus a forced `GET` and `LIST`; `PATCH` is added whenever `PUT` exists. A resource with no field of direction `in` or `inout` is read-only: its operations are reduced to `GET`, `LIST`.
 - The functional texts (`functional.functionalSummary`, `functional.functionalCapabilities`) come from `docs/generated-custom-windows/<window>.md`. Capability lines and summary sentences that cite a ticket (`ETP-<number>`) or Jira are not published; when no summary sentence remains, the summary is `Public API resource for the <window> window.`
-- A relationship is added to a field whose `reference` resolves to another public resource.
-- `scripts/validate-base-public-api-manifest.mjs` checks: `publicApi` is `true`; `fields.id.internalPath` is `id`; no resource named or titled `accounting`; every child has a parent, a foreign key, a path segment, `GET` and `LIST`, and either none or all of `POST`, `PUT`, `PATCH`, `DELETE`; every relationship target exists and has a valid cardinality and foreign key.
+- A relationship is added to a field whose `reference` resolves to another public resource. When that field also publishes a lookup, the lookup `type` becomes the related resource's public name, so the ids a lookup lists are sent back with the type the relationship expects.
+- `scripts/validate-base-public-api-manifest.mjs` checks: `publicApi` is `true`; `fields.id.internalPath` is `id`; no resource named or titled `accounting`; every child has a parent, a foreign key, a path segment, `GET` and `LIST`, and either none or all of `POST`, `PUT`, `PATCH`, `DELETE`; every relationship target exists and has a valid cardinality and foreign key; every lookup is well formed; every enum is a non-empty list of distinct string codes of a string field, with a label for each code and none for any other; every field description is a non-empty string.
 
 ---
 
@@ -236,8 +256,7 @@ The route table is fixed controller code; resource and child lookup use the mani
   (`draftMode` with `processField: documentAction`) **and** opts in with `window.publicApi.actions: ["complete"]`
   in its `decisions.json` (absent means no actions; see [Public API configuration](public-api-configuration.md)); the generator derives it structurally and sends
   `{"docAction": "<processValue>"}` to `POST /sws/neo/{specName}{path}`. In v1 `complete` is the only
-  public action: declared `processEndpoints` are not exposed. Fiscal monitors and child resources
-  declare none.
+  public action: declared `processEndpoints` are not exposed. Child resources declare none.
 - **Published today.** `sales-order` and `purchase-order` publish `complete`
   (`POST /api/v1/sales-order/{id}/actions/complete`, `POST /api/v1/purchase-order/{id}/actions/complete`); no
   other resource publishes an action. Completing runs the same document process as the application's
@@ -266,7 +285,7 @@ to find an id it cannot know beforehand, for example a payment method.
   top-level resources and published reference fields can have one; anything else fails the
   generation. A field without a lookup, a field that is not published and a child resource answer
   `404` (code `unknown_lookup` for a field of the resource), and nothing is sent to Etendo.
-- **Published today.** All four list payment methods (`type` `payment-method`):
+- **Published today.** Four payment-method lookups (`type` `payment-method`), two order warehouse lookups (`type` `warehouse`) and the contact category lookup (`type` `contact-category`):
 
   | Route | Field | Fixed context sent to Etendo |
   |-------|-------|------------------------------|
@@ -274,8 +293,27 @@ to find an id it cannot know beforehand, for example a payment method.
   | `GET /api/v1/purchase-order/lookups/payment_method` | The purchase order's payment method | `IsSOTrx=N` |
   | `GET /api/v1/contacts/lookups/payment_method` | The contact's payment method as a customer | `FIN_ISRECEIPT=Y` |
   | `GET /api/v1/contacts/lookups/purchase_payment_method` | The contact's payment method as a vendor | `FIN_ISRECEIPT=N` |
+  | `GET /api/v1/sales-order/lookups/warehouse` | The sales order's warehouse | None |
+  | `GET /api/v1/purchase-order/lookups/warehouse` | The purchase order's warehouse | None |
+  | `GET /api/v1/contacts/lookups/category` | The contact's category | None |
 
-  Each lists the tenant's active payment methods, the same list the app offers in that field. The
+  Choose an order's warehouse with that order's warehouse lookup and send the selected id as
+  `data.attributes.warehouse` on create. The field is optional: if it is omitted, Etendo assigns
+  a warehouse when the order is created. There is no `relationships.warehouse`, because the
+  warehouse collection is outside V1. Partial `PATCH` requests may omit an unchanged warehouse.
+  On completed orders the app locks the field; the public API applies the same upstream
+  document validation.
+
+  The category lookup lists the categories the app offers in the contact form: the field has no
+  validation rule, so the list is the tenant's active categories the key's role can read, with no
+  further filter (no context is sent). `category` is optional on create: when it is omitted, Etendo
+  assigns the default category, as the app does. Contact categories are a published resource
+  (`contact-category`), so `category` is a relationship: send the id under
+  `data.relationships.category` as `{ "data": { "type": "contact-category", "id": "..." } }`, and
+  read it there. The lookup answers values of `type` `contact-category`, ready to be sent as the
+  relationship; listing `GET /api/v1/contact-category` gives the same ids with all their fields.
+
+  Each payment-method lookup lists the tenant's active payment methods, the same list the app offers in that field. The
   fixed context is forwarded to the field's selector; whether it narrows the list depends on that
   field's validation rule, as in the app. Integrators must not rely on the list being filtered by
   sales or purchase.
@@ -315,6 +353,15 @@ hygiene, the generator and the validator also refuse a child resource whose path
   - The ids inside `links.related` and `links.self` are URL-encoded.
   - `links.self` (`/api/v1/<resource>/<id>`) is present only when an id exists.
   - `meta.etag` is present on resources of versioned entities whose record carries `updated` ([4.5](#45-optimistic-concurrency-etag-and-if-match)), including the items of a list.
+- **Person or company (`contacts`):** a contact is a person or a company, and `is_person` (a JSON boolean) says which. A contact created without it is a company.
+  - A **company** sends `name`; `first_name` and `last_name` are refused (`400`). A create that sends `first_name` or `last_name` without `is_person: true` is a company, so it is refused too, and the error tells the caller to send `is_person: true` to create a person.
+  - A **person** sends `is_person: true` with `first_name` and `last_name`, both required (`400` without either). Etendo derives `name` from the first and last name (`first_name + " " + last_name`) and a read returns the derived value; send none; a value other than first name + last name is refused (`400`). An empty string or `null` counts as absent.
+  - An `is_person` value that is not recognized as true is treated as a company. A `PATCH` with `is_person: true` on an existing person re-derives `name` from its first and last name.
+  - On `PATCH`, the rules apply only when the body carries `is_person`, `name`, `first_name` or `last_name`. Switching a person to a company (`is_person: false`, with `name`) clears its stored first and last name.
+  - A missing field answers `400` with code `missing_required_field` and a `source.pointer` to the public field (for example `/data/attributes/last_name`), like any other missing field. A refused field answers `400` with Etendo's message as `detail`, which states the rule.
+  - None of these fields is marked `required` in the manifest or the OpenAPI document, because each is required only for one kind of contact; the field descriptions state the rule and Etendo enforces it. `phone`, `email` and the other contact fields apply to both kinds.
+  - `tax_id_key` is the kind of tax id in `tax_id`, one of the codes of its AD list (`1` NIF, `2` intra-community VAT number, `3` passport, ...; the OpenAPI document lists them all with their labels). When it is omitted, Etendo applies the default kind before it validates `tax_id`, and an invalid tax id is refused on create.
+- **Customer and vendor (`contacts`):** `is_customer` and `is_vendor` (JSON booleans, read and write) are the Cliente / Proveedor flags of the contact form. `is_customer` lets the contact be used on sales documents, `is_vendor` on purchase documents: the purchase order only accepts a vendor as its contact and answers `422` with code `reference_not_allowed` otherwise. When a flag is omitted on create, Etendo applies the default (`is_customer` true, `is_vendor` false) or the type the contact's category defines; to create a contact for a purchase order, send `is_vendor: true`, or set it later with a `PATCH` (with `If-Match`). With the `contact-category-type` feature flag on, a contact cannot be left with no type: a create or `PATCH` that ends with `is_customer: false` and `is_vendor: false` is refused by `ContactTypeRules` (message key `ETGO_BPartnerContactTypeRequired`) with `400`, code `bad_request` and Etendo's message as `detail`.
 - **Address country (`contacts-locationAddress`):** on a write, `country` accepts the ISO 3166-1 alpha-2 code (`ES`) or the internal country id; a code no country has returns `400`. On a read, `country` is the internal id and `country_code` (read-only) is the ISO code, `null` when the address has no country or the country has no code. The address fields (`address_line1`, `city_name`, `country`, `country_code`, ...) are added by the address handler on read and are not columns of the resource: do not use them in `filter` or `sort`. Known gap: the gateway does not refuse them yet (its query parser and the OpenAPI filter parameters only look at the field's type), so such a query reaches the backend on a property the entity does not have.
 - On a write, a relationship is `{ "data": { "type": "<related resource>", "id": "<id>" } }`; `{ "data": null }` clears it. The `type` must be the related resource, else `409`. A relationship object without a `data` member, or with an array (to-many is not supported) or an identifier without a string `id`, returns `400`.
 
@@ -392,8 +439,54 @@ Content-Type: application/vnd.api+json
 ```
 
 - **Master-child documents (lines).** A child resource is addressed through its master (`/api/v1/{master}/{masterId}/{child}`), for example `sales-order/{id}/lines`. The master foreign key (for example `salesOrder`) is never an attribute and is not part of the body: the gateway takes it from the URL and sends it to Etendo as `parentId`. A child resource's `type` is its own public name (`sales-order-lines`).
-- **Contacts.** `contacts` publishes no relationship fields today; if the manifest gains one it is exposed and validated exactly as above.
+> **Change for integrators (V1, contact categories and taxes published).** Publishing `contact-category` and `tax` turned two existing write fields into relationships: `contacts.category` and the `tax` of order and quotation lines. Before, both were plain id attributes; now a body that sends either under `attributes` is refused with `400` (`"<field>" is a relationship`), and responses carry them under `relationships` only. Send `{ "data": { "type": "contact-category", "id": "..." } }` or `{ "data": { "type": "tax", "id": "..." } }` instead. The contact's category lookup now answers values of `type` `contact-category`.
+
+- **Contact category (foreign key).** `contacts.category` points to `contact-category`. It is written and read under `relationships` like the product category; sending it under `attributes` is refused with `400`.
+- **Tax category (foreign key).** `tax.tax_category` points to `tax-category`. Both resources are read-only, so the relationship only appears in responses.
+- **Tax of a line (foreign key).** `tax` on `sales-order-lines`, `purchase-order-lines` and `sales-quotation-quotationLine` points to `tax`. It stays writable: send it under `relationships` as `{ "data": { "type": "tax", "id": "..." } }` and find the ids with `GET /api/v1/tax`. Before `tax` was published it was a plain id attribute.
 - Linkage types are validated on write: a relationship whose `type` is not the related resource returns `409`.
+
+#### 4.6.1 Relations between documents (technical debt)
+
+V1 publishes no relation between two business documents: an integrator cannot read which shipment delivered an order line, which invoice billed it or which quotation an order came from, and cannot create one document from another. This is out of V1 by the scope agreed on 2026-11-06 (shipments, receipts and invoices are not published, see [3](#manifest-generate-base-public-api-manifestmjs-to-basev1json)) and is planned for the next quarter. The rule that decides the work is parity: a relation is published exactly as the app shows and creates it, and a relation the app does not offer is not published.
+
+**What V1 carries today.** No relationship in `public-api/base.v1.json` points to a document, and `sales-order`, `purchase-order`, `sales-quotation` and their lines publish no quotation, shipment, receipt or invoice field. The only downstream trace is a set of read-only integer status fields with no linkage: `delivery_status` and `invoice_status` on `sales-order`, `deliv_status_purchase` and `invoice_status` on `purchase-order` (the stored computed columns `EM_ETGO_Delivery_Status`, `EM_ETGO_Invoice_Status` and `EM_ETGO_Deliv_Status_Purchase` of `C_Order`).
+
+**Limits of the current contract.** Any document relation runs into these, in addition to its target not being published:
+
+| Limit | Where |
+|-------|-------|
+| One level of nesting. Routes are `/api/v1/{resource}` and `/api/v1/{parent}/{parentId}/{child}`; a tab under a child tab (AD tab level 2, `level: subline`) is not published. This is why the order's *Line Tax* is not published (ETP-6012, see [3](#manifest-generate-base-public-api-manifestmjs-to-basev1json)). | `gateway/src/public-api/public-api.controller.ts`, `scripts/generate-base-public-api-manifest.mjs` |
+| To-one only. The generator writes `cardinality: 'one'` on every relationship, and a write that sends an array as relationship `data` is refused with `400` ([4.3](#43-fields-and-fail-closed-filtering)). | `scripts/generate-base-public-api-manifest.mjs`, `gateway/src/public-api/json-api-request.ts` |
+| A relationship exists only when its target is a published resource. A reference to an unpublished resource stays a plain id attribute (for example `warehouse` and `price_list` on the orders). | `scripts/generate-base-public-api-manifest.mjs` |
+| The target is found by entity name. The generator matches the field's `reference` (the Java entity: `Order`, `OrderLine`, `GoodsShipmentLine`) against the `entityName` of the published resources, ignoring case and punctuation. The order resources are the entities `header` and `lines`, so a reference to `Order` or `OrderLine` would not become a relationship even with both ends published. | `scripts/generate-base-public-api-manifest.mjs` |
+| One table, several resources. `C_Order` holds sales orders, purchase orders and quotations (a quotation is a `C_Order` whose target document type has `DocSubTypeSO = 'OB'`), while `relationship.resource` names one resource. The `C_Order_ID` of a sales invoice points to an order or to a quotation, and the app probes both. | `go: schemaforge/SalesQuotations.java`, `tools/app-shell/src/components/related-documents/salesRelatedDocs.js` |
+| `links.related` is `/api/v1/<resource>/<id>`. For a child resource that path answers `404 Child resource must be addressed through its master`, so a line-to-line link also needs the master id. | `gateway/src/public-api/public-api.controller.ts` |
+| The link columns are hidden in the windows. In `decisions.json`, `salesOrder` (header) and `salesOrderLine` (lines) of `goods-shipment`, and `salesOrder`, `salesOrderLine` and `goodsShipmentLine` of `sales-invoice`, have `visibility: system`, which the generator never publishes, even when curated ([2](#field-rules-applied-by-the-manifest-generator)). In `goods-receipt` and `purchase-invoice` the same fields are not shown by the form (`form: false` in the contract), so the window-form default does not publish them either. | `artifacts/<window>/decisions.json`, `artifacts/<window>/contract.json` |
+
+**Relations, as stored in Etendo and as the app uses them.** The table covers every relation of the sales and purchase document flow that the app's related-documents definitions read (`tools/app-shell/src/components/related-documents/salesRelatedDocs.js`, `purchaseRelatedDocs.js` and `relatedSources.js`), plus the core match tables. Two other related-documents panels exist and are not document-to-document relations of that flow: a payment's invoices (`artifacts/payment-in/custom/RelatedDocuments.jsx`, `artifacts/payment-out/custom/RelatedDocuments.jsx`, read through the invoice's payment plan) and an amortization's assets (`artifacts/amortization/custom/RelatedDocuments.jsx`); payments are never listed as related documents of an order or an invoice. Columns and fields come from `AD_COLUMN`, `AD_FIELD`, `AD_TAB` and `AD_WINDOW`; the third column lists the field in the windows the app also has (Classic-only windows such as Business Partner Info are left out) and says when the field is not displayed or not active. Every link column lives on a header or lines table, or on a level-1 tab of the invoice, so none of them needs deeper nesting. No side of any of these relations is published in V1.
+
+| Relation | Column | AD field (window › tab) | How the app creates and reads it |
+|----------|--------|-------------------------|----------------------------------|
+| Shipment or receipt line → order line | `M_InOutLine.C_OrderLine_ID` | Lines of Goods Shipment, Goods Receipt, Return Material Receipt and Return to Vendor Shipment; displayed in all four | Created by the order actions `createShipment` (`go: schemaforge/CreateShipmentHandler.java`) and `createGoodsReceipt` (`go: schemaforge/CreateGoodsReceiptHandler.java`), and by `importOrderLines` on a draft shipment or receipt (`go: schemaforge/ImportOrderLinesIntoInOutHandler.java`). Read as the movement's `linkedOrders`. |
+| Shipment or receipt → order | `M_InOut.C_Order_ID` | Header of Goods Shipment, Goods Receipt and Return Material Receipt, displayed; Header of Return to Vendor Shipment, not displayed | The order lists its shipments or receipts with a criteria query on `salesOrder` (`criteriaSource` in `salesRelatedDocs.js` and `purchaseRelatedDocs.js`). The movement's `linkedOrders` is the header order plus every order its lines point to (`go: schemaforge/GoodsShipmentHeaderHandler.java`, `go: schemaforge/GoodsReceiptHeaderHandler.java`), so the header column alone does not list every order of a movement. |
+| Invoice → order | `C_Invoice.C_Order_ID` | Header of Sales Invoice and Purchase Invoice; displayed | Created by `createDraftInvoice` from a sales order, a quotation or a goods shipment (`go: schemaforge/CreateDraftInvoiceHandler.java`) and by `createPurchaseInvoice` from a purchase order or a goods receipt (`go: schemaforge/CreatePurchaseInvoiceHandler.java`). The order lists its invoices through the `listInvoices` header action, which also finds invoices linked only through their lines. |
+| Invoice line → order line | `C_InvoiceLine.C_OrderLine_ID` | Lines of Sales Invoice and Purchase Invoice; displayed | Created by `importOrderLines` on a draft invoice (`go: schemaforge/ImportOrderLinesIntoInvoiceHandler.java`). Read as the invoice's `linkedOrders` (`go: schemaforge/InvoiceDetailEnrichment.java`). |
+| Invoice line → shipment or receipt line | `C_InvoiceLine.M_InOutLine_ID`, plus the match tables `M_MatchSI` (sales) and `M_MatchInv` (purchase) | Lines of Sales Invoice and Purchase Invoice; Matched Sales Invoices › Matched Sales Invoice and Matched Purchase Invoices › Matched Invoice; displayed in all | The link is the union of the column and the match table (`go: schemaforge/InOutInvoiceLinks.java`); on the sales side two documents are never related through a shared order line. Created by `importShipmentLines` / `importReceiptLines` on a draft invoice (`go: schemaforge/ImportInOutLinesIntoInvoiceHandler.java`), and by `importOrderLines`, which binds the invoice line to both the order line and the movement line. Read as the invoice's `linkedShipments` / `linkedReceipts` (deliveries and returns told apart by `isReturn`) and the movement's `linkedInvoices`. The app has a read-only Matched Purchase Invoices window (`artifacts/matched-purchase-invoices`). |
+| Return → returned shipment or receipt line | `M_InOutLine.Canceled_InOutLine_ID` (a return line points at the line it returns) | Lines of Goods Shipment and Goods Receipt, not active; no field in Return Material Receipt or Return to Vendor Shipment | Created by `createReturn` on a goods shipment (`go: schemaforge/CreateReturnReceiptHandler.java`), `createPurchaseReturn` on a goods receipt (`go: schemaforge/CreatePurchaseReturnHandler.java`), and `importShipmentLines` / `importReceiptLines` on a draft return (`go: schemaforge/ReturnMaterialReceiptHeaderHandler.java`, `go: schemaforge/ReturnToVendorShipmentHeaderHandler.java`); all of them set the column through `NeoReturnReceiptService.createReturnLineShell`. Read as the shipment's `returnReceipts`, the receipt's `linkedReturns` and the return's `sourceShipments` / `sourceReceipts` (`go: schemaforge/ReturnShipmentUtils.java`). The credit invoice of a return (`createReturnInvoice`, read as `returnInvoices`) is linked through `C_InvoiceLine.M_InOutLine_ID` on the return's lines, the row above. |
+| Rectifying invoice → origin invoice | `C_Invoice_Reverse` (`C_Invoice_ID` the rectifying invoice, `Reversed_C_Invoice_ID` the origin); line level: `C_InvoiceLine.EM_Etgo_Source_Invoiceline_ID` | Sales Invoice and Purchase Invoice › Reversed Invoices (level 1): `Reversed_C_Invoice_ID` displayed, `C_Invoice_ID` not displayed. The app does not show that tab (it is not in `secondaryTabs`). `EM_Etgo_Source_Invoiceline_ID` has no field in any window | Created by "Import from source invoice": `importOriginInvoiceLines` (`go: schemaforge/ImportOriginInvoiceLinesHandler.java`) writes one `C_Invoice_Reverse` row per origin and the source line on each new line; an `originInvoices` value sent on an invoice write is persisted by `go: schemaforge/InvoiceRectificationLinkSupport.java`. Read from `C_Invoice_Reverse` in both directions: `originInvoices`, what the invoice rectifies (`go: schemaforge/InvoiceRectificationLinkSupport.java`), and `rectifyingInvoices`, what rectifies it (`go: schemaforge/AbstractInvoiceHeaderHandler.java`). |
+| Sales order → quotation | `C_Order.Quotation_ID`, `C_OrderLine.Quotationline_ID` | Header and Lines of Sales Order, displayed; the same fields in Purchase Order are not active | Set by Etendo core's `ConvertQuotationIntoOrder` (`setQuotation`, `setQuotationLine`), which the quotation's `Convertquotation` action calls (`go: schemaforge/SalesQuotationHeaderHandler.java`). The order shows its quotation; the quotation lists its orders with a criteria query on `quotation` and its invoices through `listInvoices`, and never lists shipments. |
+| Matched purchase orders | `M_MatchPO` (`C_OrderLine_ID`, `M_InOutLine_ID`, `C_InvoiceLine_ID`) | Matched Purchase Orders › Matched Purchase Order; displayed | No app window (no artifact) and not read by the related-documents code, so by the parity rule it is not a candidate. |
+
+**What supporting them takes.**
+
+1. **Publish the targets.** The shipment, receipt and invoice windows, with their lines, have to enter `publicApiV1Entities` (a scope decision, [3](#manifest-generate-base-public-api-manifestmjs-to-basev1json)).
+2. **Resolve targets by document, not by entity name.** The generator has to map `Order` and `OrderLine` to the order resources, and a `C_Order` reference whose record can be an order or a quotation needs either one relationship per target or a relationship whose `type` is taken from the record.
+3. **Publish the link fields.** The `system` link fields of the sales windows need a visibility or curation decision that the generator honours; the purchase ones need `publicApi.exposed`.
+4. **Line-to-line links.** `links.related` to a child has to carry its master (`/api/v1/{master}/{masterId}/{child}/{id}`), or line resources have to be addressable without one.
+5. **The reverse direction is to-many and derived.** An order's shipments, receipts and invoices are the union the app computes on the server (header column, line columns, match tables, `listInvoices`). Exposing them needs to-many relationships (related links or `include`) or a documented filter, and either way it must reuse that server-side definition: a filter on `C_Order_ID` alone would miss documents linked only through their lines.
+6. **Creating a document from another is a business action.** `createShipment`, `createGoodsReceipt`, `createDraftInvoice`, `createPurchaseInvoice`, `Convertquotation`, `createReturn`, `createPurchaseReturn`, `createReturnInvoice`, `importOrderLines`, `importShipmentLines`, `importReceiptLines` and `importOriginInvoiceLines` would each be a declared public action ([4.2.1](#421-business-actions)); today `complete` is the only one.
+7. **Deeper nesting** is needed only for level-2 tabs such as *Line Tax*, either with two-level routes or by publishing those tabs as resources filtered by their line. No document relation listed here depends on it: the rectification link is itself a level-1 tab of the invoice (*Reversed Invoices*).
 
 ### 4.7 Content negotiation
 
@@ -433,7 +526,7 @@ Every failure is an error document, built from Etendo's answer when Etendo refus
 
 #### Running the end-to-end suite
 
-`gateway/e2e/` holds an end-to-end suite that drives a **running** gateway over HTTP (`node:test` plus global `fetch`). It is not part of `npm test` and not part of the deploy gate. One file per flow: `contacts` (with its location address), `product`, `sales-order` and `purchase-order` (header plus lines), and `errors` (the JSON:API error contract). Each flow creates a record, reads it, lists it, `PATCH`es it with the `If-Match` of the read, checks `412` for a stale ETag and `428` for a missing one, deletes it and checks `404` afterwards. The order flows (`gateway/e2e/support/orders.ts`, shared by both orders) then follow an integrator's flow with no id known beforehand: an order for the new contact (no payment method) is refused with `422` and stays `DR`, and an undeclared action answers `404 unknown_action`; the payment-method lookup of the contact (`payment_method` for sales, `purchase_payment_method` for purchases) and of the order list a value (an empty list fails with a message naming the missing tenant setup), `filter[search]` finds it by its label, and an undeclared lookup answers `404 unknown_lookup`; the value is set on the contact with `If-Match`; a new order inherits it; completing it answers `200` with `document_status` `CO`, a second call answers `meta.alreadyApplied`, and a `PATCH` and a `DELETE` on the completed order answer `422`. Every successful response body is also validated with Ajv against the schema of its operation in the gateway's own `/api/openapi.json`, so a drift between the document and the real answers fails the run with the path and the schema error.
+`gateway/e2e/` holds an end-to-end suite that drives a **running** gateway over HTTP (`node:test` plus global `fetch`). It is not part of `npm test` and not part of the deploy gate; the full CI pipelines run it unattended through `make public-api-e2e-ci` (below). One file per flow: `contacts` (with its location address, and the person-or-company rules: a person with a derived name, a company, the `400` for a company with `first_name`, a person without `last_name` and a person with `name`, the category lookup, `tax_id_key` and an invalid NIF), `product`, `sales-order` and `purchase-order` (header plus lines), and `errors` (the JSON:API error contract). Each flow creates a record, reads it, lists it, `PATCH`es it with the `If-Match` of the read, checks `412` for a stale ETag and `428` for a missing one, deletes it and checks `404` afterwards. The order flows (`gateway/e2e/support/orders.ts`, shared by both orders) then follow an integrator's flow with no id known beforehand: an order for the new contact (no payment method) is refused with `422` and stays `DR`, and an undeclared action answers `404 unknown_action`; the payment-method lookup of the contact (`payment_method` for sales, `purchase_payment_method` for purchases) and of the order list a value (an empty list fails with a message naming the missing tenant setup), `filter[search]` finds it by its label, and an undeclared lookup answers `404 unknown_lookup`; the value is set on the contact with `If-Match`; a new order inherits it; completing it answers `200` with `document_status` `CO`, a second call answers `meta.alreadyApplied`, and a `PATCH` and a `DELETE` on the completed order answer `422`. Every successful response body is also validated with Ajv against the schema of its operation in the gateway's own `/api/openapi.json`, so a drift between the document and the real answers fails the run with the path and the schema error.
 
 ```bash
 export PUBLIC_API_BASE_URL=http://localhost:4399
@@ -442,11 +535,43 @@ export PUBLIC_API_KEY_READONLY='<clientId>:<secret>'   # optional: enables the 4
 make public-api-e2e                                    # or: cd gateway && npm run test:e2e
 ```
 
-- The key needs `public-api:read`, `public-api:write` (deletes included) and `public-api:process` (the order flows complete an order; without it the `complete` call answers `403`) over the published windows. The test tenant needs at least one warehouse (the orders use it) and at least one active payment method (the order flows find it through the lookups; a tenant created by the onboarding has them).
+- The key needs `public-api:read`, `public-api:write` (deletes included) and `public-api:process` (the order flows complete an order; without it the `complete` call answers `403`) over the published windows. The test tenant needs at least one warehouse (the orders select it through their warehouse lookups) and at least one active payment method (the order flows find it through the lookups; a tenant created by the onboarding has them).
 - **Localhost guard.** The suite writes and deletes records, so it refuses to start (every file fails with a clear message) when the host of `PUBLIC_API_BASE_URL` is not `localhost` or `127.0.0.1`. `PUBLIC_API_E2E_ALLOW_REMOTE=1` lifts the guard; use it only against a disposable environment, never production.
 - **Data hygiene.** Every record carries a per-run prefix `e2e-<timestamp>-<random>` in its name or search key. An `after` hook deletes whatever the run created, newest first, even when a test failed; a record it could not delete is printed to stderr. A completed order cannot be deleted, so a run that completes orders leaves, per order flow, the completed order and its line, and the contact (with its address) and product the order uses, which their references keep from being deleted (`409`). All of them carry the run prefix. Every complete run therefore leaves, per order flow, one completed order with its line, one contact with its address, and one product; the draft orders are deleted.
 - **Rate limit.** The gateway allows 100 requests per key per 60 s by default ([4.11](#411-rate-limiting)); the client waits for `Retry-After` and retries on `429`, so a full run takes a little longer than its request count suggests. Raise `PUBLIC_API_RATE_LIMIT` on the local gateway to run faster.
 - Locally, creating a contact can answer `502` when the tenant lacks the `EM_Etgo_Identifier` sequence; the failure message says so.
+
+#### Running the suite unattended (CI)
+
+`make public-api-e2e-ci` runs the same suite with no key prepared by hand. It needs a running NEO and an Etendo GO account (email and password) whose own environment has a warehouse and the `EM_Etgo_Identifier` sequence, which a tenant created through onboarding has. `scripts/public-api-e2e-ci.mjs` then:
+
+1. signs in with `POST /sws/go/session`, lists `GET /sws/go/environments` and enters the one the account owns (`relationship: OWNER`, else the first) with `POST /sws/go/session/environment` (the SPA's cookie session: the session cookie, the `X-Go-CSRF` token of each answer, and the NEO's own origin as `Origin`, which the same-origin rule always allows);
+2. deletes the active keys named `e2e-ci-*` that a cancelled or crashed run left behind (an owner may hold 10 active keys, [5.4](#54-limits-and-constraints)), then creates two keys through `POST /oauth2/api-keys` ([5.2](#52-endpoints)), named `e2e-ci-<run id>-full` (`public-api:read`, `public-api:write`, `public-api:process`, so business actions can run) and `e2e-ci-<run id>-readonly` (`public-api:read`), so the `403` test runs too. A `409` on create says the remaining keys belong to someone else;
+3. starts the built gateway (`gateway/dist/main.js`) on a free `127.0.0.1` port against that NEO, with `PUBLIC_API_RATE_LIMIT=100000` so the throttle never slows the run, and waits for `/healthz`;
+4. runs `npm run test:e2e` with `PUBLIC_API_BASE_URL`, `PUBLIC_API_KEY` and `PUBLIC_API_KEY_READONLY` set, adding a JUnit reporter through `NODE_OPTIONS`;
+5. always (failure and `SIGINT`/`SIGTERM` included) stops the suite's whole process group, then the gateway, deletes both keys and closes the session, and exits with the suite's status (`1` when the setup failed, `130`/`143` when interrupted).
+
+It prints the key ids, never a password, cookie, CSRF token or secret. The gateway and the suite get a minimal environment: `PATH`, `HOME`, the temp/locale variables, `CI`, `NODE_*`, `npm_config_*` (either case) and `PUBLIC_API_*` (minus the sign-in account), plus what the script sets for them; other CI secrets in the caller's environment do not reach them.
+
+| Variable | Meaning |
+|----------|---------|
+| `NEO_BASE_URL` | NEO to test, default `http://localhost:8080/etendo`. A host other than `localhost`/`127.0.0.1` is refused unless `PUBLIC_API_E2E_ALLOW_REMOTE=1` |
+| `PUBLIC_API_E2E_CREDENTIALS_FILE` | JSON `{ "email", "password" }`, the shape Playwright's onboarding setup writes to `e2e/.auth-credentials*.json` |
+| `PUBLIC_API_E2E_EMAIL`, `PUBLIC_API_E2E_PASSWORD` | the account given directly instead (they win over the file) |
+| `PUBLIC_API_E2E_RESULTS_DIR` | where `junit.xml` and `gateway.log` go, default `gateway/e2e-results/` (gitignored); `PUBLIC_API_E2E_JUNIT=0` skips the JUnit file |
+| `PUBLIC_API_E2E_GATEWAY_PORT` | fixed gateway port instead of a free one |
+| `PUBLIC_API_E2E_TIMEOUT_MINUTES` | overall limit of the run, default `30`; when it is reached the script stops the suite and the gateway, deletes the keys and exits `124` |
+
+The gateway must be built first: `make public-api-e2e-ci-install` installs `gateway/` and builds it with `@etendosoftware/api-gateway-core` taken from the `schema_forge_core` tag pinned in `package.json` (the package is not published; it is packed from source by `scripts/lib/pack-gateway-core.mjs`, the same helper the gateway tests of `deploy-public-api.yml` use; the `Dockerfile` repeats those steps inside its build stage). The source is exported from `PUBLIC_API_CORE_DIR` when it points at a local `schema_forge_core` clone that has the tag (read-only, the working tree is not touched), and cloned from `PUBLIC_API_CORE_REPO` otherwise (SSH by default). A second call with the same pin only rebuilds `gateway/` (seconds).
+
+```bash
+make public-api-e2e-ci-install
+PUBLIC_API_E2E_CREDENTIALS_FILE=e2e/.auth-credentials.json make public-api-e2e-ci
+```
+
+**Isolation from the Playwright integration suite.** The full pipelines run this in a lane parallel to the Playwright integration suite, on the same Tomcat: the lane builds the gateway while Playwright builds its bundle and onboards, waits until onboarding has written the credentials of its **second** account (`e2e/.auth-credentials-2.json`; `e2e/onboarding-accounts.json` asks for two; only a file newer than the lane's start counts, so a reused workspace cannot supply a previous run's account), runs the suite with them and publishes `junit.xml` plus `gateway.log`. The whole lane, the core clone and `npm install` included, is bounded at 45 minutes; the script is given the time left as `PUBLIC_API_E2E_TIMEOUT_MINUTES`, so it normally stops first and still deletes its keys. The integration specs work in the first account's tenant; the second tenant is only touched by the cross-client invitation spec, which creates users and invitations there, not the contacts, products and orders this suite writes. That spec also invites the second account into the first tenant, which is why the script enters the environment the account owns rather than simply the first one listed. A separate tenant shares no records, document sequences or warehouses with the browser specs, and every record of this suite also carries its `e2e-<timestamp>-<random>` prefix.
+
+**When the lane runs.** A push build (for example `main` or a `mergeblock/*` cut) always runs it. A pull request build runs it only when `git diff --name-only origin/<target>...HEAD` in the repository that triggered the build touches the public API: in `etendo_schema_forge`, any path under `gateway/` or `public-api/`, `scripts/public-api-e2e-ci.mjs`, `scripts/lib/pack-gateway-core.mjs`, `package.json`, `package-lock.json` or `Makefile`; in `com.etendoerp.go`, any path that is not under `docs/` or `src-test/` and does not end in `.md`. Otherwise the lane logs `Public API E2E skipped: no public API change in this PR` and is reported as skipped, not failed. A build from any other repository, or a diff that cannot be computed, runs the lane.
 
 ### 4.10 List queries: pagination, sorting and filtering
 
@@ -539,6 +664,53 @@ X-RateLimit-Reset: 23
 Configuration (environment of the gateway): `PUBLIC_API_RATE_LIMIT` (requests, default 100) and `PUBLIC_API_RATE_WINDOW_SECONDS` (default 60); an invalid value falls back to the default. The counters live in memory of each gateway process: with N gateway tasks the effective limit per key is up to N times the configured one until a shared store is introduced. Requests with invalid keys are not limited by this guard; limiting them (per IP) belongs to the load balancer or WAF.
 
 ---
+
+### 4.12 Document currency, exchange rate and line prices
+
+`sales-quotation`, `sales-order` and `purchase-order` publish the header's `currency` (`inout`, the
+id of a currency) and `currency_rate` (`inout`, number, internal `eTGOCurrencyRate`): the
+organization-to-document multiply rate, the one the application shows next to the currency as
+"USD — 1,47" and lets the user edit with the pencil. One unit of the organization's currency is
+`currency_rate` units of the document's currency. It is `1` or empty on a document in the
+organization's own currency. The API applies the application's rules (Etendo enforces them, the
+gateway only maps the name):
+
+- **Recalculated** on a create, and on a write that changes `currency` or `order_date` without
+  sending `currency_rate`: the tenant's conversion rate valid on `order_date`, replacing a rate set
+  earlier by hand.
+- **A rate sent is kept**: a write that sends a positive `currency_rate` (alone, or together with a
+  new currency or date) saves it as sent, as when the user types it.
+- **Kept** by a write that changes neither the currency nor the date and does not send it.
+- **Back to the organization currency** sets it to `1`.
+- **Locked once completed**: a write that changes `currency_rate` on a completed document is
+  refused with `422` (nothing saved), whatever its currency, as in the application, where the rate
+  cannot be edited once the document is processed. Sending the stored value back is not a change.
+- **Refused without one** (`422`, nothing saved): a write that sends both `currency` and
+  `order_date` (or an update, which knows them from the stored document) and leaves a
+  foreign-currency document with an empty rate, because no conversion rate is configured for
+  `order_date` and none was sent, or because the write sent `null`/`0`. Completing such a
+  document is refused too.
+- **Exception, a create that omits `currency` or `order_date`.** Etendo fills them after the
+  record is saved, so it cannot refuse the create any more: when no rate is configured, the
+  document is created (`201`) without a rate. Etendo attaches a warning to its answer, which the
+  gateway does not relay. The document's next write and its completion are refused with `422`
+  until it has a rate. Send both fields on create to get the refusal up front.
+
+**Line prices in the document currency.** A line created without a price (`list_price` absent) is
+priced from the document's price list, as in the application. When the document is in a foreign
+currency and its price list is in the organization's currency, those prices are converted with the
+document's `currency_rate` (price × rate, rounded to the currency's price precision, 2 for EUR and
+USD). Every new line for a product takes the document's currency, whether its price came from the
+price list or from the caller. With a rate of 1.47, a product priced 12 EUR is created at 17.64 USD, the same
+line the application creates. That holds when the product's list price equals its standard price.
+When they differ, the API converts each one separately and keeps the discount between them, while
+the application sets both to the converted price. A `list_price` sent by the caller is taken as a
+price in the document's currency and is never converted. When the document has no rate, or the
+price list is in a third currency, the line takes the document's currency but keeps the price
+list's prices unconverted (a foreign-currency document without a rate is normally refused, see
+above). Changing the
+header's `currency` or `currency_rate` later does not re-price existing lines (neither does the
+application); delete and re-create a line to price it at the new rate.
 
 ## 5. API key management contract (`/oauth2/api-keys`)
 
@@ -774,7 +946,9 @@ Testable statements derived from this document, each linked to its section.
 ### Field selection and generation ([2](#2-field-selection-publicapi-curation-and-window-form-default), [3](#3-generation-chain))
 - [ ] A curated entity publishes only its fields with `publicApi.exposed === true` ([2](#2-field-selection-publicapi-curation-and-window-form-default))
 - [ ] A non-curated entity publishes its window form fields (`form` not `false`, visibility not `system` or `discarded`) and no grid-only field ([2](#default-exposure-window-form))
-- [ ] The fiscal monitors publish no form-derived field ([2](#2-field-selection-publicapi-curation-and-window-form-default))
+- [ ] The manifest publishes exactly the sixteen V1 resources listed in `policy.allowedResources`, including only address/contact-person children of contacts and read-only product costs, taxes, tax categories and conversion rates ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
+- [ ] An allowlisted window is published whatever its category; a window outside the allowlist is not, whatever its category ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
+- [ ] A window renamed in `publicResourceNames` is published under its public name and keeps its `specName` for NEO; relationships and lookup types that point to it use the public name ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
 - [ ] No field in `policy.excludedFields` appears in the manifest, curated or derived ([2](#default-exposure-window-form))
 - [ ] The manifest declares `policy.fieldSelection` `curated-publicApi-else-window-form` and lists `policy.excludedFields` ([2](#2-field-selection-publicapi-curation-and-window-form-default))
 - [ ] Fields with `visibility` `system` or `discarded` are excluded even when exposed ([2](#field-rules-applied-by-the-manifest-generator))
@@ -783,7 +957,7 @@ Testable statements derived from this document, each linked to its section.
 - [ ] Every manifest resource has an `id` field with internal path `id`; `updated` (read-only) is present only when the entity's raw schema has an `updated` field ([2](#field-rules-applied-by-the-manifest-generator))
 - [ ] `amount`, `decimal`, `price`, `quantity` and `number` fields are declared `number`/`double`; `dateTime` and `datetime` are `string`/`date-time`; ids, codes and text are `string` ([2](#field-rules-applied-by-the-manifest-generator))
 - [ ] A curated `id` keeps its curated direction and gets internal path `id` ([2](#field-rules-applied-by-the-manifest-generator))
-- [ ] Field `direction` is `inout` only for editable fields of an entity with a write endpoint, including for fiscal-monitor windows whose operations are `GET`, `LIST` ([2](#field-rules-applied-by-the-manifest-generator))
+- [ ] Field `direction` is `inout` only for editable fields of an entity with a write endpoint ([2](#field-rules-applied-by-the-manifest-generator))
 - [ ] The public name derivation matches the table, including the override table, the `pO` to `purchase` rule and the generic snake_case rule ([2](#name-derivation))
 - [ ] `make generate-base-public-api-manifest` produces a manifest that passes the validator ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
 - [ ] `document`, `project`, `uom`, the `Bank Account` child tab and tabs under a child tab (`subline`) are not published ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
@@ -802,6 +976,7 @@ Testable statements derived from this document, each linked to its section.
 - [ ] `GET /api/v1/contacts/{id}` calls `/sws/neo/contacts/businessPartner/{id}` ([4.2](#42-routes))
 - [ ] Flat and JSON:API request bodies are both accepted; a JSON:API body with only `relationships` (no `attributes`) is accepted ([4.3](#43-fields-and-fail-closed-filtering))
 - [ ] A relationship sent as an attribute returns `400`; a wrong `type` or a different `id` returns `409` ([4.3](#43-fields-and-fail-closed-filtering), [4.6](#46-relationships))
+- [ ] Every relationship in the manifest has `cardinality` `one`, none points to a business document (order, quotation, shipment, receipt, invoice), and no order or quotation resource publishes its quotation, shipment, receipt or invoice link ([4.6.1](#461-relations-between-documents-technical-debt))
 - [ ] A single-record `GET`, `POST`, `PUT` and `PATCH` return `data` as one object; a collection returns an array; an empty read is `404`; an empty write answer, or several records, is `502` ([4.3](#43-fields-and-fail-closed-filtering))
 - [ ] Responses are `application/vnd.api+json` without parameters; `Accept` that excludes JSON returns `406`; an unsupported body type returns `415` ([4.7](#47-content-negotiation))
 - [ ] A list query with an unknown parameter, field, operator or invalid value returns `400` with `source.parameter`; `page[size]` above 100 is refused ([4.10](#410-list-queries-pagination-sorting-and-filtering))
@@ -820,10 +995,16 @@ Testable statements derived from this document, each linked to its section.
 - [ ] `PUT` or `PATCH` with the current ETag succeeds and returns an `ETag` equal to the updated record's `meta.etag` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] Sending `updated` in a write body returns `400` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] `DELETE` succeeds without `If-Match` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
+- [ ] A `PATCH` that changes `currency_rate` on a completed order answers `422` and leaves the rate unchanged, also on an order in the organization's currency ([4.12](#412-document-currency-exchange-rate-and-line-prices))
+- [ ] On a foreign-currency order, a line created without `list_price` is priced from the price list converted by the header's `currency_rate`, in the order's currency; a `list_price` sent is kept as sent ([4.12](#412-document-currency-exchange-rate-and-line-prices))
+- [ ] `currency_rate` sent with a currency change is kept; a currency or `order_date` change without it recalculates it; a write that sends `currency` and `order_date` (or an update) leaving a foreign-currency order with no rate is refused with `422`; a create omitting either is saved without a rate and its next write is refused ([4.12](#412-document-currency-exchange-rate-and-line-prices))
 - [ ] `GET /api/v1/{resource}/lookups/{field}` of a declared lookup calls `/sws/neo/{spec}/{entity}/selectors/{selector}` with `limit`, `offset`, `q` and only the manifest's fixed context, and answers `data` items of the lookup `type` with `attributes.label` plus `meta.page` and `links` ([4.2.2](#422-lookups))
 - [ ] A lookup with any parameter other than `filter[search]`, `page[number]`, `page[size]` returns `400`; an undeclared lookup returns `404 unknown_lookup`; neither reaches Etendo ([4.2.2](#422-lookups))
 - [ ] A lookup Etendo answers with `404` returns `502`; a `403` passes through; a `401` evicts the cached token ([4.2.2](#422-lookups))
 - [ ] `publicApi.lookup` on a child resource, on an unpublished field or on a field without a reference makes the generator throw; a child path segment `lookups` is refused ([4.2.2](#422-lookups))
+- [ ] A published string field holding an AD list carries `dataType.enum` and `enumLabels`, and the OpenAPI document lists the codes under `enum`, with their labels as `x-enumDescriptions` and in the description ([Field rules](#field-rules-applied-by-the-manifest-generator))
+- [ ] `contacts` publishes `is_person`, `first_name`, `last_name`, `tax_id_key` (enum) and `category` (lookup); no person-or-company field is `required`, and their descriptions state the rule ([4.3](#43-fields-and-fail-closed-filtering))
+- [ ] `contacts` publishes `is_customer` and `is_vendor` as writable booleans, so a contact created through the API can be used on a purchase order ([4.3](#43-fields-and-fail-closed-filtering))
 
 ### Key management ([5](#5-api-key-management-contract-oauth2api-keys))
 - [ ] Update and rotate responses contain the `key` object fields (`id`, `name`, `clientId`, `capabilities`, `isActive`); rotate adds `clientSecret` and `tokensRevoked` ([5.2](#52-endpoints))

@@ -1,5 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, RefreshCw, Unlink2, Archive, AlertTriangle, Info, Plug, Settings2, Calculator, RotateCcw, ChevronDown, Trash2 } from 'lucide-react';
+import {
+  CopyIcon,
+  ArrowsClockwiseIcon,
+  LinkBreakIcon,
+  ArchiveIcon,
+  WarningIcon,
+  InfoIcon,
+  PlugIcon,
+  SlidersHorizontalIcon,
+  CalculatorIcon,
+  ArrowCounterClockwiseIcon,
+  CaretDownIcon,
+  TrashIcon,
+} from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -12,6 +25,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useHasCapability, useAuth } from '@/auth/AuthContext.jsx';
+import { SEPA_REMITTANCES_CAPABILITY } from '@/lib/capabilityVisibility.js';
+import SepaCreditorIdSection from './SepaCreditorIdSection.jsx';
+import { useAccountCreditorId } from './useAccountCreditorId.js';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 import { useBankConnectionActions, launchSaltEdgePopup } from '@/hooks/useBankConnectionActions';
 import { useFinancialAccountAccounting } from '@/hooks/useFinancialAccountAccounting.js';
@@ -290,7 +306,7 @@ async function copyIbanToClipboard(account, ui) {
  * the Accounting tab's accounting configuration (ETP-4530) in one go.
  */
 async function persistAccountEdits({
-  account, fields, settings, reconciliation, glItemDifference, accounting, updateAccount,
+  account, fields, settings, reconciliation, glItemDifference, accounting, creditorId, updateAccount,
   saveImportSettings, saveAccountingConfiguration,
 }) {
   const updates = {};
@@ -334,6 +350,11 @@ async function persistAccountEdits({
         : null;
     });
     await saveAccountingConfiguration(account.id, payload);
+  }
+  // ETP-6247: the SEPA creditor identifier is saved last, only when it changed and is not empty (the
+  // backend cannot delete a saved one; an emptied value blocks the save instead, see useAccountCreditorId).
+  if (creditorId?.dirty) {
+    await creditorId.save();
   }
 }
 
@@ -1233,6 +1254,10 @@ export function EditAccountModal({
   // loads, so it can flip false → true shortly after the modal mounts, or true → false mid-session
   // on a role switch — both handled by the reset effect below.
   const canSeeAccounting = useHasCapability('showAccountingFields');
+  // ETP-6247 — the «Remesas» section: the sepaRemittances capability AND a Bank account (the pending
+  // Type selection). The creditor identifier is one more field of this form, saved with «Guardar cambios».
+  const sepaCapable = useHasCapability(SEPA_REMITTANCES_CAPABILITY);
+  const creditorId = useAccountCreditorId({ open, account, capable: sepaCapable, active: fields.isBankType, ui });
   const [editTab, setEditTab] = useState(() => initialEditTab());
   const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false);
   const [confirmDeleteConnectionOpen, setConfirmDeleteConnectionOpen] = useState(false);
@@ -1272,7 +1297,7 @@ export function EditAccountModal({
   const reauthMessage = buildReauthMessage(bankConnection.status, locale, ui);
   const reauthTone = buildReauthTone(bankConnection.status);
   const dirty = fields.nameDirty || fields.typeDirty || fields.ibanDirty || fields.currencyDirty
-    || fields.countryDirty || fields.swiftDirty
+    || fields.countryDirty || fields.swiftDirty || creditorId.dirty
     || bankConnection.settingsDirty || (!isCash && recon.dirty) || glItemDifference.dirty
     || accounting.dirty;
   // What makes the form unsavable, independently of whether anything changed. Split out of
@@ -1282,7 +1307,7 @@ export function EditAccountModal({
     || (fields.typeEditable && fields.type === '')
     || (fields.currencyEditable && fields.currencyId === '')
     || recon.amountToleranceInvalid || bankConnection.rangeInvalid
-    || bankConnection.requiredMissing;
+    || bankConnection.requiredMissing || creditorId.blocked;
   const canSave = dirty && !saving && !saveBlocked;
   const busy = saving || bankConnection.busy;
 
@@ -1299,6 +1324,7 @@ export function EditAccountModal({
         reconciliation: isCash ? null : recon,
         glItemDifference,
         accounting,
+        creditorId,
         updateAccount,
         saveImportSettings,
         saveAccountingConfiguration,
@@ -1316,6 +1342,10 @@ export function EditAccountModal({
     // discriminator; the status is not.
     if (err.code === 'stale_record' || err.body?.error === 'stale_record') {
       setError(ui('financeAccountsEditStaleRecord'));
+    } else if (err.creditorIdMessage) {
+      // ETP-6247: the creditor identifier was refused; its message is already translated (it can name
+      // the check digits the server expects), so the generic backend-error mapping must not touch it.
+      toast.error(err.creditorIdMessage);
     } else if (isDuplicateConflict(err.status, err.code) && !hasMappedMessageKey(extractBackendMessageKeys(err.body))) {
       // ETP-6148: a code-less 409 that names a translated message (ETGO_RemittanceProvisioningConflict)
       // is not a duplicate name; it falls through to the translated toast below.
@@ -1438,13 +1468,13 @@ export function EditAccountModal({
               {/* ETP-4795: the General tab always renders now — a cash account has no bank
                   connection and no amount/date tolerances (see below), but it DOES have the GL
                   Item Difference concept used to close the difference of a cash-close. */}
-              <TabsTrigger value={EDIT_TAB_GENERAL} icon={Settings2} data-testid="edit-account-tab-general">
+              <TabsTrigger value={EDIT_TAB_GENERAL} icon={SlidersHorizontalIcon} data-testid="edit-account-tab-general">
                 {ui('financeAccountsEditTabGeneral')}
               </TabsTrigger>
               {/* ETP-4530 — the Accounting tab trigger itself must not render at all for a role
                   without the showAccountingFields capability (not just disabled/hidden via CSS). */}
               {canSeeAccounting ? (
-                <TabsTrigger value={EDIT_TAB_ACCOUNTING} icon={Calculator} data-testid="edit-account-tab-accounting">
+                <TabsTrigger value={EDIT_TAB_ACCOUNTING} icon={CalculatorIcon} data-testid="edit-account-tab-accounting">
                   {ui('financeAccountsEditTabAccounting')}
                 </TabsTrigger>
               ) : null}
@@ -1470,6 +1500,8 @@ export function EditAccountModal({
                     data-testid="ReconciliationSettingsSection__73027d" />
                 </>
               ) : null}
+
+              <SepaCreditorIdSection ui={ui} creditorId={creditorId} disabled={busy} data-testid="SepaCreditorIdSection__73027d" />
 
               <GlItemDifferenceSection
                 ui={ui}
@@ -1621,7 +1653,7 @@ function AccountFieldsGrid({ ui, account, isCash, hasBankLink, fields, token }) 
                 onClick={() => copyIbanToClipboard(account, ui)}
                 aria-label={ui('financeAccountsCopyIban')}
                 className="shrink-0 text-[hsl(var(--text-disabled))] hover:text-[hsl(var(--foreground))]">
-                <Copy className="h-4 w-4" data-testid="Copy__73027d" />
+                <CopyIcon className="h-4 w-4" data-testid="Copy__73027d" />
               </button>
             ) : null}
           </div>
@@ -1798,7 +1830,7 @@ function BankConnectionSection({
             data-testid="edit-account-connect-bank"
             className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[hsl(var(--foreground))] px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-primary-foreground"
           >
-            <Plug className="h-4 w-4" data-testid="Plug__73027d" />
+            <PlugIcon className="h-4 w-4" data-testid="Plug__73027d" />
             {ui('financeAccountsMenuConnect')}
           </button>
         ) : null}
@@ -1810,7 +1842,7 @@ function BankConnectionSection({
             data-testid="edit-account-reconnect-bank"
             className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[hsl(var(--foreground))] px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:opacity-50"
           >
-            <RefreshCw className="h-4 w-4" data-testid="ReconnectIcon__73027d" />
+            <ArrowsClockwiseIcon className="h-4 w-4" data-testid="ReconnectIcon__73027d" />
             {ui('financeAccountsBankConnectionReconnect')}
           </button>
         ) : null}
@@ -1897,7 +1929,7 @@ function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage, reauthTo
   const reauthToneClasses = BANNER_TONE_CLASSES[reauthTone] ?? BANNER_TONE_CLASSES.info;
   // `AlertTriangle` on a blue banner reads as a mismatch — same call BlockingBpBanner.jsx made when
   // product moved the credit-limit notice to info: the icon follows the tone, not the component.
-  const ReauthIcon = reauthTone === 'warning' ? AlertTriangle : Info;
+  const ReauthIcon = reauthTone === 'warning' ? WarningIcon : InfoIcon;
   return (
     <div className="flex flex-col gap-3 rounded-lg bg-[hsl(var(--muted))] p-3">
       <div className="flex items-center justify-between gap-2">
@@ -2016,7 +2048,7 @@ function EditFooter({
     if (archived) {
       return (
         <FooterButton
-          icon={RotateCcw}
+          icon={ArrowCounterClockwiseIcon}
           label={ui('financeAccountsMenuUnarchive')}
           onClick={() => onArchive?.(account)}
           disabled={busy}
@@ -2027,11 +2059,11 @@ function EditFooter({
     if (deleteMode) {
       return (
         <FooterSplitButton
-          icon={Archive}
+          icon={ArchiveIcon}
           label={ui('financeAccountsBankConnectionEditArchive')}
           onClick={() => onArchive?.(account)}
           disabled={busy}
-          menuIcon={Trash2}
+          menuIcon={TrashIcon}
           menuLabel={ui('financeAccountsMenuDelete')}
           onMenuClick={() => onDelete?.(account)}
           testId="archive-account-split"
@@ -2040,7 +2072,7 @@ function EditFooter({
     }
     return (
       <FooterButton
-        icon={Archive}
+        icon={ArchiveIcon}
         label={ui('financeAccountsBankConnectionEditArchive')}
         onClick={() => onArchive?.(account)}
         disabled={busy}
@@ -2057,11 +2089,11 @@ function EditFooter({
         {renderArchiveOrDeleteButton()}
         {connected ? (
           <FooterSplitButton
-            icon={Unlink2}
+            icon={LinkBreakIcon}
             label={ui('financeAccountsMenuDisconnect')}
             onClick={onDisconnect}
             disabled={busy}
-            menuIcon={Trash2}
+            menuIcon={TrashIcon}
             menuLabel={ui('financeAccountsBankConnectionDeleteAction')}
             onMenuClick={onDeleteConnection}
             testId="bank-connection-disconnect"
@@ -2071,7 +2103,7 @@ function EditFooter({
             able to release the surviving Salt Edge link without reconnecting first. */}
         {!connected && reconnectable ? (
           <FooterButton
-            icon={Trash2}
+            icon={TrashIcon}
             label={ui('financeAccountsBankConnectionDeleteAction')}
             onClick={onDeleteConnection}
             disabled={busy}
@@ -2167,7 +2199,7 @@ function FooterSplitButton({
         data-testid={`${testId}-split`}
         className={`${base} w-9 justify-center rounded-r-full border-l-0 px-0`}
       >
-        <ChevronDown
+        <CaretDownIcon
           className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
           data-testid="SplitChevron__73027d" />
       </button>

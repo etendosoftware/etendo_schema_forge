@@ -1,8 +1,8 @@
 {
-  "version": "0.18.0",
+  "version": "0.19.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-11-11T19:46:04.971Z",
-  "checksum": "b2d7bff4956b5a67",
+  "updatedAt": "2026-11-19T12:49:27.047Z",
+  "checksum": "45c97970723c27fc",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -72,7 +72,7 @@
       "toolbarBorderBottom": true,
       "compactSidebarPadding": true,
       "whiteFormBackground": true,
-      "sidebarClassName": "w-[320px] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle has-[[data-product-sidebar-collapsed=true]]:w-12 has-[[data-product-sidebar-collapsed=true]]:pr-0 has-[[data-product-sidebar-collapsed=true]]:overflow-hidden",
+      "sidebarClassName": "relative flex flex-col w-[320px] shrink-0 border-l border-border-subtle transition-[width] duration-200 ease-in-out motion-reduce:transition-none has-[[data-product-sidebar-collapsed=true]]:w-12",
       "formCardPadding": "px-2",
       "tabsBarPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
@@ -236,7 +236,7 @@
             "exampleKey": "importExampleProductCost",
             "labelKey": "importHeaderCost",
             "column": "Cost",
-            "type": "string"
+            "type": "decimal"
           },
           {
             "required": false,
@@ -1049,8 +1049,8 @@
             "apiKey": "cost",
             "column": "Cost",
             "label": "Cost",
-            "type": "string",
-            "tsType": "string",
+            "type": "decimal",
+            "tsType": "number",
             "visibility": "editable",
             "required": true,
             "grid": false,
@@ -2682,7 +2682,7 @@
       "toolbarBorderBottom": true,
       "compactSidebarPadding": true,
       "whiteFormBackground": true,
-      "sidebarClassName": "w-[320px] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle has-[[data-product-sidebar-collapsed=true]]:w-12 has-[[data-product-sidebar-collapsed=true]]:pr-0 has-[[data-product-sidebar-collapsed=true]]:overflow-hidden",
+      "sidebarClassName": "relative flex flex-col w-[320px] shrink-0 border-l border-border-subtle transition-[width] duration-200 ease-in-out motion-reduce:transition-none has-[[data-product-sidebar-collapsed=true]]:w-12",
       "formCardPadding": "px-2",
       "tabsBarPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
@@ -2846,7 +2846,7 @@
             "exampleKey": "importExampleProductCost",
             "labelKey": "importHeaderCost",
             "column": "Cost",
-            "type": "string"
+            "type": "decimal"
           },
           {
             "required": false,
@@ -4001,7 +4001,7 @@
             "name": "cost",
             "apiKey": "cost",
             "column": "Cost",
-            "type": "string",
+            "type": "decimal",
             "visibility": "editable",
             "required": true
           },
@@ -7913,7 +7913,7 @@
         "entity": "price",
         "field": "cost",
         "runner": "node",
-        "description": "Field 'cost' should have type 'string' in price"
+        "description": "Field 'cost' should have type 'number' in price"
       },
       {
         "id": "t-field-type-price-listPrice",

@@ -842,6 +842,57 @@ describe('ReportViewerPage — ReportViewer cross-frame + print + auto-default b
     });
   });
 
+  // "Open full report" opens the drill-down target under its OWN category: the aging reports live
+  // under treasury, the General Ledger under finance — never a hard-coded finance.
+  it.each([
+    {
+      label: 'aging drill-down from an aging report opens it under treasury',
+      parent: { ...BASE_REPORT, id: 'aging-receivable', category: 'treasury' },
+      message: { type: 'aging-drilldown', bpId: 'bp-42', bpName: 'Acme Corp' },
+      report: 'aging-receivable',
+      category: 'treasury',
+    },
+    {
+      label: 'trial-balance drill-down opens the General Ledger under finance',
+      parent: { ...BASE_REPORT, id: 'report-trial-balance', category: 'finance' },
+      message: { type: 'trial-balance-drilldown', accountId: 'acc-1', accountName: 'Cash', accountValue: '1100' },
+      report: 'report-general-ledger',
+      category: 'finance',
+    },
+  ])('openFullReport: $label', async ({ parent, message, report, category }) => {
+    const user = userEvent.setup();
+    mockSearchParams = new URLSearchParams({ report: parent.id });
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(parent));
+      if (typeof url === 'string' && url.includes('/render')) {
+        return Promise.resolve({ ok: true, text: () => Promise.resolve('<html><body>detail</body></html>') });
+      }
+      return Promise.resolve(makeSelectorResponse([]));
+    });
+    const openSpy = vi.fn();
+    const originalOpen = window.open;
+    window.open = openSpy;
+
+    try {
+      render(<ReportViewerPage />);
+      await waitFor(() => expect(screen.getByText('runReport')).toBeInTheDocument());
+      act(() => { window.dispatchEvent(new MessageEvent('message', { data: message })); });
+
+      const dialog = await screen.findByTestId('dialog');
+      await user.click(within(dialog).getByText('openFullReport'));
+
+      expect(openSpy).toHaveBeenCalledTimes(1);
+      const [url, target] = openSpy.mock.calls[0];
+      expect(target).toBe('_blank');
+      const opened = new URL(url);
+      expect(opened.pathname).toMatch(/\/report-viewer$/);
+      expect(opened.searchParams.get('report')).toBe(report);
+      expect(opened.searchParams.get('category')).toBe(category);
+    } finally {
+      window.open = originalOpen;
+    }
+  });
+
   it('opens the invoice in a new tab on postMessage("navigate-invoice") defaulting to sales-invoice', async () => {
     globalThis.fetch = vi.fn().mockImplementation((url) => {
       if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(BASE_REPORT));

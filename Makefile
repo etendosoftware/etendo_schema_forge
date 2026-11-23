@@ -19,6 +19,7 @@ endif
 test: ## Run all unit tests (CLI data-fixes + repo scripts + app-shell + artifacts + vitest)
 	node --test 'cli/test/*.test.js'
 	node --test 'scripts/__tests__/*.test.js'
+	node --test 'e2e/tests/helpers/__tests__/*.test.js'
 	node --test 'tools/app-shell/src/**/__tests__/*.test.js'
 	node --test 'tools/app-shell/test/*.test.js'
 	node --test 'artifacts/**/__tests__/*.test.js'
@@ -293,7 +294,7 @@ test-e2e-headless: ## Build a no-PWA E2E bundle, serve+test+teardown on its own 
 
 .PHONY: test-e2e-purchase-sales
 test-e2e-purchase-sales: ## Run only the failing Sales Order and Purchase Order integration specs
-	E2E_FILES=tests/flows/sales/sales-order-happy-path.integration.spec.js,tests/flows/purchases/purchase-order-full-flow.integration.spec.js ./scripts/run-e2e-last-failed.sh
+	E2E_FILES=tests/flows/before-financial-accounts/sales-order-happy-path.integration.spec.js,tests/flows/purchases/purchase-order-full-flow.integration.spec.js ./scripts/run-e2e-last-failed.sh
 
 .PHONY: test-e2e-last-failed
 test-e2e-last-failed: ## Rerun only failed integration tests recorded by the previous Playwright run
@@ -435,6 +436,18 @@ gateway-dev-local-core: ## Start the gateway dev server against the linked local
 .PHONY: public-api-e2e
 public-api-e2e: ## Run the public API end-to-end suite against a RUNNING gateway (PUBLIC_API_BASE_URL, PUBLIC_API_KEY; localhost only)
 	cd gateway && npm run test:e2e
+
+# Unattended form used by the full Jenkins pipelines (docs/public-api.md §4.9). The install step
+# packs api-gateway-core from the schema_forge_core tag pinned in package.json (it is not
+# published); the run step signs in to NEO, mints two API keys, starts the gateway, runs the
+# suite and always cleans up. Environment variables: scripts/public-api-e2e-ci.mjs.
+.PHONY: public-api-e2e-ci-install
+public-api-e2e-ci-install: ## Install + build gateway/ with api-gateway-core from the pinned core tag (PUBLIC_API_CORE_DIR or a git clone)
+	node scripts/public-api-e2e-ci.mjs install
+
+.PHONY: public-api-e2e-ci
+public-api-e2e-ci: ## Sign in to NEO, create API keys, start the gateway and run the e2e suite (NEO_BASE_URL, PUBLIC_API_E2E_CREDENTIALS_FILE)
+	node scripts/public-api-e2e-ci.mjs run
 
 .PHONY: docs-api-sync
 docs-api-sync: ## Copy the running gateway OpenAPI contract into the Docusaurus portal

@@ -15,7 +15,7 @@ The current repo evidence shows a generated finance window with payment-in-speci
 
 ## Interaction model
 - Route: `/payment-in` for the list and `/payment-in/:recordId` for the detail view.
-- Visibility: visible from the Finance menu in `tools/app-shell/src/menu.json`.
+- Visibility: visible from the Treasury menu section ("Tesorería") in `tools/app-shell/src/menu.json` (moved out of Finance in ETP-6389). Breadcrumb: `Treasury / Payment In`, declared in `decisions.json → window.breadcrumb`.
 - Implementation type: generated window loader from `tools/app-shell/src/windows/registry.js`, backed by `artifacts/payment-in/generated/web/payment-in/FinPaymentPage.jsx` and extended with payment-specific custom components such as `NewPaymentModal`, `PaymentBottomPanel`, `PaymentActivityToggle`, and `RelatedDocuments`.
 - Window shape: master-child. The primary entity is `finPayment` and the child dataset is `finPaymentScheduleDetail`, exposed as the payment allocation lines.
 - Lines surface: the allocation child (`finPaymentScheduleDetail`) is managed through the custom `PaymentBottomPanel` component, not through the standard lines table. `decisions.json` sets `detailEntity: null`, so `linesLayout` is not applicable for this window. Allocation management and summary recalculation are handled entirely inside `PaymentBottomPanel`.
@@ -42,7 +42,7 @@ The current repo evidence shows a generated finance window with payment-in-speci
 - There is no payment-in-specific UI test in `tools/app-shell` covering the specialized modal, status-driven actions, activity drawer, or allocation summary behavior, so these interactions still rely on manual verification.
 
 ## Manual verification
-1. Open `/payment-in` and confirm the Finance menu route loads the incoming-payment list rather than a placeholder.
+1. Open `/payment-in` and confirm the Treasury menu route loads the incoming-payment list rather than a placeholder.
 2. Start a new payment and confirm creation opens the specialized modal with the two intake modes instead of the plain generated header form.
 3. In credit/advance mode, select a customer, payment method, and deposit account, enter an amount, save, and confirm the created record opens in `/payment-in/:recordId`.
 4. In invoice-linked mode, select a customer with open invoices, pick an invoice, and verify the modal preloads the amount from the invoice outstanding balance before creating the payment.
@@ -450,3 +450,7 @@ The list opens with the date filter on "Últimos 30 días" (`window.listViewOpti
 ## Agent prompts on account and status — ETP-5852
 
 `decisions.json` carries an `agentPrompt` on `account` (the financial account the money is received into), `status` (the collection lifecycle codes, RPAP to RPPC, and that accounting is a separate field) and `etblkpAccountingstatus` (Y posted, N not posted, any other value the reason posting failed). Feedback M-29.
+
+## Rate and cost fields are numeric — ETP-6342
+
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. `financialTransactionConvertRate` (`Finacc_Txn_Convert_Rate`) on `finPayment` is now `decimal` in the backend contract. No frontend field changes.

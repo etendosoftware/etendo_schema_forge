@@ -4,11 +4,13 @@
   "window": {
     "category": "settings",
     "name": "Payment Term",
+    "breadcrumb": "Treasury / Payment Term",
     "detailEntity": null,
     "layoutType": "list-modal",
     "templateConfig": {
       "titleKey": "paymentTermNewTitle",
       "editTitleKey": "paymentTermEditTitle",
+      "viewTitleKey": "paymentTermViewTitle",
       "newLabelKey": "paymentTermNew",
       "modalVariant": "compact",
       "hideBackButton": true,

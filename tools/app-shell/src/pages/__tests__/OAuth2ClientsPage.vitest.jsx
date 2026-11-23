@@ -37,16 +37,16 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('lucide-react', () => ({
-  Shield: (p) => <span {...p} />,
-  Plus: (p) => <span {...p} />,
-  RefreshCw: (p) => <span {...p} />,
-  Trash2: (p) => <span {...p} />,
-  Key: (p) => <span {...p} />,
-  MoreHorizontal: (p) => <span {...p} />,
-  Copy: (p) => <span {...p} />,
-  Ban: (p) => <span {...p} />,
-  Pencil: (p) => <span {...p} />,
+vi.mock('@phosphor-icons/react', () => ({
+  ShieldIcon: (p) => <span {...p} />,
+  PlusIcon: (p) => <span {...p} />,
+  ArrowsClockwiseIcon: (p) => <span {...p} />,
+  TrashIcon: (p) => <span {...p} />,
+  KeyIcon: (p) => <span {...p} />,
+  DotsThreeIcon: (p) => <span {...p} />,
+  CopyIcon: (p) => <span {...p} />,
+  ProhibitIcon: (p) => <span {...p} />,
+  PencilSimpleIcon: (p) => <span {...p} />,
 }));
 
 vi.mock('@/components/ui/card', () => ({

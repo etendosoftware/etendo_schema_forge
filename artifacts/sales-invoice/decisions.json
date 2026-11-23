@@ -156,6 +156,7 @@
   },
   "entities": {
     "header": {
+      "agentPrompt": "To invoice in another currency, send currency on the header create: the exchange rate (eTGOCurrencyRate) is set by the server from the conversion rate valid on the invoice date, and the default price list stays valid (it is in the company's currency; a line's unitPrice is in the invoice's currency). You do not need to read the price lists or the conversion rates first. If no rate exists for that date, the save is refused naming it: ask the user for the rate, then send eTGOCurrencyRate.",
       "namedFilters": [
         {
           "name": "completed",

@@ -7,8 +7,8 @@ export const conversionRate = [
     "toCurrency": "USD",
     "validFromDate": "2026-01-15",
     "validToDate": "2026-01-15",
-    "multipleRateBy": "Sample multipleRateBy",
-    "divideRateBy": "Sample divideRateBy",
+    "multipleRateBy": 761,
+    "divideRateBy": 761,
     "sMFCRSynced": "Sample sMFCRSynced"
   },
   {
@@ -17,8 +17,8 @@ export const conversionRate = [
     "toCurrency": "EUR",
     "validFromDate": "2026-01-16",
     "validToDate": "2026-01-16",
-    "multipleRateBy": "Sample multipleRateBy",
-    "divideRateBy": "Sample divideRateBy",
+    "multipleRateBy": 544,
+    "divideRateBy": 544,
     "sMFCRSynced": "Sample sMFCRSynced"
   },
   {
@@ -27,8 +27,8 @@ export const conversionRate = [
     "toCurrency": "GBP",
     "validFromDate": "2026-01-17",
     "validToDate": "2026-01-17",
-    "multipleRateBy": "Sample multipleRateBy",
-    "divideRateBy": "Sample divideRateBy",
+    "multipleRateBy": 215,
+    "divideRateBy": 215,
     "sMFCRSynced": "Sample sMFCRSynced"
   },
   {
@@ -37,8 +37,8 @@ export const conversionRate = [
     "toCurrency": "USD",
     "validFromDate": "2026-01-18",
     "validToDate": "2026-01-18",
-    "multipleRateBy": "Sample multipleRateBy",
-    "divideRateBy": "Sample divideRateBy",
+    "multipleRateBy": 568,
+    "divideRateBy": 568,
     "sMFCRSynced": "Sample sMFCRSynced"
   },
   {
@@ -47,8 +47,8 @@ export const conversionRate = [
     "toCurrency": "EUR",
     "validFromDate": "2026-01-19",
     "validToDate": "2026-01-19",
-    "multipleRateBy": "Sample multipleRateBy",
-    "divideRateBy": "Sample divideRateBy",
+    "multipleRateBy": 679,
+    "divideRateBy": 679,
     "sMFCRSynced": "Sample sMFCRSynced"
   },
   {
@@ -57,8 +57,8 @@ export const conversionRate = [
     "toCurrency": "GBP",
     "validFromDate": "2026-01-20",
     "validToDate": "2026-01-20",
-    "multipleRateBy": "Sample multipleRateBy",
-    "divideRateBy": "Sample divideRateBy",
+    "multipleRateBy": 861,
+    "divideRateBy": 861,
     "sMFCRSynced": "Sample sMFCRSynced"
   },
   {
@@ -67,8 +67,8 @@ export const conversionRate = [
     "toCurrency": "USD",
     "validFromDate": "2026-01-21",
     "validToDate": "2026-01-21",
-    "multipleRateBy": "Sample multipleRateBy",
-    "divideRateBy": "Sample divideRateBy",
+    "multipleRateBy": 281,
+    "divideRateBy": 281,
     "sMFCRSynced": "Sample sMFCRSynced"
   },
   {
@@ -77,8 +77,8 @@ export const conversionRate = [
     "toCurrency": "EUR",
     "validFromDate": "2026-01-22",
     "validToDate": "2026-01-22",
-    "multipleRateBy": "Sample multipleRateBy",
-    "divideRateBy": "Sample divideRateBy",
+    "multipleRateBy": 639,
+    "divideRateBy": 639,
     "sMFCRSynced": "Sample sMFCRSynced"
   },
   {
@@ -87,8 +87,8 @@ export const conversionRate = [
     "toCurrency": "GBP",
     "validFromDate": "2026-01-23",
     "validToDate": "2026-01-23",
-    "multipleRateBy": "Sample multipleRateBy",
-    "divideRateBy": "Sample divideRateBy",
+    "multipleRateBy": 916,
+    "divideRateBy": 916,
     "sMFCRSynced": "Sample sMFCRSynced"
   },
   {
@@ -97,8 +97,8 @@ export const conversionRate = [
     "toCurrency": "USD",
     "validFromDate": "2026-01-24",
     "validToDate": "2026-01-24",
-    "multipleRateBy": "Sample multipleRateBy",
-    "divideRateBy": "Sample divideRateBy",
+    "multipleRateBy": 980,
+    "divideRateBy": 980,
     "sMFCRSynced": "Sample sMFCRSynced"
   },
   {
@@ -107,8 +107,8 @@ export const conversionRate = [
     "toCurrency": "EUR",
     "validFromDate": "2026-01-25",
     "validToDate": "2026-01-25",
-    "multipleRateBy": "Sample multipleRateBy",
-    "divideRateBy": "Sample divideRateBy",
+    "multipleRateBy": 997,
+    "divideRateBy": 997,
     "sMFCRSynced": "Sample sMFCRSynced"
   },
   {
@@ -117,8 +117,8 @@ export const conversionRate = [
     "toCurrency": "GBP",
     "validFromDate": "2026-01-26",
     "validToDate": "2026-01-26",
-    "multipleRateBy": "Sample multipleRateBy",
-    "divideRateBy": "Sample divideRateBy",
+    "multipleRateBy": 320,
+    "divideRateBy": 320,
     "sMFCRSynced": "Sample sMFCRSynced"
   }
 ];

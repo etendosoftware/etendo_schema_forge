@@ -21,12 +21,12 @@ import userEvent from '@testing-library/user-event';
 import InlineLinesPanel from '../InlineLinesPanel.jsx';
 import React, { createRef } from 'react';
 
-// The line delete button renders the Iconic trash from the core custom-icons barrel;
-// the published core may predate it, so stub it while keeping every other icon real.
-vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
+// Stub TrashIcon / PencilSimpleIcon from @phosphor-icons/react with marker svgs so the tests can
+// assert which glyph a row action renders, while every other icon stays real.
+vi.mock('@phosphor-icons/react', async (importOriginal) => ({
   ...(await importOriginal()),
-  IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
-  IconicEditIcon: (props) => <svg data-icon="iconic-edit" {...props} />,
+  TrashIcon: (props) => <svg data-icon="phosphor-trash" {...props} />,
+  PencilSimpleIcon: (props) => <svg data-icon="phosphor-pencil" {...props} />,
 }));
 
 vi.mock('sonner', () => ({

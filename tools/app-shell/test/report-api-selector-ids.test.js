@@ -13,5 +13,13 @@ test('ids: invalid ids are dropped one by one with the servlet charset, not the 
 
 test('ids: ignores isactive like the servlet, and only for bpartner/product', () => {
   assert.match(src, /byIds \? queryCfg\.fromWhere\.replace\("isactive='Y'", '1=1'\)/);
-  assert.match(src, /type !== 'bpartner' && type !== 'product'/);
+  assert.match(src, /type !== 'bpartner' && type !== 'product' && type !== 'product-all'/);
+});
+
+// ETP-6080: product-all is the product query without the stock clause, which stays product-only.
+test('product-all shares the product query and skips the stock EXISTS block', () => {
+  assert.match(src, /'product': productQuery,/);
+  assert.match(src, /'product-all': productQuery,/);
+  assert.match(src, /if \(type === 'product'\) \{/);
+  assert.doesNotMatch(src, /type === 'product-all'/);
 });

@@ -62,7 +62,7 @@ curl https://app.etendo.ai/api/v1/product \\
 
 Use the operation list below to discover the available resources. Every response is filtered to the fields documented for that resource.
 
-Not every Etendo window is published in this version. Windows of the finance, accounting, configuration and setup categories are left out until their public contract is curated; projects (the Service Project window, a finance window) are among them and are not available yet.
+Not every Etendo window is published in this version. V1 publishes contacts (with their addresses and contact persons), products, product categories, product costing, sales quotations, and sales and purchase orders with their lines. Any other collection answers \`404\`.
 
 ### 4. Understand a resource
 
@@ -78,7 +78,7 @@ Updates use optimistic concurrency with standard HTTP preconditions. Reading, cr
 
 ### 6. Create lines for a document
 
-Document lines are addressed through their master resource: \`/api/v1/{master}/{masterId}/{line-resource}\`. For example, create a sales-invoice line with \`POST /api/v1/sales-invoice/{masterId}/lines\`. The gateway derives the master foreign key from the URL and sends it to Etendo as \`parentId\`; clients must not override that relationship in the request body. The same nested path supports \`GET\`, \`POST\`, \`PUT\`, \`PATCH\`, and \`DELETE\` when the document contract exposes those operations.
+Document lines are addressed through their master resource: \`/api/v1/{master}/{masterId}/{line-resource}\`. For example, create a sales-order line with \`POST /api/v1/sales-order/{masterId}/lines\`. The gateway derives the master foreign key from the URL and sends it to Etendo as \`parentId\`; clients must not override that relationship in the request body. The same nested path supports \`GET\`, \`POST\`, \`PUT\`, \`PATCH\`, and \`DELETE\` when the document contract exposes those operations.
 
 ### 7. Page, sort and filter lists
 

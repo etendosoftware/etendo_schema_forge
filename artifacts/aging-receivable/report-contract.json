@@ -1,7 +1,7 @@
 {
   "version": 1,
   "reportId": "aging-receivable",
-  "category": "finance",
+  "category": "treasury",
   "type": "listing",
   "source": "neo",
   "title": { "en_US": "Aging of Receivables", "es_ES": "Antigüedad de Cobros" },

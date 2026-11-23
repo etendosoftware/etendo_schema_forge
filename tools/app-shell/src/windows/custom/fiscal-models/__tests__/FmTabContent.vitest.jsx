@@ -5,14 +5,14 @@ import React from 'react';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-vi.mock('lucide-react', () => ({
-  ReceiptText: () => null,
-  TriangleAlert: (p) => <span data-testid="icon-warn" {...p} />,
-  OctagonAlert: (p) => <span data-testid="icon-block" {...p} />,
-  CircleCheck: (p) => <span data-testid="icon-check" {...p} />,
-  ChevronRight: (p) => <span {...p} />,
-  Download: (p) => <span {...p} />,
-  FileText: (p) => <span {...p} />,
+vi.mock('@phosphor-icons/react', () => ({
+  ReceiptIcon: () => null,
+  WarningIcon: (p) => <span data-testid="icon-warn" {...p} />,
+  WarningOctagonIcon: (p) => <span data-testid="icon-block" {...p} />,
+  CheckCircleIcon: (p) => <span data-testid="icon-check" {...p} />,
+  CaretRightIcon: (p) => <span {...p} />,
+  DownloadSimpleIcon: (p) => <span {...p} />,
+  FileTextIcon: (p) => <span {...p} />,
 }));
 
 vi.mock('../FmCommon.jsx', () => ({

@@ -14,7 +14,7 @@
 import React, { useState } from 'react';
 import { notifySaveGateAttempt } from './saveGateAttempts.js';
 import { Button } from '@/components/ui/button.jsx';
-import { Check, Loader2, Save } from 'lucide-react';
+import { CheckIcon, CircleNotchIcon, FloppyDiskIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
 import { showSaveSuccessToast } from '@/hooks/useEntity';
@@ -250,6 +250,18 @@ export function isConfirmBlockedWhenEmpty(draftMode, hook) {
 }
 
 /**
+ * Tooltip of the Confirm button while it is blocked for lack of lines: the opt-in
+ * `draftMode.disabledEmptyTitleKey` (ETP-6247), only when `isConfirmBlockedWhenEmpty` blocks it —
+ * so an `allowEmptyWhen` that unblocks it (ETP-6284) shows no "no lines" tooltip either.
+ *
+ * @returns {string|null}
+ */
+export function emptyConfirmTitle(draftMode, hook, ui) {
+  if (!draftMode?.disabledEmptyTitleKey || !isConfirmBlockedWhenEmpty(draftMode, hook)) return null;
+  return ui(draftMode.disabledEmptyTitleKey);
+}
+
+/**
  * ETP-5265 QA follow-up — the draftMode "Confirm" button, lifted out of
  * `renderDraftModeSaveActions` VERBATIM (same DOM, same testids, same gate expressions)
  * for exactly one reason: it now needs a piece of local state.
@@ -275,9 +287,13 @@ export function isConfirmBlockedWhenEmpty(draftMode, hook) {
 function DraftModeConfirmButton({ confirmParams, hook, ui, draftMode, saveBtnCls, saveGate, blockCompleteForBalance, calculating = false }) {
   const [customConfirmBusy, setCustomConfirmBusy] = useState(false);
   const busy = hook.isSaving || customConfirmBusy || calculating;
+  // One source for the empty-lines block (`allowEmptyWhen` included), so the button and its
+  // opt-in `draftMode.disabledEmptyTitleKey` tooltip never disagree.
+  const blockedWhenEmpty = isConfirmBlockedWhenEmpty(draftMode, hook);
+  const emptyTitle = emptyConfirmTitle(draftMode, hook, ui);
   return (
-    <GateTooltip data-testid="GateTooltip__3b2291" title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || customConfirmBusy || isConfirmBlockedWhenEmpty(draftMode, hook) || saveGate.blocked} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title} onClick={() => runDraftModeConfirm({ ...confirmParams, setCustomConfirmBusy })}>
-      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
+    <GateTooltip data-testid="GateTooltip__3b2291" title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : (saveGate.title || emptyTitle)}><Button data-missing-required={saveGate.missingAttr} size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || customConfirmBusy || blockedWhenEmpty || saveGate.blocked} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : (saveGate.title || emptyTitle)} onClick={() => runDraftModeConfirm({ ...confirmParams, setCustomConfirmBusy })}>
+      {busy ? <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <CheckIcon className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
       {ui(draftMode.label) || draftMode.label || ui('process')}
     </Button></GateTooltip>
   );
@@ -306,7 +322,7 @@ function renderDraftModeSaveActions({
           reportUnnavigableSave({ saved, isNew, windowName, ui });
         }
       }}>
-        {hook.isSaving || calculating ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
+        {hook.isSaving || calculating ? <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <FloppyDiskIcon className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
         {ui('save')}
       </Button></GateTooltip>
       {/* ETP-4839: `draftMode.keepSaveWhenCompletedFields` keeps Save visible once
@@ -488,7 +504,7 @@ function renderNewRecordSaveActions({
           reportUnnavigableSave({ saved, isNew, windowName, ui });
         }
       }}>
-        {hook.isSaving || calculating ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" data-testid="Save__fa3275" />}
+        {hook.isSaving || calculating ? <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <FloppyDiskIcon className="h-3.5 w-3.5" data-testid="Save__fa3275" />}
         {ui('save')}
       </Button></GateTooltip>
       {!isProcessed && hook.children.length > 0 && (
@@ -497,7 +513,7 @@ function renderNewRecordSaveActions({
           const saved = await hook.handleSaveAndProcess(draftMode);
           await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
         }}>
-          {hook.isSaving || calculating ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
+          {hook.isSaving || calculating ? <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <CheckIcon className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
           {ui(draftMode.label) || tMenu(draftMode.label) || ui('process')}
         </Button></GateTooltip>
       )}
@@ -513,7 +529,7 @@ function renderNewRecordSaveActions({
 function renderExistingRecordSaveAction({
   hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
   ui, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, isDocumentReadOnly, blockSaveForBalance, saveGate = {},
-  saveBusy = false, primarySave = false,
+  saveBusy = false, primarySave = false, processRunning = false,
 }) {
   // ETP-5278 — `saveBusy`: the window reports a save-related operation still in flight outside
   // `hook` (e.g. the Users role assignment run by `onAfterExistingSave`, or promote/demote).
@@ -529,12 +545,12 @@ function renderExistingRecordSaveAction({
     ? { className: `${saveBtnCls}${isStrongPrimary(primarySave) ? ' hover:!bg-[var(--primary-hover-strong)]' : ''}`, iconColor: undefined }
     : { variant: 'outline', className: `${saveBtnCls} ${SECONDARY_SAVE_CLS}`, iconColor: 'hsl(var(--muted-foreground))' };
   return (
-    <GateTooltip data-testid="GateTooltip__3b2291" title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} {...(saveLook.variant ? { variant: saveLook.variant } : {})} size="default" className={saveLook.className} data-testid="action-save" disabled={isDocumentReadOnly || busy || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
+    <GateTooltip data-testid="GateTooltip__3b2291" title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} {...(saveLook.variant ? { variant: saveLook.variant } : {})} size="default" className={saveLook.className} data-testid="action-save" disabled={isDocumentReadOnly || busy || processRunning || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
       if (!(await flushPendingLines())) return;
       const saved = await hook.handleSave({ silent: deferSaveToast });
       await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui, deferSaveToast });
     }}>
-      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color={saveLook.iconColor} data-testid="Save__fa3275" />}
+      {busy ? <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <FloppyDiskIcon className="h-3.5 w-3.5" color={saveLook.iconColor} data-testid="Save__fa3275" />}
       {ui('save')}
     </Button></GateTooltip>
   );

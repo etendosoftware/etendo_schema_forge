@@ -1,6 +1,8 @@
 // @covers scripts/compare-sonar-coverage.js
 // @covers run-sonar.sh
-// @covers .github/workflows/test.yml
+// @covers .github/actions/unit-tests-sonar/action.yml
+// @covers .github/workflows/mini-pipeline.yml
+// @covers .github/workflows/full-pipeline.yml
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -15,7 +17,9 @@ import {
   SonarReadError,
   UsageError,
   createSonarClient,
+  describeCondition,
   evaluateCoverage,
+  formatQualityGate,
   formatResult,
   isEntryPoint,
   isSameOrigin,
@@ -24,6 +28,7 @@ import {
   parseReportTask,
   readMetric,
   readProjectKey,
+  readQualityGate,
   resolveThresholds,
   waitForCeTask,
 } from '../compare-sonar-coverage.js';
@@ -36,9 +41,11 @@ const jsonResp = (body, status = 200) => ({ ok: status < 400, status, json: asyn
 
 /**
  * Fake fetch routing on the URL: `ce` (the CE task responses, consumed in order),
- * `current` / `base` (coverage values or a Response-like / Error to return).
+ * `current` / `base` (coverage values or a Response-like / Error to return),
+ * `analysisId` (carried by every CE task answer) and `gate` (the project_status body, or a
+ * Response-like / Error to return).
  */
-function fakeFetch({ ce = [], current, base, baseBranch = 'develop' } = {}) {
+function fakeFetch({ ce = [], current, base, baseBranch = 'develop', analysisId, gate } = {}) {
   const calls = [];
   const queue = [...ce];
   const answer = (v) => {
@@ -50,7 +57,12 @@ function fakeFetch({ ce = [], current, base, baseBranch = 'develop' } = {}) {
     calls.push({ url, init });
     if (url.includes('/api/ce/task')) {
       const next = queue.shift() ?? 'SUCCESS';
-      return typeof next === 'string' ? jsonResp({ task: { status: next } }) : answer(next);
+      return typeof next === 'string' ? jsonResp({ task: { status: next, ...(analysisId && { analysisId }) } }) : answer(next);
+    }
+    if (url.includes('/api/qualitygates/project_status')) {
+      if (gate instanceof Error) throw gate;
+      if (gate && typeof gate === 'object' && 'ok' in gate) return gate;
+      return jsonResp(gate ?? null, gate === undefined ? 404 : 200);
     }
     if (url.includes('/api/measures/component') && url.includes(`&branch=${encodeURIComponent(baseBranch)}&metricKeys`)) {
       return answer(base);
@@ -289,6 +301,14 @@ describe('parseArgs', () => {
   it('rejects a non-numeric or non-positive --wait-timeout', () => {
     assert.throws(() => parseArgs(['--base-branch', 'd', '--wait-timeout', 'abc']), /positive number/);
     assert.throws(() => parseArgs(['--base-branch', 'd', '--wait-timeout', '0']), /positive number/);
+  });
+
+  it('takes --check-quality-gate as a flag without value, and only with --report-task', () => {
+    const opts = parseArgs(['--base-branch', 'd', '--report-task', 'r.txt', '--check-quality-gate', '--context', 'ci']);
+    assert.equal(opts.checkQualityGate, true);
+    assert.equal(opts.context, 'ci');
+    assert.equal(parseArgs(['--base-branch', 'd']).checkQualityGate, false);
+    assert.throws(() => parseArgs(['--base-branch', 'd', '--check-quality-gate']), /needs --report-task/);
   });
 
   it('applies defaults and derives the label', () => {
@@ -750,6 +770,103 @@ describe('main', () => {
   });
 });
 
+describe('quality gate', () => {
+  const gateDoc = (status, conditions = []) => ({ projectStatus: { status, conditions } });
+  const failedCondition = { status: 'ERROR', metricKey: 'new_violations', actualValue: '3', comparator: 'GT', errorThreshold: '0' };
+
+  it('describes a failed condition with its metric, value and threshold', () => {
+    assert.equal(describeCondition(failedCondition), 'new_violations: 3 (GT 0)');
+    assert.equal(describeCondition({}), '?: ? (? ?)');
+  });
+
+  it('formats ERROR as a failure listing the conditions, OK and NONE as passes', () => {
+    const failed = formatQualityGate({ status: 'ERROR', failed: [failedCondition] });
+    assert.equal(failed.exitCode, 1);
+    assert.match(failed.lines.join('\n'), /QUALITY GATE FAILED[\s\S]*- new_violations: 3 \(GT 0\)/);
+    assert.equal(failed.annotation, 'Quality gate failed: new_violations: 3 (GT 0).');
+    assert.match(formatQualityGate({ status: 'ERROR', failed: [] }).lines.join('\n'), /\(none listed\)/);
+    assert.equal(formatQualityGate({ status: 'OK', failed: [] }).exitCode, 0);
+    assert.equal(formatQualityGate({ status: 'NONE', failed: [] }).exitCode, 0);
+    assert.equal(formatQualityGate({ status: 'WARN', failed: [] }).exitCode, null);
+  });
+
+  it('reads the gate of the analysis the CE task produced, keeping only the ERROR conditions', async () => {
+    const fetchImpl = fakeFetch({
+      analysisId: 'A 1', gate: gateDoc('ERROR', [failedCondition, { ...failedCondition, status: 'OK' }]),
+    });
+    const getJson = createSonarClient({ hostUrl: 'https://sonar.example', token: 't', fetchImpl, warn() {} });
+    const gate = await readQualityGate(getJson, 'https://sonar.example/api/ce/task?id=T1');
+    assert.equal(gate.status, 'ERROR');
+    assert.deepEqual(gate.failed, [failedCondition]);
+    assert.equal(fetchImpl.calls[1].url, 'https://sonar.example/api/qualitygates/project_status?analysisId=A%201');
+  });
+
+  it('throws a SonarReadError when the task has no analysisId or the gate is missing', async () => {
+    const getJson = (fetchImpl) => createSonarClient({ hostUrl: 'https://sonar.example', token: 't', fetchImpl, warn() {} });
+    await assert.rejects(readQualityGate(getJson(fakeFetch({ gate: gateDoc('OK') })), 'https://sonar.example/api/ce/task?id=T1'),
+      (e) => e instanceof SonarReadError && /no analysisId/.test(e.message));
+    await assert.rejects(readQualityGate(getJson(fakeFetch({ analysisId: 'A1' })), 'https://sonar.example/api/ce/task?id=T1'),
+      (e) => e instanceof SonarReadError && /no quality gate/.test(e.message));
+  });
+
+  describe('main --check-quality-gate', () => {
+    let dir;
+    let report;
+    before(() => {
+      dir = mkdtempSync(join(tmpdir(), 'cmp-qg-'));
+      report = join(dir, 'report-task.txt');
+      writeFileSync(report, 'ceTaskId=T1\nceTaskUrl=https://sonar.example/api/ce/task?id=T1\n');
+    });
+    after(() => rmSync(dir, { recursive: true, force: true }));
+    const args = (context = 'ci') => ['--base-branch', 'develop', '--project-key', 'p', '--pull-request', '7',
+      '--report-task', report, '--check-quality-gate', '--context', context];
+
+    it('passes when the coverage is fine and the gate is OK', async () => {
+      const r = await run(args(), { fetchImpl: fakeFetch({ current: '85', base: '85', analysisId: 'A1', gate: gateDoc('OK') }) });
+      assert.equal(r.code, 0);
+      assert.match(r.text, /Coverage is OK[\s\S]*==> Quality gate\n {4}Quality gate passed/);
+    });
+
+    it('fails on a failed gate even when the coverage is fine, and annotates it in ci', async () => {
+      const fetchImpl = fakeFetch({ current: '85', base: '85', analysisId: 'A1', gate: gateDoc('ERROR', [failedCondition]) });
+      const r = await run(args(), { fetchImpl });
+      assert.equal(r.code, 1);
+      assert.match(r.text, /QUALITY GATE FAILED/);
+      assert.match(r.text, /::error title=Quality gate::Quality gate failed: new_violations: 3 \(GT 0\)\./);
+    });
+
+    it('fails when the coverage drops even though the gate is OK', async () => {
+      const r = await run(args(), { fetchImpl: fakeFetch({ current: '75', base: '85', analysisId: 'A1', gate: gateDoc('OK') }) });
+      assert.equal(r.code, 1);
+      assert.match(r.text, /Quality gate passed/);
+    });
+
+    it('passes with a note when the project has no gate', async () => {
+      const r = await run(args(), { fetchImpl: fakeFetch({ current: '85', base: '85', analysisId: 'A1', gate: gateDoc('NONE') }) });
+      assert.equal(r.code, 0);
+      assert.match(r.text, /no quality gate: nothing to check/);
+    });
+
+    it('an unreadable or unexpected gate fails in ci and is skipped on a push', async () => {
+      for (const gate of [jsonResp(null, 500), gateDoc('WARN')]) {
+        let r = await run(args('ci'), { fetchImpl: fakeFetch({ current: '85', base: '85', analysisId: 'A1', gate }) });
+        assert.equal(r.code, 1);
+        assert.match(r.text, /QUALITY GATE NOT EVALUATED[\s\S]*::error title=Quality gate::/);
+        r = await run(args('push'), { fetchImpl: fakeFetch({ current: '85', base: '85', analysisId: 'A1', gate }) });
+        assert.equal(r.code, 0);
+        assert.match(r.text, /SKIPPED ⚠️ {2}(the quality gate could not be read|unexpected quality gate status)/);
+      }
+    });
+
+    it('does not read the gate without the flag', async () => {
+      const fetchImpl = fakeFetch({ current: '85', base: '85', analysisId: 'A1', gate: gateDoc('ERROR') });
+      const r = await run(['--base-branch', 'develop', '--project-key', 'p', '--report-task', report, '--context', 'ci'], { fetchImpl });
+      assert.equal(r.code, 0);
+      assert.ok(!fetchImpl.calls.some((c) => c.url.includes('qualitygates')));
+    });
+  });
+});
+
 describe('CLI entry point', () => {
   it('isEntryPoint matches only the script itself', () => {
     const url = pathToFileURL(SCRIPT).href;
@@ -767,7 +884,20 @@ describe('CLI entry point', () => {
 
 describe('wiring guardrails', () => {
   const runSonar = readFileSync(join(REPO_ROOT, 'run-sonar.sh'), 'utf8');
-  const workflow = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'test.yml'), 'utf8');
+  const action = readFileSync(join(REPO_ROOT, '.github', 'actions', 'unit-tests-sonar', 'action.yml'), 'utf8');
+  const mini = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'mini-pipeline.yml'), 'utf8');
+  const full = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'full-pipeline.yml'), 'utf8');
+  // ETP-6387: the action is checked out from the run's own commit, apart from the PR head.
+  const assertActionFromRunCommit = (unit) => {
+    const step = /- name: Checkout the unit tests action\n([\s\S]*?)(?=\n {6}- )/.exec(unit)?.[1];
+    assert.ok(step, 'the action has its own checkout');
+    assert.match(step, /path: \.ci-actions/);
+    assert.match(step, /sparse-checkout: \.github\/actions/);
+    assert.doesNotMatch(step, /ref:/, 'no ref: the run\'s own commit, the merge ref on a PR');
+    assert.match(unit, /uses: \.\/\.ci-actions\/\.github\/actions\/unit-tests-sonar/);
+    assert.ok(unit.indexOf('fetch-depth: 0') < unit.indexOf('Checkout the unit tests action'), 'the head checkout runs first: it cleans the workspace');
+  };
+  const job = (workflow, id) => new RegExp(`\n {2}${id}:\n([\\s\\S]*?)(?=\n {2}[A-Za-z_-]+:\n|$)`).exec(workflow)?.[1];
 
   it('run-sonar.sh delegates the gate to scripts/compare-sonar-coverage.js', () => {
     assert.match(runSonar, /node\s+"\$SCRIPT_DIR\/scripts\/compare-sonar-coverage\.js"\s+"\$\{CMP_ARGS\[@\]\}"/);
@@ -779,39 +909,75 @@ describe('wiring guardrails', () => {
     assert.doesNotMatch(runSonar, /^\s*(export\s+)?COVERAGE_(TOLERANCE|MINIMUM)=/m);
   });
 
-  it('the sonar job runs the compare step on successful PRs in ci context', () => {
-    const job = /\n {2}sonar:\n([\s\S]*?)(?=\n {2}[A-Za-z_-]+:\n|$)/.exec(workflow)?.[1];
-    assert.ok(job, 'sonar job present');
-    const step = /- name: Compare coverage with the base branch\n([\s\S]*?)(?=\n {6}- |$)/.exec(job)?.[1];
-    assert.ok(step, 'compare step present in the sonar job');
-    assert.match(step, /if: github\.event_name == 'pull_request' && needs\.test\.result == 'success'/);
+  it('the action runs the compare step on PRs in ci context, with the quality gate, after the scan', () => {
+    const step = /- name: Compare coverage with the base branch\n([\s\S]*?)(?=\n {4}- |$)/.exec(action)?.[1];
+    assert.ok(step, 'compare step present in the action');
+    assert.match(step, /if: github\.event_name == 'pull_request'/);
     assert.match(step, /node scripts\/compare-sonar-coverage\.js --context ci/);
-    assert.match(step, /--report-task \.scannerwork\/report-task\.txt/);
+    assert.match(step, /--report-task \.scannerwork\/report-task\.txt \$gate/);
     assert.match(step, /--pull-request "\$PR_NUMBER" --base-branch "\$BASE_BRANCH"/);
-    assert.ok(job.indexOf('sonarqube-scan-action') < job.indexOf('Compare coverage with the base branch'),
+    assert.match(step, /gate=--check-quality-gate\n\s+if ! grep -q -- "--check-quality-gate" scripts\/compare-sonar-coverage\.js; then\n\s+gate=/,
+      'the gate flag goes only to a script that supports it (a PR head older than ETP-6374)');
+    assert.ok(action.indexOf('make test-ci-coverage') < action.indexOf('sonarqube-scan-action'), 'the scan runs after the tests');
+    assert.ok(action.indexOf('sonarqube-scan-action') < action.indexOf('Compare coverage with the base branch'),
       'compare runs after the scan');
   });
 
-  it('the sonar job fails closed on a PR whose tests did not succeed', () => {
-    const job = /\n {2}sonar:\n([\s\S]*?)(?=\n {2}[A-Za-z_-]+:\n|$)/.exec(workflow)?.[1];
-    assert.match(job, /if: \$\{\{ !cancelled\(\) && \(github\.event_name == 'pull_request' \|\|/,
-      'the job runs on every non-cancelled PR');
-    const step = /- name: Fail when the tests did not succeed\n([\s\S]*?)(?=\n {6}- |$)/.exec(job)?.[1];
-    assert.ok(step, 'fail-closed step present');
-    assert.match(step, /if: github\.event_name == 'pull_request' && needs\.test\.result != 'success'/);
-    assert.match(step, /::error title=Coverage gate::/);
-    assert.match(step, /exit 1/);
+  it('the scan and the compare step only run when every test passed (no always() on them)', () => {
+    const fromScan = action.slice(action.indexOf('- name: Sonar analysis'));
+    assert.doesNotMatch(fromScan, /if: (always|failure)\(\)/);
+  });
+
+  it('the mini pipeline runs the action on PRs and pushes to develop, under its own job name', () => {
+    assert.match(mini, /pull_request:\n {4}branches: \[develop\]/);
+    assert.match(mini, /push:\n {4}branches: \[develop\]/);
+    const unit = job(mini, 'unit-tests-sonar');
+    assert.ok(unit, 'unit-tests-sonar job present');
+    assert.match(unit, /name: 'Mini Pipeline: Unit tests \+ Sonar \+ coverage'/);
+    assertActionFromRunCommit(unit);
+    assert.match(unit, /fetch-depth: 0/);
+    assert.match(job(mini, 'mocked'), /if: github\.event_name != 'push'/);
+  });
+
+  it('the full pipeline runs the action on cuts and keeps main analyzed on a validated push', () => {
+    const unit = job(full, 'unit-tests');
+    assert.ok(unit, 'unit-tests job present');
+    assert.match(unit, /name: Unit tests \+ Sonar \+ coverage/);
+    assertActionFromRunCommit(unit);
+    assert.match(unit, /needs\.route\.outputs\.validated_run == ''/);
+    const cut = job(full, 'validated-cut-sonar');
+    assert.ok(cut, 'validated-cut-sonar job present');
+    assert.match(cut, /if: needs\.route\.outputs\.validated_run != ''/);
+    assert.match(cut, /name: unit-coverage/);
+    assert.match(full, /'Unit tests \+ Sonar \+ coverage', 'Mocked E2E \(full pipeline\)'/, 'Route requires the unit tests');
+  });
+
+  it('every Sonar scan takes its timeouts from the organization variables (ETP-6390)', () => {
+    assert.match(action, /-Dsonar\.scanner\.socketTimeout=\$\{\{ inputs\.sonar_socket_timeout \|\| '60' \}\}/);
+    assert.match(action, /-Dsonar\.scanner\.responseTimeout=\$\{\{ inputs\.sonar_response_timeout \|\| '60' \}\}/);
+    for (const unit of [job(mini, 'unit-tests-sonar'), job(full, 'unit-tests')]) {
+      assert.match(unit, /sonar_socket_timeout: \$\{\{ vars\.SONAR_SOCKET_TIMEOUT \}\}/);
+      assert.match(unit, /sonar_response_timeout: \$\{\{ vars\.SONAR_RESPONSE_TIMEOUT \}\}/);
+    }
+    const cut = job(full, 'validated-cut-sonar');
+    assert.match(cut, /-Dsonar\.scanner\.socketTimeout=\$\{\{ vars\.SONAR_SOCKET_TIMEOUT \|\| '60' \}\}/);
+    assert.match(cut, /-Dsonar\.scanner\.responseTimeout=\$\{\{ vars\.SONAR_RESPONSE_TIMEOUT \|\| '60' \}\}/);
   });
 
   it('pins the scan action to a commit sha and declares least-privilege permissions', () => {
-    assert.match(workflow, /sonarqube-scan-action@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
-    assert.doesNotMatch(workflow, /@master\b/);
-    assert.match(workflow, /^permissions:\n {2}contents: read\n/m);
-    assert.doesNotMatch(workflow, /: write-all|: read-all/);
+    for (const text of [action, full]) {
+      assert.match(text, /sonarqube-scan-action@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
+      assert.doesNotMatch(text, /@master\b/);
+    }
+    for (const text of [mini, full]) {
+      assert.match(text, /^permissions:\n {2}contents: read\n/m);
+      assert.doesNotMatch(text, /: write-all|: read-all/);
+    }
   });
 
   it('gives each push sha its own concurrency group', () => {
-    assert.match(workflow, /group: tests-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}/);
+    assert.match(mini, /group: mini-pipeline-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}/);
+    assert.match(full, /group: full-pipeline-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}/);
   });
 });
 

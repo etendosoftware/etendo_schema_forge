@@ -65,6 +65,7 @@ from .mcp_client import (
 from .steps import StepError, resolve_refs, run_steps
 from .matcher import MATCHER_VERSION, check_answer
 from .suite import (
+    FILES_DIR,
     Probe,
     Suite,
     attempt_marker,
@@ -939,6 +940,7 @@ async def run_attempt(
                 max_result_chars=ctx.max_result_chars,
                 on_event=on_event,
                 feedback_tools=ctx.provider.get("feedbackTools", False),
+                files={name: FILES_DIR / name for name in probe.files},
             )
         result.update(outcome)
         # harnessError is a separate axis from outcome (D12). Classification

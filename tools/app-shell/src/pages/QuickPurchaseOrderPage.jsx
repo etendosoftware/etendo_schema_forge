@@ -1,7 +1,12 @@
 import { useState, useReducer, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useUI, useMenuLabel } from '@/i18n';
 import { toast } from 'sonner';
-import { ClipboardList, TrendingUp, Loader2, ScanBarcode } from 'lucide-react';
+import {
+  ClipboardTextIcon,
+  TrendUpIcon,
+  CircleNotchIcon,
+  BarcodeIcon,
+} from '@phosphor-icons/react';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import SupplierSelector from './quick-purchase-order/SupplierSelector.jsx';
@@ -296,7 +301,7 @@ export default function QuickPurchaseOrderPage({ apiBaseUrl }) {
     return (
       <div className="h-full flex items-center justify-center" data-testid="quick-purchase-order-page">
         <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__835b99" />
+          <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__835b99" />
           <span className="text-sm">{ui('qpoLoading')}</span>
         </div>
       </div>
@@ -307,7 +312,7 @@ export default function QuickPurchaseOrderPage({ apiBaseUrl }) {
     return (
       <div className="h-full flex items-center justify-center" data-testid="quick-purchase-order-page">
         <div className="text-center space-y-2">
-          <ClipboardList
+          <ClipboardTextIcon
             className="h-10 w-10 text-muted-foreground/30 mx-auto"
             data-testid="ClipboardList__835b99" />
           <p className="text-sm font-medium text-destructive">{dataError}</p>
@@ -345,7 +350,7 @@ export default function QuickPurchaseOrderPage({ apiBaseUrl }) {
                     : 'border-border bg-card text-muted-foreground/40'
                 }`}
               >
-                <ScanBarcode className="h-4 w-4" data-testid="ScanBarcode__835b99" />
+                <BarcodeIcon className="h-4 w-4" data-testid="ScanBarcode__835b99" />
               </div>
               <button
                 onClick={() => setShowPriority(prev => !prev)}
@@ -356,7 +361,7 @@ export default function QuickPurchaseOrderPage({ apiBaseUrl }) {
                     : 'border-border bg-card text-muted-foreground hover:bg-muted/30'
                 }`}
               >
-                <TrendingUp className="h-4 w-4" data-testid="TrendingUp__835b99" />
+                <TrendUpIcon className="h-4 w-4" data-testid="TrendingUp__835b99" />
               </button>
             </div>
             <div className="flex-1 overflow-auto">

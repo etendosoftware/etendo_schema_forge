@@ -4,7 +4,7 @@ import { renderGridViewCells } from '@/components/contract-ui/GridColumnHeaderCo
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Layers, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { StackIcon, CircleNotchIcon, PencilSimpleIcon, TrashIcon } from '@phosphor-icons/react';
 import { useUI, useLabel } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useAccountingDimensionFields } from '@/hooks/useAccountingDimensionFields';
@@ -457,7 +457,7 @@ export default function AmortizationLinesTable({
           {loading ? (
             <tr>{renderGridCells(<>
               <td colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
-                <Loader2
+                <CircleNotchIcon
                   className="h-4 w-4 animate-spin inline mr-1.5"
                   data-testid="Loader2__fecdcf" />
               </td>
@@ -584,7 +584,7 @@ export default function AmortizationLinesTable({
                                 className="h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:text-foreground hover:bg-muted/60 transition-colors"
                                 data-testid="line-action-add-dimensions"
                               >
-                                <Layers className="h-4 w-4" data-testid="Layers__fecdcf" />
+                                <StackIcon className="h-4 w-4" data-testid="Layers__fecdcf" />
                               </button>
                             )}
                             <button
@@ -593,7 +593,7 @@ export default function AmortizationLinesTable({
                               title={ui('editLineTooltip')}
                               className={`h-8 w-8 p-0 flex items-center justify-center rounded-full transition-colors ${isEditing ? 'text-primary hover:bg-primary/10' : 'text-[hsl(var(--text-disabled))] hover:text-foreground hover:bg-muted/60'}`}
                             >
-                              <Pencil className="h-4 w-4" data-testid="Pencil__fecdcf" />
+                              <PencilSimpleIcon className="h-4 w-4" data-testid="Pencil__fecdcf" />
                             </button>
                             <button
                               onClick={() => deleteLine(line.id)}
@@ -602,7 +602,7 @@ export default function AmortizationLinesTable({
                               title={ui('deleteRowTooltip')}
                               className="h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive-foreground hover:bg-destructive transition-colors disabled:opacity-50"
                             >
-                              {deleting === line.id ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__fecdcf" /> : <Trash2 className="h-4 w-4" data-testid="Trash2__fecdcf" />}
+                              {deleting === line.id ? <CircleNotchIcon className="h-4 w-4 animate-spin" data-testid="Loader2__fecdcf" /> : <TrashIcon className="h-4 w-4" data-testid="Trash2__fecdcf" />}
                             </button>
                           </div>
                         )}
@@ -680,7 +680,7 @@ export default function AmortizationLinesTable({
                       data-testid="field-number" />
                   </td>
                   <td className="px-2 text-center text-muted-foreground align-middle">
-                    {saving === 'new' ? <Loader2 className="h-4 w-4 animate-spin inline" data-testid="Loader2__fecdcf" /> : '—'}
+                    {saving === 'new' ? <CircleNotchIcon className="h-4 w-4 animate-spin inline" data-testid="Loader2__fecdcf" /> : '—'}
                   </td>
                 </>)}</tr>
               )}
@@ -737,7 +737,7 @@ export default function AmortizationLinesTable({
           onClick={bulkDelete}
           className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
         >
-          <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fecdcf" />
+          <TrashIcon className="h-3.5 w-3.5" data-testid="Trash2__fecdcf" />
         </button>
       </SelectionToolbar>
       {batchDeleteDialog}

@@ -5,12 +5,13 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   computeTotals, documentTotal, totalMismatch, missingSet, lineKey, unresolvedProductCount, hasMissingTax,
-  pendingCount, vendorView, productView, joinMeta, extractedCountry, isReviewReadOnly, isOpenableRow,
+  pendingCount, vendorView, productView, linkedProductSimilarity, joinMeta, extractedCountry, isReviewReadOnly, isOpenableRow,
   isSettledStatus, reviewBanners, reviewNeighbors, reviewErrorKey, lineAmount, lineRate,
   initialZoom, stepZoom, PAPER_WIDTH, ZOOM_MIN, ZOOM_MAX, ZOOM_STEP,
   lineUnit6, toScaled, divRoundHalfAway, normalizeNumber, sameNumber, buildOp, applyOperationLocally,
   applyPendingToReview, newProductComplete, newProductName, saveErrorKey, isReloadCode, canMarkReviewed,
   SAVE_ERROR_LABEL_KEYS, NUMBER_FIELDS, currencyScale, lineFieldMissing, hasMissingLineField,
+  canConfirm, isConfirmRetry, confirmBlockers,
 } from '../invoiceInboxReviewModel.js';
 import { readFileSync } from 'node:fs';
 
@@ -60,14 +61,22 @@ describe('computeTotals', () => {
 
 describe('documentTotal', () => {
   const totals = { linesTotal: 121 };
-  it('uses the document total when numeric, rounded to the cent', () => {
-    assert.equal(documentTotal({ totalAmount: 130.456 }, totals), 130.46);
+  it('is the lines total, never the printed one (owner decision 2026-11-18)', () => {
+    assert.equal(documentTotal(totals), 121);
+    assert.equal(documentTotal(totals, null), 121);
   });
-  it('falls back to the lines total when missing, empty or not a number', () => {
-    assert.equal(documentTotal({}, totals), 121);
-    assert.equal(documentTotal({ totalAmount: '' }, totals), 121);
-    assert.equal(documentTotal({ totalAmount: 'n/a' }, totals), 121);
-    assert.equal(documentTotal(undefined, totals), 121);
+  it('is the created invoice grand total when given, rounded to the scale', () => {
+    assert.equal(documentTotal(totals, 217.8), 217.8);
+    assert.equal(documentTotal(totals, '217.804'), 217.8);
+    assert.equal(documentTotal(totals, 0), 0);
+  });
+  it('ignores an invoice total that is empty or not a number', () => {
+    assert.equal(documentTotal(totals, ''), 121);
+    assert.equal(documentTotal(totals, 'n/a'), 121);
+    assert.equal(documentTotal(totals, undefined), 121);
+  });
+  it('zero lines give zero', () => {
+    assert.equal(documentTotal({ linesTotal: 0 }), 0);
   });
 });
 
@@ -142,6 +151,20 @@ describe('vendorView / productView / text helpers', () => {
     assert.equal(productView({ product: { state: 'zzz' } }), 'none');
     assert.equal(productView({}), 'none');
     assert.equal(productView(null), 'none');
+  });
+  it('linkedProductSimilarity reads the similarity of the linked candidate (ETP-6051)', () => {
+    const product = (id, candidates) => ({ state: 'linked', id, matchedBy: 'suggested', candidates });
+    assert.equal(linkedProductSimilarity(product('P1', [{ id: 'P1', similarity: '72' }, { id: 'P2', similarity: '90' }])), 72);
+    assert.equal(linkedProductSimilarity(product('P2', [{ id: 'P1', similarity: '72' }, { id: 'P2', similarity: '96.7%' }])), 96.7);
+    assert.equal(linkedProductSimilarity(product('P1', [{ id: 'P1', similarity: '88,5' }])), 88.5);
+  });
+  it('linkedProductSimilarity is null when there is no usable number (ETP-6051)', () => {
+    assert.equal(linkedProductSimilarity({ id: 'P1', candidates: [{ id: 'P1' }] }), null);
+    assert.equal(linkedProductSimilarity({ id: 'P1', candidates: [{ id: 'P1', similarity: ' ' }] }), null);
+    assert.equal(linkedProductSimilarity({ id: 'P1', candidates: [{ id: 'P1', similarity: 'n/a' }] }), null);
+    assert.equal(linkedProductSimilarity({ id: 'P1', candidates: [{ id: 'P2', similarity: '80' }] }), null);
+    assert.equal(linkedProductSimilarity({ id: 'P1' }), null);
+    assert.equal(linkedProductSimilarity(null), null);
   });
   it('joinMeta skips empty parts and trims', () => {
     assert.equal(joinMeta(['B1', ' ', null, ' Madrid ', undefined]), 'B1 · Madrid');
@@ -267,12 +290,12 @@ describe('zoom', () => {
   });
 });
 
-// ── ETP-6050 S2: shared totals fixture, number helpers, operations, optimistic copy ────────────
+// ── ETP-6050 S2: totals fixture, number helpers, operations, optimistic copy ────────────
 const FIXTURE = JSON.parse(readFileSync(new URL('../../../../../__tests__/fixtures/invoice-inbox-totals.json', import.meta.url), 'utf8'));
 
-describe('totals shared fixture (same file the backend reads)', () => {
-  it('carries the 21 agreed cases', () => {
-    assert.equal(FIXTURE.cases.length, 21);
+describe('totals fixture (SPA copy; Java keeps its own, a rounding change updates both)', () => {
+  it('carries the 22 agreed cases', () => {
+    assert.equal(FIXTURE.cases.length, 22);
   });
   for (const c of FIXTURE.cases) {
     it(`computeTotals: ${c.name}`, () => {
@@ -461,10 +484,19 @@ describe('applyOperationLocally', () => {
     assert.equal(next.lines[0].product.id, null);
     assert.equal(next.lines[0].product.new.name, 'A');
     next = applyOperationLocally(next, buildOp.newProduct(0, { categoryId: 'C1', uomId: 'U1' }), { category: 'Cat', uom: 'Kg' });
-    assert.deepEqual(next.lines[0].product.new, { name: 'A', categoryId: 'C1', uomId: 'U1', category: 'Cat', uom: 'Kg' });
+    assert.deepEqual(next.lines[0].product.new, { name: 'A', categoryId: 'C1', uomId: 'U1', category: 'Cat', uom: 'Kg', categorySource: 'manual', uomSource: 'manual' });
     next = applyOperationLocally(next, buildOp.newProduct(0, { categoryId: null }));
     assert.equal(next.lines[0].product.new.category, null);
     assert.equal(next.lines[0].product.new.uomId, 'U1');
+  });
+  it('a different category / unit id flips its pre-fill source to manual; re-sending the committed id keeps the source', () => {
+    const prefilled = { lines: [{ index: 0, description: 'A', product: { state: 'new', new: { name: 'A', categoryId: 'C1', category: 'Cat', categorySource: 'ocr', uomId: 'U1', uom: 'Kg', uomSource: 'default' } } }] };
+    const same = applyOperationLocally(prefilled, buildOp.newProduct(0, { categoryId: 'C1', uomId: 'U1' }), {});
+    assert.equal(same.lines[0].product.new.categorySource, 'ocr');
+    assert.equal(same.lines[0].product.new.uomSource, 'default');
+    const changed = applyOperationLocally(prefilled, buildOp.newProduct(0, { categoryId: 'C2' }), { category: 'Other' });
+    assert.equal(changed.lines[0].product.new.categorySource, 'manual');
+    assert.equal(changed.lines[0].product.new.uomSource, 'default');
   });
   it('applyPendingToReview applies each pending op in order and passes through when empty', () => {
     const review = { status: 'PENDING_REVIEW', document: doc() };
@@ -665,11 +697,12 @@ describe('ETP-6050 S2 — totals edge cases (any sign, missing sides, discount b
   it('a scale of 3 and of 0 flow through computeTotals, documentTotal and totalMismatch', () => {
     const t3 = computeTotals([{ quantity: 3, unitPrice: 1.2345, taxRate: 10 }], 3);
     assert.equal(t3.linesTotal, 4.074);
-    assert.equal(documentTotal({ totalSource: 'printed', totalAmount: 4.0744 }, t3, 3), 4.074);
+    assert.equal(documentTotal(t3, null, 3), 4.074);
+    assert.equal(documentTotal(t3, 4.0744, 3), 4.074);
     assert.equal(totalMismatch({ totalSource: 'printed', totalAmount: 4.075 }, t3, 3), null);
     assert.deepEqual(totalMismatch({ totalSource: 'printed', totalAmount: 4.076 }, t3, 3), { lines: 4.074, document: 4.076 });
     const t0 = computeTotals([{ quantity: 3, unitPrice: 33.5, taxRate: 21 }], 0);
-    assert.equal(documentTotal({ totalSource: 'printed', totalAmount: 122.4 }, t0, 0), 122);
+    assert.equal(documentTotal(t0, 122.4, 0), 122);
     assert.equal(totalMismatch({ totalSource: 'printed', totalAmount: 123 }, t0, 0), null);
     assert.notEqual(totalMismatch({ totalSource: 'printed', totalAmount: 124 }, t0, 0), null);
   });
@@ -807,3 +840,110 @@ describe('omitKeys', () => {
   });
 });
 
+
+// ── Confirm rules and the total-mismatch fixture ───────────────────────────────────────
+const MISMATCH_FIXTURE = JSON.parse(readFileSync(new URL('../../../../../__tests__/fixtures/invoice-inbox-total-mismatch.json', import.meta.url), 'utf8'));
+
+describe('total mismatch fixture (SPA only; the Java rule has its own tests)', () => {
+  it('carries the 18 agreed cases', () => {
+    assert.equal(MISMATCH_FIXTURE.cases.length, 18);
+  });
+  for (const c of MISMATCH_FIXTURE.cases) {
+    it(`totalMismatch: ${c.name}`, () => {
+      const header = { totalSource: c.totalSource };
+      if ('totalAmount' in c) header.totalAmount = c.totalAmount;
+      const result = totalMismatch(header, { linesTotal: c.linesTotal }, c.scale);
+      assert.equal(result !== null, c.expected);
+    });
+  }
+  it('a warning carries the lines total and the printed total as numbers', () => {
+    assert.deepEqual(totalMismatch({ totalSource: 'printed', totalAmount: 10.02 }, { linesTotal: 10 }, 2), { lines: 10, document: 10.02 });
+  });
+});
+
+describe('lineRate fallback (a non-numeric taxRate uses the resolved tax)', () => {
+  it('"", text and null taxRate fall back to tax.rate', () => {
+    for (const taxRate of ['', 'abc', null, undefined]) {
+      assert.equal(lineRate({ taxRate, tax: { rate: 10 } }), 10, String(taxRate));
+    }
+  });
+  it('a numeric taxRate wins, zero included', () => {
+    assert.equal(lineRate({ taxRate: 0, tax: { rate: 10 } }), 0);
+    assert.equal(lineRate({ taxRate: '21', tax: { rate: 10 } }), 21);
+  });
+  it('neither side numeric is null', () => {
+    assert.equal(lineRate({ taxRate: 'abc', tax: { rate: 'x' } }), null);
+  });
+});
+
+describe('canConfirm / isConfirmRetry', () => {
+  const doc = (missing = []) => ({ validation: { missing } });
+  const review = (extra = {}) => ({ status: 'PENDING_REVIEW', editable: true, document: doc(), ...extra });
+  it('PENDING_REVIEW and READY with nothing pending can be confirmed (reviewed or not)', () => {
+    assert.equal(canConfirm(review()), true);
+    assert.equal(canConfirm(review({ status: 'READY' })), true);
+  });
+  it('an ERROR confirm failure or missing-fields error can be confirmed; any other error cannot', () => {
+    assert.equal(canConfirm(review({ status: 'ERROR', errorCode: 'CONFIRM_FAILED' })), true);
+    assert.equal(canConfirm(review({ status: 'ERROR', errorCode: 'MISSING_FIELDS' })), true);
+    for (const errorCode of ['UNREADABLE', 'SERVICE_FAILURE', 'FOREIGN_RECEIVER', 'REFERENCE_TOO_LONG', undefined]) {
+      assert.equal(canConfirm(review({ status: 'ERROR', errorCode })), false, String(errorCode));
+    }
+  });
+  it('is false for pending fields, read-only, other statuses and no review', () => {
+    assert.equal(canConfirm(review({ document: doc(['header.vendor']) })), false);
+    assert.equal(canConfirm(review({ editable: false })), false);
+    for (const status of ['PROCESSING', 'CONFIRMED', 'DISCARDED']) assert.equal(canConfirm(review({ status })), false, status);
+    assert.equal(canConfirm(null), false);
+    assert.equal(canConfirm(undefined), false);
+  });
+  it('isConfirmRetry is true only for a stored CONFIRM_FAILED error', () => {
+    assert.equal(isConfirmRetry({ status: 'ERROR', errorCode: 'CONFIRM_FAILED' }), true);
+    assert.equal(isConfirmRetry({ status: 'ERROR', errorCode: 'MISSING_FIELDS' }), false);
+    assert.equal(isConfirmRetry({ status: 'READY', errorCode: 'CONFIRM_FAILED' }), false);
+    assert.equal(isConfirmRetry(null), false);
+  });
+});
+
+describe('confirmBlockers', () => {
+  it('reads the exact exchangeRate / vendorAddress codes, in a stable order', () => {
+    assert.deepEqual(confirmBlockers(doc(['vendorAddress', 'exchangeRate'])), ['exchangeRate', 'vendorAddress']);
+    assert.deepEqual(confirmBlockers(doc(['exchangeRate'])), ['exchangeRate']);
+  });
+  it('ignores other codes, near-misses and no document', () => {
+    assert.deepEqual(confirmBlockers(doc(['header.vendor', 'exchangerate', 'vendorAddresses'])), []);
+    assert.deepEqual(confirmBlockers(undefined), []);
+  });
+  function doc(missing) { return { validation: { missing } }; }
+});
+
+describe('reviewBanners (confirm)', () => {
+  it('a failed confirm shows the confirmFailed banner with the stored detail (null when absent)', () => {
+    assert.deepEqual(reviewBanners({ status: 'ERROR', errorCode: 'CONFIRM_FAILED', errorDetail: 'boom' }), [{ kind: 'confirmFailed', detail: 'boom', info: null }]);
+    assert.deepEqual(reviewBanners({ status: 'ERROR', errorCode: 'CONFIRM_FAILED' }), [{ kind: 'confirmFailed', detail: null, info: null }]);
+  });
+  it('a stored identifier travels as info next to the raw stored detail', () => {
+    const info = { code: 'step_failed', params: { step: 'line', n: 2, reason: 'Tax is required' } };
+    assert.deepEqual(
+      reviewBanners({ status: 'ERROR', errorCode: 'CONFIRM_FAILED', errorDetail: '{"v":1}', errorInfo: info }),
+      [{ kind: 'confirmFailed', detail: '{"v":1}', info }],
+    );
+  });
+  it('blockers show on an open document, before the duplicates; settled documents show none', () => {
+    const document = { validation: { missing: ['exchangeRate', 'vendorAddress'] }, header: { duplicate: { state: 'found', invoices: [{ documentNo: 'F1' }] } } };
+    assert.deepEqual(reviewBanners({ status: 'PENDING_REVIEW', document }).map((b) => b.kind), ['blocker', 'blocker', 'duplicate']);
+    assert.deepEqual(reviewBanners({ status: 'PENDING_REVIEW', document }).slice(0, 2).map((b) => b.blocker), ['exchangeRate', 'vendorAddress']);
+    assert.deepEqual(reviewBanners({ status: 'DISCARDED', document }), []);
+    assert.deepEqual(reviewBanners({ status: 'CONFIRMED', document }), [{ kind: 'confirmed' }]);
+  });
+});
+
+describe('confirm save errors', () => {
+  it('every confirm refusal has its own message key; not_confirmable reloads', () => {
+    for (const code of ['not_confirmable', 'duplicate_invoice', 'missing_exchange_rate', 'vendor_address_missing', 'QUOTA_EXCEEDED', 'price_list_tax_included', 'confirm_failed']) {
+      assert.notEqual(saveErrorKey(code), 'invoiceInboxSaveErrorGeneric', code);
+    }
+    assert.equal(isReloadCode('not_confirmable'), true);
+    for (const code of ['duplicate_invoice', 'missing_exchange_rate', 'QUOTA_EXCEEDED', 'confirm_failed']) assert.equal(isReloadCode(code), false, code);
+  });
+});

@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react';
+import { PlusIcon } from '@phosphor-icons/react';
 import { useUI, useLabel } from '@/i18n';
 import SelectorInput from './SelectorInput';
 
@@ -83,7 +83,7 @@ export function DimSummary({ line, onClick, processed, labelOverrides, fields, e
         onClick={onClick}
         className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-dashed border-[hsl(var(--border-control))] text-xs font-medium text-muted-foreground hover:text-foreground hover:border-[hsl(var(--text-disabled))] transition-colors"
       >
-        <Plus className="h-3 w-3" data-testid="Plus__DimensionsPanel" />
+        <PlusIcon className="h-3 w-3" data-testid="Plus__DimensionsPanel" />
         {emptyLabel ?? ui('dimensionsPanelEmpty')}
       </button>
     );

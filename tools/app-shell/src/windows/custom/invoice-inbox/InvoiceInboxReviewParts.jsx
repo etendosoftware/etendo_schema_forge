@@ -1,4 +1,10 @@
-import { AlertCircle, AlertTriangle, Calendar, CheckCircle2, Sparkles } from 'lucide-react';
+import {
+  WarningCircleIcon,
+  WarningIcon,
+  CalendarBlankIcon,
+  CheckCircleIcon,
+  SparkleIcon,
+} from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { StatusTag } from '@/components/ui/status-tag';
@@ -36,7 +42,7 @@ export function ReviewTag({ tone = 'neutral', label, testId, icon: Icon = null }
 
 /** The "Etendo AI proposes" chip: sparkles icon on the info (lavender) tone. */
 export function AiChip({ label, testId }) {
-  return <ReviewTag tone="info" label={label} testId={testId} icon={Sparkles} data-testid="ReviewTag__ai-chip" />;
+  return <ReviewTag tone="info" label={label} testId={testId} icon={SparkleIcon} data-testid="ReviewTag__ai-chip" />;
 }
 
 /** The red line under a field or a section that blocks confirmation. */
@@ -98,13 +104,13 @@ export function ReviewField({
   );
 }
 
-/** The calendar icon of the date field, exported so the form does not import lucide twice. */
-export const DATE_FIELD_ICON = Calendar;
+/** The calendar icon of the date field, exported so the form does not import the icon twice. */
+export const DATE_FIELD_ICON = CalendarBlankIcon;
 
 const BANNER_TONES = {
-  warning: { box: 'border-status-warning-border/40 bg-status-warning/15 text-status-warning-foreground', Icon: AlertTriangle },
-  destructive: { box: 'border-destructive/30 bg-[var(--status-destructive-bg)] text-destructive', Icon: AlertCircle },
-  success: { box: 'border-status-success-border/40 bg-status-success/15 text-status-success-foreground', Icon: CheckCircle2 },
+  warning: { box: 'border-status-warning-border/40 bg-status-warning/15 text-status-warning-foreground', Icon: WarningIcon },
+  destructive: { box: 'border-destructive/30 bg-[var(--status-destructive-bg)] text-destructive', Icon: WarningCircleIcon },
+  success: { box: 'border-status-success-border/40 bg-status-success/15 text-status-success-foreground', Icon: CheckCircleIcon },
 };
 
 /** A banner: a title, an optional body. */

@@ -32,10 +32,10 @@
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
-vi.mock('lucide-react', () => ({
-  TrendingUp: () => null,
-  TrendingDown: () => null,
-  Pencil: () => null,
+vi.mock('@phosphor-icons/react', () => ({
+  TrendUpIcon: () => null,
+  TrendDownIcon: () => null,
+  PencilSimpleIcon: () => null,
 }));
 vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
   CheckboxField: () => null,

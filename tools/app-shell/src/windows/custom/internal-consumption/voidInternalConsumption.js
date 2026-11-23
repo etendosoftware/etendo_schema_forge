@@ -1,5 +1,6 @@
 import { toast } from 'sonner';
 import { extractErrorMessage, PROCESS_FAILURE_TOAST_DURATION_MS } from '@/hooks/useEntity.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 // ETP-5445 — the ONE implementation of Internal Consumption's "Anular" (Void), shared by the
 // detail kebab (artifacts/internal-consumption/custom/InternalConsumptionActions.jsx, which
@@ -11,7 +12,7 @@ export const VOID_BODY = JSON.stringify({ action: 'VO' });
 
 /** Void is only offered on completed documents. */
 export function isVoidableRow(row) {
-  return row?.status === 'CO';
+  return isCompletedStatus(row?.status);
 }
 
 /**

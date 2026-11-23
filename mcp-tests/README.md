@@ -30,11 +30,16 @@ Every command below is a `make` target run from the **repository root**.
    The file holds values, never secrets: for every credential it stores only the **name** of the
    environment variable that holds it. It wins over the environment; the only overrides are the
    visible flags `MODEL=` and `--max-steps`.
+
+   **Model:** keep `gemini/gemini-3.8-flash`, the example's value. It is the model of every OKR
+   measurement (KR2.1, KR2.2); a run with another model is not comparable, and etendo-kpis'
+   `kr21:load` refuses it. Pilot with it too. `openai/gpt-5.2` cannot run Holded (the gateway
+   refuses more than 128 tools; Holded exposes ~388).
 3. **Tokens, through environment variables:**
 
    | Variable (as named in `config.example.toml`) | For |
    |---|---|
-   | `OPENAI_API_KEY` (`[provider] api_key_env`) | The LLM gateway. Without it nothing runs (exit 2). |
+   | `ETENDO_PROXY_API_KEY` (`[provider] api_key_env`) | The LLM gateway (`llm.etendo.software`). Without it nothing runs (exit 2). |
 
    Every target uses `auth = "oauth"`, Holded included: the first run opens a browser, and the
    token is cached in `mcp-tests/.auth/<target>.json` (0600, gitignored). `make mcp-login TARGET=<t>`
@@ -158,6 +163,15 @@ harness-marker rows, a half-finished earlier seed) and only warns about what it 
 `mcp-stability` exits 2 (the agreement is printed but does not count) when any pin differs (model,
 suite sha, rule version, catalogue sha, fixture hash…), when either run is unofficial, or when run B
 reuses run A's `seedId` on any target. Concurrency may differ; it is shown, not compared.
+
+### Files handed to the agent (ETP-5850)
+
+A v2 probe may list `files: [<name>, …]`: files under `fixtures/files/` that the user "hands
+over" (the prompt names them). The agent then gets one tool next to the MCP's, `upload_file
+(file_name, url)`, which PUTs that file's raw bytes to a URL — what a client with file access does
+with the `curl` a server hands out. It knows no platform: the MCP decides how a file gets in (an
+upload URL in Etendo GO; a platform whose tool wants the bytes inline as an argument cannot be fed
+this way). Its calls are recorded like any other. An unknown name, or a path, fails the suite load.
 
 ### The "Etendo + rutina" column (child KR of KR2.1, ETP-6236)
 

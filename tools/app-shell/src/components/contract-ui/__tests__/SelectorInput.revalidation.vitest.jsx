@@ -21,7 +21,7 @@ const harness = vi.hoisted(() => ({ open: true, dataCache: null }));
 vi.mock('@/i18n', () => ({ useUI: () => (k) => k }));
 vi.mock('@/lib/buildUrlWithParams.js', () => ({ buildUrlWithParams: (url) => url }));
 vi.mock('@/lib/selectorCatalog.js', () => ({ getCatalogOptions: () => [] }));
-vi.mock('lucide-react', () => ({ Loader2: () => <span />, ChevronDown: () => <span /> }));
+vi.mock('@phosphor-icons/react', () => ({ CircleNotchIcon: () => <span />, CaretDownIcon: () => <span /> }));
 vi.mock('@/auth/useApiFetch.js', () => ({
   useApiFetch: () => (url, opts) => globalThis.fetch(url, opts),
 }));

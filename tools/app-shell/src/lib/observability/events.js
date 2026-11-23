@@ -893,8 +893,8 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.OUTCOME,
     ],
   }),
-  // `type`: 'ledger' | 'entry' (with `durationMs`, click to detail visible) | 'document' (when the
-  // tab opens, no duration). `outcome`: 'success' | 'error' | 'no_document'.
+  // `type`: 'ledger' | 'entry' (with `durationMs`, click to detail visible) | 'result' (ETP-6083: the income-summary
+  // row's explanation opens, no duration) | 'document' (when the tab opens, no duration). `outcome`: 'success' | 'error' | 'no_document'.
   REPORT_DRILLDOWN: defineEvent('report_drilldown', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
     properties: [

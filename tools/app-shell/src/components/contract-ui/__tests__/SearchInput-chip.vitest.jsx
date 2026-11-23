@@ -1,4 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { CaretDownIcon, CircleNotchIcon } from '@phosphor-icons/react';
+import { findIcon } from '@/test/iconGlyph.js';
 import userEvent from '@testing-library/user-event';
 
 // Mock i18n hooks — return the key as-is (no hardcoded strings)
@@ -149,12 +151,12 @@ describe('SearchInput chip mode (ETP-4000)', () => {
 
   it('renders the ChevronDown icon (right-anchored) when no selection and not fetching', () => {
     const { container } = render(<Harness initialData={{}} />);
-    const chevron = container.querySelector('svg.lucide-chevron-down');
+    const chevron = findIcon(container, CaretDownIcon);
     expect(chevron).not.toBeNull();
     // Regression: chevron button must keep ml-auto so chip vs input share the same right anchor.
     expect(chevron.parentElement.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
     // It must not render the loader at the same time.
-    expect(container.querySelector('svg.lucide-loader')).toBeNull();
+    expect(findIcon(container, CircleNotchIcon)).toBeNull();
   });
 
   // Regression (purchase-order warehouse): a value auto-filled by a callout arrives
@@ -289,7 +291,7 @@ describe('SearchInput chip mode (ETP-4000)', () => {
     const { container } = render(
       <Harness initialData={{ partner: 'BP-123', 'partner$_identifier': 'Acme Corp' }} />
     );
-    const chevron = container.querySelector('svg.lucide-chevron-down');
+    const chevron = findIcon(container, CaretDownIcon);
     expect(chevron).not.toBeNull();
     expect(chevron.parentElement.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
   });

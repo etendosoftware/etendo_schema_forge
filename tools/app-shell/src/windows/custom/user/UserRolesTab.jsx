@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState, Fragment } from 'react';
-import { TrendingUp, Package, Landmark, FileText, Info, Settings } from 'lucide-react';
+import {
+  TrendUpIcon,
+  PackageIcon,
+  BankIcon,
+  FileTextIcon,
+  InfoIcon,
+  GearIcon,
+} from '@phosphor-icons/react';
 import { useUI, useMenuLabel } from '@/i18n';
 import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
 import { adaptMatrix, adaptReportsMatrix } from '@/pages/roles/useRolesOverviewData.js';
@@ -21,10 +28,10 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/comp
  * resolves to the `Settings` icon regardless of the role's actual name.
  */
 const ROLE_ICONS = {
-  Sales: TrendingUp,
-  Inventory: Package,
-  Finance: Landmark,
-  Purchasing: FileText,
+  Sales: TrendUpIcon,
+  Inventory: PackageIcon,
+  Finance: BankIcon,
+  Purchasing: FileTextIcon,
 };
 
 /**
@@ -110,7 +117,7 @@ function MatrixRoleCell({ role, tier, text, isWinner, testIdKey, winnerTooltipTi
                   className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground cursor-help"
                   data-testid={`WinnerBadge__${testIdKey}-${role.id}`}
                 >
-                  <Info className="h-4 w-4" aria-hidden="true" data-testid={`WinnerBadgeIcon__${testIdKey}-${role.id}`} />
+                  <InfoIcon className="h-4 w-4" aria-hidden="true" data-testid={`WinnerBadgeIcon__${testIdKey}-${role.id}`} />
                 </span>
               </TooltipTrigger>
               <TooltipContent data-testid={`WinnerTooltipContent__${testIdKey}-${role.id}`}>
@@ -356,7 +363,7 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
                 {ui('userRolesTabWindowColumn')}
               </th>
               {columns.map((role) => {
-                const RoleIcon = role.isClientAdmin ? Settings : ROLE_ICONS[role.name];
+                const RoleIcon = role.isClientAdmin ? GearIcon : ROLE_ICONS[role.name];
                 return (
                   <th key={role.id} className="text-center text-sm font-semibold text-foreground py-2.5 px-3">
                     <span className="inline-flex items-center justify-center gap-1">

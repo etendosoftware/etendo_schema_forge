@@ -88,7 +88,7 @@ export const ROW_ACTION_BUTTON_NEUTRAL = 'h-8 w-8 p-0 flex items-center justify-
 
 /**
  * Destructive (delete): #D50B3E icon (`--status-destructive-fg`, pair it with
- * `IconicTrashIcon`), hover to the light destructive tint (`--status-destructive-bg`,
+ * `TrashIcon`), hover to the light destructive tint (`--status-destructive-bg`,
  * #FEF0F4) — never a solid red fill; focus-visible halo uses #F53D6B.
  */
 export const ROW_ACTION_BUTTON_DESTRUCTIVE = 'h-8 w-8 p-0 flex items-center justify-center rounded-full transition-colors duration-200 ease-in focus-visible:outline-none focus-visible:bg-card text-[var(--status-destructive-fg)] hover:bg-[var(--status-destructive-bg)] focus-visible:shadow-[0_0_0_2px_#FFFFFF,0_0_0_4px_#F53D6B]';

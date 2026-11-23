@@ -373,7 +373,7 @@ describe('editing — currency scale and tax mode (ETP-6050 S2)', () => {
     await mountLoaded(review);
     const yen = (v) => formatCurrency('JPY', v, { minimumFractionDigits: 0, maximumFractionDigits: 0 }).replace(/\s+/g, ' ');
     expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(yen(101));
-    expect(tid('invoice-inbox-review-total')).toHaveTextContent(yen(125));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(yen(122)); // the lines total, not the printed 125
     expect(tid('invoice-inbox-review-total-tax-21')).toHaveTextContent(yen(21));
     // lines total 122 vs printed 125: 3 units apart -> warning; 1 unit apart would not warn
     expect(tid('invoice-inbox-review-banner-mismatch')).toHaveTextContent(yen(122));
@@ -683,6 +683,37 @@ describe('editing — product resolution', () => {
     expect(tid('invoice-inbox-review-line-0-product')).toHaveAttribute('data-state', 'ok');
   });
 
+  const suggestedLine = () => makeReview({}, {
+    lines: [line({
+      description: 'Tornillo',
+      product: {
+        state: 'linked', id: 'p0', matchedBy: 'suggested', details: { name: 'Tornillo A', searchKey: 'T-A' },
+        candidates: [
+          { id: 'p0', name: 'Tornillo A', searchKey: 'T-A', category: 'Cat', uom: 'Ud', similarity: '72' },
+          { id: 'p1', name: 'Tornillo B', searchKey: 'T-B', category: 'Cat', uom: 'Ud', similarity: '70' },
+        ],
+      },
+    })],
+  });
+
+  it('ETP-6051: chosen by OCR: choosing the same candidate sends nothing and keeps "Elegido por OCR"', async () => {
+    await mountLoaded(suggestedLine());
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    fireEvent.click(tid('invoice-inbox-review-line-0-candidate-p0'));
+    expect(editOps()).toEqual([]);
+    expect(tid('invoice-inbox-review-line-0-product-suggested')).toHaveTextContent('Elegido por OCR');
+  });
+
+  it('ETP-6051: chosen by OCR: choosing another candidate sends selectProduct and the line becomes chosen by the user', async () => {
+    await mountLoaded(suggestedLine());
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    fireEvent.click(tid('invoice-inbox-review-line-0-candidate-p1'));
+    await waitFor(() => expect(editOps()).toEqual([{ op: 'selectProduct', index: 0, id: 'p1' }]));
+    expect(tid('invoice-inbox-review-line-0-product')).toHaveAttribute('data-state', 'ok');
+    expect(maybe('invoice-inbox-review-line-0-product-suggested')).toBeNull();
+    expect(tid('invoice-inbox-review-line-0-product')).toHaveTextContent('Elegido por ti');
+  });
+
   it('ambiguous: "Ninguno · crear producto nuevo" sends newProduct and opens the new-product form with the description as name', async () => {
     await mountLoaded(ambiguousLine());
     fireEvent.click(tid('invoice-inbox-review-line-0-none-option'));
@@ -798,16 +829,33 @@ describe('editing — Marcar como revisada', () => {
     expect(tid('invoice-inbox-review-mark-reviewed')).toBeDisabled();
   });
 
-  it('is disabled while a save is in flight', async () => {
+  it('clicking with a save in flight sends mark-reviewed after the save, carrying the token of that save', async () => {
     const release = holdWrites();
     await mountLoaded();
     const qty = tid('invoice-inbox-review-line-0-quantity');
     fireEvent.focus(qty);
     fireEvent.change(qty, { target: { value: '4' } });
     fireEvent.blur(qty);
-    expect(tid('invoice-inbox-review-mark-reviewed')).toBeDisabled();
-    release();
-    await waitFor(() => expect(tid('invoice-inbox-review-mark-reviewed')).not.toBeDisabled());
+    // The save is open: the button is NOT disabled by it (the click that blurred the input must land).
+    expect(tid('invoice-inbox-review-mark-reviewed')).not.toBeDisabled();
+    fireEvent.click(tid('invoice-inbox-review-mark-reviewed'));
+    await act(async () => { release(); });
+    await waitFor(() => expect(posts.filter((p) => p.url.endsWith('/mark-reviewed'))).toHaveLength(1));
+    expect(posts.map((p) => p.url.split('/').pop())).toEqual(['apply', 'mark-reviewed']);
+    expect(posts[1].body).toEqual({ updated: 'T1' });
+  });
+
+  it('a failed save sends no mark-reviewed and keeps the save error', async () => {
+    respond = (url) => (url.endsWith('/action/apply') ? refusal(422, { code: 'invalid_value' }) : undefined);
+    await mountLoaded();
+    const qty = tid('invoice-inbox-review-line-0-quantity');
+    fireEvent.focus(qty);
+    fireEvent.change(qty, { target: { value: '4' } });
+    fireEvent.click(tid('invoice-inbox-review-mark-reviewed'));
+    await waitFor(() => expect(tid('invoice-inbox-review-save-error')).toBeInTheDocument());
+    await act(async () => { await Promise.resolve(); });
+    expect(posts.some((p) => p.url.endsWith('/mark-reviewed'))).toBe(false);
+    expect(tid('invoice-inbox-review-save-error')).toBeInTheDocument();
   });
 });
 
@@ -1178,7 +1226,7 @@ describe('editing — currency scale end to end (ETP-6050 S2)', () => {
     expect(tid('invoice-inbox-review-line-0-amount')).toHaveTextContent(money('KWD', 3.704, 3));
     expect(tid('invoice-inbox-review-total-base')).toHaveTextContent(money('KWD', 3.704, 3));
     expect(tid('invoice-inbox-review-total-tax-10')).toHaveTextContent(money('KWD', 0.37, 3));
-    expect(tid('invoice-inbox-review-total')).toHaveTextContent(money('KWD', 4.075, 3));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(money('KWD', 4.074, 3)); // the lines total, not the printed 4.075
     expect(maybe('invoice-inbox-review-banner-mismatch')).toBeNull();
     ok.unmount();
     await mountLoaded(make(4.077));
@@ -1319,7 +1367,7 @@ describe('editing — any sign, zero and missing values (ETP-6050 S2)', () => {
     }));
     expect(tid('invoice-inbox-review-total-base')).toHaveTextContent(M(-121));
     expect(tid('invoice-inbox-review-total-tax-21')).toHaveTextContent(M(-25.41));
-    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(-150));
+    expect(tid('invoice-inbox-review-total')).toHaveTextContent(M(-146.41)); // the lines total, not the printed -150
     expect(tid('invoice-inbox-review-banner-mismatch')).toHaveTextContent(M(-146.41));
     expect(tid('invoice-inbox-review-banner-mismatch')).toHaveTextContent(M(-150));
   });
@@ -1448,5 +1496,138 @@ describe('editing — a new product whose names are not resolved (ETP-6050 S2)',
     fireEvent.mouseDown(await screen.findByTestId('inline-add-option-inbox-line-0-category-C9'));
     await waitFor(() => expect(editOps()).toEqual([{ op: 'newProduct', index: 0, categoryId: 'C9' }]));
     await waitFor(() => expect(tid('invoice-inbox-review-line-0-new-category')).toHaveTextContent('Tornillería'));
+  });
+});
+
+describe('editing — confirm flushes the autosave first (ETP-6051)', () => {
+  it('a pending edit is saved BEFORE the confirm, and the confirm carries the token that save returned', async () => {
+    const onConfirmed = vi.fn();
+    await mountLoaded(makeReview(), { onConfirmed });
+    const quantity = tid('invoice-inbox-review-line-0-quantity');
+    fireEvent.focus(quantity);
+    fireEvent.change(quantity, { target: { value: '7' } });
+    fireEvent.click(tid('invoice-inbox-review-confirm'));
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalledTimes(1));
+    const urls = posts.map((p) => p.url.split('/').pop());
+    expect(urls).toEqual(['apply', 'confirm']);
+    expect(posts[0].body).toEqual({ updated: 'T0', operations: [{ op: 'setLine', index: 0, quantity: 7 }] });
+    expect(posts[1].body).toEqual({ updated: 'T1' });
+  });
+
+  it('clicking Confirm with a save in flight sends exactly one confirm with the new token (the button is not disabled by the save)', async () => {
+    const release = holdWrites();
+    const onConfirmed = vi.fn();
+    await mountLoaded(makeReview(), { onConfirmed });
+    const quantity = tid('invoice-inbox-review-line-0-quantity');
+    fireEvent.focus(quantity);
+    fireEvent.change(quantity, { target: { value: '3' } });
+    fireEvent.blur(quantity);
+    expect(tid('invoice-inbox-review-confirm')).not.toBeDisabled();
+    fireEvent.click(tid('invoice-inbox-review-confirm'));
+    fireEvent.click(tid('invoice-inbox-review-confirm'));
+    await act(async () => { release(); });
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalledTimes(1));
+    expect(posts.map((p) => p.url.split('/').pop())).toEqual(['apply', 'confirm']);
+    expect(posts[1].body).toEqual({ updated: 'T1' });
+  });
+
+  it('a failed save sends no confirm and keeps the save error visible', async () => {
+    respond = (url) => (url.endsWith('/action/apply') ? refusal(500, { code: 'internal' }) : undefined);
+    const onConfirmed = vi.fn();
+    await mountLoaded(makeReview(), { onConfirmed });
+    const quantity = tid('invoice-inbox-review-line-0-quantity');
+    fireEvent.focus(quantity);
+    fireEvent.change(quantity, { target: { value: '3' } });
+    fireEvent.blur(quantity);
+    fireEvent.click(tid('invoice-inbox-review-confirm'));
+    await waitFor(() => expect(tid('invoice-inbox-review-save-error')).toBeInTheDocument());
+    await act(async () => { await Promise.resolve(); });
+    expect(posts.some((p) => p.url.endsWith('/action/confirm'))).toBe(false);
+    expect(onConfirmed).not.toHaveBeenCalled();
+    expect(tid('invoice-inbox-review-save-error')).toBeInTheDocument();
+  });
+
+  it('a failed save keeps the confirm from being sent', async () => {
+    respond = (url) => (url.endsWith('/action/apply') ? refusal(422, { code: 'invalid_value' }) : undefined);
+    const onConfirmed = vi.fn();
+    await mountLoaded(makeReview(), { onConfirmed });
+    const quantity = tid('invoice-inbox-review-line-0-quantity');
+    fireEvent.focus(quantity);
+    fireEvent.change(quantity, { target: { value: '7' } });
+    fireEvent.click(tid('invoice-inbox-review-confirm'));
+    await waitFor(() => expect(tid('invoice-inbox-review-save-error')).toBeInTheDocument());
+    expect(posts.some((p) => p.url.endsWith('/action/confirm'))).toBe(false);
+    expect(onConfirmed).not.toHaveBeenCalled();
+  });
+});
+
+describe('editing — new product pre-fill source hints (ETP-6051)', () => {
+  const newLine = (fresh, extra = {}) => line({ ...extra, product: { state: 'new', id: null, candidates: [], new: fresh } });
+  const hint = (kind) => maybe(`invoice-inbox-review-line-0-new-${kind}-source`);
+
+  it('ocr shows "del documento" (the unit also its printed text as a tooltip); default shows "por defecto"', async () => {
+    await mountLoaded(makeReview({}, { lines: [newLine(
+      { name: 'Tornillo', categoryId: 'C1', category: 'Ferretería', categorySource: 'default', uomId: 'U1', uom: 'Caja', uomSource: 'ocr' },
+      { unitPrinted: 'cajas' },
+    )] }));
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    expect(hint('category')).toHaveTextContent(L('invoiceInboxReviewSourceDefault'));
+    expect(hint('uom')).toHaveTextContent(L('invoiceInboxReviewSourceOcr'));
+    expect(hint('uom')).toHaveTextContent('cajas');
+    expect(hint('uom')).toHaveAttribute('title', L('invoiceInboxReviewUnitPrinted', { unit: 'cajas' }));
+    expect(hint('category')).not.toHaveAttribute('title');
+  });
+
+  it('ocr without a printed unit shows just "del documento", with no tooltip', async () => {
+    await mountLoaded(makeReview({}, { lines: [newLine({ name: 'T', categoryId: 'C1', category: 'Cat', categorySource: 'ocr', uomId: 'U1', uom: 'Caja', uomSource: 'ocr' })] }));
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    expect(hint('category')).toHaveTextContent(L('invoiceInboxReviewSourceOcr'));
+    expect(hint('category')).not.toHaveTextContent('·');
+    expect(hint('uom')).not.toHaveAttribute('title');
+  });
+
+  it('manual and an absent source show no hint', async () => {
+    await mountLoaded(makeReview({}, { lines: [newLine({ name: 'T', categoryId: 'C1', category: 'Cat', categorySource: 'manual', uomId: 'U1', uom: 'Caja' })] }));
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    expect(hint('category')).toBeNull();
+    expect(hint('uom')).toBeNull();
+  });
+
+  it('accepting the pre-fill (leaving the picker without choosing) sends nothing and keeps the hint', async () => {
+    await mountLoaded(makeReview({}, { lines: [newLine({ name: 'T', categoryId: 'C1', category: 'Cat', categorySource: 'ocr', uomId: 'U1', uom: 'Caja', uomSource: 'default' })] }));
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    const category = within(tid('invoice-inbox-review-line-0-new-category')).getByTestId('inline-add-field-inbox-line-0-category-chip');
+    fireEvent.focus(category);
+    fireEvent.blur(category);
+    expect(posts).toHaveLength(0);
+    expect(hint('category')).toHaveTextContent(L('invoiceInboxReviewSourceOcr'));
+  });
+
+  it('choosing a different category flips its hint to manual at once, before the server answers; the unit hint stays', async () => {
+    pickerItems([{ id: 'C1', name: 'Cat' }, { id: 'C2', name: 'Otra' }]);
+    catalog = { C2: 'Otra' };
+    await mountLoaded(makeReview({}, { lines: [newLine({ name: 'T', categoryId: 'C1', category: 'Cat', categorySource: 'ocr', uomId: 'U1', uom: 'Caja', uomSource: 'default' })] }));
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    const release = holdWrites();
+    fireEvent.click(within(tid('invoice-inbox-review-line-0-new-category')).getByTestId('inline-add-field-inbox-line-0-category-chip'));
+    fireEvent.mouseDown(await screen.findByTestId('inline-add-option-inbox-line-0-category-C2'));
+    await waitFor(() => expect(hint('category')).toBeNull());
+    expect(hint('uom')).toHaveTextContent(L('invoiceInboxReviewSourceDefault'));
+    await act(async () => { release(); });
+    await waitFor(() => expect(editOps()).toContainEqual({ op: 'newProduct', index: 0, categoryId: 'C2' }));
+  });
+
+  it('pickers stay required (missing hint) while no category / unit is chosen, whatever the source', async () => {
+    await mountLoaded(makeReview({}, { lines: [newLine({ name: 'T' })], validation: { missing: ['line[0].product'] } }));
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    expect(tid('invoice-inbox-review-line-0-new-error')).toHaveTextContent(L('invoiceInboxReviewProductNewRequired'));
+    expect(hint('category')).toBeNull();
+  });
+
+  it('the product name field carries the product-name label, not the generic one', async () => {
+    await mountLoaded(makeReview({}, { lines: [newLine({ name: 'T' })] }));
+    fireEvent.click(tid('invoice-inbox-review-line-0-product'));
+    expect(tid('invoice-inbox-review-line-0-new-name')).toHaveAttribute('aria-label', L('invoiceInboxReviewProductName'));
+    expect(tid('invoice-inbox-review-line-0-new-product')).toHaveTextContent(L('invoiceInboxReviewProductName'));
   });
 });

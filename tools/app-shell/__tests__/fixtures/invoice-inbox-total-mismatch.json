@@ -1,0 +1,148 @@
+{
+  "_comment": "ETP-6051 — shared by the SPA (invoiceInboxReviewModel totalMismatch) and, later, the backend. Rule: a mismatch exists only when totalSource is 'printed', the printed totalAmount is a finite number (null, empty, text or absent never warn) and, both converted to integer units of the currency scale (decimal text, HALF_UP away from zero, symmetric for negatives), they differ by STRICTLY MORE than one unit. `scale` is the currency's own decimals (0, 2, 3 supported). `linesTotal` is the already-rounded lines total of the document. `expected` is the boolean flag.",
+  "cases": [
+    {
+      "name": "one cent apart does not warn (scale 2)",
+      "totalSource": "printed",
+      "linesTotal": 10.0,
+      "scale": 2,
+      "expected": false,
+      "totalAmount": 10.01
+    },
+    {
+      "name": "two cents apart warns (scale 2)",
+      "totalSource": "printed",
+      "linesTotal": 10.0,
+      "scale": 2,
+      "expected": true,
+      "totalAmount": 10.02
+    },
+    {
+      "name": "negative: one cent apart does not warn",
+      "totalSource": "printed",
+      "linesTotal": -10.0,
+      "scale": 2,
+      "expected": false,
+      "totalAmount": -10.01
+    },
+    {
+      "name": "negative: two cents apart warns",
+      "totalSource": "printed",
+      "linesTotal": -10.0,
+      "scale": 2,
+      "expected": true,
+      "totalAmount": -10.02
+    },
+    {
+      "name": "exact half-cent rounds half-up away from zero: 10.005 is 1001 units, one apart",
+      "totalSource": "printed",
+      "linesTotal": 10.0,
+      "scale": 2,
+      "expected": false,
+      "totalAmount": 10.005
+    },
+    {
+      "name": "exact half-cent: 10.015 is 1002 units, two apart",
+      "totalSource": "printed",
+      "linesTotal": 10.0,
+      "scale": 2,
+      "expected": true,
+      "totalAmount": 10.015
+    },
+    {
+      "name": "negative half-cent is symmetric: -10.005 is -1001 units, one apart",
+      "totalSource": "printed",
+      "linesTotal": -10.0,
+      "scale": 2,
+      "expected": false,
+      "totalAmount": -10.005
+    },
+    {
+      "name": "negative half-cent is symmetric: -10.015 is -1002 units, two apart",
+      "totalSource": "printed",
+      "linesTotal": -10.0,
+      "scale": 2,
+      "expected": true,
+      "totalAmount": -10.015
+    },
+    {
+      "name": "scale 0: one unit apart does not warn",
+      "totalSource": "printed",
+      "linesTotal": 100,
+      "scale": 0,
+      "expected": false,
+      "totalAmount": 101
+    },
+    {
+      "name": "scale 0: two units apart warns",
+      "totalSource": "printed",
+      "linesTotal": 100,
+      "scale": 0,
+      "expected": true,
+      "totalAmount": 102
+    },
+    {
+      "name": "scale 3: one thousandth apart does not warn",
+      "totalSource": "printed",
+      "linesTotal": 1.0,
+      "scale": 3,
+      "expected": false,
+      "totalAmount": 1.001
+    },
+    {
+      "name": "scale 3: two thousandths apart warns",
+      "totalSource": "printed",
+      "linesTotal": 1.0,
+      "scale": 3,
+      "expected": true,
+      "totalAmount": 1.002
+    },
+    {
+      "name": "a null printed total never warns",
+      "totalSource": "printed",
+      "linesTotal": 10.0,
+      "scale": 2,
+      "expected": false,
+      "totalAmount": null
+    },
+    {
+      "name": "an empty printed total never warns",
+      "totalSource": "printed",
+      "linesTotal": 10.0,
+      "scale": 2,
+      "expected": false,
+      "totalAmount": ""
+    },
+    {
+      "name": "a non-numeric printed total never warns",
+      "totalSource": "printed",
+      "linesTotal": 10.0,
+      "scale": 2,
+      "expected": false,
+      "totalAmount": "abc"
+    },
+    {
+      "name": "a missing printed total never warns",
+      "totalSource": "printed",
+      "linesTotal": 10.0,
+      "scale": 2,
+      "expected": false
+    },
+    {
+      "name": "a printed total of zero against non-zero lines warns",
+      "totalSource": "printed",
+      "linesTotal": 10.0,
+      "scale": 2,
+      "expected": true,
+      "totalAmount": 0
+    },
+    {
+      "name": "totalSource lines never warns",
+      "totalSource": "lines",
+      "linesTotal": 10.0,
+      "scale": 2,
+      "expected": false,
+      "totalAmount": 50
+    }
+  ]
+}

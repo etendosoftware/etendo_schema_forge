@@ -1,15 +1,17 @@
 {
   "version": "0.2.0",
   "generatedAt": "2026-06-16T16:35:15.726Z",
-  "updatedAt": "2026-07-28T13:51:31.609Z",
-  "checksum": "88c9f5b2db3ccb9c",
+  "updatedAt": "2026-11-19T18:18:36.124Z",
+  "checksum": "c3b75a63764c933e",
   "frontendContract": {
     "window": {
       "id": "82922976BB524D1BAA3CF8462B9219FE",
       "name": "Transaction Type",
       "primaryEntity": "transactionType",
       "category": "finance",
-      "templateConfig": null,
+      "templateConfig": {
+        "viewTitleKey": "transactionTypeViewTitle"
+      },
       "breadcrumb": "Finance / Transaction Type",
       "detailEntity": null,
       "layoutType": "list-modal"
@@ -101,6 +103,9 @@
       "name": "Transaction Type",
       "primaryEntity": "transactionType",
       "category": "finance",
+      "templateConfig": {
+        "viewTitleKey": "transactionTypeViewTitle"
+      },
       "breadcrumb": "Finance / Transaction Type",
       "detailEntity": null,
       "layoutType": "list-modal"

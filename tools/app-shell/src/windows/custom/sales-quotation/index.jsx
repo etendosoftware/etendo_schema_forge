@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { XCircle } from 'lucide-react';
+import { XCircleIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useUI, useLocale, useMenuLabel } from '@/i18n';
 import { useNavigate } from 'react-router-dom';
@@ -13,6 +13,7 @@ import GeneratedApp from '@generated/sales-quotation/generated/web/sales-quotati
 import QuotationTable from '@generated/sales-quotation/generated/web/sales-quotation/QuotationTable';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
+import { FieldCreateContext } from '@/components/contract-ui/FieldCreateContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import LinesEmptyState from '@/components/contract-ui/LinesEmptyState.jsx';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
@@ -27,6 +28,8 @@ import QuotationSecondaryActions from '@generated/sales-quotation/custom/Quotati
 import SendToEvaluationModal from '@generated/sales-quotation/custom/SendToEvaluationModal';
 import QuotationConfirmModal from '@generated/sales-quotation/custom/QuotationConfirmModal';
 import RejectQuotationModal from '@generated/sales-quotation/custom/RejectQuotationModal';
+import CreateRejectReasonModal from '@generated/sales-quotation/custom/CreateRejectReasonModal';
+import { isDraftStatus } from '../../../lib/docStatus.js';
 
 // The statuses whose Confirmar opens a modal: DR sends to evaluation; UE, CO (legacy) and ETGO_AC
 // (accepted by the customer from the portal, ETP-6209) convert into an order or an invoice.
@@ -59,7 +62,7 @@ const customMenuActions = ({ status }) => [
   {
     key: 'reject',
     labelKey: 'rejectQuotation',
-    icon: XCircle,
+    icon: XCircleIcon,
     // The XCircle icon already carries the destructive cue; the Figma
     // (Screenshot 2026-04-30 11-38-53) renders both icon and label in the
     // neutral dark-gray (hsl(var(--foreground))), not the legacy red text.
@@ -131,7 +134,7 @@ const quotationBulkRowFilter = (row, action, ui) => {
   // because buildInOutActions fires on ANY draft present. QA flagged that union behaviour as a
   // minor observation on the return windows; there is no reason to reproduce it here.
   if (action !== 'CO') return true;
-  if ((row.documentStatus || row.docStatus) !== 'DR') return ui('bulkRowNotDraft');
+  if (!isDraftStatus(row.documentStatus || row.docStatus)) return ui('bulkRowNotDraft');
   return true;
 };
 
@@ -239,7 +242,7 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
   const closeReject = useCallback(() => setRejectRow(null), []);
 
   const confirmPortal = confirmRow && createPortal(
-    confirmRow.documentStatus === 'DR' ? (
+    isDraftStatus(confirmRow.documentStatus) ? (
       <SendToEvaluationModal
         quotationId={confirmRow.id}
         data={confirmRow}
@@ -283,6 +286,32 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
 
   const { headers, createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'sale' });
+
+  // ETP-6209 — the form's "Motivo de rechazo" (editable on a rejected quotation) offers
+  // "+ Crear razón" and opens the SAME popup as the reject flow (CreateRejectReasonModal, the
+  // createRejectReason action); the created reason is then selected in the field. The generic
+  // `allowCreate` cannot do it: a reject reason has no CRUD spec to POST `{ name }` to.
+  const [rejectReasonCreate, setRejectReasonCreate] = useState(null);
+  const fieldCreateCtxValue = useMemo(() => ({
+    rejectReason: {
+      label: `+ ${ui('createRejectReason')}`,
+      onOpen: (query, onSelect) => setRejectReasonCreate({ initialName: (query || '').trim(), onSelect }),
+    },
+  }), [ui]);
+  const rejectReasonCreatePortal = rejectReasonCreate && recordId ? createPortal(
+    <CreateRejectReasonModal
+      initialName={rejectReasonCreate.initialName}
+      quotationId={recordId}
+      apiBaseUrl={apiBaseUrl}
+      token={token}
+      onClose={() => setRejectReasonCreate(null)}
+      onCreated={(created) => {
+        rejectReasonCreate.onSelect(created);
+        setRejectReasonCreate(null);
+      }}
+      data-testid="FieldCreateRejectReasonModal__bc8637" />,
+    document.body,
+  ) : null;
 
   const { requestDelete, deleteDialog } = useRowDelete({
     apiBaseUrl,
@@ -328,6 +357,7 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
   if (recordId) {
     return (
       <CreateContactContext.Provider value={createContactCtxValue}>
+        <FieldCreateContext.Provider value={fieldCreateCtxValue}>
         <GeneratedApp
           windowName={windowName}
           recordId={recordId}
@@ -339,7 +369,9 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
           {...rest}
           topbarSecondary={QuotationSecondaryActions}
           data-testid="GeneratedApp__bc8637" />
+        </FieldCreateContext.Provider>
         {contactPortal}
+        {rejectReasonCreatePortal}
       </CreateContactContext.Provider>
     );
   }

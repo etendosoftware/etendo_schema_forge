@@ -1,8 +1,8 @@
 {
-  "version": "0.12.0",
+  "version": "0.13.0",
   "generatedAt": "2026-09-29T12:00:08.872Z",
-  "updatedAt": "2026-11-11T19:52:23.478Z",
-  "checksum": "e5bfa0c0345dd2d7",
+  "updatedAt": "2026-11-20T16:35:32.615Z",
+  "checksum": "44c79f4919d44ccd",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -14,6 +14,7 @@
       "hideCreate": true,
       "hideMoreMenu": true,
       "hideListFilters": true,
+      "breadcrumb": "Treasury / Accounts",
       "customComponents": {
         "headerTable": "AccountsHeaderTable"
       },
@@ -3387,6 +3388,7 @@
       "hideCreate": true,
       "hideMoreMenu": true,
       "hideListFilters": true,
+      "breadcrumb": "Treasury / Accounts",
       "customComponents": {
         "headerTable": "AccountsHeaderTable"
       },
@@ -4093,7 +4095,7 @@
             "name": "foreignConversionRate",
             "apiKey": "foreignConversionRate",
             "column": "Foreign_Convert_Rate",
-            "type": "string",
+            "type": "decimal",
             "visibility": "discarded",
             "required": false
           },

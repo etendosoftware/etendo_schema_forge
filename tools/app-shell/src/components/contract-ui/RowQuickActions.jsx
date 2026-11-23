@@ -1,9 +1,16 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Loader2 } from 'lucide-react';
-// ETP-5600 — Figma "Sticky Acciones": edit, copy, mail, kebab and trash are the Iconic set on
-// the 20x20 frame (core custom-icons), so the band never mixes icon families.
-import { IconicCopyIcon, IconicDotsVerticalIcon, IconicEditIcon, IconicMailIcon, IconicTrashIcon } from '@/components/ui/custom-icons';
+import {
+  CaretRightIcon,
+  CircleNotchIcon,
+  CopyIcon,
+  DotsThreeVerticalIcon,
+  PencilSimpleIcon,
+  EnvelopeSimpleIcon,
+  TrashIcon,
+} from '@phosphor-icons/react';
+// ETP-5600 — Figma "Sticky Acciones": edit, copy, mail, kebab and trash on the 20x20 frame.
+// ETP-6155 — all Phosphor (regular), the one icon family of the app.
 import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
@@ -36,6 +43,13 @@ function isActionVisible(config, fallbackVisibleWhen, row) {
  *   3. Email/Send      — only when documentPreview is configured for the window
  *   4. More (kebab)    — popover containing every menuActions[] item from the window config
  *   5. Delete          — respects the same hideDeleteWhenComplete + statusField gate as DetailView
+ *
+ * A `menuActions` entry may carry a `submenu` (ETP-6247): `[{ key, label | labelKey, content?, disabled?, onClick }]`.
+ * The entry then renders as a row with a chevron that opens a side panel to its left (hover or click),
+ * instead of running anything itself. `content` is an optional node drawn in place of the text (e.g. a
+ * status chip); a `disabled` item is dimmed and not clickable (it stays listed, never hidden). A click
+ * closes the kebab and calls `item.onClick({ row, windowName, apiBaseUrl, token })`. Entries without
+ * `submenu` are unchanged.
  *
  * `menuActions` entries with a `neoAction` field (ETP-5414) support two optional siblings:
  *   - `neoActionName` — overrides the literal wire action name sent to
@@ -127,6 +141,8 @@ export default function RowQuickActions({
 }) {
   const ui = useUI();
   const [showMenu, setShowMenu] = useState(false);
+  // Key of the kebab entry whose `submenu` is open (one at a time); reset whenever the kebab closes.
+  const [openSubmenu, setOpenSubmenu] = useState(null);
   const capabilities = useCapabilitiesSafe();
   const [menuPos, setMenuPos] = useState(null);
   const [inFlight, setInFlight] = useState({});
@@ -204,6 +220,8 @@ export default function RowQuickActions({
     hideDeleteWhenComplete,
     hideDeleteButton,
   });
+
+  useEffect(() => { if (!showMenu) setOpenSubmenu(null); }, [showMenu]);
 
   const stop = (e) => { e.stopPropagation(); };
 
@@ -367,7 +385,7 @@ export default function RowQuickActions({
           title={ui('quickAction.edit')}
           data-testid="row-quick-action-edit"
         >
-          {inFlight.edit ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicEditIcon className="h-5 w-5" data-testid="Pencil__ec6673" />}
+          {inFlight.edit ? <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <PencilSimpleIcon className="h-5 w-5" data-testid="Pencil__ec6673" />}
         </button>
       )}
       {/* Clone — only when host wires onClone (no generic default exists); never on read-only. */}
@@ -381,7 +399,7 @@ export default function RowQuickActions({
           title={ui('quickAction.clone')}
           data-testid="row-quick-action-clone"
         >
-          {inFlight.duplicate ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicCopyIcon className="h-5 w-5" data-testid="Copy__ec6673" />}
+          {inFlight.duplicate ? <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <CopyIcon className="h-5 w-5" data-testid="Copy__ec6673" />}
         </button>
       )}
       {/* Email — gated by sendDocument.enabled (default true for eligible
@@ -397,7 +415,7 @@ export default function RowQuickActions({
           title={ui('quickAction.email')}
           data-testid="row-quick-action-email"
         >
-          {inFlight.email ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicMailIcon className="h-5 w-5" data-testid="Mail__ec6673" />}
+          {inFlight.email ? <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <EnvelopeSimpleIcon className="h-5 w-5" data-testid="Mail__ec6673" />}
         </button>
       )}
       {/* More — popover with menuActions[] */}
@@ -411,7 +429,7 @@ export default function RowQuickActions({
             title={ui('quickAction.more')}
             data-testid="row-quick-action-more"
           >
-            <IconicDotsVerticalIcon className="h-5 w-5" data-testid="MoreVertical__ec6673" />
+            <DotsThreeVerticalIcon className="h-5 w-5" data-testid="MoreVertical__ec6673" />
           </button>
           {showMenu && menuPos && createPortal(
             <>
@@ -434,6 +452,68 @@ export default function RowQuickActions({
             >
               {visibleMenuActions.map((action, i) => {
                 const ActionIcon = action.icon;
+                if (Array.isArray(action.submenu) && action.submenu.length > 0) {
+                  const subKey = action.key ?? String(i);
+                  const subOpen = openSubmenu === subKey;
+                  const subLabel = action.labelKey ? ui(action.labelKey) : action.label;
+                  return (
+                    <div
+                      key={subKey}
+                      className="relative"
+                      onMouseEnter={() => setOpenSubmenu(subKey)}
+                      onMouseLeave={() => setOpenSubmenu((current) => (current === subKey ? null : current))}
+                    >
+                      <button
+                        type="button"
+                        data-testid={`menu-action-${subKey}`}
+                        aria-haspopup="menu"
+                        aria-expanded={subOpen}
+                        onClick={(e) => { stop(e); setOpenSubmenu(subKey); }}
+                        className="w-full text-left px-3 py-1.5 text-sm leading-6 transition-colors flex items-center gap-2 text-foreground hover:bg-secondary"
+                      >
+                        {ActionIcon && (
+                          <ActionIcon
+                            className="h-4 w-4 flex-shrink-0"
+                            style={{ color: 'hsl(var(--text-disabled))' }}
+                            data-testid="ActionIcon__ec6673" />
+                        )}
+                        <span className="flex-1">{subLabel}</span>
+                        <CaretRightIcon className="h-4 w-4 flex-shrink-0 text-[hsl(var(--text-disabled))]" aria-hidden="true" data-testid="ChevronRight__ec6673" />
+                      </button>
+                      {subOpen && (
+                        <div
+                          role="menu"
+                          className="absolute right-full top-0 z-[62] min-w-[160px] rounded-lg bg-card py-2"
+                          style={{ boxShadow: '0px 0px 0px 1px hsl(var(--foreground) / 0.1), 0px 10px 18px hsl(var(--foreground) / 0.03), 0px 2px 4px hsl(var(--foreground) / 0.04)' }}
+                          data-testid={`submenu-${subKey}`}
+                        >
+                          {action.submenu.map((item) => (
+                            <button
+                              key={item.key}
+                              type="button"
+                              role="menuitem"
+                              disabled={item.disabled === true}
+                              aria-disabled={item.disabled === true}
+                              data-testid={`submenu-action-${subKey}-${item.key}`}
+                              onClick={(e) => {
+                                stop(e);
+                                if (item.disabled) return;
+                                setShowMenu(false);
+                                item.onClick?.({ row, windowName, apiBaseUrl, token });
+                              }}
+                              className={[
+                                'w-full text-left px-3 py-1.5 text-sm leading-6 transition-colors flex items-center gap-2',
+                                item.disabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-secondary',
+                              ].join(' ')}
+                            >
+                              {item.content ?? (item.labelKey ? ui(item.labelKey) : item.label)}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
                 const label = action.labelKey ? ui(action.labelKey) : action.label;
                 const inFlightKey = `menu:${action.key ?? action.label ?? 'unknown'}`;
                 const pending = !!inFlight[inFlightKey];
@@ -451,7 +531,7 @@ export default function RowQuickActions({
                     ].filter(Boolean).join(' ')}
                   >
                     {pending ? (
-                      <Loader2
+                      <CircleNotchIcon
                         className="h-4 w-4 flex-shrink-0 animate-spin"
                         data-testid="Loader2__ec6673" />
                     ) : ActionIcon && (
@@ -481,7 +561,7 @@ export default function RowQuickActions({
           title={ui('quickAction.delete')}
           data-testid="row-quick-action-delete"
         >
-          {inFlight.delete ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicTrashIcon className="h-5 w-5" data-testid="IconicTrashIcon__ec6673" />}
+          {inFlight.delete ? <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <TrashIcon className="h-5 w-5" aria-hidden="true" data-testid="IconicTrashIcon__ec6673" />}
         </button>
       )}
     </div>

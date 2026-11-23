@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Maximize2, Box, Calendar, ChevronDown } from 'lucide-react';
+import { ArrowsOutIcon, CubeIcon, CalendarBlankIcon, CaretDownIcon } from '@phosphor-icons/react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUI, useLocaleSwitch } from '@/i18n';
@@ -17,7 +17,8 @@ import { resolveVisible, isolate, activeHighlight, dimmedOpacity, filterVisibleS
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import ProductSidebarCollapsed from './ProductSidebarCollapsed';
 import ViewMovementsLink from './ViewMovementsLink';
-import ProductSidebarDividerToggle, { SIDEBAR_PANEL_ID } from './ProductSidebarDividerToggle';
+import ProductSidebarFrame from './ProductSidebarFrame';
+import { SIDEBAR_PANEL_ID } from './ProductSidebarDividerToggle';
 import { useSidebarCollapsed } from './useSidebarCollapsed';
 import { chartSeriesColor, CHART_AREA_OPACITY_VAR } from '@/lib/chartPalette';
 
@@ -58,11 +59,11 @@ function SidebarPeriodSelector({ period, onChangePeriod, ui, disabled = false })
         className={`h-10 flex items-center gap-1 px-3 border border-border-control rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-sm font-medium transition-colors
           ${disabled ? 'bg-muted text-disabled cursor-not-allowed' : 'bg-card text-foreground'}`}
       >
-        <Calendar
+        <CalendarBlankIcon
           className={`h-5 w-5 shrink-0 ${disabled ? 'text-disabled' : 'text-muted-foreground'}`}
           data-testid="Calendar__59b33d" />
         <span className="flex-1 text-left mx-1">{ui(current.key)}</span>
-        <ChevronDown
+        <CaretDownIcon
           className={`h-5 w-5 shrink-0 ${disabled ? 'text-disabled' : 'text-muted-foreground'}`}
           data-testid="ChevronDown__59b33d" />
       </button>
@@ -119,7 +120,7 @@ function AvailabilityWidget({ label, value, badge, badgeIsName = false, onClick,
   return (
     <Root {...rootProps} data-testid={onClick ? 'AvailabilityCardButton' : 'AvailabilityCard'}>
       <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-card border border-border-control rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]">
-        <Box className="w-6 h-6 text-disabled" data-testid="Box__59b33d" />
+        <CubeIcon className="w-6 h-6 text-disabled" data-testid="Box__59b33d" />
       </div>
       <div className="flex-1 min-w-0 flex flex-col">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0" data-testid="AvailabilityLabelRow">
@@ -345,7 +346,7 @@ function StockChart({
             className="inline-flex items-center justify-center w-6 h-6 rounded-sm text-muted-foreground hover:text-foreground shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
             data-testid="StockChartExpandButton"
           >
-            <Maximize2 size={16} aria-hidden="true" data-testid="Maximize2__59b33d" />
+            <ArrowsOutIcon size={16} aria-hidden="true" data-testid="Maximize2__59b33d" />
           </button>
         </div>
         <StockChartLegend items={legendItems} visible={panelShown} highlight={panelHighlight} onToggle={onTogglePanelSeries} onHover={setPanelHover} data-testid="StockChartLegend__59b33d" />
@@ -551,110 +552,108 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   // show (ETP-4606, extended to Expense/Resource in ETP-5091).
   if (['S', 'E', 'R'].includes(data?.productType)) return null;
 
-  // ONE button on the divider in both states (a sibling of the content, portalled out of the scroll column).
-  const dividerToggle = <ProductSidebarDividerToggle collapsed={collapsed} onToggle={() => toggle(!collapsed, null)} data-testid="ProductSidebarDividerToggle__d1v7e2" />;
+  // ONE divider button in both states, owned by the frame (CSS-anchored to the column, see ProductSidebarFrame).
+  const frameProps = { collapsed, onToggle: () => toggle(!collapsed, null) };
 
   if (collapsed) {
     return (
-      <>
-        {dividerToggle}
+      <ProductSidebarFrame {...frameProps} data-testid="ProductSidebarFrame__59b33d">
         <ProductSidebarCollapsed
           onSelectTab={(tab) => { setActiveTab(tab); toggle(false, `ProductSidebarTab-${tab}`); }}
           data-testid="ProductSidebarCollapsed__59b33d" />
-      </>
+      </ProductSidebarFrame>
     );
   }
 
   return (
-    <>
-    {dividerToggle}
-    <div id={SIDEBAR_PANEL_ID} className="flex flex-col gap-3" data-product-sidebar-collapsed="false">
-      {/* ── Inventory overview ── */}
-      <div>
+    <ProductSidebarFrame {...frameProps} data-testid="ProductSidebarFrame__59b33d">
+      <div id={SIDEBAR_PANEL_ID} className="flex flex-col gap-3" data-product-sidebar-collapsed="false">
+        {/* ── Inventory overview ── */}
+        <div>
 
-        {/* Segmented tabs (pill) — full width, no title */}
-        <div className="px-4 pt-2 flex items-center gap-2">
-          <div className="flex-1 min-w-0 flex items-center gap-1 p-1 h-10 rounded-xl" style={{ background: 'hsl(var(--muted))' }}>
-            {['summary', 'warehouses'].map(tab => (
-              <button
-                key={tab}
-                data-testid={`ProductSidebarTab-${tab}`}
-                onClick={() => setActiveTab(tab)}
-                className="flex-1 h-8 px-3 text-sm rounded-lg transition-all"
-                style={
-                  activeTab === tab
-                    ? { background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', fontWeight: 500,
-                        boxShadow: '0px 1px 3px rgba(18,18,23,0.10), 0px 1px 2px rgba(18,18,23,0.06)' }
-                    : { color: 'hsl(var(--foreground))', fontWeight: 400 }
-                }
-              >
-                {tab === 'summary' ? ui('summary') : ui('warehouses')}
-              </button>
-            ))}
+          {/* Segmented tabs (pill) — full width, no title */}
+          <div className="px-4 pt-2 flex items-center gap-2">
+            <div className="flex-1 min-w-0 flex items-center gap-1 p-1 h-10 rounded-xl" style={{ background: 'hsl(var(--muted))' }}>
+              {['summary', 'warehouses'].map(tab => (
+                <button
+                  key={tab}
+                  data-testid={`ProductSidebarTab-${tab}`}
+                  onClick={() => setActiveTab(tab)}
+                  className="flex-1 h-8 px-3 text-sm rounded-lg transition-all"
+                  style={
+                    activeTab === tab
+                      ? { background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', fontWeight: 500,
+                          boxShadow: '0px 1px 3px rgba(18,18,23,0.10), 0px 1px 2px rgba(18,18,23,0.06)' }
+                      : { color: 'hsl(var(--foreground))', fontWeight: 400 }
+                  }
+                >
+                  {tab === 'summary' ? ui('summary') : ui('warehouses')}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* Summary tab content */}
-        {activeTab === 'summary' && (
-          <div className="px-4 pt-3 pb-4 flex flex-col gap-3">
-            <SidebarPeriodSelector
-              period={period}
-              onChangePeriod={setPeriod}
-              ui={ui}
-              disabled={!hasChart}
-              data-testid="SidebarPeriodSelector__59b33d" />
-            {showAvailability && <AvailabilityWidget
-              label={ui('productSidebarStockAvailable')}
-              value={stockLoading ? null : fmt(onHand)}
-              loading={stockLoading}
-              unavailable={stockFailed}
-              badge={onHandSubtitle}
-              badgeIsName={locationRows.length === 1}
-              onClick={stockLoading || stockFailed ? undefined : () => setActiveTab('warehouses')}
-              data-testid="AvailabilityWidget__59b33d" />}
+          {/* Summary tab content */}
+          {activeTab === 'summary' && (
+            <div className="px-4 pt-3 pb-4 flex flex-col gap-3">
+              <SidebarPeriodSelector
+                period={period}
+                onChangePeriod={setPeriod}
+                ui={ui}
+                disabled={!hasChart}
+                data-testid="SidebarPeriodSelector__59b33d" />
+              {showAvailability && <AvailabilityWidget
+                label={ui('productSidebarStockAvailable')}
+                value={stockLoading ? null : fmt(onHand)}
+                loading={stockLoading}
+                unavailable={stockFailed}
+                badge={onHandSubtitle}
+                badgeIsName={locationRows.length === 1}
+                onClick={stockLoading || stockFailed ? undefined : () => setActiveTab('warehouses')}
+                data-testid="AvailabilityWidget__59b33d" />}
+            </div>
+          )}
+
+          {/* Warehouses tab content */}
+          {activeTab === 'warehouses' && (
+            <div className="px-4 pt-3 pb-4 flex flex-col gap-3">
+              <SidebarPeriodSelector
+                period={period}
+                onChangePeriod={setPeriod}
+                ui={ui}
+                disabled={!hasChart}
+                data-testid="SidebarPeriodSelector__59b33d" />
+              {stockFailed && <StockUnavailableNote message={ui('stockUnavailableDesc')} data-testid="StockUnavailableNote__59b33d" />}
+              <WarehouseCards rows={sortedRows} ui={ui} fmt={fmt} data-testid="WarehouseCards__59b33d" />
+            </div>
+          )}
+        </div>
+        {/* ── Divider ── */}
+        {(hasChart || transactions !== null) && (
+          <div className="px-4">
+            <div className="border-t border-border-subtle" />
           </div>
         )}
-
-        {/* Warehouses tab content */}
-        {activeTab === 'warehouses' && (
-          <div className="px-4 pt-3 pb-4 flex flex-col gap-3">
-            <SidebarPeriodSelector
-              period={period}
-              onChangePeriod={setPeriod}
-              ui={ui}
-              disabled={!hasChart}
-              data-testid="SidebarPeriodSelector__59b33d" />
-            {stockFailed && <StockUnavailableNote message={ui('stockUnavailableDesc')} data-testid="StockUnavailableNote__59b33d" />}
-            <WarehouseCards rows={sortedRows} ui={ui} fmt={fmt} data-testid="WarehouseCards__59b33d" />
+        {/* ── Stock movement or empty state ── */}
+        {hasChart
+          ? <StockChart {...stockChartProps} data-testid="StockChart__59b33d" />
+          : <StockFallback
+            stockFailed={stockFailed}
+            historyFailed={historyFailed}
+            historyLoaded={transactions !== null}
+            ui={ui}
+            navigate={navigate}
+            data-testid="StockFallback__59b33d" />
+        }
+        {/* ETP-5908: under the chart, in both tabs (once: the hidden chart below is only a modal host) */}
+        {hasChart && <ViewMovementsLink period={period} data-testid="ViewMovementsLink__59b33d" />}
+        {/* Hidden StockChart for warehouse tab modal trigger */}
+        {activeTab === 'warehouses' && hasChart && (
+          <div className="hidden">
+            <StockChart {...stockChartProps} data-testid="StockChart__59b33d" />
           </div>
         )}
       </div>
-      {/* ── Divider ── */}
-      {(hasChart || transactions !== null) && (
-        <div className="px-4">
-          <div className="border-t border-border-subtle" />
-        </div>
-      )}
-      {/* ── Stock movement or empty state ── */}
-      {hasChart
-        ? <StockChart {...stockChartProps} data-testid="StockChart__59b33d" />
-        : <StockFallback
-          stockFailed={stockFailed}
-          historyFailed={historyFailed}
-          historyLoaded={transactions !== null}
-          ui={ui}
-          navigate={navigate}
-          data-testid="StockFallback__59b33d" />
-      }
-      {/* ETP-5908: under the chart, in both tabs (once: the hidden chart below is only a modal host) */}
-      {hasChart && <ViewMovementsLink period={period} data-testid="ViewMovementsLink__59b33d" />}
-      {/* Hidden StockChart for warehouse tab modal trigger */}
-      {activeTab === 'warehouses' && hasChart && (
-        <div className="hidden">
-          <StockChart {...stockChartProps} data-testid="StockChart__59b33d" />
-        </div>
-      )}
-    </div>
-    </>
+    </ProductSidebarFrame>
   );
 }

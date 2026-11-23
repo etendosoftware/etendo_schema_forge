@@ -16,8 +16,12 @@ function getWindowName() {
 // legacy sf_auth_client_id key, which nothing writes since the cookie session.
 function getSessionContext() {
   const { clientId } = getSessionIdentity();
-  return clientId ? { account_id: clientId } : {};
+  // `account_id` is the pre-ETP-6228 name of `ad_client_id`; it keeps going out during the transition.
+  return clientId ? { account_id: clientId, ad_client_id: clientId } : {};
 }
+
+// `account_id` is the pre-ETP-6228 group key, kept until saved reports move to `ad_client_id`.
+const GROUP_KEYS = ['ad_client_id', 'account_id'];
 
 export async function trackSessionStarted({ username, clientId, clientName } = {}) {
   // Recorded first, so the flag context below and every later event see who signed in.
@@ -38,14 +42,21 @@ export async function trackSessionStarted({ username, clientId, clientName } = {
   // rather than the provider's success boolean, decides whether telemetry may continue.
   if (!stillCurrent()) return;
   if (clientId) {
-    void group('account_id', clientId);
+    // Both group keys during the ETP-6228 transition, so saved `account_id` group reports keep working.
+    // Each pair starts together, with no yield between its calls, and the session is checked before
+    // the next step: `group` registers a super property, so a call after a logout would put the
+    // previous tenant's id back on later events.
+    await Promise.all(GROUP_KEYS.map(key => group(key, clientId)));
+    if (!stillCurrent()) return;
     const clientNameValue = clientName || getSessionIdentity().clientName;
     if (clientNameValue) {
-      void groupSet('account_id', clientId, { $name: clientNameValue });
+      await Promise.all(GROUP_KEYS.map(key => groupSet(key, clientId, { $name: clientNameValue })));
+      if (!stillCurrent()) return;
     }
   }
   await track('session_started', {
     account_id: clientId || undefined,
+    ad_client_id: clientId || undefined,
   });
   if (!stillCurrent()) return;
   await flush();

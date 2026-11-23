@@ -10,7 +10,7 @@ const columns = [
   { key: 'invoiceGrandTotal', column: 'GrandTotal', type: 'amount', labels: {"es_ES":"Total factura","es_AR":"Total factura","en_US":"Invoice total"}, label: 'Invoice Total', currencyField: 'currency' },
   { key: 'invoiceOutstanding', column: 'OutstandingAmt', type: 'amount', labels: {"es_ES":"Pendiente","es_AR":"Pendiente","en_US":"Outstanding"}, label: 'Outstanding', currencyField: 'currency' },
   { key: 'amount', column: 'Amount', type: 'amount', labels: {"es_ES":"A remesar","es_AR":"A remesar","en_US":"To remit"}, label: 'Amount', required: true, currencyField: 'currency', editInPlace: {"resetToField":"dueOutstanding","maxField":"dueOutstanding"} },
-  { key: 'status', column: 'Status', type: 'status', labels: {"es_ES":"Estado del recibo","es_AR":"Estado del recibo","en_US":"Receipt status"}, label: 'Receipt Status', enumLabels: { 'RPAP': 'statusRpap', 'RPAE': 'statusRpae', 'RPVOID': 'statusRpvoid', 'REM_SENT': 'statusRemSent', 'PPM': 'statusPpm', 'RPR': 'statusRpr', 'REM_CANCEL': 'statusRemCancel', 'RDNC': 'statusRdnc', 'PWNC': 'statusPwnc', 'RPPC': 'statusRppc', 'ETGOERR': 'statusEtgoerr' } },
+  { key: 'status', column: 'Status', type: 'status', labels: {"es_ES":"Estado del recibo","es_AR":"Estado del recibo","en_US":"Receipt status"}, label: 'Receipt Status', enumLabels: { 'RPAP': 'statusRpap', 'RPAE': 'statusRpae', 'RPVOID': 'remittanceReceiptReturned', 'REM_SENT': 'statusRemSent', 'PPM': 'statusPpm', 'RPR': 'statusRpr', 'REM_CANCEL': 'statusRemCancel', 'RDNC': 'statusRdnc', 'PWNC': 'statusPwnc', 'RPPC': 'statusRppc', 'ETGOERR': 'statusEtgoerr' } },
 ];
 // @sf-generated-end columns:lines
 

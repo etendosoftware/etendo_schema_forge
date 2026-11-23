@@ -39,12 +39,12 @@ vi.mock('../acct-process-monitor/useAcctProcessMonitor.js', async (importOrigina
   useAcctProcessMonitor: () => mockUseAcctProcessMonitor(),
 }));
 
-vi.mock('lucide-react', () => ({
-  Loader2: (p) => <span data-testid={p['data-testid']} />,
-  Play: (p) => <span data-testid={p['data-testid']} />,
-  RefreshCw: (p) => <span data-testid={p['data-testid']} />,
-  ShieldAlert: (p) => <span data-testid={p['data-testid']} />,
-  TriangleAlert: (p) => <span data-testid={p['data-testid']} />,
+vi.mock('@phosphor-icons/react', () => ({
+  CircleNotchIcon: (p) => <span data-testid={p['data-testid']} />,
+  PlayIcon: (p) => <span data-testid={p['data-testid']} />,
+  ArrowsClockwiseIcon: (p) => <span data-testid={p['data-testid']} />,
+  ShieldWarningIcon: (p) => <span data-testid={p['data-testid']} />,
+  WarningIcon: (p) => <span data-testid={p['data-testid']} />,
 }));
 
 vi.mock('@/components/ui/card', () => ({

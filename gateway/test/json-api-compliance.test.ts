@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { PublicApiSchema } from '@etendosoftware/api-gateway-core';
 import { buildPerEntityOpenApiPaths } from '../src/openapi/build-per-entity-paths.ts';
-import { PublicApiController } from '../src/public-api/public-api.controller.ts';
+import { PublicApiController, toEtag } from '../src/public-api/public-api.controller.ts';
 
 // JSON:API compliance checks over the REAL public API manifest, so a resource,
 // relationship or verb added to the manifest later is checked without editing
@@ -159,4 +159,51 @@ test('relationship fields of the manifest are writable only as relationships', a
       /is a relationship/,
     );
   }
+});
+
+test('order warehouse is an optional create attribute and stays optional on PATCH', () => {
+  for (const name of ['sales-order', 'purchase-order']) {
+    const request = (path: string, method: string) =>
+      (paths[path][method].requestBody!.content[MEDIA].schema.properties as any).data;
+    const create = request(`/api/v1/${name}`, 'post');
+    const patch = request(`/api/v1/${name}/{id}`, 'patch');
+    assert.ok(!create.properties.attributes.required?.includes('warehouse'), name);
+    assert.ok(!patch.properties.attributes.required?.includes('warehouse'), name);
+    assert.ok(create.properties.attributes.properties.warehouse, name);
+    assert.equal(create.properties.relationships?.properties.warehouse, undefined, name);
+    assert.ok(paths[`/api/v1/${name}/lookups/warehouse`].get, name);
+  }
+  assert.equal(paths['/api/v1/warehouse'], undefined);
+});
+
+test('orders forward selected warehouse as an attribute and allow a partial PATCH omitting it', async () => {
+  for (const name of ['sales-order', 'purchase-order']) {
+    const bodies: Array<{ method: string; body: unknown }> = [];
+    const fakeFetch = async (_url: string, init?: RequestInit) => {
+      bodies.push({ method: init!.method!, body: JSON.parse(String(init?.body)) });
+      return new Response(JSON.stringify({ response: { data: [{ id: 'order-1', warehouse: 'warehouse-1' }] } }), { status: 200 });
+    };
+    const controller = new PublicApiController(manifest, 'http://neo.local/etendo', fakeFetch as typeof fetch);
+    await controller.create(name, { data: { type: name, attributes: { warehouse: 'warehouse-1' } } }, { neoJwt: 'jwt' } as any);
+    await controller.patch(name, 'order-1', { data: { type: name, attributes: { order_date: '2026-11-06' } } },
+      { neoJwt: 'jwt' } as any, toEtag('2026-11-06T10:00:00Z'));
+    assert.equal(bodies[0].method, 'POST');
+    assert.deepEqual(bodies[0].body, { warehouse: 'warehouse-1' });
+    assert.equal(bodies[1].method, 'PATCH');
+    assert.deepEqual(bodies[1].body, { orderDate: '2026-11-06', updated: '2026-11-06T10:00:00Z' });
+  }
+});
+
+test('excluded resources answer 404 without forwarding to NEO', async () => {
+  let calls = 0;
+  const controller = new PublicApiController(manifest, 'http://neo.local/etendo', (async () => {
+    calls += 1;
+    throw new Error('excluded resources must never reach NEO');
+  }) as typeof fetch);
+  for (const name of ['warehouse', 'sales-invoice', 'purchase-invoice', 'goods-shipment', 'goods-receipt',
+    'monitor-verifactu', 'sii-monitor', 'tbai-facturas-enviadas']) {
+    await assert.rejects(() => controller.list(name, { neoJwt: 'jwt' } as any),
+      (error: any) => error.getStatus() === 404, name);
+  }
+  assert.equal(calls, 0);
 });

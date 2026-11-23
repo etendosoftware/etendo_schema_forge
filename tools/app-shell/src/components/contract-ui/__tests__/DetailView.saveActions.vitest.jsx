@@ -94,7 +94,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { toast } from 'sonner';
 import {
   handlePostSaveNavigation, reportUnnavigableSave, renderSaveActions,
-  runAfterSaveHook, buildUnsavedChangesSaver, isConfirmBlockedWhenEmpty,
+  runAfterSaveHook, buildUnsavedChangesSaver, isConfirmBlockedWhenEmpty, emptyConfirmTitle,
 } from '../saveActions.jsx';
 
 describe('handlePostSaveNavigation', () => {
@@ -740,5 +740,12 @@ describe('isConfirmBlockedWhenEmpty — draftMode.disableWhenEmpty / allowEmptyW
     expect(isConfirmBlockedWhenEmpty(draftMode, { ...empty, selected: { hasManualTaxLines: false } })).toBe(true);
     expect(isConfirmBlockedWhenEmpty(draftMode, empty)).toBe(true);
     expect(allowEmptyWhen).toHaveBeenLastCalledWith(null);
+  });
+
+  it('the disabledEmptyTitleKey tooltip follows the same block: none when allowEmptyWhen unblocks', () => {
+    const ui = key => `t:${key}`;
+    const draftMode = { disableWhenEmpty: true, disabledEmptyTitleKey: 'addLines', allowEmptyWhen: r => r?.ok === true };
+    expect(emptyConfirmTitle(draftMode, { ...empty, editing: { ok: false } }, ui)).toBe('t:addLines');
+    expect(emptyConfirmTitle(draftMode, { ...empty, editing: { ok: true } }, ui)).toBeNull();
   });
 });

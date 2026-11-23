@@ -18552,7 +18552,7 @@
       ]
     },
     "71ffdfc8865e7daf652e4f855e18d8bb6126fff59ba2b01e651989778533de54": {
-      "checksum": "8ce6ffe0f6d92aa6e7f0d6913fa3d41a30315d6f5cd434f9861ca90559397c38",
+      "checksum": "6a6400844ac2407d403f676008bad92c3fce64f83c2fa0efd64cf0b88daf8201",
       "params": [
         "FF8080812E71F7C7012E71FD0499001B"
       ],
@@ -18910,6 +18910,30 @@
           "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
           "columnname": "Remittance_Status",
           "position": "26"
+        },
+        {
+          "ad_column_id": "9B7859AAB4E24C749BCC06F13CFEB8B8",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Creditor_Identifier",
+          "position": "27"
+        },
+        {
+          "ad_column_id": "FC88F83900AA466DACF6B522695D09D5",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "DD_Scheme",
+          "position": "28"
+        },
+        {
+          "ad_column_id": "AF2CFCFC055144859C20E9C01BBB76EA",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "Iban",
+          "position": "28"
+        },
+        {
+          "ad_column_id": "133447821EA54D0ABD2B97631D333B12",
+          "ad_table_id": "FF8080812E6C2859012E6D0271E1009D",
+          "columnname": "IsFinanced",
+          "position": "29"
         },
         {
           "ad_column_id": "6ABCDDF9439F46209669EE29B61CF935",
@@ -28912,7 +28936,7 @@
       ]
     },
     "d01d6bbdb647d8f235cf05767cb7e3b8fedecd48ddc2f90a6c39a4c16b91c599": {
-      "checksum": "116af576db677dc1e0d9ab9e15fcc4140fcaaaabd6c5b1670165766fc63cd257",
+      "checksum": "9f9f230fb1ef5b6025127ce3f924ace1bd5d99133dbe8384a9a14be90d63f614",
       "params": [
         "81AC659E93504927B459E0CAE80CE923"
       ],
@@ -28978,6 +29002,12 @@
           "position": null
         },
         {
+          "ad_column_id": "97180CFB542C417E894F77D67FE44207",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "C_Currency_ID",
+          "position": null
+        },
+        {
           "ad_column_id": "6BE813C5FFA341B9AD6ECC930D3CC8C9",
           "ad_table_id": "1531A29104874CAF9246FC081422074A",
           "columnname": "C_Invoice_ID",
@@ -29014,6 +29044,12 @@
           "position": null
         },
         {
+          "ad_column_id": "CAC3D80AB1D64F7BA9C9D379BE5AEEA8",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Error_Detail",
+          "position": null
+        },
+        {
           "ad_column_id": "FEFF0B31557A4774AA97506E9813B57A",
           "ad_table_id": "1531A29104874CAF9246FC081422074A",
           "columnname": "Extracted_Data",
@@ -29041,6 +29077,12 @@
           "ad_column_id": "BFE5FD2768634A1FA9DF5A13A27F3F5D",
           "ad_table_id": "1531A29104874CAF9246FC081422074A",
           "columnname": "GrandTotal",
+          "position": null
+        },
+        {
+          "ad_column_id": "70D4CED00F1C4A108D6D447D059A105D",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "New_Products",
           "position": null
         },
         {
@@ -29095,6 +29137,12 @@
           "ad_column_id": "83C5C8A10B914A7AB811404A1F142BA9",
           "ad_table_id": "1531A29104874CAF9246FC081422074A",
           "columnname": "Target_Type",
+          "position": null
+        },
+        {
+          "ad_column_id": "8BE8A542ABF443D6A637F8782B4DF4A4",
+          "ad_table_id": "1531A29104874CAF9246FC081422074A",
+          "columnname": "Total_Mismatch",
           "position": null
         }
       ]

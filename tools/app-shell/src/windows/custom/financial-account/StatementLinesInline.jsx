@@ -1,6 +1,6 @@
 import { FinancialGridView, FinancialGridRow } from './FinancialGridView.jsx';
 import { Fragment, useState } from 'react';
-import { ArrowUpRight, Layers } from 'lucide-react';
+import { ArrowUpRightIcon, StackIcon } from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
@@ -183,7 +183,7 @@ function TxnChip({ line, ui, onOpen }) {
         multi && 'font-medium',
       )}
     >
-      {multi ? <Layers className="h-3.5 w-3.5 flex-none text-[hsl(var(--text-disabled))]" data-testid="Layers__10cf4a" /> : <ArrowUpRight className="h-3.5 w-3.5 flex-none text-[hsl(var(--text-disabled))]" data-testid="ArrowUpRight__10cf4a" />}
+      {multi ? <StackIcon className="h-3.5 w-3.5 flex-none text-[hsl(var(--text-disabled))]" data-testid="Layers__10cf4a" /> : <ArrowUpRightIcon className="h-3.5 w-3.5 flex-none text-[hsl(var(--text-disabled))]" data-testid="ArrowUpRight__10cf4a" />}
       <span className="truncate">
         {multi ? ui('financeAccountStatementLinesTxnChipMulti', { count: txns.length }) : txns[0].documentNo}
       </span>

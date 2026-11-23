@@ -10,12 +10,13 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
-vi.mock('lucide-react', () => ({
-  ChevronDown: () => <span data-testid="icon-chevron" />,
-  ChevronRight: () => <span data-testid="icon-chevron-right" />,
-  Calendar: () => <span data-testid="icon-calendar" />,
-  Check: () => <span data-testid="icon-check" />,
-  Circle: () => <span data-testid="icon-circle" />,
+vi.mock('@phosphor-icons/react', () => ({
+  CaretDownIcon: () => <span data-testid="icon-chevron" />,
+  CaretRightIcon: () => <span data-testid="icon-chevron-right" />,
+  CalendarBlankIcon: () => <span data-testid="icon-calendar" />,
+  CheckIcon: () => <span data-testid="icon-check" />,
+  CircleIcon: () => <span data-testid="icon-circle" />,
+  DotOutlineIcon: () => <span data-testid="icon-circle" />,
 }));
 
 import { render, screen } from '@testing-library/react';

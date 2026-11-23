@@ -289,6 +289,14 @@ A computed column that reads a table from **another module** needs that module d
 
 **A Classic `AD_MESSAGE` that reads wrong in GO** (it names a Classic tab, process or field label) is reworded in `com.etendoerp.go`, never by editing the Classic row (shared with Classic) and never in `backendErrors.js`: add it to `ClassicMessageRemap` and both `neo_hints_{es,en}.properties`, only if a GO user can trigger it. Full rule: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.17.
 
+## Document Status (docStatus) Checks
+
+**Never compare a document status against a raw literal (`documentStatus === 'DR'`, `status !== 'CO'`).** The lifecycle (DR draft -> CO completed -> VO voided, plus UE) and the rule "editable only in draft" live in one place: `tools/app-shell/src/lib/docStatus.js` (`isDraftStatus`, `isCompletedStatus`, `isVoidedStatus`, `isEditableStatus`, `docStatusCode`, `DOC_STATUS`). A new edge status (VO, UE, IP) must change behaviour there, not in dozens of files.
+
+- Guardrail: `tools/app-shell/test/no-raw-doc-status.test.js` fails on new raw comparisons. Opt out only with a visible `doc-status-ok: <reason>` comment on or above the line.
+- "Editable only in draft" lives only in `isEditableStatus`: use it wherever the question is "can the user edit"; use `isDraftStatus` for lifecycle checks (print exclusion, PDF caching). Modules loaded by plain `node --test` must import the helper by relative path, not `@/`.
+- Filter payloads (`value: 'CO'`) and action codes (`docAction: 'CO'`) are not comparisons and are unaffected.
+
 ## Currency & Amount Formatting
 
 **Every monetary value MUST be formatted through the canonical currency utilities — never a hand-rolled `Intl.NumberFormat`/`toLocaleString` call.** A hardcoded locale (`'en-US'`, unpinned `undefined`) or a missing `useGrouping: true` silently drops the thousands separator or renders the wrong decimal comma — this exact bug shipped repeatedly across the codebase before ETP-4314 centralized it. Treat any new ad-hoc money formatter as a bug, not a style nit.
@@ -396,8 +404,8 @@ live in `.claude/hooks/`.
 
 Why: `--no-verify` skips `.githooks/pre-push`, the only local gate that catches
 failing tests and Sonar regressions before CI (coverage drops are caught by the
-PR's `Sonar Build` check, `docs/coverage-gate.md`). Bypassing it converts a seconds-long local failure into a 1h+ Jenkins
-cycle. When the gate blocks a push, **fixing what it reports is the task** — do
+PR's `Unit tests + Sonar + coverage` check, `docs/coverage-gate.md`). Bypassing it converts a seconds-long local failure into a
+full CI cycle. When the gate blocks a push, **fixing what it reports is the task** — do
 not route around it. If the gate itself is broken, say so and stop.
 
 The hook denies a segment only when it is a real invocation: it blanks quoted

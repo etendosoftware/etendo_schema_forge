@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog.jsx';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select.jsx';
 import { Label } from '@/components/ui/label.jsx';
-import { FileCheck, Loader2 } from 'lucide-react';
+import { SealCheckIcon, CircleNotchIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
@@ -11,9 +11,10 @@ import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkAct
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { filterPostingActions } from '@/lib/capabilityVisibility.js';
+import { isCompletedStatus, isDraftStatus } from '../../lib/docStatus.js';
 
 export const buildInOutActions = (rows) => {
-  const hasDraft = rows.some((r) => (r.documentStatus || r.docStatus) === 'DR');
+  const hasDraft = rows.some((r) => isDraftStatus(r.documentStatus || r.docStatus));
   return hasDraft ? [{ value: 'CO', labelKey: 'confirm' }] : [];
 };
 
@@ -73,8 +74,8 @@ export const postRowFilter = (row, action, ui) => {
 function buildBulkActions(selectedRows, buildActions) {
   if (buildActions) return buildActions(selectedRows);
   const statusOf = (r) => r.documentStatus || r.docStatus;
-  const hasDraft = selectedRows.some((r) => statusOf(r) === 'DR');
-  const hasCompleted = selectedRows.some((r) => statusOf(r) === 'CO');
+  const hasDraft = selectedRows.some((r) => isDraftStatus(statusOf(r)));
+  const hasCompleted = selectedRows.some((r) => isCompletedStatus(statusOf(r)));
   const out = [];
   if (hasDraft) out.push({ value: 'CO', labelKey: 'confirm' });
   if (hasCompleted) out.push({ value: 'RE', labelKey: 'reactivate' });
@@ -276,7 +277,7 @@ export default function BulkDocumentAction({
           windows and "Procesado masivo" in others depending on `labelKey`,
           so the icon alone isn't even consistently meaningful. Figma
           "Confirmar" button (Button 7, verified in Dev Mode): icon
-          file-checkmark → lucide FileCheck, padding 7px/12px, gap 4px. */}
+          file-checkmark → Phosphor SealCheckIcon, padding 7px/12px, gap 4px. */}
       <button
         type="button"
         disabled={running}
@@ -289,7 +290,7 @@ export default function BulkDocumentAction({
           opacity: running ? 0.5 : 1,
         }}
         data-testid="Button__90fe6a">
-        <FileCheck className="h-3.5 w-3.5" data-testid="FileCheck__90fe6a" />
+        <SealCheckIcon className="h-3.5 w-3.5" data-testid="FileCheck__90fe6a" />
         {ui(labelKey)}
       </button>
       <Dialog open={open} onOpenChange={setOpen} data-testid="Dialog__90fe6a">
@@ -339,7 +340,7 @@ export default function BulkDocumentAction({
                   established Loader2/animate-spin pattern (DataTable.jsx, CreatableSearchSelect.jsx)
                   rather than adding a new loading state or spinner. */}
               {running && (
-                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" data-testid="Loader2__90fe6a" />
+                <CircleNotchIcon className="h-3.5 w-3.5 animate-spin mr-1" data-testid="Loader2__90fe6a" />
               )}
               {ui('accept')}
             </Button>

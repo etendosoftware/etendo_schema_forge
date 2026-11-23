@@ -49,6 +49,14 @@
 /* The heavy separator only makes sense BETWEEN blocks — after the last
    account, nothing follows it, so it read as a stray line before the footer. */
 .acct-block:last-of-type .acct-total td { border-bottom: none !important; }
+{{#if meta.chartTotals}}
+/* ETP-6084 chart-tree view (the dynamic report's print): one tree row per node, indented by `indent`. */
+.tb-tree .tree-row.heading td { font-weight: 700; }
+.tb-tree .dim-row td { font-style: italic; color: #475569; }
+.tb-tree .period-group { text-align: center; }
+.tb-tree .cell-amount { white-space: nowrap; }
+.tb-tree .cmp-against { display: block; font-weight: 400; font-size: 0.85em; }
+{{/if}}
 </style>
 </head>
 <body><div class="report-container">
@@ -66,6 +74,56 @@
   {{/if}}
 
 
+{{#if meta.chartTotals}}
+  <table class="report-table tb-tree" style="table-layout: auto;">
+    <thead>
+      <tr>
+        <th rowspan="{{#if (periodMode meta.params.compareMode)}}2{{else}}1{{/if}}">{{meta.labels.account_no}}</th>
+        <th rowspan="{{#if (periodMode meta.params.compareMode)}}2{{else}}1{{/if}}">{{meta.labels.account_name}}</th>
+        <th class="cell-amount" rowspan="{{#if (periodMode meta.params.compareMode)}}2{{else}}1{{/if}}">{{meta.labels.opening_balance}}</th>
+        <th class="cell-amount period-group" colspan="{{#if (periodMode meta.params.compareMode)}}{{#if meta.compareMovements}}4{{else}}1{{/if}}{{else}}1{{/if}}">{{meta.labels.activity_debit}}</th>
+        <th class="cell-amount period-group" colspan="{{#if (periodMode meta.params.compareMode)}}{{#if meta.compareMovements}}4{{else}}1{{/if}}{{else}}1{{/if}}">{{meta.labels.activity_credit}}</th>
+        <th class="cell-amount period-group" colspan="{{#if (periodMode meta.params.compareMode)}}4{{else}}1{{/if}}">{{meta.labels.closing_balance}}</th>
+      </tr>
+      {{#if (periodMode meta.params.compareMode)}}
+      <tr>
+        <th class="cell-amount"></th>
+        {{#if meta.compareMovements}}<th class="cell-amount">{{meta.labels.periodCompared}}<span class="cmp-against">{{periodCompared meta.params.periods 0 (periodMode meta.params.compareMode) meta.params.columns meta.locale}}</span></th><th class="cell-amount">{{meta.labels.periodVarAmount}}</th><th class="cell-amount">{{meta.labels.periodVarPct}}</th>{{/if}}
+        <th class="cell-amount"></th>
+        {{#if meta.compareMovements}}<th class="cell-amount">{{meta.labels.periodCompared}}<span class="cmp-against">{{periodCompared meta.params.periods 0 (periodMode meta.params.compareMode) meta.params.columns meta.locale}}</span></th><th class="cell-amount">{{meta.labels.periodVarAmount}}</th><th class="cell-amount">{{meta.labels.periodVarPct}}</th>{{/if}}
+        <th class="cell-amount"></th>
+        <th class="cell-amount">{{meta.labels.periodCompared}}<span class="cmp-against">{{periodCompared meta.params.periods 0 (periodMode meta.params.compareMode) meta.params.columns meta.locale}}</span></th><th class="cell-amount">{{meta.labels.periodVarAmount}}</th><th class="cell-amount">{{meta.labels.periodVarPct}}</th>
+      </tr>
+      {{/if}}
+    </thead>
+    <tbody>
+      {{#each rows}}
+      {{#with (lookup this.cells 0) as |cell|}}
+      <tr class="tree-row{{#if ../isDimension}} dim-row{{else}}{{#ifCond ../elementlevel '!==' 'S'}} heading{{/ifCond}}{{/if}}">
+        <td>{{../value}}</td>
+        <td style="padding-left: calc(4px + {{../indent}} * 12px);">{{../name}}</td>
+        <td class="cell-amount">{{formatCurrency cell.opening.amount}}</td>
+        <td class="cell-amount">{{formatCurrency cell.debit.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#if @root.meta.compareMovements}}{{#with (lookup cell.debit (periodMode @root.meta.params.compareMode)) as |ref|}}<td class="cell-amount">{{formatCurrency ref.amount}}</td><td class="cell-amount">{{formatCurrency ref.variationAmount}}</td><td class="cell-amount">{{#if ref.variationPct}}{{formatCurrency ref.variationPct}} %{{else}}{{#ifCond ref.variationPct '===' 0}}{{formatCurrency ref.variationPct}} %{{/ifCond}}{{/if}}</td>{{/with}}{{/if}}{{/if}}
+        <td class="cell-amount">{{formatCurrency cell.credit.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#if @root.meta.compareMovements}}{{#with (lookup cell.credit (periodMode @root.meta.params.compareMode)) as |ref|}}<td class="cell-amount">{{formatCurrency ref.amount}}</td><td class="cell-amount">{{formatCurrency ref.variationAmount}}</td><td class="cell-amount">{{#if ref.variationPct}}{{formatCurrency ref.variationPct}} %{{else}}{{#ifCond ref.variationPct '===' 0}}{{formatCurrency ref.variationPct}} %{{/ifCond}}{{/if}}</td>{{/with}}{{/if}}{{/if}}
+        <td class="cell-amount">{{formatCurrency cell.closing.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#with (lookup cell.closing (periodMode @root.meta.params.compareMode)) as |ref|}}<td class="cell-amount">{{formatCurrency ref.amount}}</td><td class="cell-amount">{{formatCurrency ref.variationAmount}}</td><td class="cell-amount">{{#if ref.variationPct}}{{formatCurrency ref.variationPct}} %{{else}}{{#ifCond ref.variationPct '===' 0}}{{formatCurrency ref.variationPct}} %{{/ifCond}}{{/if}}</td>{{/with}}{{/if}}
+      </tr>
+      {{/with}}
+      {{/each}}
+      {{#with (lookup meta.chartTotals 0) as |cell|}}
+      <tr class="acct-total">
+        <td colspan="2">{{@root.meta.ui.total}}</td>
+        <td class="cell-amount">{{formatCurrency cell.opening.amount}}</td>
+        <td class="cell-amount">{{formatCurrency cell.debit.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#if @root.meta.compareMovements}}{{#with (lookup cell.debit (periodMode @root.meta.params.compareMode)) as |ref|}}<td class="cell-amount">{{formatCurrency ref.amount}}</td><td class="cell-amount">{{formatCurrency ref.variationAmount}}</td><td class="cell-amount">{{#if ref.variationPct}}{{formatCurrency ref.variationPct}} %{{else}}{{#ifCond ref.variationPct '===' 0}}{{formatCurrency ref.variationPct}} %{{/ifCond}}{{/if}}</td>{{/with}}{{/if}}{{/if}}
+        <td class="cell-amount">{{formatCurrency cell.credit.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#if @root.meta.compareMovements}}{{#with (lookup cell.credit (periodMode @root.meta.params.compareMode)) as |ref|}}<td class="cell-amount">{{formatCurrency ref.amount}}</td><td class="cell-amount">{{formatCurrency ref.variationAmount}}</td><td class="cell-amount">{{#if ref.variationPct}}{{formatCurrency ref.variationPct}} %{{else}}{{#ifCond ref.variationPct '===' 0}}{{formatCurrency ref.variationPct}} %{{/ifCond}}{{/if}}</td>{{/with}}{{/if}}{{/if}}
+        <td class="cell-amount">{{formatCurrency cell.closing.amount}}</td>{{#if (periodMode @root.meta.params.compareMode)}}{{#with (lookup cell.closing (periodMode @root.meta.params.compareMode)) as |ref|}}<td class="cell-amount">{{formatCurrency ref.amount}}</td><td class="cell-amount">{{formatCurrency ref.variationAmount}}</td><td class="cell-amount">{{#if ref.variationPct}}{{formatCurrency ref.variationPct}} %{{else}}{{#ifCond ref.variationPct '===' 0}}{{formatCurrency ref.variationPct}} %{{/ifCond}}{{/if}}</td>{{/with}}{{/if}}
+      </tr>
+      {{/with}}
+    </tbody>
+  </table>
+  {{#if meta.chartBalance}}{{#unless meta.chartBalance.balanced}}
+  <div class="period-note">{{meta.labels.unbalanced}} {{formatCurrency meta.chartBalance.debitCreditDiff}}</div>
+  {{/unless}}{{/if}}
+  {{else}}
   {{#ifCond meta.params.groupBy '!==' ''}}
   {{#each meta.tbGroups}}
   <table class="report-table acct-block" style="table-layout: fixed;">
@@ -144,6 +202,7 @@
     </tbody>
   </table>
   {{/ifCond}}
+  {{/if}}
 
   {{#if meta.isInteractive}}
   <div class="print-only-footer-note">{{meta.ui.printedOn}} {{formatDate meta.generatedAt}}</div>

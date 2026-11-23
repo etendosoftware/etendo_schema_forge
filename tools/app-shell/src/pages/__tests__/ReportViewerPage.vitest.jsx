@@ -1,5 +1,5 @@
 // @covers tools/app-shell/src/pages/ReportViewerPage.jsx
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { assertAllActionsDisabledWhileRequiredEmpty } from './reportViewerTestHelpers';
 
@@ -43,16 +43,30 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   ),
 }));
 
+// The caller's per-report grants (fetchMyReportAccess). Defaults to no grant, which is what the
+// unmocked call resolved to in this environment; the treasury gate suite below sets real grants.
+let mockReportAccess = {};
+vi.mock('@/lib/rolesApi.js', () => ({
+  fetchMyReportAccess: () => Promise.resolve({ reportAccess: mockReportAccess }),
+}));
+
 // Mock PageMetaContext
 vi.mock('@/components/layout/PageMetaContext', () => ({
   useSetPageMeta: vi.fn(),
 }));
 
 // Mock FavoritesContext
+// Mutable so the favourite-star suite can seed saved favourites and observe the toggles; empty by
+// default, which is what every other test in this file relies on.
+let mockFavorites = [];
+const mockToggleFavorite = vi.fn();
+const mockRemoveFavorite = vi.fn();
 vi.mock('@/components/layout/FavoritesContext', () => ({
   useFavorites: () => ({
-    toggleFavorite: vi.fn(),
-    isFavorite: () => false,
+    favorites: mockFavorites,
+    toggleFavorite: mockToggleFavorite,
+    removeFavorite: mockRemoveFavorite,
+    isFavorite: (name) => mockFavorites.some((f) => f.name === name),
   }),
 }));
 
@@ -76,6 +90,8 @@ vi.mock('@/components/ui/dialog', () => ({
 }));
 
 import ReportViewerPage, {
+  catalogCategoryOf,
+  findReportFavoriteKeys,
   getSelectorPlaceholderLabel,
   getSelectedItems,
   getProductSelectorUrl,
@@ -613,6 +629,340 @@ describe('ReportViewerPage — finance window access gate (ETP-5116)', () => {
     await waitFor(() => {
       expect(screen.getByText('noResults')).toBeInTheDocument();
     });
+  });
+});
+
+// -------------------------------------------------------------------
+// Tesorería › Informes — the treasury category holds the two aging reports. It shares the Financial
+// Reports anchor window with finance, but its catalog is gated by grants on its OWN reports, and a
+// legacy `category=finance&report=aging-*` link is re-pointed to treasury before the gate runs.
+// -------------------------------------------------------------------
+
+describe('catalogCategoryOf', () => {
+  it.each([
+    ['aging-receivable', 'treasury'],
+    ['aging-payable', 'treasury'],
+    ['tax-report', 'finance'],
+    ['report-general-ledger', 'finance'],
+    ['inventory-stock-report', 'inventory'],
+  ])('%s belongs to %s', (reportId, category) => {
+    expect(catalogCategoryOf(reportId)).toBe(category);
+  });
+
+  it.each([null, undefined, '', 'report-aging'])('answers null for %j (outside the catalog)', (reportId) => {
+    expect(catalogCategoryOf(reportId)).toBeNull();
+  });
+});
+
+describe('ReportViewerPage — treasury category (Tesorería › Informes)', () => {
+  const FINANCIAL_REPORTS_WINDOW = 'D647D118F5014D00AF47A636B2CD0DD3';
+  const agingReport = (id, en, es) => ({
+    id, title: { en_US: en, es_ES: es }, type: 'listing', category: 'treasury', outputs: ['pdf'], parameters: [],
+  });
+  const AGING_RECEIVABLE = agingReport('aging-receivable', 'Aging of Receivables', 'Antigüedad de Cobros');
+  const AGING_PAYABLE = agingReport('aging-payable', 'Aging of Payables', 'Antigüedad de Pagos');
+  const TAX_REPORT = { id: 'tax-report', title: { en_US: 'Tax Report' }, type: 'listing', category: 'finance', outputs: ['pdf'], parameters: [] };
+
+  const mockCatalog = (reports = [AGING_RECEIVABLE, AGING_PAYABLE, TAX_REPORT]) => {
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve({ ok: true, json: () => Promise.resolve(reports) });
+      if (typeof url === 'string' && url.includes('/render')) {
+        return Promise.resolve({ ok: true, text: () => Promise.resolve('<html><body>rendered</body></html>') });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
+    });
+  };
+
+  const lastViewerBreadcrumb = () => useSetPageMeta.mock.calls
+    .map(([meta]) => meta)
+    .filter((meta) => meta && Array.isArray(meta.breadcrumb))
+    .at(-1)?.breadcrumb;
+  const lastListBreadcrumb = () => useSetPageMeta.mock.calls
+    .map(([meta]) => meta)
+    .filter((meta) => meta && typeof meta.breadcrumb === 'string')
+    .at(-1)?.breadcrumb;
+  const rewriteCalls = () => mockSetSearchParams.mock.calls.filter(([, opts]) => opts?.replace === true);
+
+  beforeEach(() => {
+    vi.mocked(useWindowAccess).mockClear();
+    useSetPageMeta.mockClear();
+    mockSetSearchParams.mockClear();
+    mockFinanceWindowAccessTier = 'full';
+    mockReportAccess = {};
+    mockCatalog();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    mockFinanceWindowAccessTier = 'full';
+    mockReportAccess = {};
+    mockSearchParams = new URLSearchParams();
+  });
+
+  it('gates the treasury catalog on the Financial Reports anchor window', () => {
+    mockSearchParams = new URLSearchParams({ category: 'treasury' });
+    render(<ReportViewerPage />);
+    expect(useWindowAccess).toHaveBeenCalledWith(FINANCIAL_REPORTS_WINDOW);
+  });
+
+  it('a window-only role without an aging grant passes the gate but sees no aging report', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'treasury' });
+    mockFinanceWindowAccessTier = 'full';
+    mockReportAccess = { 'tax-report': 'full' };
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('noResults')).toBeInTheDocument());
+    expect(screen.queryByText('Aging of Receivables')).not.toBeInTheDocument();
+    expect(screen.queryByText('Aging of Payables')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('window-access-guard')).not.toBeInTheDocument();
+  });
+
+  it('shows only the aging report the role holds a grant on', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'treasury' });
+    mockReportAccess = { 'aging-payable': 'read-only' };
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('Aging of Payables')).toBeInTheDocument());
+    expect(screen.queryByText('Aging of Receivables')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tax Report')).not.toBeInTheDocument();
+  });
+
+  it('denies the treasury catalog to a role with neither the anchor window nor an aging grant', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'treasury' });
+    mockFinanceWindowAccessTier = 'none';
+    mockReportAccess = { 'tax-report': 'full' };
+    render(<ReportViewerPage />);
+    // Still denied once the report grants have resolved — a finance grant does not open treasury.
+    await act(async () => { await Promise.resolve(); });
+    expect(globalThis.fetch).not.toHaveBeenCalledWith('/api/reports');
+    expect(screen.getByTestId('window-access-guard')).toHaveAttribute('data-window-id', FINANCIAL_REPORTS_WINDOW);
+  });
+
+  it('a grant-only role (aging grant, no anchor window) passes the gate and sees that report', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'treasury' });
+    mockFinanceWindowAccessTier = 'none';
+    mockReportAccess = { 'aging-receivable': 'full' };
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('Aging of Receivables')).toBeInTheDocument());
+    expect(screen.queryByTestId('window-access-guard')).not.toBeInTheDocument();
+  });
+
+  it('publishes "Treasury / Reports" as the catalog breadcrumb', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'treasury' });
+    mockReportAccess = { 'aging-receivable': 'full' };
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('Aging of Receivables')).toBeInTheDocument());
+    expect(lastListBreadcrumb()).toBe('Treasury / Reports');
+  });
+
+  it('rewrites a legacy category=finance aging link to category=treasury, replacing the history entry', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'finance', report: 'aging-receivable', dateFrom: '2026-01-01' });
+    mockReportAccess = { 'aging-receivable': 'full' };
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(rewriteCalls().length).toBeGreaterThan(0));
+    const [params, opts] = rewriteCalls()[0];
+    expect(opts).toEqual({ replace: true });
+    expect(params.get('category')).toBe('treasury');
+    expect(params.get('report')).toBe('aging-receivable');
+    // The rest of the deep link survives the rewrite.
+    expect(params.get('dateFrom')).toBe('2026-01-01');
+  });
+
+  it('evaluates the gate on treasury for a legacy link: a grant-only role opens the report', async () => {
+    // Under `finance` this role would be denied (no anchor window, no finance report grant).
+    mockSearchParams = new URLSearchParams({ category: 'finance', report: 'aging-receivable' });
+    mockFinanceWindowAccessTier = 'none';
+    mockReportAccess = { 'aging-receivable': 'full' };
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByTestId('action-cancel')).toBeInTheDocument());
+    expect(screen.queryByTestId('window-access-guard')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['a treasury link', { category: 'treasury', report: 'aging-receivable' }],
+    ['a legacy finance link', { category: 'finance', report: 'aging-receivable' }],
+  ])('publishes the Treasury / Reports / title breadcrumb for %s', async (_label, query) => {
+    mockSearchParams = new URLSearchParams(query);
+    mockReportAccess = { 'aging-receivable': 'full' };
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByTestId('action-cancel')).toBeInTheDocument());
+    expect(lastViewerBreadcrumb()).toEqual([
+      { label: 'Treasury' },
+      { label: 'Reports', href: '/report-viewer?category=treasury' },
+      { label: 'Aging of Receivables' },
+    ]);
+  });
+
+  it('does not rewrite a link whose category already matches the report', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'treasury', report: 'aging-payable' });
+    mockReportAccess = { 'aging-payable': 'full' };
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByTestId('action-cancel')).toBeInTheDocument());
+    expect(rewriteCalls()).toHaveLength(0);
+  });
+
+  it('does not rewrite a finance report opened under finance', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'finance', report: 'tax-report' });
+    mockReportAccess = { 'tax-report': 'full' };
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByTestId('action-cancel')).toBeInTheDocument());
+    expect(rewriteCalls()).toHaveLength(0);
+  });
+
+  it('re-points a report outside the catalog to its contract category once the catalog loads', async () => {
+    const salesReport = { id: 'sales-x', title: { en_US: 'Sales X' }, type: 'listing', category: 'sales', outputs: ['pdf'], parameters: [] };
+    mockCatalog([salesReport]);
+    mockSearchParams = new URLSearchParams({ category: 'finance', report: 'sales-x' });
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(rewriteCalls().length).toBeGreaterThan(0));
+    expect(rewriteCalls()[0][0].get('category')).toBe('sales');
+  });
+
+  // A contract without `category` reaches the page as 'other' (report-descriptor default), or with
+  // none at all: that is "unknown", not a home, so the URL's category is kept.
+  it.each([
+    ['other', 'other'],
+    ['missing', undefined],
+  ])('does not rewrite a non-catalog report whose contract category is %s', async (_label, category) => {
+    const uncategorized = { id: 'custom-x', title: { en_US: 'Custom X' }, type: 'listing', category, outputs: ['pdf'], parameters: [] };
+    mockCatalog([uncategorized]);
+    mockSearchParams = new URLSearchParams({ category: 'finance', report: 'custom-x' });
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByTestId('action-cancel')).toBeInTheDocument());
+    expect(rewriteCalls()).toHaveLength(0);
+    // The page stays on the URL's category.
+    expect(lastViewerBreadcrumb()[0]).toEqual({ label: 'Finance' });
+  });
+
+  it('still rewrites a catalog report even when its contract says other', async () => {
+    mockCatalog([{ ...AGING_PAYABLE, category: 'other' }]);
+    mockSearchParams = new URLSearchParams({ category: 'finance', report: 'aging-payable' });
+    mockReportAccess = { 'aging-payable': 'full' };
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(rewriteCalls().length).toBeGreaterThan(0));
+    expect(rewriteCalls()[0][0].get('category')).toBe('treasury');
+  });
+});
+
+describe('findReportFavoriteKeys', () => {
+  const FAVORITES = [
+    { name: 'report-viewer?category=finance&report=aging-receivable' },
+    { name: 'report-viewer?category=treasury&report=aging-payable' },
+    { name: 'report-viewer?report=aging-receivable' },
+    { name: 'report-viewer?category=finance' },
+    { name: 'sales-order' },
+    { name: 'aging-receivable' },
+    {},
+    null,
+  ];
+
+  it('matches every saved favourite that opens the report, whatever its category', () => {
+    expect(findReportFavoriteKeys(FAVORITES, 'aging-receivable')).toEqual([
+      'report-viewer?category=finance&report=aging-receivable',
+      'report-viewer?report=aging-receivable',
+    ]);
+  });
+
+  it('does not match a different report', () => {
+    expect(findReportFavoriteKeys(FAVORITES, 'aging-payable')).toEqual(['report-viewer?category=treasury&report=aging-payable']);
+    expect(findReportFavoriteKeys(FAVORITES, 'tax-report')).toEqual([]);
+  });
+
+  it('ignores keys that are not report-viewer links, even when they name the report', () => {
+    expect(findReportFavoriteKeys([{ name: 'aging-receivable' }, { name: 'x?report=aging-receivable' }], 'aging-receivable')).toEqual([]);
+  });
+
+  it.each([undefined, null, 'not-an-array'])('answers an empty list for favourites %j', (favorites) => {
+    expect(findReportFavoriteKeys(favorites, 'aging-receivable')).toEqual([]);
+  });
+
+  it('answers an empty list without a report id', () => {
+    expect(findReportFavoriteKeys(FAVORITES, '')).toEqual([]);
+  });
+});
+
+// The report view's favourite star (published to the TopBar through PageMeta). A favourite saved
+// before the aging reports moved to treasury keeps its old key; it still lights the star, and
+// pressing the star removes it rather than adding a duplicate under the new key.
+describe('ReportViewer favourite star', () => {
+  const AGING = {
+    id: 'aging-receivable', title: { en_US: 'Aging of Receivables' }, type: 'listing', category: 'treasury', outputs: ['pdf'], parameters: [],
+  };
+  const NEW_KEY = 'report-viewer?category=treasury&report=aging-receivable';
+  const OLD_KEY = 'report-viewer?category=finance&report=aging-receivable';
+  const lastViewerMeta = () => useSetPageMeta.mock.calls
+    .map(([meta]) => meta)
+    .filter((meta) => meta && Array.isArray(meta.breadcrumb))
+    .at(-1);
+
+  beforeEach(() => {
+    useSetPageMeta.mockClear();
+    mockToggleFavorite.mockClear();
+    mockRemoveFavorite.mockClear();
+    mockFinanceWindowAccessTier = 'full';
+    mockReportAccess = { 'aging-receivable': 'full' };
+    mockSearchParams = new URLSearchParams({ category: 'treasury', report: 'aging-receivable' });
+    globalThis.fetch = vi.fn().mockImplementation((url) => (url === '/api/reports'
+      ? Promise.resolve({ ok: true, json: () => Promise.resolve([AGING]) })
+      : Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) })));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    mockFavorites = [];
+    mockReportAccess = {};
+    mockSearchParams = new URLSearchParams();
+  });
+
+  const openViewer = async () => {
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByTestId('action-cancel')).toBeInTheDocument());
+    return lastViewerMeta();
+  };
+
+  it('is off with no saved favourite, and pressing it adds the current key', async () => {
+    const meta = await openViewer();
+    expect(meta.isFavorite).toBe(false);
+    meta.onAddToFavorites();
+    expect(mockToggleFavorite).toHaveBeenCalledWith(NEW_KEY, 'Aging of Receivables', AGING.title);
+    expect(mockRemoveFavorite).not.toHaveBeenCalled();
+  });
+
+  it('is lit for a favourite saved under the current key, and pressing it removes that key', async () => {
+    mockFavorites = [{ name: NEW_KEY }];
+    const meta = await openViewer();
+    expect(meta.isFavorite).toBe(true);
+    meta.onAddToFavorites();
+    expect(mockRemoveFavorite).toHaveBeenCalledWith([NEW_KEY]);
+    expect(mockToggleFavorite).not.toHaveBeenCalled();
+  });
+
+  it('is lit for a favourite saved under the old finance category', async () => {
+    mockFavorites = [{ name: OLD_KEY }];
+    const meta = await openViewer();
+    expect(meta.isFavorite).toBe(true);
+  });
+
+  it('pressing it removes the old-category favourite and adds nothing', async () => {
+    mockFavorites = [{ name: OLD_KEY }];
+    const meta = await openViewer();
+    meta.onAddToFavorites();
+    expect(mockRemoveFavorite).toHaveBeenCalledWith([OLD_KEY]);
+    expect(mockToggleFavorite).not.toHaveBeenCalled();
+  });
+
+  it('with the report saved under both the new and the old category, the star is lit and one press removes both', async () => {
+    mockFavorites = [{ name: NEW_KEY }, { name: OLD_KEY }, { name: 'sales-order' }];
+    const meta = await openViewer();
+    expect(meta.isFavorite).toBe(true);
+    meta.onAddToFavorites();
+    expect(mockRemoveFavorite).toHaveBeenCalledTimes(1);
+    expect([...mockRemoveFavorite.mock.calls[0][0]].sort()).toEqual([NEW_KEY, OLD_KEY].sort());
+    expect(mockToggleFavorite).not.toHaveBeenCalled();
+  });
+
+  it('a favourite of another report does not light the star', async () => {
+    mockFavorites = [{ name: 'report-viewer?category=treasury&report=aging-payable' }];
+    const meta = await openViewer();
+    expect(meta.isFavorite).toBe(false);
   });
 });
 

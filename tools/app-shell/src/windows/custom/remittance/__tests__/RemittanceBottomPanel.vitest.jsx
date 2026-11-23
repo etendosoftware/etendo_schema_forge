@@ -9,7 +9,7 @@ vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => mockApiFetch }));
 
 // Stable translator (a new function per render would re-run every effect that depends on it).
 const mockUi = (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key);
-vi.mock('@/i18n', () => ({ useUI: () => mockUi }));
+vi.mock('@/i18n', () => ({ useUI: () => mockUi, useLocaleSwitch: () => ({ locale: 'es-ES' }) }));
 
 vi.mock('@/components/contract-ui', () => ({
   LinesEmptyState: (props) => (
@@ -98,6 +98,16 @@ describe('RemittanceBottomPanel — with lines', () => {
     expect(screen.getByTestId('action-select-due-items')).toHaveTextContent('remittanceSelectFromInvoices');
     expect(await screen.findByTestId('remittance-lines-total')).toBeInTheDocument();
     expect(footer).toContainElement(screen.getByTestId('remittance-lines-total'));
+  });
+
+  it('right-aligns the total in a one-row footer, trigger on the left', async () => {
+    renderPanel();
+    const total = await screen.findByTestId('remittance-lines-total');
+    const footer = screen.getByTestId('remittance-lines-footer');
+    expect(footer.style.flexDirection).toBe('row');
+    expect(total.style.justifyContent).toBe('flex-end');
+    expect(footer.children[0]).toBe(screen.getByTestId('action-select-due-items'));
+    expect(footer.children[1]).toContainElement(total);
   });
 
   it('renders the total over every line from the grid summary, in the lines’ currency', async () => {

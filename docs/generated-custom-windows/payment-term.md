@@ -15,15 +15,15 @@ Maintain the rules that determine when a receivable or payable becomes due and w
 ## Interaction model
 
 - **Layout (ETP-5978):** `layoutType: "list-modal"` — a grid plus a create/edit **popup**, rendered by the generic `ListModalWindow` (`tools/app-shell/src/components/contract-ui/ListModalWindow.jsx`) in its compact variant (`ListModalCompactDialog.jsx`). There is **no detail view** any more. Shared behaviour: `docs/window-templates.md` → *`list-modal`*, *Compact look*, *Deep link*.
-- **Route:** `/payment-term` — a single list screen. `/payment-term/<recordId>` (the generic `:windowName/:recordId` route) no longer opens a detail page: it opens the list **with that term's edit popup already open**. A record missing from the loaded list is read with `GET header/<id>`; one the server does not return shows the `recordNotFoundTitle` toast. Closing the popup (or the not-found case) replaces the URL with `/payment-term`, so a reload does not reopen it. A read-only role gets the plain list. Opening a term from the list does not change the URL. Nothing else in the app builds a `/payment-term/<id>` link (the "+ Crear condición de pago" selectors write to the spec, they do not navigate), so no caller needed a change.
-- **Visibility:** visible in **System > Settings** from `tools/app-shell/src/menu.json`; not marked hidden.
+- **Route:** `/payment-term` — a single list screen. `/payment-term/<recordId>` (the generic `:windowName/:recordId` route) no longer opens a detail page: it opens the list **with that term's edit popup already open**. A record missing from the loaded list is read with `GET header/<id>`; one the server does not return shows the `recordNotFoundTitle` toast. Closing the popup (or the not-found case) replaces the URL with `/payment-term`, so a reload does not reopen it. A read-only role gets the popup in view mode (ETP-6221, see below). Opening a term from the list does not change the URL. Nothing else in the app builds a `/payment-term/<id>` link (the "+ Crear condición de pago" selectors write to the spec, they do not navigate), so no caller needed a change.
+- **Visibility:** visible in the **Treasury** menu section ("Tesorería") from `tools/app-shell/src/menu.json` (moved out of System > Settings in ETP-6389); not marked hidden. Breadcrumb: `Treasury / Payment Term`, declared in `decisions.json → window.breadcrumb` (`window.category` stays `settings`).
 - **Implementation type:** generated `list-modal` window loaded from `tools/app-shell/src/windows/registry.js` into the generic `/:windowName` shell route. The generator emits only `HeaderPage.jsx` (plus `index.jsx`, `labels.js`, `mockCatalogs.js`); the default-layout `HeaderForm.jsx` / `HeaderTable.jsx` were removed in ETP-5978. `mockData.js` stays because `App.jsx` loads it for mock mode.
 - **Window shape:** header-only. `decisions.json` excludes the `lines` (`C_PaymentTermLine`) and `translation` entities, so neither the contract nor the NEO spec exposes them (`ETGO_SF_ENTITY.IsIncluded = 'N'`); there are no `/lines` endpoints. No attachments (a list-modal window has no attachments tab).
 
 ### List toolbar and rows (ETP-5978)
 
 - **Toolbar:** left — **Filtros** (advanced filter); right — sort, refresh, and the blue primary **+ Nueva condición de pago** (`New payment term`). No back/"Cancelar" button (`hideBackButton`) and no local search box (`hideSearch`; the app's global search sits in the top bar). The sort → refresh order is the app-wide order, kept on purpose even though the Figma shows refresh first.
-- **Row click** opens the term's edit popup (`rowClickEdit`). Clicks on the selection checkbox or the hover actions do not.
+- **Row click** opens the term's edit popup (`rowClickEdit`). Clicks on the selection checkbox or the hover actions do not. For a role with read-only access to the window, row click (and the deep link) opens the same popup in **view mode** (ETP-6221): fields disabled, no Guardar, a single **Cerrar** pill, title **Condición de pago** (`viewTitleKey`), no subtitle.
 - **Row hover:** pencil (edit popup) and red trash (delete with confirmation) at the right edge. No clone (`allowClone` off).
 - **Bulk delete:** ticking rows shows the selection bar ("N seleccionados") with a delete button; after confirmation the outcome toast reports all / partial / none deleted.
 - **Sorting** is client-side (header click or the sort popover) over the loaded list.
@@ -61,6 +61,7 @@ All keys live in `decisions.json → window`:
 | `layoutType` | `"list-modal"` | Grid + create/edit popup, no detail view |
 | `templateConfig.modalVariant` | `"compact"` | 400px one-column popup (`ListModalCompactDialog`) |
 | `templateConfig.titleKey` / `editTitleKey` | `paymentTermNewTitle` / `paymentTermEditTitle` | Popup title on create / edit |
+| `templateConfig.viewTitleKey` | `paymentTermViewTitle` | Popup title in view mode (read-only role): **Condición de pago** |
 | `templateConfig.newLabelKey` | `paymentTermNew` | "+ Nueva condición de pago" button label |
 | `templateConfig.newButtonVariant` | `"primary"` | Blue primary new button |
 | `templateConfig.hideBackButton` | `true` | No toolbar back button |

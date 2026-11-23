@@ -1,6 +1,13 @@
 import { lazy, Suspense, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
-import { Download, Mail, Maximize, Plus, Search, X } from 'lucide-react';
+import {
+  DownloadSimpleIcon,
+  EnvelopeSimpleIcon,
+  ArrowsOutIcon,
+  PlusIcon,
+  MagnifyingGlassIcon,
+  XIcon,
+} from '@phosphor-icons/react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { hasClientPdf, buildClientPdfBlob } from '@/windows/custom/shared/documentPdfRegistry.js';
 import { sendDocumentEmail } from './documentEmailSend.js';
@@ -64,10 +71,8 @@ function resolveEmailSendErrorMessage(ui, data, documentType) {
   return data?.message || ui('sendModalSendFailed', { documentType });
 }
 
-function resolveEmailSendSuccessMessage(ui, status, documentType) {
-  return status === 'DUPLICATE'
-    ? ui('sendModalDuplicate', { documentType })
-    : ui('sendModalSentSuccess', { documentType });
+function resolveEmailSendSuccessMessage(ui, documentType) {
+  return ui('sendModalSentSuccess', { documentType });
 }
 
 function resolveEmailSendExceptionMessage(ui, documentType) {
@@ -108,8 +113,8 @@ async function sendDocumentFromModal({
     language,
   });
 
-  if (data.status === 'SENT' || data.status === 'DUPLICATE') {
-    const successMessage = resolveEmailSendSuccessMessage(ui, data.status, documentType);
+  if (data.status === 'SENT') {
+    const successMessage = resolveEmailSendSuccessMessage(ui, documentType);
     toast.success(successMessage);
     setSendFeedback({ type: 'success', message: successMessage });
     // ETP-5069 — a plain cancel also calls onClose(), so a caller could not tell a
@@ -179,9 +184,8 @@ function RecipientFields({ editableRecipients, ccEnabled, toRecipients, ccRecipi
             placeholder={emailLoading ? '' : 'email@company.com'}
             style={{ ...FIELD_INPUT_STYLE, paddingRight: 32, background: 'hsl(var(--muted))' }}
           />
-          <Search
+          <MagnifyingGlassIcon
             size={13}
-            strokeWidth={1.5}
             color={SF_ICON}
             style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
             data-testid="Search__afec0a" />
@@ -205,7 +209,7 @@ function RecipientFields({ editableRecipients, ccEnabled, toRecipients, ccRecipi
           onClick={() => setCcExpanded(true)}
           style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14, lineHeight: '24px', fontWeight: 500, color: 'hsl(var(--sf-gray-900))', padding: 0, border: 'none', background: 'none', cursor: 'pointer' }}
         >
-          <Plus size={20} strokeWidth={1.5} color={SF_ICON} data-testid="Plus__afec0a" />
+          <PlusIcon size={20} color={SF_ICON} data-testid="Plus__afec0a" />
           <span style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>{ui('sendModalAddCc')}</span>
         </button>
       )}
@@ -370,7 +374,7 @@ function DocumentPreviewPane({ allowEmail, pdfUrl, pdfLoading, pdfError, waiting
           <Suspense
             fallback={<PreviewLoading ui={ui} data-testid="PreviewLoading__afec0a" />}
             data-testid="Suspense__afec0a">
-            <PdfViewer url={pdfUrl} contentPadding={PREVIEW_PADDING} fitIcon={Maximize} controlColors={PREVIEW_CONTROL_COLORS} data-testid="PdfViewer__afec0a" />
+            <PdfViewer url={pdfUrl} contentPadding={PREVIEW_PADDING} fitIcon={ArrowsOutIcon} controlColors={PREVIEW_CONTROL_COLORS} data-testid="PdfViewer__afec0a" />
           </Suspense>
         ) : (
           <HtmlPreviewFrame pdfLoading={pdfLoading} pdfError={pdfError} waitingForBlob={waitingForBlob} iframeRef={iframeRef} ui={ui} data-testid="HtmlPreviewFrame__afec0a" />
@@ -419,7 +423,7 @@ function DownloadPdfButton({ downloading, onDownload, ui }) {
       disabled={downloading}
       style={{ ...PILL_BUTTON, border: '1px solid hsl(var(--sf-border-input))', background: 'hsl(var(--sf-surface-overlay))', boxShadow: 'var(--sf-shadow-xs)', color: 'hsl(var(--sf-gray-900))', cursor: downloading ? 'wait' : 'pointer' }}
     >
-      <Download size={20} strokeWidth={1.5} color={SF_ICON} data-testid="Download__afec0a" />
+      <DownloadSimpleIcon size={20} color={SF_ICON} data-testid="Download__afec0a" />
       {downloading ? ui('sendModalDownloading') : ui('downloadPdf')}
     </button>
   );
@@ -438,7 +442,7 @@ function SendButton({ onSend, sendDisabled, sending, ui }) {
     >
       {sending ? ui('sendModalSending') : (
         <>
-          <Mail size={20} strokeWidth={1.5} data-testid="Mail__afec0a" />
+          <EnvelopeSimpleIcon size={20} data-testid="Mail__afec0a" />
           {ui('sendModalSend')}
         </>
       )}
@@ -488,7 +492,7 @@ function SendModalFooter({ allowEmail, onClose, sendFeedback, downloading, onDow
  * - windowName: for report ID resolution (e.g. "sales-invoice")
  * - token: auth token
  * - onClose: callback to close modal
- * - onSent: optional callback fired only on a successful send (SENT / DUPLICATE),
+ * - onSent: optional callback fired only on a successful send (SENT),
  *   just before onClose(), with `{ status, auditId, requestId }`. Lets a caller
  *   distinguish "the document was sent" from "the user cancelled" — both of which
  *   reach onClose — e.g. to invalidate the email-history card (ETP-5069).
@@ -831,7 +835,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
           className="bg-transparent hover:bg-muted transition-colors"
           style={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24, padding: 2, boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 9999, border: 'none', cursor: 'pointer', color: SF_ICON }}
         >
-          <X size={20} strokeWidth={1.5} data-testid="X__afec0a" />
+          <XIcon size={20} data-testid="X__afec0a" />
         </button>
       </div>
     </div>
@@ -854,7 +858,7 @@ export function SendDocumentButton({ onClick }) {
         aria-label={label}
         className="h-10 w-10 flex items-center justify-center rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors"
       >
-        <Mail className="h-5 w-5" data-testid="Mail__afec0a" />
+        <EnvelopeSimpleIcon className="h-5 w-5" data-testid="Mail__afec0a" />
       </button>
       <span className="pointer-events-none absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-[11px] text-primary-foreground opacity-0 group-hover:opacity-100 transition-opacity" style={{ zIndex: 50 }}>
         {label}

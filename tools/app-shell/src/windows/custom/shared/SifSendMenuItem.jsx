@@ -1,6 +1,7 @@
 import { useUI } from '@/i18n';
 import { requestSifSendModal } from './sifSending.js';
 import { useInvoiceSifSending } from './useInvoiceSifSending.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 /**
  * Form-view kebab (⋮) entry that sends the open invoice to its fiscal system(s).
@@ -34,7 +35,7 @@ export default function SifSendMenuItem({ data, recordId, apiBaseUrl, onClose, i
   const { specName, pendingTargets, hasPendingTargets, labelKey } = useInvoiceSifSending({ data, apiBaseUrl });
   const currentId = data?.id || recordId;
 
-  if (data?.documentStatus !== 'CO' || !hasPendingTargets || !currentId) return null;
+  if (!isCompletedStatus(data?.documentStatus) || !hasPendingTargets || !currentId) return null;
 
   // Same markup as DetailMoreActionsMenu's standard menuActions items (classes, font,
   // `menu-action-<key>` data-testid), so it reads as part of one menu.

@@ -1,4 +1,4 @@
-import { TriangleAlert } from 'lucide-react';
+import { WarningIcon } from '@phosphor-icons/react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { DateField } from '@/components/ui/date-field';
@@ -197,7 +197,7 @@ export default function SiiImportDuaSection({
           {showLengthHint && (
             <InfoBanner
               tone="warning"
-              icon={TriangleAlert}
+              icon={WarningIcon}
               dismissible={false}
               className="col-span-2"
               data-testid="SiiImportDuaSection__duaHint">
@@ -207,7 +207,7 @@ export default function SiiImportDuaSection({
           {showLcHint && (
             <InfoBanner
               tone="warning"
-              icon={TriangleAlert}
+              icon={WarningIcon}
               dismissible={false}
               className="col-span-2"
               data-testid="SiiImportDuaSection__lcHint">
@@ -217,7 +217,7 @@ export default function SiiImportDuaSection({
           {showDateHint && (
             <InfoBanner
               tone="warning"
-              icon={TriangleAlert}
+              icon={WarningIcon}
               dismissible={false}
               className="col-span-2"
               data-testid="SiiImportDuaSection__dateHint">

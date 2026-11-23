@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.18.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-10-29T13:31:33.672Z",
-  "checksum": "b8ae621dd1afa341",
+  "updatedAt": "2026-11-20T16:35:33.054Z",
+  "checksum": "0f14933885aacd95",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -21,6 +21,7 @@
         "RPVOID",
         "PWNC"
       ],
+      "breadcrumb": "Treasury / Payment Out",
       "customComponents": {
         "headerTable": "PaymentHeaderTable",
         "sidePanel": "PaymentDetailSidebar",
@@ -398,8 +399,8 @@
             "apiKey": "financialTransactionConvertRate",
             "column": "Finacc_Txn_Convert_Rate",
             "label": "Exchange Rate",
-            "type": "string",
-            "tsType": "string",
+            "type": "decimal",
+            "tsType": "number",
             "visibility": "editable",
             "required": true,
             "grid": false,
@@ -1995,6 +1996,7 @@
         "RPVOID",
         "PWNC"
       ],
+      "breadcrumb": "Treasury / Payment Out",
       "customComponents": {
         "headerTable": "PaymentHeaderTable",
         "sidePanel": "PaymentDetailSidebar",
@@ -2151,7 +2153,7 @@
             "name": "financialTransactionConvertRate",
             "apiKey": "financialTransactionConvertRate",
             "column": "Finacc_Txn_Convert_Rate",
-            "type": "string",
+            "type": "decimal",
             "visibility": "editable",
             "required": true
           },
@@ -4952,7 +4954,7 @@
         "entity": "header",
         "field": "financialTransactionConvertRate",
         "runner": "node",
-        "description": "Field 'financialTransactionConvertRate' should have type 'string' in header"
+        "description": "Field 'financialTransactionConvertRate' should have type 'number' in header"
       },
       {
         "id": "t-field-type-header-generatedCredit",

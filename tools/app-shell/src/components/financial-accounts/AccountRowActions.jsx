@@ -4,7 +4,7 @@
 // Extracted from the retired AccountRow (ETP-4658) so the testids and the
 // sync-visibility rule have a single definition; the generic DataTable renders them
 // inside its shared sticky `rowQuickActions` cell in AccountsHeaderTable.
-import { Pencil } from 'lucide-react';
+import { PencilSimpleIcon } from '@phosphor-icons/react';
 import {
   Tooltip,
   TooltipContent,
@@ -52,7 +52,7 @@ export function AccountRowActions({
                 onClick={() => onEdit?.(account)}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))]"
               >
-                <Pencil className="h-5 w-5" data-testid="Pencil__acctactions" />
+                <PencilSimpleIcon className="h-5 w-5" data-testid="Pencil__acctactions" />
               </button>
             </TooltipTrigger>
             <TooltipContent data-testid="TooltipContent__acctactions">{ui('financeAccountsMenuEdit')}</TooltipContent>

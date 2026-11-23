@@ -1,6 +1,7 @@
 import {
   ImportLoadError, MAX_ACTION_PAGE, actionErrorMessage, actionUrl, listAll, listLines, newestCreatedFirst,
 } from './importActionClient.js';
+import { isCompletedStatus } from '../../../lib/docStatus.js';
 
 // ETP-6099: the read-action client, the load-error class and its sentence moved to the shared
 // `importActionClient.js` every «Importar desde…» popup uses; re-exported so this module's callers
@@ -94,11 +95,10 @@ export async function fetchOrderDocuments({ apiFetch, config, base, bpId, invoic
     // invoices), at pendingLines 0, for the popup to hide (`isOrderCovered`) without reading their
     // lines.
     // Both directions ask `detail`: it brings the row's `creationDate` (purchases listed newest
-    // CREATED first, their action answers newest by order date) and makes `pendingLines` / `amount`
-    // count only the lines the popup leaves selectable — not those already on THIS invoice
-    // (`_alreadyImported`). Pending is quantity-based, so without it a sales order whose remaining
-    // lines are all on this invoice was listed and only emptied once expanded (the lines load
-    // lazily, ETP-6099); with it, it comes at pendingLines 0 and `isOrderCovered` hides it at open.
+    // CREATED first, their action answers newest by order date). Pending is quantity-based (ETP-5828
+    // QA UI-7): a line already on THIS invoice stays listed and selectable while it still has
+    // pending (only the rest is offered), so an order is covered (`pendingLines` 0, hidden by
+    // `isOrderCovered` at open) only when none of its lines has anything left.
     listAll({
       apiFetch, base, spec: config.invoiceSpec, targetId: invoiceId, action: 'availableOrders',
       params: { includeCovered: true, detail: true },
@@ -107,13 +107,21 @@ export async function fetchOrderDocuments({ apiFetch, config, base, bpId, invoic
     apiFetch(`${base}/${config.invoiceSpec}/header/${invoiceId}`),
   ]);
 
-  const alreadyImportedOrderLines = new Set();
+  // Order line id -> the quantity THIS invoice already holds of it (summed over its invoice lines,
+  // magnitude). A Map, so `.has(orderLineId)` still answers «is it on this invoice»; the quantity
+  // feeds the «N ya en esta factura» note of a line that still has pending (ETP-5828 QA UI-7).
+  const alreadyImportedOrderLines = new Map();
   // ETP-5828: the GET already hides the ETGO_DTO global-discount line (InvoiceLineHandler).
   let invoiceHasLines = false;
   if (invLinesRes.ok) {
     const invLines = await rowsOf(invLinesRes);
     invoiceHasLines = invLines.length > 0;
-    invLines.forEach(il => { if (il.salesOrderLine) alreadyImportedOrderLines.add(il.salesOrderLine); });
+    invLines.forEach(il => {
+      if (!il.salesOrderLine) return;
+      const held = alreadyImportedOrderLines.get(il.salesOrderLine) || 0;
+      alreadyImportedOrderLines.set(il.salesOrderLine, held + (Number(il.invoicedQuantity) || 0));
+    });
+    alreadyImportedOrderLines.forEach((qty, id) => alreadyImportedOrderLines.set(id, Math.abs(qty)));
   }
 
   let invoiceCurrency = null;
@@ -151,7 +159,7 @@ export async function fetchOrderDocuments({ apiFetch, config, base, bpId, invoic
  */
 function filterCandidateOrders(orders, bpId, invoiceCurrency) {
   const candidates = orders.filter(o =>
-    o.documentStatus === 'CO'
+    isCompletedStatus(o.documentStatus)
     && o.businessPartner === bpId
     && Number(o.invoiceStatus ?? 0) < 100
   );
@@ -212,15 +220,20 @@ export async function fetchOrderLines({ apiFetch, config, base, docId, sharedCon
 
 function orderLineRow(l, pending, sharedContext) {
   const unitPrice = Number(l.unitPrice) || 0;
-  const alreadyInCurrent = sharedContext?.alreadyImportedOrderLines?.has(l.id) || false;
+  const inCurrent = sharedContext?.alreadyImportedOrderLines;
+  const alreadyInCurrent = inCurrent?.has(l.id) || false;
   return {
     ...l,
     _productName: l['product$_identifier'] || l.id,
     _maxQty: pending,
     _unitPrice: unitPrice,
     _lineNetAmount: unitPrice * pending,
-    _alreadyImported: alreadyInCurrent || pending <= 0,
+    // ETP-5828 QA UI-7: greyed out only when nothing is left; a line already on THIS invoice with
+    // quantity still pending stays selectable for the rest (the server's pending deducts this
+    // invoice too), and says how much is already here (`_quantityInCurrent`).
+    _alreadyImported: pending <= 0,
     _alreadyInCurrent: alreadyInCurrent,
+    _quantityInCurrent: alreadyInCurrent ? Number(inCurrent.get?.(l.id)) || 0 : 0,
     _inDraftInvoices: (l.inDraftInvoices || []).map(d => d.documentNo || d.id),
     // What the OTHER drafts hold of the line, summed (magnitude): the note of a line they hold
     // only partly (QA OBS-2). Missing on an older backend, which sends no per-draft quantity.
@@ -234,9 +247,12 @@ function orderLineRow(l, pending, sharedContext) {
  * - Greyed out (QA UI-4): the draft invoice(s) holding it when nothing is left because OTHER
  *   drafts took it («en factura borrador FV1000002»); «ya importado» when it is on THIS invoice or
  *   fully invoiced.
- * - Still selectable but partly held by other drafts (QA OBS-2): how much they hold and where
- *   («1 en factura borrador FC1000020»); nothing when no other draft holds it, or when an older
- *   backend sends no per-draft quantity.
+ * - Still selectable (pending left), up to two parts joined with « · », this invoice first:
+ *   - partly on THIS invoice (QA UI-7): «2 ya en esta factura»;
+ *   - partly held by other drafts (QA OBS-2): how much they hold and where
+ *     («1 en factura borrador FC1000020»); omitted when an older backend sends no per-draft
+ *     quantity.
+ *   Nothing when neither applies.
  */
 export function orderLineNote(line, { imported }, ui, fmtQty = String) {
   const drafts = line?._inDraftInvoices || [];
@@ -246,12 +262,17 @@ export function orderLineNote(line, { imported }, ui, fmtQty = String) {
       ? ui('inDraftInvoiceOne', { documentNo: drafts[0] })
       : ui('inDraftInvoiceMany', { documentNos: drafts.join(', ') });
   }
+  const parts = [];
+  const here = Number(line?._quantityInCurrent) || 0;
+  if (here > 0) parts.push(ui('partlyInThisInvoice', { quantity: fmtQty(here) }));
   const held = Number(line?._heldByDrafts) || 0;
-  if (drafts.length === 0 || held <= 0) return null;
-  const quantity = fmtQty(held);
-  return drafts.length === 1
-    ? ui('partlyInDraftInvoiceOne', { quantity, documentNo: drafts[0] })
-    : ui('partlyInDraftInvoiceMany', { quantity, documentNos: drafts.join(', ') });
+  if (drafts.length > 0 && held > 0) {
+    const quantity = fmtQty(held);
+    parts.push(drafts.length === 1
+      ? ui('partlyInDraftInvoiceOne', { quantity, documentNo: drafts[0] })
+      : ui('partlyInDraftInvoiceMany', { quantity, documentNos: drafts.join(', ') }));
+  }
+  return parts.length > 0 ? parts.join(' · ') : null;
 }
 
 export const getOrderDisplay = (doc) => ({

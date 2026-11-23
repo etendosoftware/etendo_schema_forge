@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useMenuLabel, useUI } from '@/i18n';
 import { statusLabel as resolveStatusLabel } from '@/lib/statusBadge.js';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
@@ -13,6 +13,7 @@ import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
 import { getSalesRelatedDocs, getPurchaseRelatedDocs } from '@/components/related-documents';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
+import { isCompletedStatus, isDraftStatus } from '../../../lib/docStatus.js';
 
 // ── General tab content ───────────────────────────────────────────────────────
 
@@ -75,6 +76,10 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   const ui = useUI();
   const tMenu = useMenuLabel();
   const modalRef = useRef(null);
+  // The close animation's timer is cleared on unmount: if it fired after the preview is gone it
+  // would set state on an unmounted component (and, in tests, after jsdom is torn down).
+  const closeTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(closeTimerRef.current), []);
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendModalClosing, setSendModalClosing] = useState(false);
   // ETP-5069 — bumped when a send succeeds, so the email-history card refetches
@@ -87,12 +92,12 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   const [cachedAttachment, setCachedAttachment] = useState(null);
 
   const isSalesOrder = specName === 'sales-order';
-  const isDraft = order?.documentStatus === 'DR';
+  const isDraft = isDraftStatus(order?.documentStatus);
   // ETP-4717 — Send is only available once the order is Confirmed (CO),
   // matching the Grid row quick-action and Form-view topbar gates. No
   // per-spec difference: sales-order and purchase-order share this rule.
   // ETP-5205 — Solo-Lectura tier: Send is a write (mail + PDF attachment), Download stays.
-  const isSendable = order?.documentStatus === 'CO';
+  const isSendable = isCompletedStatus(order?.documentStatus);
   const canSend = isSendable && !readOnly;
   const ratePrecision = useCurrencyPrecision();
 
@@ -162,7 +167,12 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   };
   const closeEmailModal = () => {
     setSendModalClosing(true);
-    setTimeout(() => { setShowSendModal(false); setSendModalClosing(false); }, 300);
+    clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
+      setShowSendModal(false);
+      setSendModalClosing(false);
+    }, 300);
   };
 
   // ── Tabs ────────────────────────────────────────────────────────────────────

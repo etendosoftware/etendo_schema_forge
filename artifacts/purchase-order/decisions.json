@@ -84,6 +84,11 @@
   },
   "entities": {
     "header": {
+      "publicApi": {
+        "inputFields": [
+          { "name": "currency_rate", "internalPath": "eTGOCurrencyRate", "dataType": "number", "readable": true }
+        ]
+      },
       "fields": {
         "transactionDocument": {
           "visibility": "editable",
@@ -153,7 +158,8 @@
         "warehouse": {
           "grid": false,
           "seq": 60,
-          "inputMode": "search"
+          "inputMode": "search",
+          "publicApi": { "lookup": true }
         },
         "scheduledDeliveryDate": {
           "section": "principal",

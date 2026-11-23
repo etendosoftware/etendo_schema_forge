@@ -160,7 +160,7 @@ What the GO plugin adds on `up`:
 - exports each boolean `feature-flag <key>=<value>` line of `worktree.conf` as
   `ETGO_FLAG_<KEY>` in `<env>/build/local-env/env`, so the backend sees the flags too (not only
   the SPA). A value in `Openbravo.properties` still wins;
-- with `copilot on` in `worktree.conf`, runs the environment's `modules/com.etendoerp.copilot`
+- with `setting copilot=on` in `worktree.conf`, runs the environment's `modules/com.etendoerp.copilot`
   (`uv run python run.py`) on its own ports (5007+ in a worktree) and points `copilot.host` /
   `copilot.port` at it: needed for OCR (*Subir factura*, `etendo_extract_invoice_document`, the
   invoice inbox). `status` shows it; `stop` stops it. Details: `docs/local-env-plugin.md`.

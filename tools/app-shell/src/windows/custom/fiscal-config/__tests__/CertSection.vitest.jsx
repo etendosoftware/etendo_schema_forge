@@ -37,9 +37,9 @@ vi.mock('../CertModal.jsx', () => ({
   ),
 }));
 
-vi.mock('lucide-react', () => ({
-  FileText: () => <svg data-testid="icon-file-text" />,
-  Upload: () => <svg data-testid="icon-upload" />,
+vi.mock('@phosphor-icons/react', () => ({
+  FileTextIcon: () => <svg data-testid="icon-file-text" />,
+  UploadSimpleIcon: () => <svg data-testid="icon-upload" />,
 }));
 
 // --- Import under test ----------------------------------------------------

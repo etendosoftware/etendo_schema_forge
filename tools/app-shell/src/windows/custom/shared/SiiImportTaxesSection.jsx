@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash2, TriangleAlert } from 'lucide-react';
+import { PlusIcon, TrashIcon, WarningIcon } from '@phosphor-icons/react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -508,7 +508,7 @@ function ImportTaxRow({
             onClick={() => onDelete(row)}
             disabled={disabled}
             data-testid="Button__siiImportTaxDelete">
-            <Trash2 data-testid="Trash2__siiImportTax" />
+            <TrashIcon data-testid="Trash2__siiImportTax" />
           </Button>
         </td>
       </tr>
@@ -849,7 +849,7 @@ function ImportTaxesBlock({
           {multiDua && rows.some(r => isDuaDateAfterAccountingDate(r.aeatsiiFechaDua, accountingRegisterDate)) && (
             <InfoBanner
               tone="warning"
-              icon={TriangleAlert}
+              icon={WarningIcon}
               dismissible={false}
               data-testid="SiiImportTaxesSection__dateHint">
               {ui('sifDataTabs.dua.dateAfterAccountingDate')}
@@ -868,7 +868,7 @@ function ImportTaxesBlock({
                 onClick={() => setRows(prev => [...prev, newDraftRow()])}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border-control px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
                 data-testid="Button__siiImportTaxAdd">
-                <Plus className="h-4 w-4" data-testid="Plus__siiImportTax" />
+                <PlusIcon className="h-4 w-4" data-testid="Plus__siiImportTax" />
                 {ui('sifDataTabs.importTaxes.add')}
               </button>
             ) : <span data-testid="SiiImportTaxesSection__footerSpacer" />}

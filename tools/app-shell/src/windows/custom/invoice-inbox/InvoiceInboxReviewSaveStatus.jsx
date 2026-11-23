@@ -1,4 +1,4 @@
-import { Check, Loader2 } from 'lucide-react';
+import { CheckIcon, CircleNotchIcon } from '@phosphor-icons/react';
 import { useUI } from '@/i18n';
 
 /**
@@ -15,7 +15,7 @@ export default function InvoiceInboxReviewSaveStatus({ save, onRetry }) {
   if (save.status === 'saving') {
     return (
       <span className="inline-flex items-center gap-1.5" data-state="saving" data-testid="invoice-inbox-review-save-state">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" data-testid="Loader2__review-saving" />
+        <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" aria-hidden="true" data-testid="Loader2__review-saving" />
         {ui('invoiceInboxSaveSaving')}
       </span>
     );
@@ -23,14 +23,14 @@ export default function InvoiceInboxReviewSaveStatus({ save, onRetry }) {
   if (save.status === 'saved') {
     return (
       <span className="inline-flex items-center gap-1.5" data-state="saved" data-testid="invoice-inbox-review-save-state">
-        <Check className="h-3.5 w-3.5" aria-hidden="true" data-testid="Check__review-saved" />
+        <CheckIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid="Check__review-saved" />
         {ui('invoiceInboxSaveSaved')}
       </span>
     );
   }
   if (save.status === 'error') {
     return (
-      <span className="inline-flex items-center gap-2 text-destructive" data-state="error" data-testid="invoice-inbox-review-save-state">
+      <span className="inline-flex min-w-0 items-center gap-2 text-destructive" data-state="error" data-testid="invoice-inbox-review-save-state">
         <span className="max-w-[320px] truncate" title={save.errorText ?? ui(save.errorKey)} data-testid="invoice-inbox-review-save-error">
           {save.errorText ?? ui(save.errorKey)}
         </span>

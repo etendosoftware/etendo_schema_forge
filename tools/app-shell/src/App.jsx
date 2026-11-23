@@ -39,6 +39,7 @@ import { useSurveyEngine } from './hooks/useSurveyEngine.js';
 import { apiFetch } from '@/auth/api.js';
 import { clearStoredDateRange } from '@/components/dashboard/DashboardDateRangeContext.jsx';
 import { clearAccountIdentity } from '@/lib/flags/bootstrap.js';
+import { clearIdentityContext } from '@/lib/observability/identityContext.js';
 import { detectBasePath, getNeoBaseUrl } from '@/lib/neoBaseUrl.js';
 import { withSupportModeCapabilities } from '@/lib/supportSession.js';
 import { useSupportSessionSync } from '@/hooks/useSupportSessionSync.js';
@@ -456,6 +457,9 @@ function clearSessionScopedState(session) {
     // of the core's session storage, so nothing else clears it. Leaving it behind on a shared
     // computer means the next person's browser still names the previous account.
     clearAccountIdentity();
+    // ETP-6228 — the shell can stay mounted on a session expiry, so the hook's unmount cleanup
+    // alone would leave the last user's ids on later events.
+    void clearIdentityContext(); // NOSONAR -- fire-and-forget, like the clears above.
   }
 }
 

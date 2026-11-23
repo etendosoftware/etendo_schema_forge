@@ -7807,7 +7807,7 @@
       ]
     },
     "71ffdfc8865e7daf652e4f855e18d8bb6126fff59ba2b01e651989778533de54": {
-      "checksum": "149705bc8528843ccb2581529f13507d325df01981b759ecdc083ce515877cad",
+      "checksum": "608ddfc2a9718d196c12f0bc9df420a8243f4ffe9602f19c15b995716360f40e",
       "params": [
         "FF8080812E71F7C7012E71FD0499001B"
       ],
@@ -7851,6 +7851,22 @@
           "displaylogicgrid": null,
           "name": "Select Orders or Invoices",
           "readonlylogic": null
+        },
+        {
+          "columnname": "Creditor_Identifier",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "SEPA Creditor Identifier",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "DD_Scheme",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Direct Debit Scheme",
+          "readonlylogic": "@Processed@='Y'"
         },
         {
           "columnname": "DateAcct",
@@ -7947,6 +7963,22 @@
           "displaylogicgrid": null,
           "name": "Create Remittance File",
           "readonlylogic": null
+        },
+        {
+          "columnname": "Iban",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "IBAN",
+          "readonlylogic": "@Processed@='Y'"
+        },
+        {
+          "columnname": "IsFinanced",
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Financed",
+          "readonlylogic": "@Processed@='Y'"
         },
         {
           "columnname": "Line",

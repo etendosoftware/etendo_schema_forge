@@ -1,5 +1,12 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, Loader2, Download, Printer } from 'lucide-react';
+import {
+  XIcon,
+  CaretLeftIcon,
+  CaretRightIcon,
+  CircleNotchIcon,
+  DownloadSimpleIcon,
+  PrinterIcon,
+} from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useAnimatedOpen } from '@/lib/useAnimatedOpen.js';
@@ -7,6 +14,7 @@ import { hasClientPdf, buildClientPdfBlob, buildClientHtml } from '@/windows/cus
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { apiFetch as ambientApiFetch } from '@/auth/api.js';
+import { isDraftStatus } from '../../lib/docStatus.js';
 /**
  * Posts rendered HTML to jsreport (through the Vite `/jsreport` proxy) and
  * returns the resulting PDF blob.
@@ -219,15 +227,15 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
             {total > 1 && (
               <div className="flex items-center gap-1 ml-2">
                 <button onClick={() => setCurrentIndex(i => Math.max(0, i - 1))} disabled={currentIndex === 0} className="h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-30">
-                  <ChevronLeft className="h-4 w-4" data-testid="ChevronLeft__8d2ae7" />
+                  <CaretLeftIcon className="h-4 w-4" data-testid="ChevronLeft__8d2ae7" />
                 </button>
                 <span className="text-xs font-medium text-muted-foreground tabular-nums">{currentIndex + 1} / {total}</span>
                 <button onClick={() => setCurrentIndex(i => Math.min(total - 1, i + 1))} disabled={currentIndex === total - 1} className="h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-30">
-                  <ChevronRight className="h-4 w-4" data-testid="ChevronRight__8d2ae7" />
+                  <CaretRightIcon className="h-4 w-4" data-testid="ChevronRight__8d2ae7" />
                 </button>
               </div>
             )}
-            {loading && <Loader2
+            {loading && <CircleNotchIcon
               className="h-4 w-4 animate-spin text-muted-foreground"
               data-testid="Loader2__8d2ae7" />}
           </div>
@@ -237,7 +245,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
               disabled={printing || !currentDocId}
               className="h-8 px-3 flex items-center gap-1.5 rounded-md border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 bg-card text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {printing ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__8d2ae7" /> : <Printer className="h-3.5 w-3.5" data-testid="Printer__8d2ae7" />}
+              {printing ? <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__8d2ae7" /> : <PrinterIcon className="h-3.5 w-3.5" data-testid="Printer__8d2ae7" />}
               {printing ? ui('generating') : ui('print')}
             </button>
             <button
@@ -245,18 +253,18 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
               disabled={downloading || !currentDocId}
               className="h-8 px-3 flex items-center gap-1.5 rounded-md border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 bg-card text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__8d2ae7" /> : <Download className="h-3.5 w-3.5" data-testid="Download__8d2ae7" />}
+              {downloading ? <CircleNotchIcon className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__8d2ae7" /> : <DownloadSimpleIcon className="h-3.5 w-3.5" data-testid="Download__8d2ae7" />}
               {downloading ? ui('generating') : ui('download')}
             </button>
             <button onClick={onClose} className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 ml-1">
-              <X className="h-4 w-4" data-testid="X__8d2ae7" />
+              <XIcon className="h-4 w-4" data-testid="X__8d2ae7" />
             </button>
           </div>
         </div>
         {/* Document area */}
         <div className="flex-1 overflow-hidden bg-muted p-6 flex justify-center">
           <div className="bg-card rounded-lg shadow-lg w-full max-w-[850px] overflow-hidden relative">
-            {loading && <div className="absolute inset-0 flex items-center justify-center bg-card/80 z-10 gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__8d2ae7" /><span>{ui('generating')}</span></div>}
+            {loading && <div className="absolute inset-0 flex items-center justify-center bg-card/80 z-10 gap-2 text-muted-foreground"><CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__8d2ae7" /><span>{ui('generating')}</span></div>}
             {error && <div className="absolute inset-0 flex items-center justify-center bg-card/90 z-10 text-destructive text-sm px-8 text-center">{error}</div>}
             <iframe ref={iframeRef} title="Document Print" className="w-full h-full border-0" />
           </div>
@@ -302,7 +310,7 @@ export async function printDocuments(windowName, documents, token, translate = (
       ? { id: doc.id, documentStatus: doc.documentStatus }
       : { id: doc, documentStatus: undefined }
   ));
-  const printableDocuments = normalizedDocuments.filter((doc) => doc.documentStatus !== 'DR');
+  const printableDocuments = normalizedDocuments.filter((doc) => !isDraftStatus(doc.documentStatus));
 
   if (printableDocuments.length === 0) {
     console.info(`[print-documents] ${windowName}: all ${normalizedDocuments.length} selected document(s) are Draft — nothing to print`);

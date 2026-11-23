@@ -697,7 +697,7 @@ describe('report-api.js — period columns wiring (ETP-6239)', async () => {
   });
 
   it('spreads the same buildPeriodMeta into meta (columnPages, notes, periods)', () => {
-    assert.match(SRC, /\.\.\.neoMeta, \.\.\.buildPeriodMeta\(result\.periodSpec, \{ format, compareMode: params\.compareMode \}\)/);
+    assert.match(SRC, /\.\.\.neoMeta, \.\.\.chartMeta, \.\.\.buildPeriodMeta\(result\.periodSpec, \{ format, compareMode: params\.compareMode \}\)/);
   });
 
   it('answers a ReportPeriodsError with its status and code (400), not 500', () => {

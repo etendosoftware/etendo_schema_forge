@@ -32,7 +32,7 @@ exposure events are telemetry the SDK reports to Datadog on its own, and
 |----------|--------------|
 | Datadog | `VITE_DATADOG_ENABLED=true` plus application id, client token, site and `VITE_APP_ENV` |
 | AWS RUM | `VITE_RUM_ENABLED=true` and both RUM IDs are set |
-| Mixpanel | `VITE_MIXPANEL_ENABLED=true` and `VITE_MIXPANEL_TOKEN` is set |
+| Mixpanel | `VITE_MIXPANEL_ENABLED=true` and `VITE_MIXPANEL_TOKEN` is set, **and** the page is served from a production host (see below) |
 
 AWS RUM is opt-in (ETP-4578): the injected IDs alone no longer switch it on. Its SDK has no
 before-send hook, so every batch is sanitized through the SDK's `clientBuilder` before it is
@@ -40,8 +40,25 @@ serialized and signed (page titles, record ids and query strings never leave). C
 unless `VITE_RUM_ALLOW_COOKIES=true`; that is an open question for Privacy. RUM also calls
 `cognito-identity` at startup and keeps temporary credentials in `localStorage`.
 
+### Mixpanel only emits from production hosts (ETP-5466)
+
+The Mixpanel project is the source of the product KPIs, and it was flooded by development
+traffic: every developer with a token in the untracked `tools/app-shell/.env.local`, and every
+Playwright test (a new browser context, so a new device), emitted to it. The provider is
+therefore also gated by the page's hostname (`MIXPANEL_ALLOWED_HOSTS` in
+`observability/providers/mixpanel.js`): it starts only on **`app.etendo.software`** and
+**`app.etendo.ai`** (exact names, case-insensitive, no subdomains). On any other host —
+`localhost`, `127.0.0.1`, staging, experimental, a preview — it stays disabled even with
+`VITE_MIXPANEL_ENABLED=true` and a token: the SDK is never downloaded and nothing is sent, with
+no warning.
+
+To validate emission on purpose from a developer machine, build or run with
+`VITE_MIXPANEL_ALLOW_LOCAL=true` (only the literal `true`) in addition to the switch and the token.
+Never set it in a deployment workflow.
+
 | Variable | Description |
 |----------|-------------|
+| `VITE_MIXPANEL_ALLOW_LOCAL` | Set to `true` to let Mixpanel emit from a non-production host (local validation only). Off by default. |
 | `VITE_RUM_ENABLED` | Set to `true` to enable AWS RUM. Off by default; both RUM IDs are also required. |
 | `VITE_RUM_ALLOW_COOKIES` | Set to `true` to let RUM keep its session in cookies. Off by default (consent is undecided). |
 | `VITE_TELEMETRY_KILL` | Build-default kill switch: `true` stops every provider, a comma list (`mixpanel,aws-rum`) stops those. See [Kill Switch](#kill-switch). |
@@ -91,7 +108,8 @@ one and passes `VITE_*` through to it. The fake values below never reach a real 
 Scenario 1 is the default bundle, so the regular mocked suite (and the pre-push) already runs
 it. When `E2E_TELEMETRY` is unset, `run-e2e-full.sh` builds with `VITE_MIXPANEL_ENABLED`,
 `VITE_DATADOG_ENABLED` and `VITE_RUM_ENABLED` forced to `false`, so a developer's gitignored
-`tools/app-shell/.env.local` no longer leaks real providers into the default bundle. Scenarios 2 and 3 each need a bundle built with the fake provider configuration:
+`tools/app-shell/.env.local` no longer leaks real providers into the default bundle. (Mixpanel is
+also off there by host, since the suite runs on `localhost`.) Scenarios 2 and 3 each need a bundle built with the fake provider configuration:
 
 ```bash
 # 2. Positive control, providers configured and NOT killed: requests are attempted.
@@ -103,6 +121,7 @@ it. When `E2E_TELEMETRY` is unset, `run-e2e-full.sh` builds with `VITE_MIXPANEL_
   export VITE_APP_ENV=e2e
   export VITE_MIXPANEL_ENABLED=true
   export VITE_MIXPANEL_TOKEN=fake-project-token
+  export VITE_MIXPANEL_ALLOW_LOCAL=true   # the suite runs on localhost (ETP-5466)
   export VITE_RUM_ENABLED=true
   export VITE_RUM_APP_MONITOR_ID=fake-monitor
   export VITE_RUM_IDENTITY_POOL_ID=eu-west-3:fake-pool
@@ -120,6 +139,7 @@ it. When `E2E_TELEMETRY` is unset, `run-e2e-full.sh` builds with `VITE_MIXPANEL_
   export VITE_APP_ENV=e2e
   export VITE_MIXPANEL_ENABLED=true
   export VITE_MIXPANEL_TOKEN=fake-project-token
+  export VITE_MIXPANEL_ALLOW_LOCAL=true   # the suite runs on localhost (ETP-5466)
   export VITE_RUM_ENABLED=true
   export VITE_RUM_APP_MONITOR_ID=fake-monitor
   export VITE_RUM_IDENTITY_POOL_ID=eu-west-3:fake-pool
@@ -226,7 +246,7 @@ Its value (36 characters) stays under the gateway's opaque-value scrub. `errorCo
 | `report_opened` | Once per report session, when the first request answers | `source` (`menu` when picked from the report list, else `deep_link`), `outcome`, `durationMs`, `errorCode`, `account_id` |
 | `report_filter_applied` | One per user change, when its result is visible or its request failed. Never for the defaults, "Limpiar filtros" or a change whose request was replaced inside the debounce | `type` (`period`, `organization`, `account_level`, `business_partner`, `product`, `comparison`, `columns`), `outcome`, `durationMs` (none for `account_level` and `comparison`: nothing loads), `errorCode`, `account_id` |
 | `report_group_toggled` | A row folded or unfolded, expand all, collapse all | `type` (`expand`, `collapse`, `expand_all`, `collapse_all`), `outcome: success`, `account_id` |
-| `report_drilldown` | A drill-down step | `type` (`ledger`, `entry` timed from the click to the answer; `document` when the tab opens), `outcome` (`success`, `error` incl. a blocked pop-up, `no_document` for an entry with no window), `account_id` |
+| `report_drilldown` | A drill-down step | `type` (`ledger`, `entry` timed from the click to the answer; `result` when the balance sheet's income-summary (129) explanation panel opens, no duration, ETP-6083; `document` when the tab opens), `outcome` (`success`, `error` incl. a blocked pop-up, `no_document` for an entry with no window), `account_id` |
 | `report_panel_toggled` | The "Personalizar informe" panel was hidden or shown (ETP-6239) | `panelState` (`collapsed`, `expanded`), `trigger` (`user` for the button, `auto_columns` when choosing Mes/Trimestre hid it), `outcome: success`, `account_id`. The property is `panelState` and not `state`: the payload policy denylists `state` (OAuth) and would drop it |
 
 ### `account_id` and `internal_user` on report and walkthrough events (ETP-6230)
@@ -446,7 +466,7 @@ await stop({ status: 'success' });
 Payloads are normalized before providers receive them:
 
 - Allowed common fields: `app`, `environment`, `hostname`, `mockMode`, `role_groups`,
-  `route`, `routePattern`, `timestamp`, and `windowName`.
+  `route`, `routePattern`, `tenant_type`, `timestamp`, and `windowName`.
 - Allowed KPI numeric fields: `accuracy`, `attempt`, `count`, `durationMs`,
   `position`, `score`, `step`, and `value`. These must be finite numbers within
   their configured bounds; strings and booleans are dropped for numeric keys.
@@ -483,6 +503,79 @@ free text per tenant. `useSessionStartTracking` keeps them in the common context
 with `setContext`, before `session_started` fires, follows a role switch, and
 clears them on unmount. In a Mixpanel `where`, filter with
 `"warehouse" in properties["role_groups"]`. Mapping: `lib/observability/roleGroups.js`.
+
+### `ad_user_id`, `ad_client_id`, `etgo_account_id` (ETP-6228)
+
+Every event carries the same internal identity so KPIs can count per environment or
+account, join SPA events with the backend's, and exclude test accounts:
+
+| Property | Value |
+|---|---|
+| `ad_user_id` | The AD_User of the session (internal id, no name or email). |
+| `ad_client_id` | The environment (AD_Client_ID). Same value as the former `account_id`. |
+| `etgo_account_id` | The ETGO_Account that **owns** the environment (one account, several environments). Not the account of the person signed in: an invited member signs in with their own account. |
+
+`useSessionStartTracking` keeps them in the common context with `setContext`, in a single
+write so a company switch replaces all three together. They are cleared on unmount and,
+for a session lost while the shell stays mounted, from `clearSessionScopedState` in
+`App.jsx` (`clearIdentityContext`). An id that is not known yet is left off the events; it is
+never copied from another tenant. `session_started` is not sent if the session changed while
+the group calls were in flight. Policy: the three keys are in the allowlist of `payload.js`;
+names and emails are dropped.
+
+**Sources.** `ad_user_id` is `useAuth().userId` and `etgo_account_id` is
+`useAuth().etgoAccountId`, both mapped by `schema_forge_core` from the session payload
+(`environment.userId`, `environment.etgoAccountId`). Until the core release and the backend
+expose them the SPA sends neither; it never falls back to `account.id`.
+
+**Transition.** `account_id` keeps being sent (session events and health events) with the
+same value as `ad_client_id`, and the Mixpanel group is registered under both keys
+(`group`/`groupSet` for `ad_client_id` and `account_id`), so saved reports and group reports
+keep working. No removal date is set: drop `account_id` (property and group key) once the
+reports move to `ad_client_id`.
+
+**Open items** (for the issue owner):
+- Backend events carry the same identity since ETP-6228 (`NeoTelemetryService`, owner account
+  from the flagged owner user, also returned as `environment.etgoAccountId` by
+  `GET /sws/go/session`); see the backend telemetry doc for its own open items (the legal rule,
+  ETP-5791, forbids business record ids only; the PM confirmed on 2026-11-19 that `ad_user_id` is
+  allowed).
+- `distinct_id` as hash of `ad_user_id` + device id: needs `identify`, which ETP-4352 (GDPR)
+  removed; pending a privacy decision.
+- `ETGO_Account` lookup table with the test-account flag in Mixpanel: flag name pending from
+  Platform.
+- Group Analytics must be active in the project, and the project's group-key limit must allow
+  both keys during the transition.
+- Formal privacy review: the code sends internal ids only.
+- `account_id` removal date.
+
+### `tenant_type` (ETP-6072)
+
+Every event carries `tenant_type` once the current environment is known, so KPIs
+can leave demo tenants out (consumer: `etendo-kpis`). It is not `environment`, which
+is the deployment (`VITE_APP_ENV`: prod, staging, e2e). The payload policy keeps only
+the two values below and drops anything else, including the backend casing.
+
+| Value | When |
+|---|---|
+| `demo` | The current row of `GET /sws/go/environments` has `environmentType` `DEMO` |
+| `productive` | It has `environmentType` `PRODUCTIVE`, also when a canceled subscription makes its `plan` read `free` |
+| *(absent)* | The list has not loaded, no row matches the session's client, or the row reports no type |
+
+The source is `environmentType`, never `plan`. `useTenantTypeContext` (mounted by
+`useSessionStartTracking`) keeps the value in the common context with `setContext`,
+follows the current tenant, and clears it on unmount. The list loads asynchronously,
+so events sent before it settles go out without the property: read its absence as
+unknown. `session_started` waits for the list (at most 5 s, then it goes out without
+the property), because it is the denominator of the adoption KPIs and a filter on the
+numerator alone would bias them. A company switch is a
+hard navigation, so the next page resolves the new tenant. Backend events of
+`com.etendoerp.go` do not go through the SPA; since ETP-6228 the backend sink adds the same
+`tenant_type` (`demo` | `productive`, from the same environment lifecycle) to the events built
+in a session, see `docs/backend-observability.md` in that module. Historical events
+are not backfilled. In a Mixpanel `where`, exclude demo tenants and keep the unknown
+ones with `not (properties["tenant_type"] == "demo")`. Mapping:
+`lib/observability/tenantType.js`.
 
 The health event helpers read `account_id` from the in-memory session identity
 (`lib/sessionIdentity.js`), which `trackSessionStarted` records on sign-in and
@@ -639,7 +732,8 @@ and STAGING from `VITE_DATADOG_APPLICATION_ID_<TARGET>` and
 same RUM application ID/client token plus `VITE_APP_ENV` enable Datadog Feature
 Flags (`VITE_FLAGS_PROVIDER`, default `datadog`), and `VITE_CONFIGCAT_SDK_KEY`
 keeps ConfigCat available as the fallback. Mixpanel is independently opt-in through
-`VITE_MIXPANEL_ENABLED`.
+`VITE_MIXPANEL_ENABLED`, and only emits on the production hosts (`app.etendo.software`,
+`app.etendo.ai`): a staging or experimental bundle built with it stays silent (ETP-5466).
 
 When Datadog telemetry is enabled, CI uploads hidden source maps using the
 server-side `DATADOG_API_KEY` secret, service `etendo-go-web`, commit SHA release
@@ -755,3 +849,53 @@ analytics attribution.
 Code and unit tests establish this emission contract. Confirm receipt in the
 selected Mixpanel project and Datadog environment after deployment before using
 these events as evidence of an operational improvement.
+
+## Marketing Attribution: GTM, `hubspotutk` and the dataLayer (ETP-6363)
+
+Marketing's lead attribution ("Atribución de leads", 2026-11-17) is separate from the product
+analytics above: it does not go through the observability gateway and none of its data reaches
+Mixpanel or Datadog.
+
+**Google Tag Manager** (`src/lib/marketing/gtm.js`, installed from `main.jsx`). The container
+`GTM-N8JMRDH9` carries, in marketing's hands, the default consent ("denied"), Google Analytics and
+HubSpot's tracking code, which shows the cookie banner and leaves the `hubspotutk` cookie. The app
+only installs it, and only:
+
+- on the production host (`app.etendo.ai`; `VITE_GTM_HOSTS` takes a comma-separated list, e.g. for
+  a `local.etendo.ai` alias to test the cookie locally), so no developer machine feeds marketing's
+  reports;
+- never in a support session.
+
+`VITE_GTM_ID` overrides the container and `VITE_GTM_ENABLED=false` disables it. The `<noscript>`
+iframe of marketing's snippet is left out: the app does not run without JavaScript.
+
+**Cookie settings.** The user menu shows "Configuración de cookies" where GTM is loaded; it reopens
+HubSpot's banner (`_hsp.push(['showBanner'])`). Signing up never depends on accepting cookies.
+
+**`hubspotutk` and the sign-up** (`etendo-go-core` `onboarding/hubspotAttribution.js`). The
+register and single sign-on requests carry `hubspotContext`: `hutk` (only when the cookie exists),
+`pageUri` (the address with its campaign parameters only, `utm_*`, `hsa_*`, `gclid`, `fbclid`,
+`msclkid`, `li_fat_id`..., so no token in the address leaves the app) and `pageName`. The backend
+keeps it on the account and submits the confirmed sign-up to HubSpot's form (see
+`com.etendoerp.go` `docs/hubspot-sync.md`, `SIGNUP_FORM`).
+
+**dataLayer events** (`src/lib/marketing/dataLayer.js`). Pushed only where GTM is loaded, each
+once its action is confirmed, never with an email, a name or a phone:
+
+| Event | When | Parameters |
+|---|---|---|
+| `sign_up` | the register form created the account, or a single sign-on did (`accountCreated` in the SSO answer) | `method`: `email` / `google` |
+| `login` | a sign-in that found the account | `method` |
+| `user_identified` | after the sign-in or the sign-up, and every analytics `identify` (once per account and page load) | `user_id`: the account's internal id |
+| `onboarding_step` | the profile and company steps (`onboarding_setup_step_completed`), once each | `step_number` (1, 2), `step_name` (`profile`, `company`: the onboarding's step ids, shared with Mixpanel; they must not change) |
+| `onboarding_complete` | the environment was created (`onboarding_run_succeeded`) | — |
+| `purchase` | the backend confirmed the payment (the checkout status is `paid` after Stripe's webhook), once per purchase id (remembered in `localStorage`) | `ecommerce`: `transaction_id` (the checkout request id), `value` and `currency` (the plan's price), `items` (the plan key and name) |
+| `first_key_action` | the account's first qualification milestone, as `GET /sws/go/me` reports it (`firstKeyAction`), once per account (remembered in `localStorage`); not when it was reached more than 30 days before | `action_name`: `import`, `business_partner`, `product`, `order`, `invoice`, `invoice_completed` or `invoice_posted` |
+| `logout` | the user logs out | `user_id: null` |
+
+`first_key_action` comes late on purpose. The milestones are detected by the backend's HubSpot sync
+(every minute, `com.etendoerp.go` `docs/hubspot-sync.md`), which the browser does not see: the app
+reads it off the `/me` call it already makes on each load (`useSupportSessionSync`), so it is pushed
+on the next load after the milestone, not on the action itself. GA attributes it by its cookie, so
+the delay does not change the attribution. The 30-day limit keeps accounts active before the event
+shipped from reporting old milestones as new conversions.

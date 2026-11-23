@@ -72,6 +72,11 @@
   },
   "entities": {
     "header": {
+      "publicApi": {
+        "inputFields": [
+          { "name": "currency_rate", "internalPath": "eTGOCurrencyRate", "dataType": "number", "readable": true }
+        ]
+      },
       "draftMode": {
         "enabled": true,
         "processField": "documentAction",
@@ -170,7 +175,8 @@
           "createNamePlaceholderKey": "paymentTermDaysPlaceholder"
         },
         "warehouse": {
-          "inputMode": "search"
+          "inputMode": "search",
+          "publicApi": { "lookup": true }
         },
         "salesRepresentative": {
           "visibility": "system"

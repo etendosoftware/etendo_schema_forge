@@ -1,16 +1,10 @@
 /**
  * Confirm-modal lifecycle of the LIVE purchase-order topbar actions (ETP-5255).
  *
- * ## Which file this tests, and why it is not the sibling
+ * ## Which file this tests
  *
- * There are two `PurchaseOrderActions.jsx`. The one the running window uses is
- * `artifacts/purchase-order/custom/PurchaseOrderActions.jsx` — `customLoaders` in
- * `windows/registry.js` wins over `windowLoaders`, so the live window is
- * `windows/custom/purchase-order/index.jsx`, and it imports the confirm modal from
- * `@generated/purchase-order/custom/PurchaseOrderActions`. That is the module imported below.
- * The `PurchaseOrderActions.vitest.jsx` next to this file imports
- * `../PurchaseOrderActions.jsx`, a different component that does not contain the confirm modal
- * at all — do not add these cases there.
+ * `artifacts/purchase-order/custom/PurchaseOrderActions.jsx`, imported below through
+ * `@generated/purchase-order/custom/PurchaseOrderActions` — the module the running window loads.
  *
  * ## What this replaces
  *
@@ -147,8 +141,8 @@ describe('PurchaseOrderActions — confirm modal lifecycle', () => {
     vi.restoreAllMocks();
   });
 
-  it('does not open the confirm modal for an order that is not in draft', async () => {
-    await renderActions('CO');
+  it.each(['CO', 'VO', 'UE', 'XX', null, undefined])('does not open the confirm modal for status %s', async (status) => {
+    await renderActions(status);
     expect(confirmModal()).not.toBeInTheDocument();
 
     await dispatchOpenConfirm();
