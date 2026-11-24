@@ -817,7 +817,8 @@ export function ManualRateDialog({
       error={rateError}
       orgIso={orgIso}
       destIso={destIso}
-      ui={ui} />
+      ui={ui}
+      data-testid="RateField__51f9a2" />
   );
   const blocked = writes.submitting || writes.confirmOpen;
 
@@ -868,7 +869,8 @@ export function ManualRateDialog({
                 setDestId={setDestId}
                 options={options}
                 optionsLoaded={optionsLoaded}
-                ui={ui} />
+                ui={ui}
+                data-testid="DestinationField__51f9a2" />
             </div>
 
             <ModeHint
@@ -877,9 +879,14 @@ export function ManualRateDialog({
               currency={currency}
               orgIso={orgIso}
               destIso={destIso}
-              ui={ui} />
+              ui={ui}
+              data-testid="ModeHint__51f9a2" />
 
-            {isEdit ? <EditRangeFields rateField={rateField} row={row} ui={ui} /> : (
+            {isEdit ? <EditRangeFields
+              rateField={rateField}
+              row={row}
+              ui={ui}
+              data-testid="EditRangeFields__51f9a2" /> : (
               <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
                 {rateField}
                 <ValidFromField
@@ -892,7 +899,8 @@ export function ManualRateDialog({
                   max={nowBound}
                   inError={startInError}
                   error={dateError}
-                  ui={ui} />
+                  ui={ui}
+                  data-testid="ValidFromField__51f9a2" />
               </div>
             )}
 
@@ -905,7 +913,8 @@ export function ManualRateDialog({
               mode={mode}
               destIso={destIso}
               orgIso={orgIso}
-              ui={ui} />
+              ui={ui}
+              data-testid="DialogSummary__51f9a2" />
             <ErrorBox message={writes.submitError ?? previewError} data-testid="ErrorBox__51f9a2" />
           </div>
 
@@ -914,7 +923,8 @@ export function ManualRateDialog({
             canSubmit={canSubmit}
             submitLabel={submitLabel}
             onClose={onClose}
-            ui={ui} />
+            ui={ui}
+            data-testid="DialogFooterButtons__51f9a2" />
         </form>
       </DialogContent>
       {lines && (
