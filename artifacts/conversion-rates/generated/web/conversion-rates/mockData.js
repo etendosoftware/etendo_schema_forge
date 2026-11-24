@@ -3,122 +3,158 @@
 export const conversionRate = [
   {
     "id": "mock-conversionRate-001",
+    "organization": "Sample organization",
     "currency": "USD",
     "toCurrency": "USD",
-    "validFromDate": "2026-01-15",
-    "validToDate": "2026-01-15",
+    "validFromDate": "Sample validFromDate",
+    "validToDate": "Sample validToDate",
     "multipleRateBy": 99.44,
     "divideRateBy": 99.44,
-    "sMFCRSynced": "Sample sMFCRSynced"
+    "sMFCRSynced": "Sample sMFCRSynced",
+    "conversionRateType": "Sample conversionRateType",
+    "etgoRateStatus": "DR"
   },
   {
     "id": "mock-conversionRate-002",
+    "organization": "Sample organization",
     "currency": "EUR",
     "toCurrency": "EUR",
-    "validFromDate": "2026-01-16",
-    "validToDate": "2026-01-16",
+    "validFromDate": "Sample validFromDate",
+    "validToDate": "Sample validToDate",
     "multipleRateBy": 96.94,
     "divideRateBy": 96.94,
-    "sMFCRSynced": "Sample sMFCRSynced"
+    "sMFCRSynced": "Sample sMFCRSynced",
+    "conversionRateType": "Sample conversionRateType",
+    "etgoRateStatus": "CO"
   },
   {
     "id": "mock-conversionRate-003",
+    "organization": "Sample organization",
     "currency": "GBP",
     "toCurrency": "GBP",
-    "validFromDate": "2026-01-17",
-    "validToDate": "2026-01-17",
+    "validFromDate": "Sample validFromDate",
+    "validToDate": "Sample validToDate",
     "multipleRateBy": 12.48,
     "divideRateBy": 12.48,
-    "sMFCRSynced": "Sample sMFCRSynced"
+    "sMFCRSynced": "Sample sMFCRSynced",
+    "conversionRateType": "Sample conversionRateType",
+    "etgoRateStatus": "VO"
   },
   {
     "id": "mock-conversionRate-004",
+    "organization": "Sample organization",
     "currency": "USD",
     "toCurrency": "USD",
-    "validFromDate": "2026-01-18",
-    "validToDate": "2026-01-18",
+    "validFromDate": "Sample validFromDate",
+    "validToDate": "Sample validToDate",
     "multipleRateBy": 96.31,
     "divideRateBy": 96.31,
-    "sMFCRSynced": "Sample sMFCRSynced"
+    "sMFCRSynced": "Sample sMFCRSynced",
+    "conversionRateType": "Sample conversionRateType",
+    "etgoRateStatus": "IP"
   },
   {
     "id": "mock-conversionRate-005",
+    "organization": "Sample organization",
     "currency": "EUR",
     "toCurrency": "EUR",
-    "validFromDate": "2026-01-19",
-    "validToDate": "2026-01-19",
+    "validFromDate": "Sample validFromDate",
+    "validToDate": "Sample validToDate",
     "multipleRateBy": 31.27,
     "divideRateBy": 31.27,
-    "sMFCRSynced": "Sample sMFCRSynced"
+    "sMFCRSynced": "Sample sMFCRSynced",
+    "conversionRateType": "Sample conversionRateType",
+    "etgoRateStatus": "DR"
   },
   {
     "id": "mock-conversionRate-006",
+    "organization": "Sample organization",
     "currency": "GBP",
     "toCurrency": "GBP",
-    "validFromDate": "2026-01-20",
-    "validToDate": "2026-01-20",
+    "validFromDate": "Sample validFromDate",
+    "validToDate": "Sample validToDate",
     "multipleRateBy": 76.52,
     "divideRateBy": 76.52,
-    "sMFCRSynced": "Sample sMFCRSynced"
+    "sMFCRSynced": "Sample sMFCRSynced",
+    "conversionRateType": "Sample conversionRateType",
+    "etgoRateStatus": "CO"
   },
   {
     "id": "mock-conversionRate-007",
+    "organization": "Sample organization",
     "currency": "USD",
     "toCurrency": "USD",
-    "validFromDate": "2026-01-21",
-    "validToDate": "2026-01-21",
+    "validFromDate": "Sample validFromDate",
+    "validToDate": "Sample validToDate",
     "multipleRateBy": 2.66,
     "divideRateBy": 2.66,
-    "sMFCRSynced": "Sample sMFCRSynced"
+    "sMFCRSynced": "Sample sMFCRSynced",
+    "conversionRateType": "Sample conversionRateType",
+    "etgoRateStatus": "VO"
   },
   {
     "id": "mock-conversionRate-008",
+    "organization": "Sample organization",
     "currency": "EUR",
     "toCurrency": "EUR",
-    "validFromDate": "2026-01-22",
-    "validToDate": "2026-01-22",
+    "validFromDate": "Sample validFromDate",
+    "validToDate": "Sample validToDate",
     "multipleRateBy": 10.03,
     "divideRateBy": 10.03,
-    "sMFCRSynced": "Sample sMFCRSynced"
+    "sMFCRSynced": "Sample sMFCRSynced",
+    "conversionRateType": "Sample conversionRateType",
+    "etgoRateStatus": "IP"
   },
   {
     "id": "mock-conversionRate-009",
+    "organization": "Sample organization",
     "currency": "GBP",
     "toCurrency": "GBP",
-    "validFromDate": "2026-01-23",
-    "validToDate": "2026-01-23",
+    "validFromDate": "Sample validFromDate",
+    "validToDate": "Sample validToDate",
     "multipleRateBy": 93.97,
     "divideRateBy": 93.97,
-    "sMFCRSynced": "Sample sMFCRSynced"
+    "sMFCRSynced": "Sample sMFCRSynced",
+    "conversionRateType": "Sample conversionRateType",
+    "etgoRateStatus": "DR"
   },
   {
     "id": "mock-conversionRate-010",
+    "organization": "Sample organization",
     "currency": "USD",
     "toCurrency": "USD",
-    "validFromDate": "2026-01-24",
-    "validToDate": "2026-01-24",
+    "validFromDate": "Sample validFromDate",
+    "validToDate": "Sample validToDate",
     "multipleRateBy": 1.1,
     "divideRateBy": 1.1,
-    "sMFCRSynced": "Sample sMFCRSynced"
+    "sMFCRSynced": "Sample sMFCRSynced",
+    "conversionRateType": "Sample conversionRateType",
+    "etgoRateStatus": "CO"
   },
   {
     "id": "mock-conversionRate-011",
+    "organization": "Sample organization",
     "currency": "EUR",
     "toCurrency": "EUR",
-    "validFromDate": "2026-01-25",
-    "validToDate": "2026-01-25",
+    "validFromDate": "Sample validFromDate",
+    "validToDate": "Sample validToDate",
     "multipleRateBy": 79.99,
     "divideRateBy": 79.99,
-    "sMFCRSynced": "Sample sMFCRSynced"
+    "sMFCRSynced": "Sample sMFCRSynced",
+    "conversionRateType": "Sample conversionRateType",
+    "etgoRateStatus": "VO"
   },
   {
     "id": "mock-conversionRate-012",
+    "organization": "Sample organization",
     "currency": "GBP",
     "toCurrency": "GBP",
-    "validFromDate": "2026-01-26",
-    "validToDate": "2026-01-26",
+    "validFromDate": "Sample validFromDate",
+    "validToDate": "Sample validToDate",
     "multipleRateBy": 53.61,
     "divideRateBy": 53.61,
-    "sMFCRSynced": "Sample sMFCRSynced"
+    "sMFCRSynced": "Sample sMFCRSynced",
+    "conversionRateType": "Sample conversionRateType",
+    "etgoRateStatus": "IP"
   }
 ];

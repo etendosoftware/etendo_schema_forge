@@ -21250,7 +21250,7 @@
       ]
     },
     "88ad8a1f069401e3146d7f655acfc6a28ca92062200daae9b33395feed8061f1": {
-      "checksum": "5aa1325b31e694a9e531c904547efe279dbf96f9da9fc4b1403e2f64ef2ef361",
+      "checksum": "8a53cedee50708f23f5dfef389b43114223bb149e5afb473aff0e03d4f70ddfb",
       "params": [
         "116"
       ],
@@ -21344,6 +21344,12 @@
           "ad_table_id": "140",
           "columnname": "DivideRate",
           "position": "15"
+        },
+        {
+          "ad_column_id": "5A4657176D6543E59817E500C4F21C2C",
+          "ad_table_id": "140",
+          "columnname": "EM_Etgo_Rate_Status",
+          "position": null
         },
         {
           "ad_column_id": "8552BAB04A1A4F779EF4875B78C4D5BB",

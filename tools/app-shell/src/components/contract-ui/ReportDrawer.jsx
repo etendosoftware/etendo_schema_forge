@@ -256,10 +256,16 @@ export async function renderViaJsreport(recipe, title, columns, rows, filters, l
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
+/**
+ * `rows` (optional, ETP-6365): the rows to print, already filtered and ordered by the host. When
+ * given, the drawer prints them as they are instead of reading every record of `entity` — for a
+ * custom page whose list is a filtered, grouped view of the entity (Currency Conversion). Absent,
+ * the drawer fetches exactly as before.
+ */
 export default function ReportDrawer({
   open, onClose, windowName, columns, title,
   apiBaseUrl, entity, token, sortColumn, sortDirection,
-  activeFilters,
+  activeFilters, rows: providedRows,
 }) {
   const ui = useUI();
   // ETP-5300 (Lea's QA comment) — every label LISTING_TEMPLATE and the
@@ -326,6 +332,12 @@ export default function ReportDrawer({
 
   // Fetch all records when drawer opens
   useEffect(() => {
+    if (open && Array.isArray(providedRows)) {
+      setReportRows(resolveRows(providedRows, columns || []));
+      setFetchingData(false);
+      setError(null);
+      return;
+    }
     if (!open || !apiBaseUrl || !entity) {
       setReportRows(null);
       setError(null);
@@ -350,7 +362,7 @@ export default function ReportDrawer({
       });
 
     return () => { cancelled = true; };
-  }, [open, apiBaseUrl, apiFetch, entity, token, sortColumn, sortDirection, columns]);
+  }, [open, apiBaseUrl, apiFetch, entity, token, sortColumn, sortDirection, columns, providedRows]);
 
   // ETP-5300 (Lea's QA comment) — the drawer is never unmounted between opens
   // (ListView always renders it; only `shouldRender` toggles), so `activeFormat`

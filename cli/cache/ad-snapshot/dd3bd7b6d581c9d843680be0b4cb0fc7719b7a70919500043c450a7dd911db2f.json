@@ -10735,6 +10735,77 @@
         }
       ]
     },
+    "a261afa47e60ca3d65dd197aac1fb551aaab3c7ba1433750adc12b7cedaf4cfc": {
+      "checksum": "e010a903659cbc582f7c38e28cd79062dff526d5723ba563301c4c849c45501d",
+      "params": [
+        [
+          "39E798EF77B5445B90A0FDF44999008C",
+          "111"
+        ]
+      ],
+      "rows": [
+        {
+          "ad_reference_id": "111",
+          "name": "Average",
+          "name_es": "Promedio",
+          "value": "A"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "Company",
+          "name_es": "Empresa",
+          "value": "C"
+        },
+        {
+          "ad_reference_id": "39E798EF77B5445B90A0FDF44999008C",
+          "name": "Current",
+          "name_es": "Current",
+          "value": "CURRENT"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "Fixed",
+          "name_es": "Fijo",
+          "value": "F"
+        },
+        {
+          "ad_reference_id": "39E798EF77B5445B90A0FDF44999008C",
+          "name": "Historic",
+          "name_es": "Historic",
+          "value": "HISTORIC"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "Manual Rate",
+          "name_es": "Porcentaje manual",
+          "value": "M"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "None",
+          "name_es": "Ninguno",
+          "value": "N"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "Period End",
+          "name_es": "Fin periodo",
+          "value": "P"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "Spot",
+          "name_es": "Punto",
+          "value": "S"
+        },
+        {
+          "ad_reference_id": "111",
+          "name": "User Type",
+          "name_es": "Definido por el usuario",
+          "value": "U"
+        }
+      ]
+    },
     "a5a4e7ede94fc476d62df55563fffd12e01cbb0dc9af964eb9bd981eaacec7c1": {
       "checksum": "3405f280c130b18ea250725480d18a7f9d173f0d13b8662db2fa2be3394c10a9",
       "params": [

@@ -2,25 +2,28 @@
   "$schema": "decisions-v2",
   "window": {
     "category": "finance",
-    "name": "Conversion Rates",
+    "name": "Currency Conversion",
     "detailEntity": null,
-    "readOnly": true
+    "layoutType": "custom",
+    "readOnly": false
   },
   "entities": {
     "header": {
       "name": "conversionRate",
+      "methods": ["GET", "GETBYID", "DELETE"],
       "publicApi": { "readOnly": true },
       "fields": {
-        "organization": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
-        "currency": { "grid": true, "form": true, "searchable": true, "inputMode": "selector", "readOnlyLogic": "@sMFCRSynced@='Y'", "publicApi": { "exposed": true } },
-        "toCurrency": { "grid": true, "form": true, "searchable": true, "inputMode": "selector", "readOnlyLogic": "@sMFCRSynced@='Y'", "publicApi": { "exposed": true } },
-        "conversionRateType": { "grid": true, "form": true, "searchable": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
-        "validFromDate": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'", "publicApi": { "exposed": true } },
-        "validToDate": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'", "publicApi": { "exposed": true } },
+        "organization": { "grid": false, "form": false, "visibility": "readOnly" },
+        "currency": { "grid": true, "form": true, "searchable": true, "inputMode": "selector", "visibility": "readOnly", "publicApi": { "exposed": true } },
+        "toCurrency": { "grid": true, "form": true, "searchable": true, "inputMode": "selector", "readOnlyLogic": "@sMFCRSynced@='Y'", "readOnlyLogicJs": "!!record.id || record.sMFCRSynced === true", "publicApi": { "exposed": true } },
+        "conversionRateType": { "grid": false, "form": false, "visibility": "readOnly" },
+        "validFromDate": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'", "readOnlyLogicJs": "!!record.id || record.sMFCRSynced === true", "publicApi": { "exposed": true }, "_note": "ETP-6365: set on create only; an existing rate changes its rate alone (PATCH multipleRateBy)." },
+        "validToDate": { "grid": true, "form": true, "visibility": "readOnly", "publicApi": { "exposed": true } },
         "multipleRateBy": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'", "publicApi": { "exposed": true } },
-        "divideRateBy": { "grid": true, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'", "publicApi": { "exposed": true } },
-        "active": { "grid": false, "form": true, "readOnlyLogic": "@sMFCRSynced@='Y'" },
-        "sMFCRSynced": { "visibility": "readOnly", "grid": true, "form": true, "section": "principal" }
+        "divideRateBy": { "grid": true, "form": true, "visibility": "readOnly", "publicApi": { "exposed": true }, "_note": "Read-only since ETP-6365: the server derives it from multipleRateBy." },
+        "active": { "grid": false, "form": false },
+        "sMFCRSynced": { "visibility": "readOnly", "grid": true, "form": true, "section": "principal" },
+        "etgoRateStatus": { "visibility": "readOnly", "grid": true, "form": true, "_note": "ETP-6365: column served by com.etendoerp.go (CURRENT = rules now | HISTORIC = no longer rules); filterable." }
       }
     }
   },

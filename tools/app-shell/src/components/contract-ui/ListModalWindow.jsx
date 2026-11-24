@@ -9,13 +9,9 @@ import {
   MagnifyingGlassIcon,
   XIcon,
   CircleNotchIcon,
-  CopyIcon,
-  PencilSimpleIcon,
-  TrashIcon,
 } from '@phosphor-icons/react';
-// Same icons and row-action buttons as RowQuickActions (every other list), so the hover
-// actions never mix icon families or sizes across windows.
-import { ROW_ACTION_BUTTON_NEUTRAL, ROW_ACTION_BUTTON_DESTRUCTIVE } from './rowVisuals.js';
+// Hover row actions (edit / clone / delete): shared with the Currency Conversion history (ETP-6365).
+import { ListModalRowActions } from './ListModalRowActions.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
@@ -1225,54 +1221,6 @@ function gridColumnStyle(col, gridView, header = false) {
   return header
     ? { width, overflowWrap: 'anywhere', whiteSpace: 'normal' }
     : { width, overflowWrap: 'anywhere' };
-}
-
-/**
- * Hover row actions (edit / clone / delete) — the RowQuickActions look: 20px icons on
- * the shared 32px row-action buttons (`rowVisuals.js`), a 20px spinner on the row being deleted.
- * Each button renders only when its handler is given (a read-only role gets none).
- */
-function ListModalRowActions({ row, onEdit, onClone, onDelete, deleting, className, ui }) {
-  return (
-    <div className={cn('flex items-center justify-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100', className)}>
-      {onEdit && (
-        <button
-          type="button"
-          onClick={() => onEdit(row)}
-          aria-label={ui('edit')}
-          title={ui('edit')}
-          data-testid={`list-modal-edit-${row.id}`}
-          className={ROW_ACTION_BUTTON_NEUTRAL}>
-          <PencilSimpleIcon className="h-5 w-5" aria-hidden="true" data-testid="IconicEditIcon__19eda5" />
-        </button>
-      )}
-      {onClone && (
-        <button
-          type="button"
-          onClick={() => onClone(row)}
-          aria-label={ui('clone')}
-          title={ui('clone')}
-          data-testid={`list-modal-clone-${row.id}`}
-          className={ROW_ACTION_BUTTON_NEUTRAL}>
-          <CopyIcon className="h-5 w-5" aria-hidden="true" data-testid="IconicCopyIcon__19eda5" />
-        </button>
-      )}
-      {onDelete && (
-        <button
-          type="button"
-          onClick={() => onDelete(row)}
-          disabled={deleting}
-          aria-label={ui('delete')}
-          title={ui('delete')}
-          data-testid={`list-modal-delete-${row.id}`}
-          className={cn(ROW_ACTION_BUTTON_DESTRUCTIVE, deleting && 'opacity-60 cursor-wait')}>
-          {deleting
-            ? <CircleNotchIcon className="h-5 w-5 animate-spin" data-testid="Loader2__19eda5" />
-            : <TrashIcon className="h-5 w-5" aria-hidden="true" data-testid="IconicTrashIcon__19eda5" />}
-        </button>
-      )}
-    </div>
-  );
 }
 
 // Row / header / checkbox-column density. `compact` (templateConfig.listVariant) is the Figma

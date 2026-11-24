@@ -5,11 +5,12 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency', required: true },
   { key: 'toCurrency', column: 'C_Currency_ID_To', type: 'selector', label: 'To Currency', required: true },
-  { key: 'validFromDate', column: 'ValidFrom', type: 'date', label: 'Valid From Date', required: true },
-  { key: 'validToDate', column: 'ValidTo', type: 'date', label: 'Valid To Date' },
+  { key: 'validFromDate', column: 'ValidFrom', type: 'string', label: 'Valid From Date', required: true, maxLength: 19 },
+  { key: 'validToDate', column: 'ValidTo', type: 'string', label: 'Valid To Date', maxLength: 19 },
   { key: 'multipleRateBy', column: 'MultiplyRate', type: 'number', label: 'Multiple Rate By', required: true },
   { key: 'divideRateBy', column: 'DivideRate', type: 'number', label: 'Divide Rate By', required: true },
   { key: 'sMFCRSynced', column: 'EM_SMFCR_Is_Synced', type: 'boolean', label: 'Synced' },
+  { key: 'etgoRateStatus', column: 'EM_Etgo_Rate_Status', type: 'status', label: 'Status', enumLabels: { 'CURRENT': 'emEtgoRateStatusCurrent', 'HISTORIC': 'emEtgoRateStatusHistoric' } },
 ];
 // @sf-generated-end columns:conversionRate
 

@@ -367,6 +367,9 @@ const customLoaders = {
   // pattern as purchase-invoice/sales-invoice above. Detail branch is untouched
   // (still the generated HeaderPage, rendered directly).
   'amortization': () => import('./custom/amortization/index.jsx'),
+  // ETP-6365 — Currency Conversion: "Vigentes hoy" cards + grouped history + manual-rate dialogs
+  // over the `conversion-rates` spec; replaces the generated read-only list.
+  'conversion-rates': () => import('./custom/conversion-rates/index.jsx'),
 };
 
 // Audited custom entry points forward ListView grid props to the standard DataTable.

@@ -449,8 +449,8 @@
         },
         {
           "name": "conversion-rates",
-          "label": "Conversion Rates",
-          "favname": "Conversion Rates",
+          "label": "Currency Conversion",
+          "favname": "Currency Conversion",
           "windowId": "116"
         },
         {

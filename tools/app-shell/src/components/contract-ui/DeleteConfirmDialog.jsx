@@ -49,6 +49,11 @@ function preventWhile(locked) {
  *   notice?: import('react').ReactNode,
  * }} props
  *
+ * `title` / `message` (optional, ETP-6365) replace the title and the confirmation question for a
+ * host whose copy must differ (Currency Conversion words it impersonally and names the rate).
+ * Omitted, every other surface keeps "Eliminar registros / ¿Estás seguro…?". The in-progress
+ * description is unchanged.
+ *
  * `notice` (optional) is an extra block rendered under the description — a host-specific
  * consequence the user must read before confirming (e.g. the Imported Statements tab warns that a
  * bank-connected account re-imports deleted movements on the next sync, ETP-6151). Omitted by
@@ -56,7 +61,7 @@ function preventWhile(locked) {
  */
 export function DeleteConfirmDialog({
   open, count, deleting = false, progress = null, onConfirm, onClose, testIdScope = 'batch-delete',
-  notice = null,
+  notice = null, title = null, message = null,
 }) {
   const ui = useUI();
   const scope = testIdScope;
@@ -66,7 +71,7 @@ export function DeleteConfirmDialog({
   const processed = Math.min(progress?.processed ?? 0, total);
   const showProgress = deleting && progress != null && total > 0;
   const percent = showProgress ? Math.round((processed / total) * 100) : 0;
-  let description = ui('bulkDeleteConfirmMessage', { count });
+  let description = message ?? ui('bulkDeleteConfirmMessage', { count });
   if (showProgress) description = ui('bulkDeleteProgressMessage', { processed, total });
   else if (deleting) description = ui('bulkDeleteInProgressMessage', { count });
 
@@ -89,7 +94,7 @@ export function DeleteConfirmDialog({
         onInteractOutside={lock}
         data-testid={`DialogContent__${scope}`}>
         <DialogHeader data-testid={`DialogHeader__${scope}`}>
-          <DialogTitle data-testid={`DialogTitle__${scope}`}>{ui('bulkDeleteConfirmTitle')}</DialogTitle>
+          <DialogTitle data-testid={`DialogTitle__${scope}`}>{title ?? ui('bulkDeleteConfirmTitle')}</DialogTitle>
           <DialogDescription aria-live="polite" data-testid={`DialogDescription__${scope}`}>
             {description}
           </DialogDescription>
