@@ -18,9 +18,12 @@ const groups = {
   // ETP-6389 — Tesorería: Cobro, Pago, Cuentas, an Informes link holding only the aging reports,
   // and Condiciones de pago (moved from Settings).
   Treasury: 'payment-in payment-out financial-account report-viewer-treasury payment-term',
-  Finance: 'remittance chart-of-accounts cost-center service-project general-ledger-configuration calendar assets asset-group amortization not-posted-documents manual-journals fiscal-monitor conversion-rates fiscal-models tax tax-category report-viewer-finance',
+  Finance: 'remittance chart-of-accounts cost-center service-project general-ledger-configuration calendar assets asset-group amortization not-posted-documents manual-journals conversion-rates report-viewer-finance',
+  // ETP-6380 — Impuestos: the fiscal windows out of Finance, an Informes link holding only the Tax
+  // Report, and Configuración fiscal (moved from Settings).
+  Taxes: 'tax tax-category fiscal-monitor report-viewer-taxes fiscal-config fiscal-models',
   Connections: 'authorize',
-  Settings: 'organization document-sequence business-partner-category user roles api-keys document-templates acct-process-monitor fiscal-config',
+  Settings: 'organization document-sequence business-partner-category user roles api-keys document-templates acct-process-monitor',
 };
 
 // Composition aliases documented in calendar/fiscal-monitor/fiscal-config guides.
@@ -70,6 +73,13 @@ const exceptions = {
     path: 'report-viewer?category=treasury',
     requiresGroupReport: true,
     reportIds: ['aging-receivable', 'aging-payable'],
+  },
+  // ETP-6380 — same shape as Treasury: revealed by a grant on the Tax Report, not by the anchor.
+  'report-viewer-taxes': {
+    accessWindowId: 'D647D118F5014D00AF47A636B2CD0DD3',
+    path: 'report-viewer?category=taxes',
+    requiresGroupReport: true,
+    reportIds: ['tax-report'],
   },
 };
 

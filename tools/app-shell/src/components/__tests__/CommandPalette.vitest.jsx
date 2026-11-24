@@ -10,11 +10,16 @@ const MENU_TRANSLATIONS = vi.hoisted(() => ({
   'Aging Report (Receivables)': 'Antigüedad de cobros',
   'Aging Report (Payables)': 'Antigüedad de pagos',
   'Payment Term': 'Condiciones de pago',
+  // Impuestos fixture (see `taxesFixture` below).
+  Taxes: 'Impuestos',
+  'Fiscal Models': 'Modelos Fiscales',
 }));
 // The Tesorería group is always part of the menu fixture — registry.js indexes each group's
 // `reportId` rows once, at import — but it is `hidden` (so the palette skips it) unless a test
 // switches it on. That keeps the fixed window lists of the other tests unchanged.
 const treasuryFixture = vi.hoisted(() => ({ visible: false }));
+// Same switch for the Impuestos group, whose menu icon key is `BadgePercent`.
+const taxesFixture = vi.hoisted(() => ({ visible: false }));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -127,6 +132,14 @@ vi.mock('../../menu.json', () => ({
         ],
       },
       {
+        group: 'Taxes',
+        icon: 'BadgePercent',
+        get hidden() { return !taxesFixture.visible; },
+        items: [
+          { name: 'fiscal-models', label: 'Fiscal Models' },
+        ],
+      },
+      {
         group: 'Hidden Group',
         icon: 'Package',
         hidden: true,
@@ -168,6 +181,8 @@ vi.mock('@/components/global-search/GlobalSearchPrimitives.jsx', () => ({
 
 import { render, screen, fireEvent, waitFor, cleanup, act, within } from '@testing-library/react';
 import { useEffect } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { SealPercentIcon, PackageIcon } from '@phosphor-icons/react';
 import { CommandPalette } from '../CommandPalette.jsx';
 import { isSearchableMenuItem, splitSearchHighlight } from '@/lib/globalSearchMenu.js';
 import { GlobalSearchProvider, useGlobalSearch } from '@/components/global-search/GlobalSearchContext.jsx';
@@ -939,5 +954,40 @@ describe('CommandPalette — Tesorería group', () => {
     });
     fireEvent.click(item);
     expect(mockNavigate).toHaveBeenCalledWith(expectedPath);
+  });
+});
+
+// Impuestos (Taxes): the menu declares its icon as `BadgePercent`, which the palette maps to
+// Phosphor's SealPercentIcon. An unmapped key silently falls back to PackageIcon, so the test
+// compares the rendered SVG of each result against both reference icons.
+describe('CommandPalette — Impuestos group icon', () => {
+  const svgBody = (Icon) => {
+    const host = document.createElement('div');
+    host.innerHTML = renderToStaticMarkup(<Icon />);
+    return host.querySelector('svg').innerHTML;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vectorSearchOverride.current = null;
+    taxesFixture.visible = true;
+  });
+
+  afterEach(() => {
+    taxesFixture.visible = false;
+  });
+
+  it('shows the SealPercent icon, not the Package fallback, on the Impuestos results', async () => {
+    renderWithQuery('Impuestos');
+    const item = await waitFor(() => {
+      const found = document.querySelector('[data-testid="cmd-group-Impuestos"] [data-testid^="cmd-item-"]');
+      expect(found).not.toBeNull();
+      return found;
+    });
+    expect(item.dataset.testid.split(' ').at(-1)).toBe('fiscal-models');
+    const rendered = item.querySelector('svg').innerHTML;
+    expect(svgBody(SealPercentIcon)).not.toBe(svgBody(PackageIcon));
+    expect(rendered).toBe(svgBody(SealPercentIcon));
+    expect(rendered).not.toBe(svgBody(PackageIcon));
   });
 });

@@ -4,6 +4,7 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/Reconciliation390.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/Settlements303Table390.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/Incidents390Tab.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmDetailChrome.jsx
 //
 // Also: the Facturas tab wiring — "Ver facturas" on an invoice box opens the tab filtered by it.
 //
@@ -11,13 +12,16 @@
 // `GET /fiscal390/boxes` payload, the box search, manual inputs (live derivation + the saved
 // manualData), the substitute identifier validation, and the save ordering (inputs are saved in
 // their own PUT before generating the file or changing the status).
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
+// `ui()` returns the key unless a test switches `i18nState.ui` to a real locale dictionary
+// (the TopBar breadcrumb suite asserts the exact es_ES / en_US text).
+const i18nState = vi.hoisted(() => ({ ui: null, locale: 'es_ES' }));
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
-  useLocaleSwitch: () => ({ locale: 'es_ES' }),
+  useUI: () => i18nState.ui ?? ((key) => key),
+  useLocaleSwitch: () => ({ locale: i18nState.locale }),
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 const navigateMock = vi.hoisted(() => vi.fn());
@@ -98,6 +102,9 @@ vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
 }));
 
 import FmModel390Page, { substituteIdentifierError, summaryOf } from '../FmModel390Page.jsx';
+import { breadcrumbToText, normalizeBreadcrumb } from '@/components/layout/TopBar/breadcrumb.js';
+import { lastMeta, renderWithMeta } from '../../../__tests__/testUtils/topBarMetaTestUtils.jsx';
+import { loadLocaleDictionary, makeRealUI } from '../../../../shared/__tests__/testUtils/realLocaleUI.js';
 import { fetchBoxes390, generate390File, fetchPreload390, validate390 } from '../fm390Api.js';
 import { persistManualData, fetchDeclarationIncidents, fetchDeclaration } from '../../../fiscalModelsUtils.js';
 import { toast } from 'sonner';
@@ -1091,5 +1098,49 @@ describe('FmModel390Page — the generated file validated by the AEAT (ETP-5716)
       expect(tab.textContent).toContain('fm.incidents.block_sub');
       expect(tab.textContent).not.toContain('fm.incidents.review_sub');
     });
+  });
+});
+
+// The breadcrumb published to the app TopBar has the 303/349 shape: Impuestos, then "Modelos
+// Fiscales" as a link back to the declarations list (onBack), then the declaration title. It used
+// to be a plain string, so no level was clickable.
+describe('FmModel390Page — TopBar breadcrumb', () => {
+  const realUiEs = makeRealUI(loadLocaleDictionary('es_ES'));
+  const realUiEn = makeRealUI(loadLocaleDictionary('en_US'));
+
+  afterEach(() => {
+    i18nState.ui = null;
+    i18nState.locale = 'es_ES';
+  });
+
+  it('publishes three levels: taxes, the section and the declaration title', () => {
+    renderWithMeta(<FmModel390Page decl={makeDecl()} {...props()} />);
+    const items = normalizeBreadcrumb(lastMeta.breadcrumb);
+    expect(items.map(item => item.label)).toEqual(['taxes', 'fm.breadcrumb.section', lastMeta.title]);
+  });
+
+  it('es_ES: resolves to "Impuestos / Modelos Fiscales / <title>"', () => {
+    i18nState.ui = realUiEs;
+    renderWithMeta(<FmModel390Page decl={makeDecl()} {...props()} />);
+    expect(lastMeta.title).toMatch(/^Modelo 390/);
+    expect(breadcrumbToText(lastMeta.breadcrumb)).toBe(`Impuestos / Modelos Fiscales / ${lastMeta.title}`);
+  });
+
+  it('en_US: resolves to "Taxes / Fiscal Models / <title>"', () => {
+    i18nState.ui = realUiEn;
+    i18nState.locale = 'en_US';
+    renderWithMeta(<FmModel390Page decl={makeDecl()} {...props()} />);
+    expect(lastMeta.title).toMatch(/^Form 390/);
+    expect(breadcrumbToText(lastMeta.breadcrumb)).toBe(`Taxes / Fiscal Models / ${lastMeta.title}`);
+  });
+
+  it('only the "Modelos Fiscales" level is a link, and clicking it calls onBack', () => {
+    i18nState.ui = realUiEs;
+    const p = props();
+    renderWithMeta(<FmModel390Page decl={makeDecl()} {...p} />);
+    const items = normalizeBreadcrumb(lastMeta.breadcrumb);
+    expect(items.filter(item => item.onClick).map(item => item.label)).toEqual(['Modelos Fiscales']);
+    act(() => { items[1].onClick(); });
+    expect(p.onBack).toHaveBeenCalledTimes(1);
   });
 });

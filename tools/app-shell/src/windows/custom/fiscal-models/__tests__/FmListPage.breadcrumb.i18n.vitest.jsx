@@ -9,7 +9,7 @@
 //
 // FmListPage.jsx used to render `Tesorería / {t('fm.list.title') ?? 'Declaraciones'}` —
 // a raw hardcoded Spanish literal, never localized, never matched against the
-// menu section. The fix is `{ui('finance')} / {ui('fm.breadcrumb.section')}`.
+// menu section. The fix is `{ui('taxes')} / {ui('fm.breadcrumb.section')}`.
 //
 // NOTE: the sibling FmListPage.vitest.jsx mocks '@etendosoftware/app-shell-core'
 // for useUI, but FmListPage.jsx actually imports useUI from '@/i18n' — that mock
@@ -77,19 +77,19 @@ const defaultProps = {
 
 
 describe('FmListPage — breadcrumb against the real locale dictionary (ETP-4945)', () => {
-  it('resolves the es_ES breadcrumb to "Finanzas / Modelos Fiscales", not the stale "Tesorería"', () => {
+  it('resolves the es_ES breadcrumb to "Impuestos / Modelos Fiscales", not the stale "Tesorería"', () => {
     activeUi = realUiEs;
     renderWithMeta(<FmListPage declarations={[]} {...defaultProps} />);
 
-    expect(lastMeta.breadcrumb).toBe('Finanzas / Modelos Fiscales');
+    expect(lastMeta.breadcrumb).toBe('Impuestos / Modelos Fiscales');
     expect(document.body.textContent).not.toContain('Tesorería');
   });
 
-  it('resolves the en_US breadcrumb to "Finance / Fiscal Models"', () => {
+  it('resolves the en_US breadcrumb to "Taxes / Fiscal Models"', () => {
     activeUi = realUiEn;
     renderWithMeta(<FmListPage declarations={[]} {...defaultProps} />);
 
-    expect(lastMeta.breadcrumb).toBe('Finance / Fiscal Models');
+    expect(lastMeta.breadcrumb).toBe('Taxes / Fiscal Models');
   });
 });
 

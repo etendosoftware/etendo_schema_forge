@@ -833,7 +833,12 @@ export default function FmModel390Page({
   useFmDetailPageMeta({
     model: MODEL_ID,
     title: declTitle,
-    breadcrumb: `${t('finance')} / ${t('fm.breadcrumb.section')} / ${declTitle}`,
+    // Same shape as the 303/349: the "Modelos Fiscales" level goes back to the list (ETP-6380).
+    breadcrumb: [
+      t('taxes'),
+      { label: t('fm.breadcrumb.section'), onClick: onBack },
+      declTitle,
+    ],
     favLabel: t('fm.breadcrumb.section'),
   });
 

@@ -231,7 +231,9 @@ describe('findActiveGroup — report-category entries', () => {
     ['?category=treasury&report=aging-payable', 'Treasury'],
     ['?category=treasury&report=aging-receivable', 'Treasury'],
     ['?category=treasury', 'Treasury'],
-    ['?category=finance&report=tax-report', 'Finance'],
+    ['?category=finance&report=balance-sheet', 'Finance'],
+    ['?category=taxes&report=tax-report', 'Taxes'],
+    ['?category=taxes', 'Taxes'],
     ['?category=finance', 'Finance'],
     ['?category=inventory&report=inventory-stock-report', 'Inventory'],
   ])('/report-viewer%s resolves to %s', (search, expected) => {
@@ -262,8 +264,45 @@ describe('findActiveGroup — report-category entries', () => {
     expect(activeGroupName(pathname, '')).toBe(expected);
   });
 
+  // ETP-6380 — every visible entry resolves to its OWN group: no Finance route lights up Impuestos
+  // (or the reverse), whatever the order of the two adjacent groups in the Finance section.
+  it('every visible Finance and Taxes entry resolves to its own group', () => {
+    for (const group of groups().filter(g => g.group === 'Finance' || g.group === 'Taxes')) {
+      for (const item of group.items) {
+        const target = `/${item.path || item.name}`;
+        const q = target.indexOf('?');
+        const [pathname, search] = q === -1 ? [target, ''] : [target.slice(0, q), target.slice(q)];
+        expect(activeGroupName(pathname, search), item.name).toBe(group.group);
+        if (q === -1) expect(activeGroupName(`${pathname}/ABC123`, ''), `${item.name} detail`).toBe(group.group);
+      }
+    }
+  });
+
   it('a non-query target does not match a longer slug that only shares its prefix', () => {
     expect(activeGroupName('/payment-input', '')).toBeNull();
+  });
+});
+
+// ETP-6380 — the Impuestos header is styled as active (filled icon, card background) only when the
+// route belongs to it; on a Finance window it renders like any other inactive group.
+describe('SideMenu — Taxes group header state', () => {
+  beforeEach(() => { menuFixture.useShippedMenu = true; });
+  afterEach(() => {
+    menuFixture.useShippedMenu = false;
+    mockUseLocation.mockReturnValue({ pathname: '/dashboard', search: '' });
+  });
+  const headerWeight = testId => screen.getByTestId(testId).querySelector('[data-weight]').getAttribute('data-weight');
+
+  it.each([
+    ['/chart-of-accounts', '', 'regular', 'fill'],
+    ['/report-viewer', '?category=finance', 'regular', 'fill'],
+    ['/fiscal-config', '', 'fill', 'regular'],
+    ['/report-viewer', '?category=taxes&report=tax-report', 'fill', 'regular'],
+  ])('at %s%s Taxes is %s and Finance is %s', (pathname, search, taxesWeight, financeWeight) => {
+    mockUseLocation.mockReturnValue({ pathname, search });
+    render(<SideMenu menuGroups={buildMenuGroups()} expanded onToggle={vi.fn()} />);
+    expect(headerWeight('menu-group-taxes')).toBe(taxesWeight);
+    expect(headerWeight('menu-group-finance')).toBe(financeWeight);
   });
 });
 

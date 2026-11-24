@@ -190,7 +190,7 @@ NEO Headless reads fiscal-config records with `NO_ACTIVE_FILTER=true` (see `NeoC
 ## Interaction model
 
 - Route: `/fiscal-config` (custom window, not generated).
-- Visibility: visible in the Settings menu.
+- Visibility: visible in the Impuestos (`Taxes`) menu group, Finance section (moved from Settings in ETP-6380). Breadcrumb: `Impuestos / <page title>` (e.g. "Impuestos / Configuración Fiscal VERI*FACTU", `` `${ui('taxes')} / ${pageTitle}` `` in `FiscalConfigPage.jsx` and `OnboardingWizard.jsx`); it used to read "Configuración / Monitor fiscal / …". The wizard's location hints (`fiscal.onboarding.skipped.hint`, `fiscal.onboarding.confirm.subtitle*`) say "Impuestos → Configuración fiscal".
 - Implementation type: `layoutType: "custom"` — loaded from `customLoaders` in `tools/app-shell/src/windows/registry.js`.
 - Entry point: `FiscalConfigPage.jsx` — determines profile and delegates to wizard or section components.
 
@@ -713,7 +713,7 @@ environment, enrollment dates or submission cadences.
 
 - `artifacts/fiscal-config/decisions.json` — `layoutType: "custom"`, window registered.
 - `tools/app-shell/src/windows/registry.js` — `fiscal-config` in `customLoaders`; data-only fiscal specs are not registered as navigable windows.
-- `tools/app-shell/src/menu.json` — `fiscal-config` entry under Settings group.
+- `tools/app-shell/src/menu.json` — `fiscal-config` entry under the Taxes group (ETP-6380).
 - `tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigPage.jsx` — profile-routing orchestrator.
 - `tools/app-shell/src/windows/custom/fiscal-config/OnboardingWizard.jsx` — 5-screen wizard with territory groups, sub-questions, confirm, detail and skipped screens (the applied screen was removed in ETP-5831; the detail save hands over to the page).
 - `tools/app-shell/src/windows/custom/fiscal-config/CertSection.jsx` — cert status widget with on-mount GET fetch to restore state after refresh.

@@ -5,7 +5,7 @@
     "category": "settings",
     "name": "Tax Rate",
     "detailEntity": "accounting",
-    "breadcrumb": "Finance / Tax",
+    "breadcrumb": "Taxes / Tax",
     "hidePrint": true,
     "hideMoreMenu": true,
     "hideCreate": true,

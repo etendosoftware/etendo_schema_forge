@@ -1360,7 +1360,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
       {active && (
         <ListPageMeta
           title={windowTitle}
-          breadcrumb={`${ui('finance')} / ${windowTitle}`}
+          breadcrumb={`${ui('taxes')} / ${windowTitle}`}
           recordCount={decls.length}
           data-testid="ListPageMeta__cb728e" />
       )}

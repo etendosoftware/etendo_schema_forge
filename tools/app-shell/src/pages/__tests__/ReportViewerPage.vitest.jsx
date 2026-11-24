@@ -642,7 +642,7 @@ describe('catalogCategoryOf', () => {
   it.each([
     ['aging-receivable', 'treasury'],
     ['aging-payable', 'treasury'],
-    ['tax-report', 'finance'],
+    ['tax-report', 'taxes'],
     ['report-general-ledger', 'finance'],
     ['inventory-stock-report', 'inventory'],
   ])('%s belongs to %s', (reportId, category) => {
@@ -661,7 +661,7 @@ describe('ReportViewerPage — treasury category (Tesorería › Informes)', () 
   });
   const AGING_RECEIVABLE = agingReport('aging-receivable', 'Aging of Receivables', 'Antigüedad de Cobros');
   const AGING_PAYABLE = agingReport('aging-payable', 'Aging of Payables', 'Antigüedad de Pagos');
-  const TAX_REPORT = { id: 'tax-report', title: { en_US: 'Tax Report' }, type: 'listing', category: 'finance', outputs: ['pdf'], parameters: [] };
+  const TAX_REPORT = { id: 'tax-report', title: { en_US: 'Tax Report' }, type: 'listing', category: 'taxes', outputs: ['pdf'], parameters: [] };
 
   const mockCatalog = (reports = [AGING_RECEIVABLE, AGING_PAYABLE, TAX_REPORT]) => {
     globalThis.fetch = vi.fn().mockImplementation((url) => {
@@ -799,12 +799,52 @@ describe('ReportViewerPage — treasury category (Tesorería › Informes)', () 
     expect(rewriteCalls()).toHaveLength(0);
   });
 
-  it('does not rewrite a finance report opened under finance', async () => {
-    mockSearchParams = new URLSearchParams({ category: 'finance', report: 'tax-report' });
+  it('does not rewrite a taxes report opened under taxes', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'taxes', report: 'tax-report' });
     mockReportAccess = { 'tax-report': 'full' };
     render(<ReportViewerPage />);
     await waitFor(() => expect(screen.getByTestId('action-cancel')).toBeInTheDocument());
     expect(rewriteCalls()).toHaveLength(0);
+  });
+
+  // ETP-6380 — the Tax Report moved to Impuestos › Informes: a legacy finance link or favourite is
+  // re-pointed to taxes, and the viewer names Taxes as its first breadcrumb level.
+  it('rewrites a legacy category=finance tax-report link to category=taxes', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'finance', report: 'tax-report' });
+    mockReportAccess = { 'tax-report': 'full' };
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(rewriteCalls().length).toBeGreaterThan(0));
+    const [params, opts] = rewriteCalls()[0];
+    expect(opts).toEqual({ replace: true });
+    expect(params.get('category')).toBe('taxes');
+    expect(params.get('report')).toBe('tax-report');
+  });
+
+  it('gates the taxes catalog on the Financial Reports anchor window', () => {
+    mockSearchParams = new URLSearchParams({ category: 'taxes' });
+    render(<ReportViewerPage />);
+    expect(useWindowAccess).toHaveBeenCalledWith(FINANCIAL_REPORTS_WINDOW);
+  });
+
+  it('lists only the Tax Report under taxes and publishes "Taxes / Reports"', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'taxes' });
+    mockReportAccess = { 'tax-report': 'full', 'aging-payable': 'full' };
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('Tax Report')).toBeInTheDocument());
+    expect(screen.queryByText('Aging of Payables')).not.toBeInTheDocument();
+    expect(lastListBreadcrumb()).toBe('Taxes / Reports');
+  });
+
+  it('publishes the Taxes / Reports / title breadcrumb for a tax-report link', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'taxes', report: 'tax-report' });
+    mockReportAccess = { 'tax-report': 'full' };
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByTestId('action-cancel')).toBeInTheDocument());
+    expect(lastViewerBreadcrumb()).toEqual([
+      { label: 'Taxes' },
+      { label: 'Reports', href: '/report-viewer?category=taxes' },
+      { label: 'Tax Report' },
+    ]);
   });
 
   it('re-points a report outside the catalog to its contract category once the catalog loads', async () => {

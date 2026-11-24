@@ -25,7 +25,7 @@ The generated fields still carry the older `readOnlyLogic: "@sMFCRSynced@='Y'"` 
 
 ## Interaction model
 - **Route:** `/conversion-rates` and `/conversion-rates/:recordId`.
-- **Visibility:** visible from the **Finance** group in `tools/app-shell/src/menu.json` (`windowId: "116"`), alongside Fiscal Monitor and Fiscal Models.
+- **Visibility:** visible from the **Finance** group in `tools/app-shell/src/menu.json` (`windowId: "116"`). Fiscal Monitor and Fiscal Models, which used to sit next to it, moved to the **Taxes** (Impuestos) group in ETP-6380.
 - **Implementation type:** generated window loaded through `tools/app-shell/src/windows/registry.js`; `category: finance`.
 - **Window shape:** single-entity window (`conversionRate`) with no child entities and no declared process endpoints in the generated index.
 - **List columns:** Currency, To Currency, Valid From Date, Valid To Date, Multiple Rate By, Divide Rate By, and Synced.
