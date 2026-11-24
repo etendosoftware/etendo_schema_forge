@@ -38,10 +38,10 @@ This window has no reactive UI behavior — there are no selectors, callouts, de
 ## Manual verification
 Since ETP-5068 there is no UI to verify. What must be checked is the *absence* of the entry and the survival of the API/classic paths:
 
-1. Expand the sidebar, open **Configuración**, and confirm there is no "Registro de descarga de tipos de cambio" / "Conversion Rate Downloader Log" entry (the last Settings item is Fiscal Configuration).
+1. Expand the sidebar, open **Configuración**, and confirm there is no "Registro de descarga de tipos de cambio" / "Conversion Rate Downloader Log" entry (Fiscal Configuration, formerly the last Settings item, moved to the Impuestos group in ETP-6380).
 2. Open the command palette (⌘K) and search "conversion"/"descarga" — only `Conversion Rates` / `Rangos de conversión` may appear.
 3. Navigate directly to `/conversion-rate-downloader-log` and confirm the graceful `Window "conversion-rate-downloader-log" not found` state (no blank page, no console crash).
-4. Confirm `/conversion-rates` is unaffected and still reachable from **Configuración**.
+4. Confirm `/conversion-rates` is unaffected and still reachable from **Finanzas**.
 5. Open **Configuración → Roles** and confirm the window is no longer a row in the window x role matrix; open a user's **Roles** tab and confirm the same.
 6. Etendo classic: with a GO template role, open the "Registro descarga tipos de cambio" window and confirm the log rows are still readable there.
 7. API/MCP: `GET /sws/neo/conversion-rate-downloader-log/header` still answers 200, and `etendo_discover` still reports the entity `readOnly: true`.
