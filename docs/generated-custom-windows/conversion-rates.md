@@ -134,13 +134,14 @@ The entity is curated (`publicApi.exposed: true`) on `currency`, `toCurrency`, `
 `validToDate`, `multipleRateBy` and `divideRateBy`, so the downloader's `sMFCRSynced` flag and the
 ETP-6365 status column stay out of the public API.
 
-`multipleRateBy` and `divideRateBy` declare `"type": "number"` in `decisions.json`, and the public
-API publishes them as `number`/`double`, the type NEO answers. The override was added while AD
-reference 800019 (Rate) was not mapped by the core extractor; core 0.3.110 now maps that reference to
-`decimal` (see the ETP-6342 section below), so the override is redundant. Removing it is a follow-up,
-together with the generator test that pins it.
+The public API publishes `multipleRateBy` and `divideRateBy` as `number`/`double`, the type NEO
+answers (the default CRUD serializes the `BigDecimal` as is). ETP-6174 declared `"type": "number"`
+on both in `decisions.json` while AD reference 800019 (Rate) was extracted as `string`. Core 0.3.110
+extracts it as `decimal` (see the ETP-6342 section below), which the manifest generator also maps
+to `number`/`double`, so ETP-6385 removed the override; the published type did not change.
+Regenerated with `make regen ONLY=conversion-rates FROM_CACHE=1` (contract `0.8.0`).
 Contract: `docs/public-api.md` §3.
 
 ## Rate and cost fields are numeric — ETP-6342
 
-Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. **Multiple Rate By** (`multipleRateBy`, `MultiplyRate`) and **Divide Rate By** (`divideRateBy`, `DivideRate`) are `decimal` in the contract (`tsType: number`). While the ETP-6174 `"type": "number"` override on both fields is in place, the contract keeps them as `number`; the public API type is `number`/`double` either way.
+Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. **Multiple Rate By** (`multipleRateBy`, `MultiplyRate`) and **Divide Rate By** (`divideRateBy`, `DivideRate`) are now `decimal` in the contract (`tsType: number`): the form renders them as number inputs and the list as numeric columns, without the former 22-character `maxLength`. The contract keeps the DB-derived `validation.maxLength: 22`, which the generator ignores for numeric fields; the public API type is `number`/`double`.

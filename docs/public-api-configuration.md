@@ -84,6 +84,10 @@ must really return it under `internalPath`, or the attribute never appears.
 }
 ```
 
+Every input field is generated with `queryable: false`: it is not a column of the entity, so the gateway
+answers `400 invalid_query_parameter` to a `filter` or `sort` on it and the OpenAPI document lists no
+`filter` parameter for it.
+
 A name that collides with a published field fails the generation.
 
 Real example: the headers of `sales-quotation`, `sales-order` and `purchase-order` publish the
