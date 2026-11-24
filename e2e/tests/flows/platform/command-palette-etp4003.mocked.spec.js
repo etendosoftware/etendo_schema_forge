@@ -113,13 +113,17 @@ test.describe('CommandPalette window search and picker (1280x720)', () => {
   test('"Configura" ranks Configuración Fiscal first and Enter opens it', async ({ page }) => {
     const input = await openPalette(page, '/dashboard');
     await input.fill('Configura');
-    const firstGroup = page.getByTestId('CommandGroup__73263e').first();
+    const groups = page.getByTestId('CommandGroup__73263e');
     // A window whose own name matches ranks first, then the rest of the section whose name
     // matches (Organización, Secuencias de documentos, …), then windows that match only by
     // their source label ("Esquema contable", i.e. General Ledger Configuration). Before the
     // tiered ranking, menu order let the accounting section come first and Enter opened
     // /general-ledger-configuration; with sections first, it opened Organización.
-    await expect(firstGroup.locator('h3')).toHaveText(/^Configuración$/, { timeout: 5_000 });
+    // Configuración Fiscal lives in Impuestos (ETP-6380), not in Configuración: its own-name
+    // match still outranks the section match, so Impuestos is listed first and the
+    // Configuración section only follows it.
+    await expect(groups.first().locator('h3')).toHaveText(/^Impuestos$/, { timeout: 5_000 });
+    await expect(groups.nth(1).locator('h3')).toHaveText(/^Configuración$/);
     const items = page.locator('[data-global-search-item="true"]');
     await expect(items.first()).toHaveText(/Configuración Fiscal/);
     await expect(items.nth(1)).toHaveText(/Organización/);
