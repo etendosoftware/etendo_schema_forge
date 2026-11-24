@@ -92,13 +92,18 @@ export function DateTimeField({
     () => parseCalendarDate(parts?.date) || parseCalendarDate(splitWallClock(max)?.date) || new Date(),
   );
 
-  // Follow the value from outside while the user is not typing.
+  // Follow the value from outside while the user is not typing. Text the user typed that is not a
+  // real date and time stays, flagged, after blur as after Enter: until they correct it or a new
+  // non-empty value arrives from props (the `null` it committed itself is not one).
+  const lastFormatted = React.useRef(formattedValue);
   React.useEffect(() => {
-    if (!isFocused) {
-      setInputText(formattedValue);
-      setTypedInvalid(false);
-    }
-  }, [formattedValue, isFocused]);
+    const arrived = lastFormatted.current !== formattedValue;
+    lastFormatted.current = formattedValue;
+    if (isFocused) return;
+    if (typedInvalid && (!arrived || !formattedValue)) return;
+    setInputText(formattedValue);
+    setTypedInvalid(false);
+  }, [formattedValue, isFocused, typedInvalid]);
   React.useEffect(() => {
     const day = parseCalendarDate(parts?.date);
     if (day) setDisplayedMonth(day);

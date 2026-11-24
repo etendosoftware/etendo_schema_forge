@@ -46,13 +46,18 @@ describe('DateTimeField', () => {
     expect(input).not.toHaveAttribute('aria-invalid');
   });
 
-  it('Enter on a day that does not exist commits null and keeps the text flagged', async () => {
+  it.each([
+    ['Enter', (user) => user.keyboard('{Enter}')],
+    ['blur (Tab)', (user) => user.tab()],
+  ])('%s on a day that does not exist commits null and keeps the text flagged', async (_how, leave) => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(<Controlled onChange={onChange} />);
+    render(<Controlled initial="2026-11-19T14:20:00" onChange={onChange} />);
     const input = screen.getByTestId(T);
 
-    await user.type(input, '310220261000{Enter}');
+    await user.clear(input);
+    await user.type(input, '310220261000');
+    await leave(user);
 
     expect(onChange).toHaveBeenLastCalledWith(null);
     expect(input).toHaveValue('31/02/2026 10:00');
