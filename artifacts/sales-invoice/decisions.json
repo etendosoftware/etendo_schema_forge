@@ -1010,9 +1010,7 @@
           "gridReadOnly": true
         },
         "rate": {
-          "grid": true,
-          "type": "number",
-          "_note": "ETP-5657: explicit numeric type override. C_Conversion_Rate_Document.Rate uses AD reference 800019 'General Quantity', which the core extractor's reference map does not cover, so it is extracted as type 'string' (maxLength 10) and the inline editor treated the rate as plain text (raw '0.68027210884', no locale decimal comma). 'number' (not 'decimal') is used on purpose: generate-frontend maps it to a 'number' table column and, with explicitType, a 'number' form field; InlineLinesPanel only edits types in EDITABLE_TYPES (which has 'number' but not 'decimal') and routes NUMERIC_FIELD_TYPES through MaskedAmountInput without 2-decimal grouping. The string-only maxLength passthrough is dropped on the numeric path. Remove once ref 800019 is mapped in schema_forge_core."
+          "grid": true
         },
         "foreignAmount": {
           "grid": true,

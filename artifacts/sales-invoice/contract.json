@@ -1,8 +1,8 @@
 {
-  "version": "0.95.0",
+  "version": "0.96.0",
   "generatedAt": "2026-10-19T17:29:21.531Z",
-  "updatedAt": "2026-11-18T15:10:53.247Z",
-  "checksum": "88aacfce30a7e237",
+  "updatedAt": "2026-11-19T15:06:53.694Z",
+  "checksum": "6f45244001b03489",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -2806,13 +2806,12 @@
             "apiKey": "rate",
             "column": "Rate",
             "label": "Rate",
-            "type": "number",
+            "type": "decimal",
             "tsType": "number",
             "visibility": "editable",
             "required": false,
             "grid": true,
             "form": true,
-            "explicitType": true,
             "validation": {
               "maxLength": 10
             },
@@ -5601,7 +5600,7 @@
             "name": "rate",
             "apiKey": "rate",
             "column": "Rate",
-            "type": "number",
+            "type": "decimal",
             "visibility": "editable",
             "required": false
           },
