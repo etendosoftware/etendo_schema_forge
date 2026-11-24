@@ -4,16 +4,10 @@ WORKDIR /app
 COPY gateway/package.json ./package.json
 COPY gateway/tsconfig.json ./tsconfig.json
 COPY gateway/src ./src
-COPY .schema_forge_core/packages/api-gateway-core /tmp/api-gateway-core
-RUN npm install --include=dev --prefix /tmp/api-gateway-core \
-  && npm install --include=dev --no-save --prefix /tmp/api-gateway-core @types/node \
-  && npm run build --prefix /tmp/api-gateway-core \
-  && cd /tmp/api-gateway-core \
-  && npm pack --pack-destination /tmp
-RUN npm install --omit=dev /tmp/etendosoftware-api-gateway-core-*.tgz
-# main.ts uses NestExpressApplication, whose declarations import express types.
-RUN npm install --no-save @nestjs/cli typescript @types/express@^4.17.21
-RUN npm run build
+# The token is a BuildKit secret and never becomes an image layer.
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=true \
+    npm install --include=dev --no-audit --no-fund
+RUN npm run build && npm prune --omit=dev
 
 FROM node:22-bookworm-slim
 
