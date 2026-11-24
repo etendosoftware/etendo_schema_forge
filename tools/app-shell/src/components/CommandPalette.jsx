@@ -41,7 +41,7 @@ import {
   ClockIcon,
   SparkleIcon,
   WalletIcon,
-  PercentIcon,
+  BankIcon,
 } from '@phosphor-icons/react';
 
 const ICON_MAP = {
@@ -54,7 +54,7 @@ const ICON_MAP = {
   FolderKanban: KanbanIcon,
   Settings: GearIcon,
   Wallet: WalletIcon,
-  Percent: PercentIcon,
+  Landmark: BankIcon,
 };
 
 function HighlightedQuery({ text, query }) {
