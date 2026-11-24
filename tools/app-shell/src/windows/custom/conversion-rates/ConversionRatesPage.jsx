@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { FunnelSimpleIcon, LinkSimpleIcon, PlusIcon, PrinterIcon } from '@phosphor-icons/react';
+import { LinkSimpleIcon, PlusIcon, PrinterIcon } from '@phosphor-icons/react';
 import { DistinctValuesFilter } from '@etendosoftware/app-shell-core/components/ui/distinct-values-filter.jsx';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
@@ -121,7 +121,6 @@ export default function ConversionRatesPage({ apiBaseUrl }) {
   const updateFilters = useCallback((patch) => {
     setSearchParams(writeFilters({ ...filters, ...patch }), { replace: true });
   }, [filters, setSearchParams]);
-  const [filtersVisible, setFiltersVisible] = useState(true);
 
   // ── Rates in force (currency header lines) ──────────────────────────────────
   const [currentRates, setCurrentRates] = useState([]);
@@ -302,75 +301,60 @@ export default function ConversionRatesPage({ apiBaseUrl }) {
     <div className="flex min-h-0 flex-1 flex-col overflow-auto rounded-tl-2xl bg-card" data-testid="convrate-page">
       <div className="flex flex-col gap-5 px-4 pb-8 pt-3">
         <div className="flex flex-wrap items-center justify-between gap-2" data-testid="convrate-toolbar">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setFiltersVisible((v) => !v)}
-              aria-expanded={filtersVisible}
-              aria-controls="convrate-filters"
-              className="h-10 gap-1.5 rounded-lg bg-card px-3 text-sm font-normal"
-              data-testid="convrate-toggle-filters">
-              <FunnelSimpleIcon className="h-5 w-5 text-[#828FA3]" data-testid="FunnelSimpleIcon__convrate" />
-              {ui('filters')}
-            </Button>
-            {filtersVisible && (
-              <div id="convrate-filters" className="flex flex-wrap items-center gap-2" data-testid="convrate-filters">
-                <DistinctValuesFilter
-                  value={filters.currencyId}
-                  onChange={(v) => updateFilters({ currencyId: v || null })}
-                  codes={currencyOptions.map((o) => o.id)}
-                  labelFor={(id) => isoById.get(id) ?? id}
-                  allLabel={ui('convRateAllCurrencies')}
-                  heading={ui('convRateCurrency')}
-                  searchPlaceholder={ui('searchValues')}
-                  popoverWidth="w-56"
-                  triggerTestId="convrate-filter-currency"
-                  data-testid="DistinctValuesFilter__convrate-currency" />
-                <DistinctValuesFilter
-                  value={filters.period}
-                  onChange={(v) => updateFilters({ period: v || DEFAULT_PERIOD })}
-                  codes={[...PERIODS]}
-                  labelFor={(p) => ui(PERIOD_LABEL[p])}
-                  allLabel={null}
-                  heading={ui('convRatePeriod')}
-                  searchable={false}
-                  searchPlaceholder={ui('searchValues')}
-                  popoverWidth="w-56"
-                  triggerTestId="convrate-filter-period"
-                  data-testid="DistinctValuesFilter__convrate-period" />
-                {filters.period === 'custom' && (
-                  <>
-                    <div className="w-[160px]">
-                      <DateField
-                        value={filters.customFrom ?? ''}
-                        onChange={(iso) => updateFilters({ customFrom: iso || null })}
-                        placeholder={ui('convRatePeriodFrom')}
-                        data-testid="convrate-filter-custom-from" />
-                    </div>
-                    <div className="w-[160px]">
-                      <DateField
-                        value={filters.customTo ?? ''}
-                        onChange={(iso) => updateFilters({ customTo: iso || null })}
-                        placeholder={ui('convRatePeriodTo')}
-                        data-testid="convrate-filter-custom-to" />
-                    </div>
-                  </>
-                )}
-                <DistinctValuesFilter
-                  value={filters.status === 'all' ? null : filters.status}
-                  onChange={(v) => updateFilters({ status: v || 'all' })}
-                  codes={[RATE_STATUS.CURRENT, RATE_STATUS.HISTORIC]}
-                  labelFor={(st) => ui(STATUS_LABEL[st])}
-                  allLabel={ui('convRateAllStatuses')}
-                  heading={ui('convRateStatus')}
-                  searchable={false}
-                  searchPlaceholder={ui('searchValues')}
-                  popoverWidth="w-56"
-                  triggerTestId="convrate-filter-status"
-                  data-testid="DistinctValuesFilter__convrate-status" />
-              </div>
+          <div className="flex flex-wrap items-center gap-2" data-testid="convrate-filters">
+            <DistinctValuesFilter
+              value={filters.currencyId}
+              onChange={(v) => updateFilters({ currencyId: v || null })}
+              codes={currencyOptions.map((o) => o.id)}
+              labelFor={(id) => isoById.get(id) ?? id}
+              allLabel={ui('convRateAllCurrencies')}
+              heading={ui('convRateCurrency')}
+              searchPlaceholder={ui('searchValues')}
+              popoverWidth="w-56"
+              triggerTestId="convrate-filter-currency"
+              data-testid="DistinctValuesFilter__convrate-currency" />
+            <DistinctValuesFilter
+              value={filters.period}
+              onChange={(v) => updateFilters({ period: v || DEFAULT_PERIOD })}
+              codes={[...PERIODS]}
+              labelFor={(p) => ui(PERIOD_LABEL[p])}
+              allLabel={null}
+              heading={ui('convRatePeriod')}
+              searchable={false}
+              searchPlaceholder={ui('searchValues')}
+              popoverWidth="w-56"
+              triggerTestId="convrate-filter-period"
+              data-testid="DistinctValuesFilter__convrate-period" />
+            {filters.period === 'custom' && (
+              <>
+                <div className="w-[160px]">
+                  <DateField
+                    value={filters.customFrom ?? ''}
+                    onChange={(iso) => updateFilters({ customFrom: iso || null })}
+                    placeholder={ui('convRatePeriodFrom')}
+                    data-testid="convrate-filter-custom-from" />
+                </div>
+                <div className="w-[160px]">
+                  <DateField
+                    value={filters.customTo ?? ''}
+                    onChange={(iso) => updateFilters({ customTo: iso || null })}
+                    placeholder={ui('convRatePeriodTo')}
+                    data-testid="convrate-filter-custom-to" />
+                </div>
+              </>
             )}
+            <DistinctValuesFilter
+              value={filters.status === 'all' ? null : filters.status}
+              onChange={(v) => updateFilters({ status: v || 'all' })}
+              codes={[RATE_STATUS.CURRENT, RATE_STATUS.HISTORIC]}
+              labelFor={(st) => ui(STATUS_LABEL[st])}
+              allLabel={ui('convRateAllStatuses')}
+              heading={ui('convRateStatus')}
+              searchable={false}
+              searchPlaceholder={ui('searchValues')}
+              popoverWidth="w-56"
+              triggerTestId="convrate-filter-status"
+              data-testid="DistinctValuesFilter__convrate-status" />
           </div>
           <div className="flex items-center gap-2">
             <Button
