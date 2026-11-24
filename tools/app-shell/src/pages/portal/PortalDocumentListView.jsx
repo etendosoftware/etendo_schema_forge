@@ -10,11 +10,13 @@ import {
   PortalCountChip, PortalDate, PortalDesktopHeader, PortalDocumentStatus, PortalMain,
   PortalMoney, PortalRowBadge, PortalSearchPill,
   PORTAL_ROW_FOCUS, PortalInvoiceTypeBadge,
+  PortalCreatedWithTile,
 } from './PortalBits.jsx';
 import {
   PORTAL_KIND_GROUPS, PORTAL_KIND_META, documentLabelKey, initialPortalRange, quotationValidity,
   toCalendarParam,
 } from './portalPresentation.js';
+import { isCompletedStatus } from '../../lib/docStatus.js';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -204,6 +206,9 @@ export default function PortalDocumentListView({
             <PortalCountChip count={totalCount} data-testid="PortalCountChip__c7f7d2" />
           </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            {/* Etendo link left of the other controls, as on the Inicio bar (provisional until
+                the mobile design arrives). */}
+            <PortalCreatedWithTile data-testid="PortalCreatedWithTile__c7f7d2" />
             <PortalCustomer identity={identity} variant="avatar" data-testid="PortalCustomer__c7f7d2" />
           </div>
         </div>
@@ -307,7 +312,7 @@ function MobileCard({ document, kind, onOpen }) {
         {/* An invoice shows its payment state; its document status too when it is not the plain
             "completed" every listed invoice shares (closed, voided), like the table. */}
         <span className="flex flex-wrap items-center justify-end gap-1">
-          {isInvoice && document.documentStatus !== 'CO'
+          {isInvoice && !isCompletedStatus(document.documentStatus)
             ? <PortalDocumentStatus
             status={document.documentStatus}
             className="text-[13px] leading-[18px]"

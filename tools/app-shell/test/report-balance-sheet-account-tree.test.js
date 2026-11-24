@@ -1,3 +1,4 @@
+// @covers tools/app-shell/vite-plugins/report-api.js
 // @covers artifacts/balance-sheet/report-contract.json
 // @covers artifacts/profit-loss/report-contract.json
 // @covers artifacts/balance-sheet/template.hbs
@@ -12,6 +13,7 @@ import { resolve } from 'node:path';
 import Handlebars from 'handlebars';
 import { registerReportHelpers, buildJsreportHelpersString } from '../../../templates/reports/helpers/report-html-helpers.js';
 import { buildContractLabels } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
+import { buildAccountReportTree } from '../vite-plugins/report-api.js';
 import { expandBrandingPartial } from './reportBrandingPartialHelper.js';
 import { registerJsreportHelpers } from './reportJsreportHelpers.js';
 
@@ -41,11 +43,12 @@ const ARTIFACT_DIR = resolve(import.meta.dirname, '../../../artifacts/balance-sh
 const PL_DIR = resolve(import.meta.dirname, '../../../artifacts/profit-loss');
 const CONTRACT = JSON.parse(readFileSync(resolve(ARTIFACT_DIR, 'report-contract.json'), 'utf8'));
 const PL_CONTRACT = JSON.parse(readFileSync(resolve(PL_DIR, 'report-contract.json'), 'utf8'));
-// ETP-6080 gave profit-loss its interactive view first (dimension filters, split,
-// expansion); balance-sheet follows in ETP-6079. Until then the two match on
-// everything else, and these are the only profit-loss additions allowed.
-const PL_ONLY_SECTIONS = ['dimensiones'];
-const PL_ONLY_PARAMS = ['bPartnerId', 'productId', 'expandedNodeIds', 'splitBy', 'splitNodeId', 'splitSign'];
+// ETP-6083 — the Balance Sheet now has the interactive view of profit-loss
+// (dimension filters, split, expansion) but differs on purpose: a balance is read
+// AT a date, so it has no `columns` parameter, its `dateFrom` is the inert ledger
+// start, and its own account-level / shortcut / compare metadata. Everything else
+// is still asserted as shared.
+const BS_OWN_PARAMS = ['dateFrom', 'dateTo', 'accountLevel', 'compareTo'];
 const SQL = CONTRACT.sql.query;
 const OPERANDS_SQL = CONTRACT.sql.operandsQuery;
 const HELPERS_CODE = readFileSync(resolve(ARTIFACT_DIR, 'helpers.js'), 'utf8');
@@ -88,28 +91,71 @@ describe('balance-sheet report-contract.json — sections', () => {
     assert.equal(byId.comparacion.label.es_ES, 'Comparación');
   });
 
-  it('matches profit-loss section-for-section (same sidebar layout)', () => {
-    assert.deepEqual(CONTRACT.sections, PL_CONTRACT.sections.filter((s) => !PL_ONLY_SECTIONS.includes(s.id)));
+  it('matches profit-loss section-for-section, "dimensiones" included (same sidebar layout)', () => {
+    assert.deepEqual(CONTRACT.sections, PL_CONTRACT.sections);
+    assert.deepEqual(CONTRACT.sections.map((s) => s.id), ['periodo', 'agrupacion', 'dimensiones', 'comparacion']);
   });
 });
 
-describe('balance-sheet report-contract.json — the 11 sidebar parameters', () => {
-  it('declares exactly the same 11 parameters as profit-loss, in the same order', () => {
-    // Deliberate: both reports share one engine and one sidebar shape, so a
-    // parameter added to one must be added to the other or the two drift.
+describe('balance-sheet report-contract.json — sidebar parameters', () => {
+  it('declares the 17 parameters of the interactive view, in order, and NO `columns`', () => {
+    // Periods/columns (month, quarter, ...) make no sense for a balance read at one date.
     assert.deepEqual(
       (CONTRACT.parameters || []).map((p) => p.name),
       [
         'acctSchemaId', 'orgId', 'yearId', 'dateFrom', 'dateTo',
         'accountLevel', 'showOnlyAccountsWithValue',
         'compareTo', 'referenceYearId', 'fromReferenceDate', 'toReferenceDate',
+        'bPartnerId', 'productId', 'expandedNodeIds', 'splitBy', 'splitNodeId', 'splitSign',
       ]
     );
-    assert.equal(CONTRACT.parameters.length, 11);
+    assert.equal(findParam('columns'), undefined);
+    assert.ok(PL_CONTRACT.parameters.some((p) => p.name === 'columns'), 'profit-loss keeps its columns parameter');
   });
 
-  it('every parameter is byte-identical to its profit-loss counterpart', () => {
-    assert.deepEqual(CONTRACT.parameters, PL_CONTRACT.parameters.filter((p) => !PL_ONLY_PARAMS.includes(p.name)));
+  it('every parameter but the four Balance-specific ones is byte-identical to profit-loss', () => {
+    const shared = (list) => list.filter((p) => !BS_OWN_PARAMS.includes(p.name) && p.name !== 'columns');
+    assert.deepEqual(shared(CONTRACT.parameters), shared(PL_CONTRACT.parameters));
+  });
+
+  it('the four Balance-specific parameters really differ from profit-loss', () => {
+    for (const name of BS_OWN_PARAMS) {
+      assert.notDeepEqual(findParam(name), PL_CONTRACT.parameters.find((p) => p.name === name), name);
+    }
+  });
+
+  it('opts in to the balance check, and (unlike profit-loss) has no result trend rule', () => {
+    assert.equal(CONTRACT.balanceCheck, true);
+    assert.equal(PL_CONTRACT.balanceCheck, undefined);
+    assert.equal(CONTRACT.trend, undefined);
+    assert.equal(PL_CONTRACT.trend, 'result');
+  });
+
+  it('bPartnerId / productId are optional multi-selects in "dimensiones"; the interactive-only params are hidden', () => {
+    for (const name of ['bPartnerId', 'productId']) {
+      const p = findParam(name);
+      assert.equal(p.type, 'search');
+      assert.equal(p.multi, true);
+      assert.equal(p.section, 'dimensiones');
+      assert.ok(!p.required && !p.hidden);
+    }
+    for (const name of ['expandedNodeIds', 'splitBy', 'splitNodeId', 'splitSign']) {
+      assert.equal(findParam(name)?.hidden, true, name);
+    }
+  });
+
+  it('dateFrom is the inert ledger start: role ledgerStart, kept out of the export filter grid', () => {
+    const p = findParam('dateFrom');
+    assert.equal(p.role, 'ledgerStart');
+    assert.equal(p.excludeFromSummary, true);
+  });
+
+  it('dateTo offers the four "as of" shortcuts', () => {
+    assert.deepEqual(findParam('dateTo').shortcuts, ['today', 'lastMonthEnd', 'lastQuarterEnd', 'lastFiscalYearEnd']);
+  });
+
+  it('compareTo maps the two modes to same-date-last-year and previous-fiscal-year-close', () => {
+    assert.deepEqual(findParam('compareTo').compareModes, { sly: 'sameDateLastYear', prev: 'previousFiscalYearClose' });
   });
 
   it('yearId is a required, org-dependent year selector in "periodo"', () => {
@@ -132,7 +178,7 @@ describe('balance-sheet report-contract.json — the 11 sidebar parameters', () 
     });
   }
 
-  it('accountLevel is a required select defaulting to "C" with the 4 expected options', () => {
+  it('accountLevel is a required select defaulting to "C" with the 6 expected options', () => {
     const p = findParam('accountLevel');
     assert.equal(p.type, 'select');
     assert.equal(p.required, true);
@@ -140,11 +186,28 @@ describe('balance-sheet report-contract.json — the 11 sidebar parameters', () 
     assert.equal(p.section, 'agrupacion');
 
     const byValue = Object.fromEntries((p.options || []).map((o) => [o.value, o]));
-    assert.deepEqual(Object.keys(byValue).sort(), ['C', 'D', 'E', 'S']);
+    assert.deepEqual(Object.keys(byValue).sort(), ['C', 'D', 'E', 'G', 'P', 'S']);
     assert.equal(byValue.S.label.es_ES, 'Subcuenta');
     assert.equal(byValue.D.label.es_ES, 'Desglose');
     assert.equal(byValue.C.label.es_ES, 'Cuenta');
     assert.equal(byValue.E.label.es_ES, 'Epígrafe');
+    assert.equal(byValue.G.label.es_ES, 'Grupo');
+    assert.equal(byValue.P.label.es_ES, 'Epígrafe');
+  });
+
+  it('accountLevel: Group/Heading (G/P) are dynamic-only with a maxIndent, E/D are legacy-only, C/S are shared', () => {
+    const byValue = Object.fromEntries(findParam('accountLevel').options.map((o) => [o.value, o]));
+    assert.deepEqual([byValue.G.maxIndent, byValue.G.dynamicOnly], [0, true]);
+    assert.deepEqual([byValue.P.maxIndent, byValue.P.dynamicOnly], [1, true]);
+    assert.equal(byValue.E.legacyOnly, true);
+    assert.equal(byValue.D.legacyOnly, true);
+    for (const v of ['G', 'P']) assert.equal(byValue[v].legacyOnly, undefined, v);
+    for (const v of ['E', 'D']) assert.equal(byValue[v].dynamicOnly, undefined, v);
+    for (const v of ['C', 'S']) {
+      assert.equal(byValue[v].dynamicOnly, undefined, v);
+      assert.equal(byValue[v].legacyOnly, undefined, v);
+      assert.equal(byValue[v].maxIndent, undefined, v);
+    }
   });
 
   it('showOnlyAccountsWithValue is a toggle defaulting to true, in "agrupacion"', () => {
@@ -477,7 +540,7 @@ const PASIVO = 'Patrimonio Neto y Pasivo';
 // (including the injected `129 - Resultados del ejercicio` = 36,967.90 that
 // has zero real fact_acct postings). A comma-and-quote-bearing name exercises
 // the CSV escaping.
-const ROWS = [
+const BASE_ROWS = [
   { node_id: 'n1', value: 'A.B', name: 'ACTIVO CORRIENTE', element: 'A.B - ACTIVO CORRIENTE', elementlevel: 'E', amount: -157271.85, amount_ref: -100000, indent: 0, indentClass: 'ind-0', isHeading: true, group: ACTIVO, isGroupStart: true },
   { node_id: 'n2', value: 'A.B.I', name: 'Existencias, netas de "rappels"', element: 'A.B.I - Existencias, netas de "rappels"', elementlevel: 'E', amount: 23496.47, amount_ref: 12000, indent: 1, indentClass: 'ind-1', isHeading: true, group: ACTIVO, isGroupStart: false },
   { node_id: 'n3', value: '350', name: 'Productos terminados', element: '350 - Productos terminados', elementlevel: 'C', amount: 23496.47, amount_ref: 12000, indent: 2, indentClass: 'ind-2', isHeading: false, group: ACTIVO, isGroupStart: false },
@@ -485,6 +548,13 @@ const ROWS = [
   { node_id: 'n5', value: '129', name: 'Resultados del ejercicio', element: '129 - Resultados del ejercicio', elementlevel: 'C', amount: 36967.9, amount_ref: 8000, indent: 3, indentClass: 'ind-3', isHeading: false, group: PASIVO, isGroupStart: true },
   { node_id: 'n6', value: 'P.TOTAL', name: 'TOTAL PATRIMONIO NETO Y PASIVO', element: 'P.TOTAL - TOTAL PATRIMONIO NETO Y PASIVO', elementlevel: 'E', isFormula: true, amount: -150152.93, amount_ref: -90000, indent: 0, indentClass: 'ind-0', isHeading: true, group: PASIVO, isGroupStart: false },
 ];
+
+// addVariation() adds these when comparing: amount - reference, and % of |reference| (null when the reference is 0).
+const ROWS = BASE_ROWS.map((r) => ({
+  ...r,
+  variationAmount: Math.round((r.amount - r.amount_ref) * 100) / 100,
+  variationPct: r.amount_ref ? Math.round(((r.amount - r.amount_ref) / Math.abs(r.amount_ref)) * 10000) / 100 : null,
+}));
 
 function renderHtml({ compareTo, locale = 'en_US', rows = ROWS } = {}) {
   const hb = Handlebars.create();
@@ -562,9 +632,9 @@ describe('balance-sheet template.hbs — group-header bands (the multi-root case
     assert.match(after.slice(0, after.indexOf('</tr>', after.indexOf('tree-row'))), /129 - Resultados del ejercicio/);
   });
 
-  it('spans the band across 2 columns without comparison and 3 with it', () => {
+  it('spans the band across 2 columns without comparison and 5 with it (amount, compared, variation, variation %)', () => {
     assert.match(renderHtml({ compareTo: false }), /<td colspan="2">Activo<\/td>/);
-    assert.match(renderHtml({ compareTo: true }), /<td colspan="3">Activo<\/td>/);
+    assert.match(renderHtml({ compareTo: true }), /<td colspan="5">Activo<\/td>/);
   });
 
   it('renders NO band at all when every row shares one group (the P&L shape)', () => {
@@ -576,13 +646,36 @@ describe('balance-sheet template.hbs — group-header bands (the multi-root case
 });
 
 describe('balance-sheet template.hbs — Reference Amount column visibility', () => {
-  it('compareTo=true: shows the header, a 3-col colgroup and a reference cell per row', () => {
+  it('compareTo=true: shows the header, a 5-col colgroup, and a reference + variation + % cell per row', () => {
     const html = renderHtml({ compareTo: true });
     assert.doesNotMatch(html, /Missing helper/);
     assert.match(html, /<th class="cell-amount">Reference Amount<\/th>/);
-    assert.equal([...html.matchAll(/<col style="width:20%">/g)].length, 2);
-    assert.equal([...html.matchAll(/class="cell-amount"/g)].length, ROWS.length * 2 + 2);
+    assert.match(html, /<th class="cell-amount">Variation<\/th><th class="cell-amount">Variation %<\/th>/);
+    assert.equal([...html.matchAll(/<col style="width:\d+%">/g)].length, 5);
+    // Amount + reference + variation + % per row, plus the 4 header cells.
+    assert.equal([...html.matchAll(/class="cell-amount"/g)].length, ROWS.length * 4 + 4);
     assert.match(html, />12\.000,00</, 'the reference amount must be rendered');
+    assert.match(html, />11\.496,47<\/td>\s*<td class="cell-amount">95,80 %</, 'variation and its percentage');
+  });
+
+  it('compareTo=true: a reference of 0 leaves the % cell empty, a real 0 % is printed', () => {
+    const rows = [
+      { ...ROWS[1], variationAmount: -22.48, variationPct: null },
+      { ...ROWS[2], variationAmount: 0, variationPct: 0 },
+    ];
+    const body = renderHtml({ compareTo: true, rows }).replace(/[\s\S]*<tbody>/, '');
+    assert.match(body, /-22,48<\/td>\s*<td class="cell-amount"><\/td>/);
+    assert.match(body, />0,00 %</);
+  });
+
+  it('compareTo=true: the compared header names the reference date when the render carries one', () => {
+    const hb = Handlebars.create();
+    registerReportHelpers(hb, HELPERS_CODE);
+    const html = hb.compile(expandBrandingPartial(readFileSync(resolve(ARTIFACT_DIR, 'template.hbs'), 'utf8')))({
+      css: '', rows: ROWS,
+      meta: { ...META_BASE, locale: 'es_ES', labels: LABELS.es_ES, params: { compareTo: 'true', toReferenceDate: '2025-12-31' } },
+    });
+    assert.match(html, /Importe de Referencia<span class="cmp-against">\(31\/12\/2025\)<\/span>/);
   });
 
   it('compareTo=false: hides the header and every reference cell, and uses the 2-col colgroup', () => {
@@ -606,6 +699,7 @@ describe('balance-sheet template.hbs — Reference Amount column visibility', ()
     assert.match(html, /<th>Elemento<\/th>/);
     assert.match(html, /<th class="cell-amount">Importe<\/th>/);
     assert.match(html, /<th class="cell-amount">Importe de Referencia<\/th>/);
+    assert.match(html, /<th class="cell-amount">Variación<\/th><th class="cell-amount">Variación %<\/th>/);
   });
 });
 
@@ -663,13 +757,13 @@ describe('balance-sheet template-excel.hbs', () => {
     assert.doesNotMatch(html, /-157\.271,85/, 'amounts must never go through formatCurrency in the Excel export');
   });
 
-  it('includes the reference-amount column only when compareTo === "true"', () => {
+  it('includes the reference-amount and variation columns only when compareTo === "true"', () => {
     const on = renderExcel({ compareTo: true });
-    assert.match(on, /<th>Reference Amount<\/th>/);
-    assert.match(on, /<td data-cell-type="number">12000<\/td>/);
+    assert.match(on, /<th>Reference Amount<\/th><th>Variation<\/th><th>Variation %<\/th>/);
+    assert.match(on, /<td data-cell-type="number">12000<\/td><td data-cell-type="number">11496\.47<\/td><td data-cell-type="number">95\.8<\/td>/);
 
     const off = renderExcel({ compareTo: false });
-    assert.doesNotMatch(off, /Reference Amount/);
+    assert.doesNotMatch(off, /Reference Amount|Variation/);
     assert.doesNotMatch(off, /<td data-cell-type="number">12000<\/td>/);
   });
 
@@ -678,7 +772,7 @@ describe('balance-sheet template-excel.hbs', () => {
     const header = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
     assert.deepEqual(
       [...header.matchAll(/<th>([^<]*)<\/th>/g)].map((m) => m[1]),
-      ['Grupo', 'Profundidad', 'Tipo', 'Código', 'Nombre', 'Importe', 'Importe de Referencia']
+      ['Grupo', 'Profundidad', 'Tipo', 'Código', 'Nombre', 'Importe', 'Importe de Referencia', 'Variación', 'Variación %']
     );
   });
 });
@@ -754,10 +848,10 @@ describe('balance-sheet template-csv.hbs', () => {
     }
   });
 
-  it('appends the reference-amount column only when compareTo === "true"', () => {
+  it('appends the reference-amount and variation columns only when compareTo === "true"', () => {
     const on = renderCsv({ compareTo: true }).trim().split('\n');
-    assert.equal(on[0], 'Group,Depth,Type,Code,Name,Amount,Reference Amount');
-    assert.equal(on[1], `${ACTIVO},0,Heading,A.B,ACTIVO CORRIENTE,-157271.85,-100000`);
+    assert.equal(on[0], 'Group,Depth,Type,Code,Name,Amount,Reference Amount,Variation,Variation %');
+    assert.equal(on[1], `${ACTIVO},0,Heading,A.B,ACTIVO CORRIENTE,-157271.85,-100000,-57271.85,-57.27`);
 
     const off = renderCsv({ compareTo: false }).trim().split('\n');
     assert.equal(off[0], 'Group,Depth,Type,Code,Name,Amount');
@@ -766,7 +860,7 @@ describe('balance-sheet template-csv.hbs', () => {
 
   it('header row uses translated labels [es_ES]', () => {
     const csv = renderCsv({ compareTo: true, locale: 'es_ES' });
-    assert.equal(csv.trim().split('\n')[0], 'Grupo,Profundidad,Tipo,Código,Nombre,Importe,Importe de Referencia');
+    assert.equal(csv.trim().split('\n')[0], 'Grupo,Profundidad,Tipo,Código,Nombre,Importe,Importe de Referencia,Variación,Variación %');
   });
 });
 
@@ -936,7 +1030,7 @@ for (const { report, dir, contract } of TYPE_REPORTS) {
 }
 
 // ETP-6080 — the Excel/CSV templates and the number helpers are shared with profit-loss.
-describe('balance-sheet exports — shared with profit-loss (ETP-6080)', () => {
+describe('balance-sheet exports — shared with profit-loss (ETP-6080, ETP-6083)', () => {
   const pl = resolve(import.meta.dirname, '../../../artifacts/profit-loss');
   for (const f of ['template-excel.hbs', 'template-csv.hbs', 'helpers.js']) {
     it(`${f} stays byte-identical to profit-loss`, () => {
@@ -945,14 +1039,200 @@ describe('balance-sheet exports — shared with profit-loss (ETP-6080)', () => {
   }
 
   it('compare on but no variation labels: no variation columns, and a null % cell is never a number cell', () => {
+    const { variationAmount, variationPct, ...noVariation } = LABELS.en_US;
+    void variationAmount; void variationPct;
     const hb = Handlebars.create();
     registerReportHelpers(hb, HELPERS_CODE);
     registerJsreportHelpers(hb, HELPERS_CODE);
     const excel = hb.compile(readFileSync(resolve(ARTIFACT_DIR, 'template-excel.hbs'), 'utf8'))({
-      meta: { ...META_BASE, labels: LABELS.en_US, params: { compareTo: 'true' } },
+      meta: { ...META_BASE, labels: noVariation, params: { compareTo: 'true' } },
       rows: [{ ...ROWS[0], variationAmount: 1, variationPct: null }],
     });
     assert.doesNotMatch(excel, /Variation/);
     assert.doesNotMatch(excel, /data-cell-type="number"><\/td>/);
+  });
+});
+
+// ── ETP-6083: the queries behind the interactive view, the PDF "as of" header ──
+
+const { applyPlaceholders } = await (await import('../vite-plugins/report-cli.js')).loadReportCli('report-sql');
+const apply = (sql, params) => applyPlaceholders(sql, { clientId: 'C1', params, contract: CONTRACT });
+const NO_YEAR = { acctSchemaId: 'S1', orgId: 'O1', dateFrom: '2026-01-01', dateTo: '2026-12-31', compareTo: 'false' };
+const SQLS = CONTRACT.sql;
+const FACT_QUERIES = ['query', 'splitQuery', 'periodQuery', 'splitPeriodQuery'];
+// The predicates every ledger read shares, whatever it computes from them (E1: same as `sql.query`).
+const SHARED_PREDICATES = [
+  "fa.ad_client_id IN ('__CLIENT_ID__')",
+  "fa.factaccttype NOT IN ('R', 'C')",
+  "('__ORGID__' = '' OR ad_isorgincluded(fa.ad_org_id, '__ORGID__', fa.ad_client_id) <> -1)",
+  "('__ACCTSCHEMAID__' = '' OR fa.c_acctschema_id = '__ACCTSCHEMAID__')",
+  "('__BPARTNERID__' = '' OR fa.c_bpartner_id = '__BPARTNERID__')",
+  "('__PRODUCTID__' = '' OR fa.m_product_id = '__PRODUCTID__')",
+];
+
+describe('balance-sheet SQL — predicate parity across query, splitQuery, periodQuery, splitPeriodQuery (ETP-6083)', () => {
+  for (const key of FACT_QUERIES) {
+    it(`${key} reads fact_acct through the same predicates as sql.query (org, schema, R/C, contact, product)`, () => {
+      for (const predicate of SHARED_PREDICATES) assert.ok(SQLS[key].includes(predicate), `${key} lacks: ${predicate}`);
+    });
+
+    it(`${key} never reads __DATEFROM__ — a balance is cumulative, never a range`, () => {
+      assert.doesNotMatch(SQLS[key], /__DATEFROM__|__FROMREFERENCEDATE__/);
+      assert.doesNotMatch(SQLS[key], /fa\.dateacct\s*>=?/, 'no lower bound on the ledger date');
+    });
+  }
+
+  it('the two period queries take their buckets from __PERIODS__ exactly once and accumulate "<= bucket end"', () => {
+    for (const key of ['periodQuery', 'splitPeriodQuery']) {
+      assert.equal(SQLS[key].split('__PERIODS__').length, 2, key);
+      for (const col of ['b.t', 'b.st', 'b.pt']) assert.ok(SQLS[key].includes(`d.dateacct <= ${col}`), `${key} ${col}`);
+      assert.doesNotMatch(SQLS[key], /d\.dateacct\s*(>=|<\s)/);
+    }
+  });
+
+  it('periodQuery and splitPeriodQuery return the columns the engine reads', () => {
+    for (const col of ['s.account_id', 's.idx', 's.own_amt', 's.own_amt_sly', 's.own_amt_prev', 's.own_result', 's.own_result_sly', 's.own_result_prev']) {
+      assert.ok(SQLS.periodQuery.includes(col), col);
+    }
+    for (const col of ['AS dimension_id', 'AS dimension_name', 'f.idx', 'f.own_amt', 'f.own_amt_sly', 'f.own_amt_prev', 'AS own_result', 'AS own_result_sly', 'AS own_result_prev']) {
+      assert.ok(SQLS.splitPeriodQuery.includes(col), col);
+    }
+  });
+
+  it('periods is not a declared parameter (applyPlaceholders would paste it raw)', () => {
+    assert.equal(findParam('periods'), undefined);
+  });
+
+  it('splitQuery covers the node and its subtree and groups by the chosen dimension', () => {
+    const SPLIT = SQLS.splitQuery;
+    assert.match(SPLIT, /SELECT '__SPLITNODEID__'::varchar AS node_id/);
+    assert.match(SPLIT, /JOIN sub s ON tn\.parent_id = s\.node_id/);
+    assert.match(SPLIT, /CASE '__SPLITBY__' WHEN 'org' THEN fa\.ad_org_id WHEN 'bpartner' THEN fa\.c_bpartner_id ELSE fa\.m_product_id END AS dimension_id/);
+    assert.match(SQLS.splitPeriodQuery, /CASE '__SPLITBY__' WHEN 'org' THEN fa\.ad_org_id WHEN 'bpartner' THEN fa\.c_bpartner_id ELSE fa\.m_product_id END AS dimension_id/);
+    for (const col of ['AS dimension_id', 'AS dimension_name', 'own_amt', 'own_amt_ref', 'AS result_onthefly', 'AS result_onthefly_ref']) {
+      assert.ok(SPLIT.includes(col), col);
+    }
+  });
+
+  it('applies the contact / product / date filters when substituted, and strips them when blank', () => {
+    const filled = apply(SQL, { ...NO_YEAR, bPartnerId: 'A,B', productId: 'P1' });
+    assert.match(filled, /fa\.c_bpartner_id IN \('A','B'\)/);
+    assert.match(filled, /fa\.m_product_id IN \('P1'\)|fa\.m_product_id = 'P1'/);
+    assert.match(filled, /fa\.dateacct <= '2026-12-31'::date/);
+    // sql.query still needs a yearId (old viewer, exports); the interactive view reads periodQuery / splitQuery, which need none.
+    const blank = apply(SQL, { ...NO_YEAR, yearId: 'Y1' });
+    assert.doesNotMatch(blank, /__[A-Z]+__/);
+    assert.doesNotMatch(blank, /c_bpartner_id|m_product_id/);
+    const split = apply(SQLS.splitQuery, { ...NO_YEAR, splitNodeId: 'N1', splitBy: 'org' });
+    assert.doesNotMatch(split, /__[A-Z]+__/);
+    const period = apply(SQLS.periodQuery, { ...NO_YEAR, periods: '' });
+    assert.doesNotMatch(period.replace('__PERIODS__', ''), /__[A-Z]+__/);
+  });
+});
+
+describe('balance-sheet SQL — the on-the-fly result (129) is reported on the income-summary node only (ETP-6083, E2)', () => {
+  it('sql.query: result_onthefly(_ref) come from net_income, the posted branch contributes NULL', () => {
+    assert.match(SQL, /FROM posted UNION ALL SELECT \(SELECT node_id FROM income_summary\)/);
+    const posted = SQL.slice(SQL.indexOf('facts AS ('), SQL.indexOf('FROM posted'));
+    assert.match(posted, /NULL::numeric AS result_dr_minus_cr,\s*NULL::numeric AS result_dr_minus_cr_ref/);
+    assert.match(SQL, /SUM\(f\.result_dr_minus_cr\) AS result_onthefly, SUM\(f\.result_dr_minus_cr_ref\) AS result_onthefly_ref/);
+  });
+
+  it('sql.query: the on-the-fly part is the same R/E net income the old CTE summed (excluding R/C)', () => {
+    const cte = SQL.slice(SQL.indexOf('net_income AS ('), SQL.indexOf('facts AS ('));
+    assert.match(cte, /ev\.accounttype IN \('R', 'E'\)/);
+    assert.match(cte, /fa\.factaccttype NOT IN \('R', 'C'\)/);
+  });
+
+  it('periodQuery: own_result* are NULL for every ordinary account and set on the income-summary row', () => {
+    const q = SQLS.periodQuery;
+    const ordinary = q.slice(q.indexOf('FROM days d CROSS JOIN buckets b'), q.indexOf('UNION ALL'));
+    assert.match(q.slice(q.indexOf('facts AS'), q.indexOf('UNION ALL')), /NULL::numeric AS own_result,\s*NULL::numeric AS own_result_sly,\s*NULL::numeric AS own_result_prev/);
+    assert.ok(ordinary.length > 0);
+    const summary = q.slice(q.indexOf('UNION ALL'), q.indexOf('), sums AS'));
+    assert.match(summary, /SELECT \(SELECT node_id FROM income_summary\), b\.idx/);
+    assert.match(summary, /d\.re_amt/);
+  });
+
+  it('splitQuery / splitPeriodQuery: result columns are NULL unless the income-summary account is inside the split subtree', () => {
+    for (const col of ['result_onthefly', 'result_onthefly_ref']) {
+      assert.ok(SQLS.splitQuery.includes(`CASE WHEN (SELECT node_id FROM income_summary) IN (SELECT node_id FROM sub) THEN f.${col} END AS ${col}`), col);
+    }
+    for (const col of ['own_result', 'own_result_sly', 'own_result_prev']) {
+      assert.ok(SQLS.splitPeriodQuery.includes(`CASE WHEN (SELECT node_id FROM income_summary) IN (SELECT node_id FROM sub) THEN f.${col} END AS ${col}`), col);
+    }
+  });
+});
+
+describe('balance-sheet engine — a contra account subtracts under its debit-normal root (ETP-6083)', () => {
+  const node = (node_id, o = {}) => ({
+    node_id, parent_id: '', sort_path: node_id, value: node_id, name: `Name ${node_id}`, elementlevel: 'C',
+    isalwaysshown: 'N', own_amt: 0, own_amt_ref: 0, accountsign: 'D', group_name: ACTIVO, ...o,
+  });
+  // 281 (accumulated depreciation) carries a credit balance: raw debit - credit is negative.
+  const nodes = [
+    node('A', { sort_path: '1', accountsign: 'D' }),
+    node('IM', { parent_id: 'A', sort_path: '1.1', elementlevel: 'E' }),
+    node('213', { parent_id: 'IM', sort_path: '1.1.1', own_amt: 1000, own_amt_ref: 900 }),
+    node('281', { parent_id: 'IM', sort_path: '1.1.2', own_amt: -300, own_amt_ref: -200 }),
+  ];
+  const rows = Object.fromEntries(buildAccountReportTree(nodes, []).map((r) => [r.node_id, r]));
+
+  it('the contra account keeps its negative sign and reduces the heading total', () => {
+    assert.equal(rows['281'].amount, -300);
+    assert.equal(rows['281'].amount_ref, -200);
+    assert.equal(rows.IM.amount, 700);
+    assert.equal(rows.IM.amount_ref, 700);
+  });
+
+  it('and the printed template shows it as a negative figure', () => {
+    const html = renderHtml({ compareTo: false, rows: Object.values(rows).filter((r) => r.node_id === '281') });
+    assert.match(html, />-300,00</);
+  });
+});
+
+describe('balance-sheet template.hbs — "as of" header and period columns (ETP-6083)', () => {
+  const PERIODS = [
+    { idx: 0, dateFrom: '2026-01-01', dateTo: '2026-02-28', partial: false },
+    { idx: 1, dateFrom: '2026-01-01', dateTo: '2026-01-31', partial: false },
+  ];
+  const CELL = { amount: 10, sly: { amount: 5, variationAmount: 5, variationPct: 100 }, prev: { amount: 8, variationAmount: 2, variationPct: 25 } };
+  const PROWS = [
+    { ...BASE_ROWS[0], cells: [CELL, CELL] },
+    { ...BASE_ROWS[4], cells: [CELL, CELL] },
+  ];
+  function render(locale, params, { periods, rows = ROWS } = {}) {
+    const hb = Handlebars.create();
+    registerReportHelpers(hb, HELPERS_CODE);
+    return hb.compile(expandBrandingPartial(readFileSync(resolve(ARTIFACT_DIR, 'template.hbs'), 'utf8')))({
+      css: '', rows,
+      meta: { ...META_BASE, locale, labels: LABELS[locale], params, ...(periods ? { periods, columnPages: [[0, 1]], columnPageSize: 2 } : {}) },
+    });
+  }
+
+  it('the subtitle reads "As of <Hasta>" / "a <Hasta>" in the locale date format', () => {
+    assert.match(render('en_US', { dateTo: '2026-12-31' }), /<div class="report-subtitle">As of 12\/31\/2026<\/div>/);
+    assert.match(render('es_ES', { dateTo: '2026-12-31' }), /<div class="report-subtitle">a 31\/12\/2026<\/div>/);
+  });
+
+  it('no subtitle when the render carries no Hasta', () => {
+    assert.doesNotMatch(render('es_ES', {}), /class="report-subtitle"/);
+  });
+
+  it('with periods and no comparison: one amount column per bucket, bands span the page', () => {
+    const html = render('es_ES', { compareMode: 'none', columns: 'month', dateTo: '2026-02-28' }, { periods: PERIODS, rows: PROWS });
+    assert.doesNotMatch(html, /Missing helper/);
+    assert.match(html, /<th rowspan="2">Concepto<\/th>/);
+    assert.equal([...html.matchAll(/class="cell-amount period-group"/g)].length, PERIODS.length);
+    assert.doesNotMatch(html, /Comparado/);
+    assert.equal([...html.matchAll(/class="group-header"/g)].length, 2);
+  });
+
+  it('with periods and a comparison: amount / compared / variation / % per bucket, band spans 1 + 4 columns per bucket', () => {
+    const html = render('es_ES', { compareMode: 'sly', columns: 'month', dateTo: '2026-02-28', periods: '' }, { periods: PERIODS, rows: PROWS });
+    for (const h of ['Importe', 'Comparado', 'Var.', 'Var. %']) assert.ok(html.includes(h), h);
+    const span = Number(/<tr class="group-header">\s*<td colspan="(\d+)">/.exec(html)[1]);
+    assert.equal(span, 1 + 4 * PERIODS.length);
+    assert.match(html, /<td class="cell-amount">5,00<\/td>/, 'the sly cell amount');
   });
 });

@@ -58,6 +58,15 @@ export const INVOICE_INBOX_CAPABILITY = 'invoiceInbox';
  */
 export const SEPA_REMITTANCES_CAPABILITY = 'sepaRemittances';
 
+/**
+ * ETP-6284 — the capability that switches on purchase-invoice imports with DUA: the DUA and
+ * import-taxes cards of the SIF tab, the deferred-VAT check and the Confirm of an import invoice
+ * without lines. Served by `SFWindowAccessMap` as `capabilities.siiImportDua`: the backend
+ * evaluates the per-account feature flag `sii-import-dua` (the same evaluator that gates the tax
+ * line writes and `siiDeferredVat`) and the browser never does. Fails closed.
+ */
+export const SII_IMPORT_DUA_CAPABILITY = 'siiImportDua';
+
 // The generic posting actions served by `DocumentPostingService` for every
 // postable document. A structural contract, not an entity name.
 const POSTING_ACTIONS = new Set(['post', 'unpost']);

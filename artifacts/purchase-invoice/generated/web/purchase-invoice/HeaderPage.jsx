@@ -135,17 +135,13 @@ export const api = {
     "tax": {
       "get": true,
       "getById": true,
-      "post": false,
-      "put": false,
-      "patch": false,
-      "delete": false,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
       "listUrl": "/sws/neo/purchase-invoice/tax",
       "detailUrl": "/sws/neo/purchase-invoice/tax/{id}",
-      "supportedFilters": [],
-      "methods": [
-        "GET",
-        "GETBYID"
-      ]
+      "supportedFilters": []
     },
     "basicDiscounts": {
       "get": true,

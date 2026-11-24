@@ -18,7 +18,7 @@ describe('voidInternalConsumption helper (ETP-5445)', () => {
   });
 
   it('exports isVoidableRow gated on status CO', () => {
-    assert.match(src, /export function isVoidableRow\(row\)\s*\{\s*return row\?\.status === 'CO';\s*\}/);
+    assert.match(src, /export function isVoidableRow\(row\)\s*\{\s*return isCompletedStatus\(row\?\.status\);\s*\}/);
   });
 
   it('exports an async voidInternalConsumption({ apiFetch, basePath = \'\', recordId, ui })', () => {

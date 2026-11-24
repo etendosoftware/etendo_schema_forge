@@ -581,8 +581,32 @@ const BACKEND_ERROR_KEY_MAP = {
   // (retry).
   ETGO_RemittanceAccountNotBank: 'backendError.remittanceAccountNotBank',
   ETGO_RemittanceAccountIbanRequired: 'backendError.remittanceAccountIbanRequired',
+  // The remittance's own IBAN (REM_REMITTANCE.IBAN, written with the header): length 15-34 or mod 97 failed.
+  ETGO_RemittanceIbanInvalid: 'backendError.remittanceIbanInvalid',
+  // Collection-only options of the remittance header (direct debit scheme CORE|B2B, «Remesa financiada»).
+  ETGO_RemittanceSchemeInvalid: 'backendError.remittanceSchemeInvalid',
+  ETGO_RemittanceOptionsCollectionOnly: 'backendError.remittanceOptionsCollectionOnly',
   ETGO_RemittanceAccountNotAllowed: 'backendError.remittanceAccountNotAllowed',
   ETGO_RemittanceProvisioningConflict: 'backendError.remittanceProvisioningConflict',
+  // ETP-6148 — the SEPA creditor identifier saved on the financial account (saveCreditorId, 422). The SPA
+  // validates the same rule inline (lib/sepaCreditorId.js); these are the safety net. The two
+  // ETGO_RemittanceFileAccount* codes are the readiness problems of a collection remittance whose
+  // account has no (valid) saved identifier; their localized text normally wins, the key is the fallback.
+  ETGO_SepaCreditorIdRequired: 'backendError.sepaCreditorIdRequired',
+  ETGO_SepaCreditorIdInvalidFormat: 'backendError.sepaCreditorIdInvalidFormat',
+  ETGO_SepaCreditorIdInvalidCheckDigits: 'backendError.sepaCreditorIdInvalidCheckDigits',
+  // saveCreditorId on a remittance: a payment remittance (or one of another account) has no creditor
+  // identifier; and a save with no remittance that does not target the account.
+  ETGO_RemittanceCreditorIdNotApplicable: 'backendError.remittanceCreditorIdNotApplicable',
+  ETGO_RemittanceCreditorIdNeedsAccount: 'backendError.remittanceCreditorIdNeedsAccount',
+  ETGO_RemittanceFileAccountNoCreditorId: 'backendError.remittanceFileAccountNoCreditorId',
+  ETGO_RemittanceFileAccountInvalidCreditorId: 'backendError.remittanceFileAccountInvalidCreditorId',
+  // ETP-6247 — the SEPA file actions (confirm / generateFile / fileReadiness, RemittanceHeaderHandler).
+  // The backend localizes every ETGO_RemittanceFile* text in the request language with its
+  // positional params substituted, and the 422s carry no messageParams, so only the parameter-free
+  // key is mapped here: a mapped parametric key would leave `{0}` unfilled, and translateByMessageKey
+  // falls back to the backend text in that case anyway (UNFILLED_PARAM).
+  ETGO_RemittanceFileNotProcessed: 'backendError.remittanceFileNotProcessed',
   // ETP-6148 — FinancialAccountHandler: a financial-account update that changes `type` from Bank
   // to Cash or Card while the account has open SEPA remittances (REM status PE, PR, CP or PP of a
   // provisioned type), 422. Not gated by the flag. The backend embeds the open count as `{0}` and
@@ -622,6 +646,13 @@ const BACKEND_ERROR_KEY_MAP = {
   ETGO_RemittanceProcessFailed: 'backendError.remittanceProcessFailed',
   ETGO_RemittanceNotProcessed: 'backendError.remittanceNotProcessed',
   ETGO_RemittanceReactivateFailed: 'backendError.remittanceReactivateFailed',
+  // ETP-6247 — the step-by-step flow (markSent / markCollected / reactivate, 422). MarkCollectedFailed
+  // carries the cause as `{0}` with no `messageParams`, so its sentence takes `{detail}` like the
+  // other *Failed keys above.
+  ETGO_RemittanceMarkSentNotAllowed: 'backendError.remittanceMarkSentNotAllowed',
+  ETGO_RemittanceMarkCollectedNotAllowed: 'backendError.remittanceMarkCollectedNotAllowed',
+  ETGO_RemittanceMarkCollectedFailed: 'backendError.remittanceMarkCollectedFailed',
+  ETGO_RemittanceReactivateNotAllowed: 'backendError.remittanceReactivateNotAllowed',
   // ETP-5684 — NeoAccountingAccessPolicy (com.etendoerp.go): a post/unpost from a role without
   // Show Accounting Fields. The SPA hides those actions, so this reaches only a stale screen.
   ETGO_AccountingAccessDenied: 'backendError.accountingAccessDenied',

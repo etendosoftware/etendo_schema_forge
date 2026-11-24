@@ -48,6 +48,7 @@ delete DELETE {baseUrl}/{entity}/{id}
   "templateConfig": {
     "titleKey": "matchRuleNewTitle",          // i18n key for the create-modal title
     "editTitleKey": "matchRuleEditTitle",      // i18n key for the edit-modal title
+    "viewTitleKey": "matchRuleViewTitle",      // i18n key for the read-only view title (default: "Ver")
     "bannerKey": "matchRuleBanner",            // optional info banner above the grid
     "searchPlaceholderKey": "matchRuleSearchPlaceholder",
     "newLabelKey": "matchRuleNew",             // "+ New" button label
@@ -76,7 +77,7 @@ exactly as before.
 | `hideBackButton` | `true` / `false` | Drops the toolbar back ("Cancelar") button. |
 | `hideSearch` | `true` / `false` | Drops the local search box (the app's global search sits in the top bar). The page's `filters` (the `searchable` columns) only feed that box, so they then have no effect in the UI; the advanced filter does not depend on them and still offers every column. |
 | `newButtonVariant` | `"default"` (absent) / `"primary"` | `primary`: the "+ New" button uses the blue primary button of the generated lists instead of the ink button. |
-| `rowClickEdit` | `true` / `false` | Clicking a row opens its edit modal (the hover pencil keeps working). Clicks on the selection checkbox, an inline toggle or the hover actions do not open it. Never for a read-only role. |
+| `rowClickEdit` | `true` / `false` | Clicking a row opens its edit modal (the hover pencil keeps working). Clicks on the selection checkbox, an inline toggle or the hover actions do not open it. A read-only role gets row click whatever this key says (see *Read-only role: view mode*). |
 | `listVariant` | `"default"` (absent) / `"compact"` | `compact`: the Figma list density — 40px rows (cells vertically centred, no vertical padding), a 32px checkbox column with 8px left padding, header text tracking −0.005em, and white fill + xs shadow on the toolbar outline buttons (Filtros, sort, refresh), Filtros with 12px / 16px side padding and an 8px icon gap. |
 
 **Fixed column widths.** A grid column declares `columnWidth` (px, emitted as `minWidth`) and
@@ -109,8 +110,20 @@ delete. A `stepper` field with `integer: true` refuses any typed or pasted non-d
 a letter, a `%`, a minus sign when `min` ≥ 0) and digits beyond the length of `max`, and says why
 under the field.
 
-**Keyboard.** With `rowClickEdit`, each row is focusable; Enter or Space on the focused row opens
-it (not when the focus is on its checkbox, toggle or hover actions).
+**Keyboard.** With `rowClickEdit` (or for a read-only role), each row is focusable; Enter or Space
+on the focused row opens it (not when the focus is on its checkbox, toggle or hover actions).
+
+**Read-only role: view mode (ETP-6221).** When the generated page passes `window.readOnly` (the
+role's `AD_Window_Access` tier is read-only), the window already hides "+ New", the hover
+pencil / clone / delete, the selection column and disables the inline toggles (ETP-4950). The
+record itself stays reachable: clicking a row (or Enter / Space on it) and the deep link open the
+same modal in **view mode**, in every window whether or not it declares `rowClickEdit`. Every
+field is disabled (`EntityForm readOnly`), the footer toggle is shown disabled, there is no Save
+pill, and the only action is **Cerrar** (`ui('close')`; the compact variant's outline pill, the
+default variant's `list-modal-close-view` pill). The title is `viewTitleKey`, falling back to the
+generic **Ver**; the view mode shows **no subtitle** (the create / edit subtitles describe
+configuring the record, which that role cannot do). `handleSave` and `handleFieldChange` also
+refuse a read-only role. Full-access roles are unchanged.
 
 Toolbar order is fixed for every list-modal window: left — back (unless hidden), toolbar
 dropdown filters, **Filtros**; right — search (unless hidden), sort, refresh, "+ New". This is the
@@ -128,8 +141,8 @@ modal open** (any variant). The record is taken from the loaded list; one the li
 is read with `GET {entity}/{id}`. A record the server does not return shows the
 `recordNotFoundTitle` toast. Closing the modal (or the not-found case) replaces the URL with
 `/<window>`, so a reload does not reopen it — note the route change remounts the window and
-re-reads the list. A read-only role gets the plain list. Opening a record from the list does not
-change the URL.
+re-reads the list. A read-only role gets the same modal in view mode (ETP-6221; before, it got
+the plain list). Opening a record from the list does not change the URL.
 
 ### Field-level flags
 
@@ -230,8 +243,11 @@ windowLoaders[name] || customLoaders[name] || PlaceholderWindow
 | `hidden: true` + `"redirect": "/path"` | stripped | `<Navigate to="/path" replace />` (old bookmarks keep working) |
 | … + `"redirectKeepPath": true` (ETP-5720) | stripped | same, but `/<name>/<id>?q#h` goes to `/path/<id>?q#h`. Only for a renamed window (`simple-g-l-journal` → `manual-journals`); a redirect to a different window must not carry a foreign record ID |
 | `hidden: true` + `"routeOnly": true` | stripped | loads the window (use only when an in-app link needs it: overview page buttons, row actions) |
+| `hidden: true` + `"reportId"` + `"path"` (ETP-6389) | stripped | not registered (the `path`, `report-viewer?category=<cat>&report=<id>`, points at the dedicated report viewer route). The `path` is read by the global search, which lists the row while the user types if they hold a grant on the report, and by the favourite-label map |
 
 Dedicated routes in `runtime-routes.jsx` (`/smart-scan`, `/hr`, `/report-viewer`...) win over `:windowName`, so hidden pages and reports are unaffected. A hidden window that has a `windowId` shared with a visible one (e.g. `business-partner` and `contacts`, 123) therefore no longer slips through role access: declare `redirect` to the window that replaced it. Do not add a link to a window that is hidden without one of the two flags.
+
+Access flags (`windowId`, `accessWindowId`, `capability`, `hideWhenFirstStepsDismissed`, `requiresGroupReport`) decide visibility, not routing; they are described with `filterMenuGroupsByAccess()` in `docs/generated-custom-windows/app-shell-functional-flows.md` (authenticated shell flow).
 
 ## Flow: layoutType → contract → generator
 

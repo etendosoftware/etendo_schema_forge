@@ -230,4 +230,22 @@ describe('DocumentStatusPill', () => {
       expect(screen.getByTestId('document-status-pill').style.letterSpacing).toBe('-0.01em');
     });
   });
+
+  it('enumVariants colours the pill per code, like the grid chip', () => {
+    const variants = { CT: 'success', PE: 'neutral', AN: 'destructive', CP: 'warning' };
+    const { rerender } = render(<DocumentStatusPill status="CT" enumVariants={variants} />);
+    expect(screen.getByTestId('document-status-pill')).toHaveAttribute('data-tone', 'success');
+    for (const [code, tone] of Object.entries(variants)) {
+      rerender(<DocumentStatusPill status={code} enumVariants={variants} />);
+      expect(screen.getByTestId('document-status-pill')).toHaveAttribute('data-tone', tone);
+    }
+  });
+
+  it('a code missing from enumVariants, or no enumVariants, keeps the global tone', () => {
+    const { rerender } = render(<DocumentStatusPill status="CO" enumVariants={{ CT: 'warning' }} />);
+    const withoutMap = () => screen.getByTestId('document-status-pill').getAttribute('data-tone');
+    const fallback = withoutMap();
+    rerender(<DocumentStatusPill status="CO" />);
+    expect(withoutMap()).toBe(fallback);
+  });
 });

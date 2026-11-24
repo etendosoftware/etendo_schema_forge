@@ -933,6 +933,14 @@ rectification code, which order flows never preselect — only a customer return
 `docs/ui-customization.md` §21b.
 Backend reference: `com.etendoerp.go` `docs/neo-headless.md` §4.12.36b (ETP-6179).
 
+## Public API — exchange rate and line currency — ETP-6177
+
+The `sales-order` window exposes `header.eTGOCurrencyRate` as numeric `currency_rate`
+through `entities.header.publicApi.inputFields` in `decisions.json` (`form: false`).
+
+See [Document currency, exchange rate and line prices](../public-api.md#412-document-currency-exchange-rate-and-line-prices)
+for the shared rate rules, completed-document lock, line conversion and pricing exceptions.
+
 ## Rate and cost fields are numeric — ETP-6342
 
 Schema Forge core 0.3.110 maps AD reference `800019` (General Quantity: rates and costs) to `decimal` instead of the `string` fallback. The header `eTGOCurrencyRate` (`EM_ETGO_Currency_Rate`) is now `decimal` in the contract (`tsType: number`).

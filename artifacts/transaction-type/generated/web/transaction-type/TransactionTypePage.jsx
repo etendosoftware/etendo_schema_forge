@@ -40,7 +40,8 @@ const listModalConfig = {
   "allowClone": false,
   "backLabelKey": null,
   "backTo": null,
-  "toolbarFilters": []
+  "toolbarFilters": [],
+  "viewTitleKey": "transactionTypeViewTitle"
 };
 
 export const api = {

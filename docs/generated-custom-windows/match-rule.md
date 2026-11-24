@@ -14,9 +14,9 @@ Because `match-rule`'s contract carries a real `window.id`, `generate-frontend.j
 
 ## Interaction model
 
-- Route: `/match-rule` — a single list screen. There is **no drill-in detail route**. Since ETP-5978 `/match-rule/<recordId>` (the generic `:windowName/:recordId` route) opens the list with that rule's edit modal already open; closing it returns the URL to `/match-rule` (shared `list-modal` behaviour, see `docs/window-templates.md` → *Deep link*). A read-only role gets the plain list.
+- Route: `/match-rule` — a single list screen. There is **no drill-in detail route**. Since ETP-5978 `/match-rule/<recordId>` (the generic `:windowName/:recordId` route) opens the list with that rule's edit modal already open; closing it returns the URL to `/match-rule` (shared `list-modal` behaviour, see `docs/window-templates.md` → *Deep link*). A read-only role gets the modal in view mode (ETP-6221, see below).
 - Layout: `layoutType: "list-modal"` — a grid (list) plus a create/edit **modal**, rendered by the generic `ListModalWindow` component (`tools/app-shell/src/components/contract-ui/ListModalWindow.jsx`).
-- Visibility: intended for the Finance menu, label "Reglas de matcheo" (`Matching Rules` in `en_US`).
+- Visibility: intended for the Treasury menu section (Finance until ETP-6389; breadcrumb `Treasury / Accounts / Match Rule`), label "Reglas de matcheo" (`Matching Rules` in `en_US`).
 - Window shape: header-only (`detailEntity: null`). The single entity is `etgoMatchRuleHeader`, backed by table `ETGO_Match_Rule`.
 - Backend: **generic NEO Headless W CRUD** (persistence served from the AD tab / `ETGO_SF_FIELD`) plus a thin validation pre-hook (`MatchRuleHandler`, `@Named("match-rule")`).
 
@@ -192,6 +192,16 @@ cell, disables the inline toggle (`ListModalCell` -> `ToggleCell` -> `PillToggle
 offers no selection column or bulk bar at all — there is no action a read-only role could take
 with one.
 
+### Read-only role can open a rule (ETP-6221)
+
+ETP-4950 also disabled the deep link for a read-only role, and the window has no `rowClickEdit`
+(even a full-access role opens a rule through the hover pencil), so a read-only role could not see
+a rule's detail at all. Now a row click (or Enter / Space on a focused row) and
+`/match-rule/<recordId>` open the wide modal in **view mode**: every field disabled, no submit
+pill, a single **Cerrar**
+pill (`list-modal-close-view`), title **Regla de matcheo** (`templateConfig.viewTitleKey` →
+`matchRuleViewTitle`) and no subtitle (the create subtitle "Configura una regla…" is not shown). Full-access roles keep the hover pencil and no row click.
+
 ## Gap assessment
 
 - Inline editing of `priority` directly in the grid is carried as a contract flag (`inlineEdit`) but the primary edit path verified here is the modal; treat in-grid priority editing as future behavior.
@@ -199,7 +209,7 @@ with one.
 
 ## Manual verification
 
-1. After the user runs `push-to-neo` + `export.database` + smartbuild and wires the menu, open `/match-rule` from the Finance menu and confirm the prioritized grid renders with the columns above and the read-only Reconciliations count.
+1. After the user runs `push-to-neo` + `export.database` + smartbuild and wires the menu, open `/match-rule` from the Treasury menu and confirm the prioritized grid renders with the columns above and the read-only Reconciliations count.
 2. Click "Nueva regla", confirm the modal opens with Priority pre-filled to `max + 10`, fill Name + Pattern + Concept condition, save, and confirm the row appears.
 3. Create a Regex-condition rule with a deliberately catastrophic pattern (e.g. `((a+)+)+$` — Java 17 optimizes the single-nested form) and confirm the save is rejected with a 400 error message (shown in Spanish via `translateBackendError`).
 4. Create two rules with the same Priority and the same "Afecta a" account and confirm **both are accepted** (priority is a ranking, not a unique key).

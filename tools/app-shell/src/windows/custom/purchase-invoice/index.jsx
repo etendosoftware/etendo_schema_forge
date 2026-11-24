@@ -21,6 +21,7 @@ import { CreateContactContext } from '@/components/contract-ui/CreateContactCont
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord, buildInvoiceUnpostActions, invoiceUnpostRowFilter, makeInvoiceReactivateRowFilter } from '../shared/useInvoiceWindow.js';
 import { PURCHASE_INVOICE_FOLLOW_UP } from '../shared/invoiceFollowUp.js';
+import { useSiiImportDuaEnabled } from '../shared/SiiImportDuaSection.jsx';
 import { createFollowUpAfterProcess } from '@/components/follow-up-documents/followUpDocuments.js';
 import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
 import { useSifRowSendAction } from '../shared/useSifRowSendAction.jsx';
@@ -114,6 +115,11 @@ const LABEL_OVERRIDES = {
     OutstandingAmt: 'Saldo pendiente',
   },
 };
+
+/** ETP-6284: Confirm without lines when the invoice carries manual (import) tax lines. */
+export function allowConfirmWithManualTaxLines(record) {
+  return record?.hasManualTaxLines === true || record?.hasManualTaxLines === 'Y';
+}
 
 function PurchaseInvoiceBulkAction(props) {
   // ETP-5745 follow-up — one row-fetch per SELECTED row when reactivating, not per list row;
@@ -236,7 +242,14 @@ export default function PurchaseInvoiceWindow(props) {
   // can save corrected header dimensions; their decisions.json readOnlyLogic override
   // (@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')) keeps them locked while the invoice
   // is posted (matching core C_INVOICE_TRG) or in any processed status other than CO.
-  const draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference', 'accountingDate', 'project', 'costcenter', 'aeatsiiErrorRegistral'], editableLineFieldsWhenCompleted: ['project', 'costcenter'], afterProcess: FOLLOW_UP_AFTER_PROCESS });
+  // ETP-6284: behind the siiImportDua capability, an import invoice with no lines but with manual tax lines
+  // (C_InvoiceTax, Recalculate=N — `hasManualTaxLines`, PurchaseInvoiceHeaderHandler) can be
+  // confirmed, as in Classic (C_Invoice_Post accepts lines OR tax lines).
+  const importDuaEnabled = useSiiImportDuaEnabled();
+  const draftModeOverride = {
+    ...getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference', 'accountingDate', 'project', 'costcenter', 'aeatsiiErrorRegistral'], editableLineFieldsWhenCompleted: ['project', 'costcenter'], afterProcess: FOLLOW_UP_AFTER_PROCESS }),
+    ...(importDuaEnabled ? { allowEmptyWhen: allowConfirmWithManualTaxLines } : {}),
+  };
 
   // ETP-4520 — mirrors buildWindowAccessWiring's effectiveWindow: the hand-rolled
   // ListView below never picked up the read-only tier either, unlike GeneratedApp

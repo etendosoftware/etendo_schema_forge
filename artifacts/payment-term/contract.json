@@ -1,8 +1,8 @@
 {
   "version": "0.12.0",
   "generatedAt": "2026-04-29T19:06:55.269Z",
-  "updatedAt": "2026-10-28T17:20:09.310Z",
-  "checksum": "c5128897a4012612",
+  "updatedAt": "2026-11-20T17:55:48.996Z",
+  "checksum": "0f184a70f296abd9",
   "frontendContract": {
     "window": {
       "id": "141",
@@ -12,6 +12,7 @@
       "templateConfig": {
         "titleKey": "paymentTermNewTitle",
         "editTitleKey": "paymentTermEditTitle",
+        "viewTitleKey": "paymentTermViewTitle",
         "newLabelKey": "paymentTermNew",
         "modalVariant": "compact",
         "hideBackButton": true,
@@ -20,6 +21,7 @@
         "rowClickEdit": true,
         "listVariant": "compact"
       },
+      "breadcrumb": "Treasury / Payment Term",
       "detailEntity": null,
       "labelOverrides": {
         "es_ES": {
@@ -194,6 +196,7 @@
       "templateConfig": {
         "titleKey": "paymentTermNewTitle",
         "editTitleKey": "paymentTermEditTitle",
+        "viewTitleKey": "paymentTermViewTitle",
         "newLabelKey": "paymentTermNew",
         "modalVariant": "compact",
         "hideBackButton": true,
@@ -202,6 +205,7 @@
         "rowClickEdit": true,
         "listVariant": "compact"
       },
+      "breadcrumb": "Treasury / Payment Term",
       "detailEntity": null,
       "labelOverrides": {
         "es_ES": {

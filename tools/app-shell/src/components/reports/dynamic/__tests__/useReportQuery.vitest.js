@@ -131,6 +131,13 @@ describe('useReportQuery', () => {
     });
   });
 
+  it('a statement timeout is classed report_timeout (ETP-6146)', async () => {
+    apiFetchMock.mockResolvedValueOnce(json({ error: 'REPORT_TIMEOUT', code: 'REPORT_TIMEOUT' }, { ok: false, status: 504 }));
+    const { result } = render(READY);
+    await flushDebounce();
+    expect(result.current).toMatchObject({ loading: false, errorCode: 'report_timeout' });
+  });
+
   it('an error body without a code is classed by status', async () => {
     apiFetchMock.mockResolvedValueOnce({ ok: false, status: 502, json: () => Promise.reject(new Error('not json')) });
     const { result } = render(READY);

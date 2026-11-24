@@ -181,7 +181,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createAuthContextMock, createFiscalConfigMock } from '@/test/mockOrderWindowAuth.jsx';
-import PurchaseInvoiceWindow from '../index.jsx';
+import PurchaseInvoiceWindow, { allowConfirmWithManualTaxLines } from '../index.jsx';
 import { consumeFollowUpPrompt } from '@/components/follow-up-documents/followUpDocuments.js';
 import { expectInvoiceBulkUnpostWiring } from '../../shared/__tests__/testUtils/invoiceBulkUnpostAssertions.js';
 
@@ -714,5 +714,16 @@ describe('PurchaseInvoiceWindow — SIF send entry points', () => {
   it('loads the fiscal config in the list view', () => {
     render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
     expect(sifHookCalls[sifHookCalls.length - 1].args.loadConfig).toBe(true);
+  });
+});
+
+describe('allowConfirmWithManualTaxLines — import invoice confirmed with tax lines only', () => {
+  it('allows an empty invoice only when the header reports manual tax lines', () => {
+    expect(allowConfirmWithManualTaxLines({ hasManualTaxLines: true })).toBe(true);
+    expect(allowConfirmWithManualTaxLines({ hasManualTaxLines: 'Y' })).toBe(true);
+    expect(allowConfirmWithManualTaxLines({ hasManualTaxLines: false })).toBe(false);
+    expect(allowConfirmWithManualTaxLines({ hasManualTaxLines: 'N' })).toBe(false);
+    expect(allowConfirmWithManualTaxLines({})).toBe(false);
+    expect(allowConfirmWithManualTaxLines(null)).toBe(false);
   });
 });

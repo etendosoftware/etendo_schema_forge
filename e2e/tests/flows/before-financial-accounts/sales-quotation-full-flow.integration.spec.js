@@ -10,9 +10,10 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../../helpers/auth.js';
+import { noteFinancialAccountPrecondition } from '../../helpers/financial-account-helpers.js';
 import { ensureOpenPeriod } from '../../helpers/period-helpers.js';
 import { ensureStockOnHand, DEFAULT_WAREHOUSE_NAME } from '../../helpers/inventory-helpers.js';
-import { selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
+import { ensureCustomerSetup, selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
 import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
@@ -391,10 +392,16 @@ async function clickAndExpectAction(page, trigger, actionPattern, label) {
   );
   await trigger.click();
   const resp = await respPromise;
-  // The body is gone when the action makes the page reload (DocAction does):
-  // the status is still checked, and callers that need the body assert on the
+  // The body can be unavailable: gone when the action makes the page reload, and never
+  // reported finished by Chromium when the page does not read it and the response is
+  // `Cache-Control: no-store` (every NEO JSON response since ETP-4571; the action modals
+  // do not read success bodies). `resp.text()` then neither resolves nor rejects, so it is
+  // bounded. The status is still checked, and callers that need the body assert on the
   // returned data, so a missing body cannot pass silently there.
-  const text = await resp.text().catch(() => '');
+  const text = await Promise.race([
+    resp.text().catch(() => ''),
+    new Promise((resolve) => { setTimeout(() => resolve(''), 10_000); }),
+  ]);
   expect(resp.status(), `${label} should succeed — response: ${text.slice(0, 300)}`).toBeLessThan(400);
   expect(text,
     `[ETP-4567] ${label} must not answer "No pending lines to invoice"`,
@@ -433,6 +440,11 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await login(page, { user, password });
     await expect(page).toHaveURL(/dashboard/, { timeout: 30_000 });
     await slow(page);
+    // Runs before any spec creates a financial account; see the folder's README.
+    await noteFinancialAccountPrecondition(page, test.info());
+    // A fresh tenant has no contacts; provision the customer instead of borrowing one
+    // an earlier spec left behind (it never touches financial accounts).
+    await ensureCustomerSetup(page);
 
     // ETP-5079: the onboarding dataset no longer seeds any visible product, so
     // the lines added below have nothing to pick unless the suite provisions
@@ -585,6 +597,15 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     const negQuotationProductName = (await negQuotationRow.locator('[data-cell-key="product"]').textContent())?.trim();
     await ensureStockOnHand(page, {
       productName: negQuotationProductName,
+      warehouseName: DEFAULT_WAREHOUSE_NAME,
+      minQty: 200,
+    });
+    // The baseline POSITIVE line ships stock out, so its product needs stock on hand too.
+    // This spec runs on a tenant fresh from onboarding (flows/before-financial-accounts/),
+    // where nothing has received that product yet; it used to pass only because the
+    // purchase specs, running first, left goods receipts of it behind.
+    await ensureStockOnHand(page, {
+      productName: PRODUCT_FIXTURE_ALPHA.name,
       warehouseName: DEFAULT_WAREHOUSE_NAME,
       minQty: 200,
     });
@@ -947,6 +968,11 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await login(page, { user, password });
     await expect(page).toHaveURL(/dashboard/, { timeout: 30_000 });
     await slow(page);
+    // Runs before any spec creates a financial account; see the folder's README.
+    await noteFinancialAccountPrecondition(page, test.info());
+    // A fresh tenant has no contacts; provision the customer instead of borrowing one
+    // an earlier spec left behind (it never touches financial accounts).
+    await ensureCustomerSetup(page);
 
     // ETP-5079: no product is seeded on a fresh tenant — provision the two
     // fixtures the negative lines below are built from.

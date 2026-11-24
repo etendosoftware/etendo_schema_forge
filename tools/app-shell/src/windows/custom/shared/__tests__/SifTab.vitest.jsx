@@ -138,11 +138,12 @@ vi.mock('@/components/ui/select', () => {
 // test suite — so it's stubbed out here to a simple marker exposing its props as data
 // attributes.
 vi.mock('@/windows/custom/shared/SifAttachmentsSection.jsx', () => ({
-  default: ({ tableName, recordId }) => (
+  default: ({ tableName, recordId, recordIds }) => (
     <div
       data-testid="mock-sif-attachments-section"
       data-table-name={tableName}
       data-record-id={recordId ?? ''}
+      data-record-ids={(recordIds ?? []).join(',')}
     />
   ),
 }));
@@ -379,6 +380,16 @@ describe('SifTab', () => {
       const section = screen.getByTestId('mock-sif-attachments-section');
       expect(section).toHaveAttribute('data-table-name', 'aeatsii_facturas');
       expect(section).toHaveAttribute('data-record-id', 'sii-sub-001');
+    });
+
+    // ETP-6284: an SII send with DUA leaves several aeatsii_facturas rows (F1 + F5s); the
+    // section receives all of them so no record's XML is hidden.
+    it('passes every aeatsii_facturas id (aeatsiiFacturaIds) to the Adjuntos section', () => {
+      render(<SifTab {...makeProps({ data: {
+        documentStatus: 'CO', aeatsiiFacturaId: 'sii-3', aeatsiiFacturaIds: ['sii-1', 'sii-2', 'sii-3'],
+      } })} />);
+      const section = screen.getByTestId('mock-sif-attachments-section');
+      expect(section).toHaveAttribute('data-record-ids', 'sii-1,sii-2,sii-3');
     });
 
     it('renders the Adjuntos section with an empty recordId when aeatsiiFacturaId is absent', () => {

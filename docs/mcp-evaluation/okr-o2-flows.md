@@ -92,6 +92,18 @@ fija. Se itera; todavía **no son pruebas de la suite**.
 | 54 | `w-contact-category-vendor` | Contacto en la categoría Proveedor: hereda solo proveedor (ETP-5791, flag `contact-category-type`) | Contactos, Categoría de contacto | 📄 | no |
 | 55 | `w-contact-own-category` | Contacto en una categoría propia cliente y proveedor: hereda los dos (ETP-5791) | Contactos, Categoría de contacto | 📄 | no |
 | 56 | `e-fiscal-year-start` | Pedir un ejercicio de julio a junio: el MCP no lo cambia y el agente manda a Primeros pasos (ETP-5577) | Calendario | 📄 | no |
+| 57 | `q-product-purchased-units` | Unidades de un producto que entraron por compras este mes (ETP-5889) | Productos, Movimientos | 📄 | no |
+| 58 | `q-product-movements` | Qué movimientos tuvo un producto (ETP-5889) | Productos, Movimientos | 📄 | no |
+| 59 | `q-invoice-inbox` | Qué facturas hay en la bandeja, pendientes de pasar a compras (ETP-6046) | Bandeja de facturas | 📄 | no |
+| 60 | `q-profit-quarter` | Resultado de un trimestre en Pérdidas y Ganancias (ETP-6080/6239) | Informes | 📄 | no |
+| 61 | `q-profit-by-month` | Pérdidas y Ganancias mes a mes (ETP-6239) | Informes | 📄 | no |
+| 62 | `w-portal-link` | El link del portal de un cliente para mandárselo (ETP-6209) | Contactos, Portal | 📄 | sí |
+| 63 | `e-contact-without-type` | Registrar un contacto que no es cliente ni proveedor: se rechaza (KR2.2) | Contactos | 📄 | no |
+| 64 | `e-portal-link-without-email` | Link del portal de un cliente sin email: no hay link (KR2.2) | Contactos, Portal | 📄 | no |
+| 65 | `e-profit-by-month-long-range` | PyG mes a mes de 30 meses: el límite de 24 y cómo lo resuelve el agente (KR2.2) | Informes | 📄 | no |
+| 66 | `e-invoice-inbox-confirm` | Pedir que pase a compras un documento de la bandeja: lo hace una persona en la app (KR2.2) | Bandeja de facturas | 📄 | no |
+| 67 | `e-payment-term-out-of-range` | Condición de pago de 400 días: el rango es 0 a 365 y el contacto no se toca (KR2.2) | Contactos, Condiciones de pago | 📄 | no |
+| 68 | `e-remittance-cash-account` | Remesa en la cuenta Caja, que no admite remesas (KR2.2) | Remesas | 📄 | no |
 | | **Errores y negativas** | | | | |
 | 39 | `e-unknown-document` | Documento que no existe | Factura | 📄 | sí |
 | 40 | ~~`e-invalid-write`~~ | Cantidad negativa — **retirada del KR** (Etendo la acepta por diseño) | Pedido | 📄 | — |

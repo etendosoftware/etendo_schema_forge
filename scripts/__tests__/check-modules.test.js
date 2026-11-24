@@ -146,12 +146,17 @@ describe('retired Bitbucket host', () => {
   it('fails the check for a module whose origin is on the retired host, with the fix command', async () => {
     git(clone, 'checkout', '-q', '-B', EPIC, `origin/${EPIC}`);
     const realOrigin = git(clone, 'remote', 'get-url', 'origin');
-    git(clone, 'remote', 'set-url', 'origin', 'git@bitbucket.org:koodu_software/org.openbravo.module.sii.git');
+    const retiredOrigin = 'git@bitbucket.org:koodu_software/org.openbravo.module.sii.git';
+    // The longest insteadOf match wins: isolate this fixture from a developer's global host repair.
+    const rewriteKey = `url.${retiredOrigin}.insteadOf`;
+    git(clone, 'config', rewriteKey, retiredOrigin);
+    git(clone, 'remote', 'set-url', 'origin', retiredOrigin);
     try {
       const r = await evaluateRepo(clone, epicSpec, EPIC);
       assert.ok(errors(r).some((m) => m.includes('remote set-url origin git@ssh.bitbucket.org:koodu_software/org.openbravo.module.sii.git')));
     } finally {
       git(clone, 'remote', 'set-url', 'origin', realOrigin);
+      git(clone, 'config', '--unset', rewriteKey);
     }
   });
 });

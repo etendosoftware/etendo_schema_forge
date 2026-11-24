@@ -86,6 +86,10 @@ must really return it under `internalPath`, or the attribute never appears.
 
 A name that collides with a published field fails the generation.
 
+Real example: the headers of `sales-quotation`, `sales-order` and `purchase-order` publish the
+exchange rate, a field the form does not show (`form: false`, the rate picker edits it), as
+`{ "name": "currency_rate", "internalPath": "eTGOCurrencyRate", "dataType": "number", "readable": true }`.
+
 ## 4. Enable or disable an action
 
 Actions are opt-in per window, at `window.publicApi.actions`. v1 knows only `complete`, and only for

@@ -19,6 +19,27 @@
  */
 import { normalizeLabel } from './matchOptionLabel.js';
 
+/**
+ * Whether a menu.json item may be listed by the global search, before the
+ * feature-flag / capability / support-mode rules the palette applies on top.
+ *
+ * A visible item always may. A `hidden` item normally may not — except a report row
+ * (ETP-6389): one that carries a `reportId` and an explicit `path`
+ * (`report-viewer?category=<cat>&report=<id>`) is listed while the user is searching
+ * (`includeReports`), so "Antigüedad" finds the aging reports under their own group,
+ * and only when `canOpenReport(reportId)` says the caller holds a grant on it — the same
+ * per-report rule the report catalog applies. Report rows stay out of the empty-query
+ * listing, where they would only crowd the window list.
+ *
+ * @param {{hidden?: boolean, reportId?: string, path?: string}} item
+ * @param {{includeReports?: boolean, canOpenReport?: (reportId: string) => boolean}} [options]
+ * @returns {boolean}
+ */
+export function isSearchableMenuItem(item, { includeReports = false, canOpenReport = () => false } = {}) {
+  if (!item.hidden) return true;
+  return includeReports && Boolean(item.reportId) && Boolean(item.path) && canOpenReport(item.reportId) === true;
+}
+
 function matchesAny(values, needle) {
   return values.some((value) => normalizeLabel(value).includes(needle));
 }

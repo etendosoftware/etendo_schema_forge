@@ -276,3 +276,27 @@ describe('blocked Save reports the attempt (ETP-5513)', () => {
     expect(seen).toEqual([['a', 'b']]);
   });
 });
+
+// ETP-6247 — `draftMode.disabledEmptyTitleKey`: the tooltip that says why «Confirmar» is disabled with no lines.
+describe('renderSaveActions — draftMode disabledEmptyTitleKey', () => {
+  const draft = (extra = {}) => ({ enabled: true, label: 'confirm', disableWhenEmpty: true, onConfirm: vi.fn(), ...extra });
+  const render_ = (draftMode, children, hookExtra = {}) => render(<>{renderSaveActions(existingRecordParams({
+    isNew: true, data: {}, draftMode, hook: { isSaving: false, handleSave: vi.fn(), primeSaved: vi.fn(), children, childrenLoading: false, ...hookExtra },
+  }))}</>);
+
+  it('disables «Confirmar» without lines and explains why', () => {
+    render_(draft({ disabledEmptyTitleKey: 'needsLines' }), []);
+    expect(screen.getByTestId('action-save')).toBeDisabled();
+    expect(screen.getByTestId('action-save')).toHaveAttribute('title', 'needsLines');
+  });
+
+  it('has no tooltip once there is a line, and none without the opt-in key', () => {
+    const { unmount } = render_(draft({ disabledEmptyTitleKey: 'needsLines' }), [{ id: 'l1' }]);
+    expect(screen.getByTestId('action-save')).toBeEnabled();
+    expect(screen.getByTestId('action-save')).not.toHaveAttribute('title', 'needsLines');
+    unmount();
+    render_(draft(), []);
+    expect(screen.getByTestId('action-save')).toBeDisabled();
+    expect(screen.getByTestId('action-save')).not.toHaveAttribute('title', 'needsLines');
+  });
+});

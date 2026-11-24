@@ -82,6 +82,21 @@ const REPORT_IDS_BY_GROUP = new Map(
 );
 
 /**
+ * Whether `reportAccess` (id -> tier, from `fetchMyReportAccess()`) holds a grant on at least one
+ * `reportId` entry of the menu.json group `groupName`. Reads `REPORT_IDS_BY_GROUP` (the raw,
+ * unfiltered menu), so it works on groups whose hidden report rows were already stripped.
+ * `null`/omitted `reportAccess` answers `false` (fail closed).
+ *
+ * @param {string} groupName — menu.json `group` key (e.g. `"Treasury"`).
+ * @param {Record<string, string>|null} [reportAccess]
+ * @returns {boolean}
+ */
+export function hasAccessibleReportInGroup(groupName, reportAccess) {
+  if (!reportAccess) return false;
+  return (REPORT_IDS_BY_GROUP.get(groupName) ?? []).some(id => reportAccess[id] !== undefined);
+}
+
+/**
  * Filters an already-built menuGroups array (see buildMenuGroups) down to what
  * the current role can reach, per SFListMenu (com.etendoerp.go docs/neo-headless.md
  * §8). Items carrying no windowId/processId/obuiappProcessId (dashboard, custom
@@ -156,6 +171,16 @@ const REPORT_IDS_BY_GROUP = new Map(
  * that still needs to read it" mistake the ETP-5402 matrix fix already made once, recurring here
  * in a different call site.
  *
+ * A sixth axis (ETP-6389) lets an item declare `"requiresGroupReport": true` for a report-category
+ * link that must only show when there is at least one report behind it — e.g. Tesorería ›
+ * Informes, whose category holds nothing but the two aging reports. Such an item is hidden unless
+ * the caller holds a grant (`reportAccess`) on at least one `reportId` entry of the item's OWN
+ * menu.json group (`REPORT_IDS_BY_GROUP`, same raw source as the fallback above). It is stricter
+ * than `accessWindowId` alone: the shared Financial Reports anchor window is NOT enough, because
+ * a role holding that window but no grant on any of the group's reports would otherwise open an
+ * empty catalog. Admin/client-admin is exempt, like the `accessWindowId` axis. Fails CLOSED: a
+ * missing/not-yet-loaded `reportAccess` hides the item.
+ *
  * @param {Array} groups — output of buildMenuGroups.
  * @param {Set<string>|null} allowedIds — from useRoleMenu(). `null` disables
  *   the windowId/processId/obuiappProcessId filtering axis.
@@ -172,7 +197,8 @@ const REPORT_IDS_BY_GROUP = new Map(
  *   `hideWhenFirstStepsDismissed`; `true` and `undefined` both hide it.
  * @param {Record<string, string>|null} [reportAccess] — id -> tier, from
  *   `fetchMyReportAccess()` (ETP-5402 QA follow-up). `null`/omitted disables
- *   only the report-access fallback above; the other axes are unaffected.
+ *   the report-access fallback above and hides every non-admin `requiresGroupReport`
+ *   item (fail closed); the other axes are unaffected.
  */
 export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null, windowAccess = null,
   firstStepsDismissed = undefined, reportAccess = null) {
@@ -180,14 +206,15 @@ export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null
   const itemIds = item => [item.windowId, item.processId, item.obuiappProcessId].filter(Boolean);
   return groups
     .map(group => {
-      const reportIdsInGroup = REPORT_IDS_BY_GROUP.get(group.group) ?? [];
-      const groupHasAccessibleReport = Boolean(reportAccess)
-        && reportIdsInGroup.some(id => reportAccess[id] !== undefined);
+      const groupHasAccessibleReport = hasAccessibleReportInGroup(group.group, reportAccess);
       return {
         ...group,
         items: group.items.filter(item => {
           if (item.capability && capabilities?.[item.capability] !== true) return false;
           if (item.hideWhenFirstStepsDismissed && firstStepsDismissed !== false) return false;
+          if (item.requiresGroupReport && !capabilities?.isAdminOrClientAdmin && !groupHasAccessibleReport) {
+            return false;
+          }
           if (item.accessWindowId && !capabilities?.isAdminOrClientAdmin) {
             const hasWindowAccess = windowAccess && windowAccess[item.accessWindowId] !== undefined;
             if (!hasWindowAccess && !groupHasAccessibleReport) return false;
