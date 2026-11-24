@@ -508,6 +508,8 @@ export function buildEntity({
       internalPath: input.internalPath,
       dataType: { type: input.dataType ?? 'string' },
       reference: null,
+      // An input field is added by the entity's handler, not a column: filter and sort would hit a missing property.
+      queryable: false,
       ...(!outputOnly && input.required === true ? { required: true } : {}),
     };
   }

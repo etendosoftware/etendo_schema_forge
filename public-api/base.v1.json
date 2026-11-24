@@ -547,7 +547,8 @@
           "dataType": {
             "type": "string"
           },
-          "reference": null
+          "reference": null,
+          "queryable": false
         },
         "address_line2": {
           "sourceVisibility": "editable",
@@ -556,7 +557,8 @@
           "dataType": {
             "type": "string"
           },
-          "reference": null
+          "reference": null,
+          "queryable": false
         },
         "city_name": {
           "sourceVisibility": "editable",
@@ -565,7 +567,8 @@
           "dataType": {
             "type": "string"
           },
-          "reference": null
+          "reference": null,
+          "queryable": false
         },
         "postal_code": {
           "sourceVisibility": "editable",
@@ -574,7 +577,8 @@
           "dataType": {
             "type": "string"
           },
-          "reference": null
+          "reference": null,
+          "queryable": false
         },
         "country": {
           "sourceVisibility": "editable",
@@ -583,7 +587,8 @@
           "dataType": {
             "type": "string"
           },
-          "reference": null
+          "reference": null,
+          "queryable": false
         },
         "region_name": {
           "sourceVisibility": "editable",
@@ -592,7 +597,8 @@
           "dataType": {
             "type": "string"
           },
-          "reference": null
+          "reference": null,
+          "queryable": false
         },
         "country_code": {
           "sourceVisibility": "readOnly",
@@ -601,7 +607,8 @@
           "dataType": {
             "type": "string"
           },
-          "reference": null
+          "reference": null,
+          "queryable": false
         },
         "id": {
           "sourceVisibility": "system",
@@ -876,7 +883,7 @@
       },
       "source": {
         "artifact": "conversion-rates",
-        "contractVersion": "0.7.0",
+        "contractVersion": "0.8.0",
         "backendEntity": true
       }
     },

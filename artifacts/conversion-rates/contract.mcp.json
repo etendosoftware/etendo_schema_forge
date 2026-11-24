@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0",
+  "version": "0.8.0",
   "generatedAt": "2026-05-21T20:22:50.312Z",
   "updatedAt": "2026-07-15T18:13:15.696Z",
-  "contractChecksum": "c49eb86ffd6e19e4",
+  "contractChecksum": "c966f2658933f97b",
   "apiPrediction": {
     "specName": "conversion-rates",
     "baseUrl": "/sws/neo/conversion-rates",
