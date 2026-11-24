@@ -247,6 +247,487 @@ function ErrorBox({ message }) {
 /** Field descriptor of the "Moneda destino" picker (the shared form selector needs a key/id). */
 const DESTINATION_FIELD = { key: 'convRateToCurrency', id: 'convRateToCurrency', required: true };
 
+const TITLE_KEYS = {
+  [DIALOG_MODES.NEW_CURRENCY]: 'convRateNewCurrencyTitle',
+  [DIALOG_MODES.NEW_RATE]: 'convRateNewRateTitle',
+  [DIALOG_MODES.EDIT]: 'convRateEditTitle',
+};
+const SUBMIT_KEYS = {
+  [DIALOG_MODES.NEW_CURRENCY]: 'convRateCreateCurrency',
+  [DIALOG_MODES.NEW_RATE]: 'convRateCreateRate',
+  [DIALOG_MODES.EDIT]: 'convRateSaveChanges',
+};
+
+/** Title and primary-button label of the dialog for `mode` (an unknown mode reads as Nueva divisa). */
+export function dialogTexts(mode, destIso, ui) {
+  const titleKey = TITLE_KEYS[mode] ?? TITLE_KEYS[DIALOG_MODES.NEW_CURRENCY];
+  const title = titleKey === TITLE_KEYS[DIALOG_MODES.NEW_CURRENCY] ? ui(titleKey) : ui(titleKey, { currency: destIso });
+  return { title, submitLabel: ui(SUBMIT_KEYS[mode] ?? SUBMIT_KEYS[DIALOG_MODES.NEW_CURRENCY]) };
+}
+
+/** The error under Válido desde: required when touched and empty, future when after `now`. */
+function startError(touchedDate, validFrom, inFuture, ui) {
+  if (touchedDate && validFrom == null) return ui('convRateValidFromRequired');
+  return inFuture ? ui('convRateValidFromFuture') : null;
+}
+
+/**
+ * The validation of the form: the parsed rate and start, the field errors, the upper bound of the
+ * start (the server clock aged by the time the dialog has been open) and whether the inputs allow
+ * the primary action. Modificar: only the rate is editable (the range is fixed).
+ */
+export function validationOf({ form, touched, isEdit, dest, nowBound, ui }) {
+  const rate = parseRateInput(form.rateText);
+  const validFrom = normalizeValidFrom(form.validFrom);
+  // No future starts: the server refuses them, so they are refused here first.
+  const inFuture = Boolean(validFrom && nowBound && isAfterWallClock(validFrom, nowBound));
+  const createValid = Boolean(dest && rate != null && validFrom && !inFuture);
+  return {
+    rate,
+    validFrom,
+    rateError: touched.rate && rate == null ? ui('convRateRateRequired') : null,
+    dateError: startError(touched.date, validFrom, inFuture, ui),
+    inputsValid: isEdit ? rate != null : createValid,
+  };
+}
+
+/** Whether a write answer is a refusal: a non-2xx, an in-band `error`, or what `extra` says. */
+function isRefused(res, data, extra) {
+  return !res.ok || Boolean(data?.error) || extra(data);
+}
+
+/**
+ * The refusal of a write: a non-2xx answer (read through `extractErrorMessage`) or an in-band
+ * `data.error`, with the field it belongs to.
+ */
+async function refusalOf(res, data, ui) {
+  if (!res.ok) {
+    const body = await res.clone().json().catch(() => null);
+    return { field: refusedField(body?.error ?? body), message: await extractErrorMessage(res, ui) };
+  }
+  const message = typeof data?.error === 'string' ? data.error : ui('convRateSaveFailed');
+  return { field: refusedField(data), message };
+}
+
+/** Awaits a write and answers `{data}`, or `{refusal}` when it was refused (see {@link isRefused}). */
+async function settle(request, ui, extra = () => false) {
+  const { res, data } = await request;
+  if (isRefused(res, data, extra)) return { refusal: await refusalOf(res, data, ui) };
+  return { data };
+}
+
+/**
+ * Runs `task` unless another write is in flight (`inFlight`, a ref: state alone lets a fast double
+ * click send twice); `onError` receives what it throws.
+ */
+async function runGuarded(inFlight, setSubmitting, task, onError) {
+  if (inFlight.current) return;
+  inFlight.current = true;
+  setSubmitting(true);
+  try {
+    await task();
+  } catch (e) {
+    onError(e);
+  } finally {
+    inFlight.current = false;
+    setSubmitting(false);
+  }
+}
+
+/** Modificar with the rate it already has: saves nothing. */
+function isUnchangedEdit(isEdit, rate, row) {
+  return isEdit && rate === Number(row.multipleRateBy);
+}
+
+/**
+ * The server's "now" (`serverClock`), read when a create dialog opens: the default of Válido desde
+ * and its upper bound. Answers the minute and the browser time of the read, so the bound can be
+ * aged while the dialog stays open without trusting the browser's own clock.
+ */
+function useServerClock(open, mode, apiFetch, setForm) {
+  const [serverNow, setServerNow] = useState(null);
+  const readAt = useRef(0);
+  useEffect(() => {
+    if (!open || mode === DIALOG_MODES.EDIT) return undefined;
+    const ctrl = new AbortController();
+    setServerNow(null);
+    fetchServerClock(apiFetch, ctrl.signal)
+      .then((now) => {
+        if (!now) return;
+        readAt.current = Date.now();
+        setServerNow(now);
+        setForm((f) => ({ ...f, validFrom: now }));
+      })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [open, mode, apiFetch, setForm]);
+  return serverNow ? addMillisToWallClock(serverNow, Date.now() - readAt.current) : null;
+}
+
+/** "Nueva divisa": the currencies that can still receive a first manual rate. */
+function useManualCurrencyOptions(open, isNewCurrency, apiFetch) {
+  const [options, setOptions] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    if (!open || !isNewCurrency) return undefined;
+    const ctrl = new AbortController();
+    setLoaded(false);
+    fetchManualCurrencyOptions(apiFetch, ctrl.signal)
+      .then((list) => {
+        setOptions(list);
+        setLoaded(true);
+      })
+      .catch((e) => {
+        if (e?.name === 'AbortError') return;
+        setOptions([]);
+        setLoaded(true);
+      });
+    return () => ctrl.abort();
+  }, [open, isNewCurrency, apiFetch]);
+  return { options, optionsLoaded: loaded };
+}
+
+/**
+ * Runs `request(signal)` debounced while `enabled`, keeping only the latest answer: an older
+ * answer is aborted and ignored; disabled (or a failure) sets `null`.
+ */
+function useDebouncedAnswer(enabled, request, deps) {
+  const [answer, setAnswer] = useState(null);
+  const seqRef = useRef(0);
+  useEffect(() => {
+    if (!enabled) {
+      setAnswer(null);
+      return undefined;
+    }
+    const seq = ++seqRef.current;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => {
+      request(ctrl.signal)
+        .then((data) => { if (seq === seqRef.current) setAnswer(data); })
+        .catch((e) => { if (e?.name !== 'AbortError' && seq === seqRef.current) setAnswer(null); });
+    }, PREVIEW_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `deps` lists what `request` reads
+  }, [enabled, ...deps]);
+  return [answer, setAnswer];
+}
+
+/** Modificar, "Guardar cambios": asks the server for the proposal and opens the confirmation. */
+async function proposeChange(ctx) {
+  const out = await settle(updateManualRate(ctx.apiFetch, { id: ctx.row.id, multipleRateBy: ctx.rate }), ctx.ui,
+    (data) => !data?.proposal);
+  if (out.refusal) return ctx.showRefusal(out.refusal);
+  ctx.setProposal({ rate: ctx.rate, ...out.data.proposal });
+  ctx.setConfirmOpen(true);
+  return undefined;
+}
+
+/** "Crear divisa" / "Crear tasa". */
+async function createRate(ctx) {
+  const create = ctx.isNewCurrency ? createManualCurrency : createManualRate;
+  const body = { toCurrency: ctx.dest.currencyId, multipleRateBy: ctx.rate, validFromDate: ctx.validFrom };
+  const out = await settle(create(ctx.apiFetch, body), ctx.ui);
+  if (out.refusal) return ctx.showRefusal(out.refusal);
+  ctx.onSaved();
+  return undefined;
+}
+
+/** "Confirmar cambio": the only step of Modificar that saves (`updateManualRate` + `confirm`). */
+async function confirmChangeTask(ctx) {
+  const body = { id: ctx.row.id, multipleRateBy: ctx.rate, confirm: true };
+  const out = await settle(updateManualRate(ctx.apiFetch, body), ctx.ui, (data) => data?.saved === false);
+  ctx.setConfirmOpen(false);
+  if (out.refusal) return ctx.showRefusal(out.refusal);
+  ctx.onSaved();
+  return undefined;
+}
+
+/**
+ * The writes of the dialog, one at a time: Crear divisa / Crear tasa, Guardar cambios (asks for
+ * the proposal and opens the confirmation) and Confirmar cambio (the only step of Modificar that
+ * saves). A refusal is shown in the dialog with the field it belongs to.
+ */
+function useRateWrites(params) {
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const [submitErrorField, setSubmitErrorField] = useState(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const inFlight = useRef(false);
+
+  const ctx = {
+    ...params,
+    setConfirmOpen,
+    showRefusal: (refusal) => {
+      setSubmitErrorField(refusal.field);
+      setSubmitError(refusal.message);
+    },
+  };
+  const runOnce = (task) => runGuarded(inFlight, setSubmitting, () => task(ctx), (e) => {
+    setConfirmOpen(false);
+    setSubmitError(e?.message || params.ui('convRateSaveFailed'));
+  });
+
+  const submit = async (canSubmit) => {
+    if (!canSubmit || inFlight.current) return;
+    setSubmitError(null);
+    setSubmitErrorField(null);
+    // Modificar: an unchanged rate saves nothing; otherwise "Guardar cambios" only opens the
+    // confirmation.
+    if (isUnchangedEdit(params.isEdit, params.rate, params.row)) {
+      params.onClose();
+      return;
+    }
+    await runOnce(params.isEdit ? proposeChange : createRate);
+  };
+
+  const reset = () => {
+    setConfirmOpen(false);
+    setSubmitError(null);
+    setSubmitting(false);
+  };
+
+  return {
+    submitting,
+    submitError,
+    submitErrorField,
+    confirmOpen,
+    setConfirmOpen,
+    submit,
+    confirmChange: () => runOnce(confirmChangeTask),
+    reset,
+  };
+}
+
+/**
+ * What the errors and the state of the writes mean for the form: the preview's refusal, the field
+ * a refusal belongs to (overlap / future start → Válido desde), which fields show in error and
+ * whether the primary action is enabled.
+ */
+export function formStateOf({ preview, writes, rateError, dateError, inputsValid }) {
+  const previewError = preview?.error ?? null;
+  const previewField = previewError ? refusedField(preview) : null;
+  const submitField = writes.submitError ? writes.submitErrorField : null;
+  const errorField = previewField || submitField || null;
+  return {
+    previewError,
+    rateInError: Boolean(rateError) || errorField === 'multipleRateBy',
+    startInError: Boolean(dateError) || errorField === 'validFromDate',
+    canSubmit: Boolean(inputsValid) && !writes.submitting && !previewError,
+  };
+}
+
+/** The summary lines of Modificar for the typed rate: the server's proposal when it is for it. */
+function editLinesFor(isEdit, row, rate, proposal) {
+  if (!isEdit || !row) return null;
+  return editLines(row, rate, proposal?.rate === rate ? proposal : null);
+}
+
+/**
+ * Enter in a field submits the primary action. The submit is deferred one tick so a field that
+ * commits on Enter (DateTimeField, the rate) has published its value; `submit` then judges the
+ * fresh state, so a disabled action stays disabled.
+ */
+function enterSubmitHandler(formRef) {
+  return (event) => {
+    if (!isEnterSubmitKey(event, formRef.current)) return;
+    event.preventDefault();
+    setTimeout(() => formRef.current?.requestSubmit(), 0);
+  };
+}
+
+/** Closing (Esc, overlay) is ignored while a write runs or the confirmation is open. */
+function closeHandler(blocked, onClose) {
+  return (next) => {
+    if (!next && !blocked) onClose();
+  };
+}
+
+function originText(orgIso, orgName) {
+  return orgName ? `${orgIso} · ${orgName}` : (orgIso ?? '');
+}
+
+function DialogFooterButtons({ submitting, canSubmit, submitLabel, onClose, ui }) {
+  return (
+    <div className="flex justify-end gap-2.5 border-t border-border px-[22px] py-3.5">
+      <Button type="button" variant="outline" onClick={onClose} disabled={submitting} data-testid="convrate-dialog-cancel">
+        {ui('cancel')}
+      </Button>
+      <Button type="submit" disabled={!canSubmit} data-testid="convrate-dialog-submit">
+        {submitting ? ui('saving') : submitLabel}
+      </Button>
+    </div>
+  );
+}
+
+function RateField({ value, onChange, onBlur, inError, error, orgIso, destIso, ui }) {
+  return (
+    <Field label={ui('convRateRate')} required className="min-w-0" data-testid="Field__convrate-rate">
+      <div
+        className={`flex ${FIELD_HEIGHT} min-w-0 items-center gap-1.5 rounded-lg border bg-card px-3 text-sm shadow-[0px_1px_2px_rgba(18,18,23,0.05)] focus-within:ring-2 focus-within:ring-focus-ring ${inError ? 'border-destructive' : 'border-[hsl(var(--border-control))]'}`}>
+        <span className="shrink-0 whitespace-nowrap text-muted-foreground">{ui('convRateOneOrg', { currency: orgIso })}</span>
+        <MaskedAmountInput
+          bare
+          grouping={false}
+          value={value}
+          onChange={onChange}
+          onBlur={onBlur}
+          isRawAllowed={(raw) => !String(raw).includes('-')}
+          aria-label={ui('convRateRate')}
+          aria-invalid={inError ? true : undefined}
+          aria-describedby={error ? 'convrate-rate-error' : undefined}
+          className="w-full min-w-0 border-0 bg-transparent p-0 outline-none focus-visible:ring-0 tabular-nums"
+          data-testid="convrate-dialog-rate" />
+        {destIso && <span className="shrink-0 whitespace-nowrap text-muted-foreground" data-testid="convrate-dialog-rate-suffix">{destIso}</span>}
+      </div>
+      {error && (
+        <span id="convrate-rate-error" className="block text-xs font-normal text-destructive" data-testid="convrate-dialog-rate-error">
+          {error}
+        </span>
+      )}
+    </Field>
+  );
+}
+
+/**
+ * Válido desde: in error (red border, aria-invalid) on a field error or on a server refusal of the
+ * start (overlap, future); the hint stays under it, as in the error design.
+ */
+function ValidFromField({ value, onChange, onBlur, max, inError, error, ui }) {
+  return (
+    <Field label={ui('convRateValidFromDateTime')} required className="min-w-0" data-testid="Field__convrate-from">
+      <DateTimeField
+        value={value}
+        onChange={onChange}
+        onBlur={onBlur}
+        max={max ?? undefined}
+        invalid={inError}
+        required
+        aria-label={ui('convRateValidFromDateTime')}
+        data-testid="convrate-dialog-valid-from-input" />
+      {error && (
+        <span className="block text-xs font-normal text-destructive" data-testid="convrate-dialog-date-error">{error}</span>
+      )}
+      <span className="block text-xs font-normal text-muted-foreground">{ui('convRateValidFromHint')}</span>
+    </Field>
+  );
+}
+
+/** Modificar: the range of the row, read-only, and the hint that only the rate can change. */
+function EditRangeFields({ rateField, row, ui }) {
+  return (
+    <>
+      <div className="max-w-[240px]">{rateField}</div>
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
+        <Field label={ui('convRateValidFromDateTime')} className="min-w-0" data-testid="Field__convrate-from">
+          <DateTimeField
+            value={row?.validFromDate}
+            readOnly
+            aria-label={ui('convRateValidFromDateTime')}
+            data-testid="convrate-dialog-valid-from" />
+        </Field>
+        <Field label={ui('convRateValidToDateTime')} className="min-w-0" data-testid="Field__convrate-to">
+          <DateTimeField
+            value={isOpenEnded(row?.validToDate) ? null : row.validToDate}
+            readOnly
+            placeholder={ui('convRateOpenEnd')}
+            aria-label={ui('convRateValidToDateTime')}
+            data-testid="convrate-dialog-valid-to" />
+        </Field>
+      </div>
+      <div className="-mt-1.5 text-xs text-muted-foreground" data-testid="convrate-dialog-edit-hint">
+        {ui('convRateEditOnlyRate')}
+      </div>
+    </>
+  );
+}
+
+/** Moneda destino: picked among the options (Nueva divisa), else the fixed currency, read-only. */
+function DestinationField({ isNewCurrency, dest, destId, setDestId, options, optionsLoaded, ui }) {
+  const destText = dest ? [dest.isoCode, dest.name].filter(Boolean).join(' · ') : '';
+  const destinationOptions = useMemo(
+    () => options.map((o) => ({ id: o.id, name: [o.isoCode, o.name].filter(Boolean).join(' · ') })),
+    [options],
+  );
+  return (
+    <Field label={ui('convRateDestinationCurrency')} required={isNewCurrency} className="min-w-0" data-testid="Field__convrate-destination">
+      {isNewCurrency ? (
+        <div data-testid="convrate-dialog-destination">
+          <CreatableSearchSelect
+            // Seeds its options from staticOptions on mount only: remount once they load.
+            key={optionsLoaded ? 'convrate-dest-loaded' : 'convrate-dest-loading'}
+            field={DESTINATION_FIELD}
+            value={destId ?? ''}
+            displayValue={destText}
+            onChange={(id) => setDestId(id || null)}
+            resolvedLabel={ui('convRateDestinationCurrency')}
+            placeholderOverride={ui('convRateSelectCurrency')}
+            staticOptions={destinationOptions}
+            disabled={optionsLoaded && options.length === 0}
+            data-testid="CreatableSearchSelect__convrate-dest" />
+        </div>
+      ) : (
+        <Input
+          value={destText}
+          readOnly
+          disabled
+          aria-label={ui('convRateDestinationCurrency')}
+          data-testid="convrate-dialog-destination" />
+      )}
+    </Field>
+  );
+}
+
+/** The line under the currencies: the Nueva divisa hint, or the rate in force of Nueva tasa. */
+function ModeHint({ mode, noneAvailable, currency, orgIso, destIso, ui }) {
+  if (mode === DIALOG_MODES.NEW_CURRENCY) {
+    return (
+      <div className="-mt-1.5 text-xs text-muted-foreground" data-testid="convrate-dialog-hint">
+        {noneAvailable ? ui('convRateNoCurrencyAvailable') : ui('convRateNewCurrencyHint')}
+      </div>
+    );
+  }
+  if (mode !== DIALOG_MODES.NEW_RATE || currency?.rate == null) return null;
+  return (
+    <div className="-mt-1.5 text-xs text-muted-foreground" data-testid="convrate-dialog-current">
+      {ui('convRateCurrentRateLine', {
+        org: orgIso,
+        rate: formatRate(currency.rate),
+        currency: destIso,
+        from: formatWallClock(currency.validFrom),
+      })}
+    </div>
+  );
+}
+
+/** Modificar: old → new of both directions and the note; a create: the preview, unless refused. */
+function DialogSummary({ isEdit, row, lines, preview, previewError, mode, destIso, orgIso, ui }) {
+  if (isEdit) {
+    if (!row) return null;
+    return (
+      <>
+        <EditSummary lines={lines} destIso={destIso} orgIso={orgIso} ui={ui} data-testid="EditSummary__51f9a2" />
+        <EditNote ui={ui} data-testid="EditNote__51f9a2" />
+      </>
+    );
+  }
+  if (previewError) return null;
+  return (
+    <PreviewSummary preview={preview} mode={mode} destIso={destIso} orgIso={orgIso} ui={ui} data-testid="PreviewSummary__51f9a2" />
+  );
+}
+
+/** The resolved destination: the picked option (Nueva divisa) or the fixed `currency`. */
+function useDestination(isNewCurrency, currency, options, destId) {
+  return useMemo(() => {
+    if (!isNewCurrency) return currency ?? null;
+    const opt = options.find((o) => o.id === destId);
+    return opt ? { currencyId: opt.id, isoCode: opt.isoCode, name: opt.name } : null;
+  }, [isNewCurrency, currency, options, destId]);
+}
+
 /**
  * ETP-6365 — "Nueva divisa" / "Nueva tasa · X" / "Modificar tasa · X". The server owns every
  * rule (inverse rate, closing the previous open range at start − 1 minute, overlap refusal):
@@ -278,23 +759,32 @@ export function ManualRateDialog({
   const isNewCurrency = mode === DIALOG_MODES.NEW_CURRENCY;
 
   const [form, setForm] = useState(() => initialState(mode, row));
-  // Server clock read when the dialog opened, and the browser time of that read, so "now" can be
-  // aged while the dialog stays open without trusting the browser's own clock.
-  const [serverNow, setServerNow] = useState(null);
-  const serverNowReadAt = useRef(0);
   const [destId, setDestId] = useState(null);
-  const [options, setOptions] = useState([]);
-  const [optionsLoaded, setOptionsLoaded] = useState(false);
   const [touched, setTouched] = useState({ rate: false, date: false });
-  const [preview, setPreview] = useState(null);
-  const [submitError, setSubmitError] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  // Synchronous in-flight guard of the writes: state alone lets a fast double click send twice.
-  const inFlight = useRef(false);
   const formRef = useRef(null);
-  // Modificar: the server's proposal for the typed rate, and the confirmation step.
-  const [proposal, setProposal] = useState(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const nowBound = useServerClock(open, mode, apiFetch, setForm);
+  const { options, optionsLoaded } = useManualCurrencyOptions(open, isNewCurrency, apiFetch);
+  const dest = useDestination(isNewCurrency, currency, options, destId);
+  const destIso = dest?.isoCode ?? '';
+  const destCurrencyId = dest?.currencyId ?? null;
+  const { rate, validFrom, rateError, dateError, inputsValid } = validationOf({ form, touched, isEdit, dest, nowBound, ui });
+
+  // Debounced preview of what creating the rate would do; stale answers are aborted.
+  const [preview] = useDebouncedAnswer(open && !isEdit && inputsValid,
+    (signal) => previewManualRate(apiFetch, { mode, toCurrency: destCurrencyId, multipleRateBy: rate, validFromDate: validFrom }, signal),
+    [mode, apiFetch, destCurrencyId, rate, validFrom]);
+  // Modificar: debounced proposal (`updateManualRate` without `confirm`) for the typed rate — the
+  // summary and the confirmation show the server's old → new of both directions.
+  const rowId = row?.id ?? null;
+  const [proposal, setProposal] = useDebouncedAnswer(open && isEdit && Boolean(rowId) && rate != null,
+    (signal) => updateManualRate(apiFetch, { id: rowId, multipleRateBy: rate }, signal)
+      .then(({ res, data }) => (res.ok && data?.proposal ? { rate, ...data.proposal } : null)),
+    [rowId, rate, apiFetch]);
+  const lines = editLinesFor(isEdit, row, rate, proposal);
+
+  const writes = useRateWrites({
+    apiFetch, ui, isEdit, isNewCurrency, row, rate, validFrom, dest, onSaved, onClose, setProposal,
+  });
 
   // Reset every time the dialog opens (a new target or a new row).
   useEffect(() => {
@@ -302,300 +792,43 @@ export function ManualRateDialog({
     setForm(initialState(mode, row));
     setDestId(null);
     setTouched({ rate: false, date: false });
-    setPreview(null);
     setProposal(null);
-    setConfirmOpen(false);
-    setSubmitError(null);
-    setSubmitting(false);
+    writes.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on open/target change only
   }, [open, mode, row]);
 
-  // The server's "now": default of Válido desde (new rates) and its upper bound (every mode).
-  useEffect(() => {
-    if (!open || mode === DIALOG_MODES.EDIT) return undefined;
-    const ctrl = new AbortController();
-    setServerNow(null);
-    fetchServerClock(apiFetch, ctrl.signal)
-      .then((now) => {
-        if (!now) return;
-        serverNowReadAt.current = Date.now();
-        setServerNow(now);
-        if (mode !== DIALOG_MODES.EDIT) {
-          setForm((f) => ({ ...f, validFrom: now }));
-        }
-      })
-      .catch(() => {});
-    return () => ctrl.abort();
-  }, [open, mode, apiFetch]);
+  const { previewError, rateInError, startInError, canSubmit } = formStateOf({
+    preview, writes, rateError, dateError, inputsValid,
+  });
 
-  // "Nueva divisa": the currencies that can still receive a first manual rate.
-  useEffect(() => {
-    if (!open || !isNewCurrency) return undefined;
-    const ctrl = new AbortController();
-    setOptionsLoaded(false);
-    fetchManualCurrencyOptions(apiFetch, ctrl.signal)
-      .then((list) => {
-        setOptions(list);
-        setOptionsLoaded(true);
-      })
-      .catch((e) => {
-        if (e?.name === 'AbortError') return;
-        setOptions([]);
-        setOptionsLoaded(true);
-      });
-    return () => ctrl.abort();
-  }, [open, isNewCurrency, apiFetch]);
-
-  const dest = useMemo(() => {
-    if (!isNewCurrency) return currency ?? null;
-    const opt = options.find((o) => o.id === destId);
-    return opt ? { currencyId: opt.id, isoCode: opt.isoCode, name: opt.name } : null;
-  }, [isNewCurrency, currency, options, destId]);
-  const destinationOptions = useMemo(
-    () => options.map((o) => ({ id: o.id, name: [o.isoCode, o.name].filter(Boolean).join(' · ') })),
-    [options],
-  );
-  const destIso = dest?.isoCode ?? '';
-  const destCurrencyId = dest?.currencyId ?? null;
-
-  const rate = parseRateInput(form.rateText);
-  const validFrom = normalizeValidFrom(form.validFrom);
-  const rateError = touched.rate && rate == null ? ui('convRateRateRequired') : null;
-  // No future starts: the server refuses them, so they are refused here first (field error,
-  // confirm disabled). The bound is the server clock aged by the time the dialog has been open.
-  const nowBound = serverNow ? addMillisToWallClock(serverNow, Date.now() - serverNowReadAt.current) : null;
-  const inFuture = Boolean(validFrom && nowBound && isAfterWallClock(validFrom, nowBound));
-  let dateError = null;
-  if (touched.date && validFrom == null) dateError = ui('convRateValidFromRequired');
-  else if (inFuture) dateError = ui('convRateValidFromFuture');
-  // Modificar: only the rate is editable (the range is fixed; change it by deleting and creating).
-  const inputsValid = isEdit
-    ? rate != null
-    : Boolean(dest && rate != null && validFrom && !inFuture);
-
-  // Debounced preview of what creating the rate would do; stale answers are aborted.
-  const previewSeq = useRef(0);
-  useEffect(() => {
-    if (!open || isEdit || !inputsValid) {
-      setPreview(null);
-      return undefined;
-    }
-    const seq = ++previewSeq.current;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => {
-      previewManualRate(apiFetch, {
-        mode,
-        toCurrency: destCurrencyId,
-        multipleRateBy: rate,
-        validFromDate: validFrom,
-      }, ctrl.signal)
-        .then((data) => { if (seq === previewSeq.current) setPreview(data); })
-        .catch((e) => { if (e?.name !== 'AbortError' && seq === previewSeq.current) setPreview(null); });
-    }, PREVIEW_DEBOUNCE_MS);
-    return () => {
-      clearTimeout(timer);
-      ctrl.abort();
-    };
-  }, [open, isEdit, mode, inputsValid, apiFetch, destCurrencyId, rate, validFrom]);
-
-  // Modificar: debounced proposal (`updateManualRate` without `confirm`) for the typed rate — the
-  // summary and the confirmation show the server's old → new of both directions.
-  const proposalSeq = useRef(0);
-  const rowId = row?.id ?? null;
-  useEffect(() => {
-    if (!open || !isEdit || !rowId || rate == null) {
-      setProposal(null);
-      return undefined;
-    }
-    const seq = ++proposalSeq.current;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => {
-      updateManualRate(apiFetch, { id: rowId, multipleRateBy: rate }, ctrl.signal)
-        .then(({ res, data }) => {
-          if (seq !== proposalSeq.current) return;
-          setProposal(res.ok && data?.proposal ? { rate, ...data.proposal } : null);
-        })
-        .catch(() => { if (seq === proposalSeq.current) setProposal(null); });
-    }, PREVIEW_DEBOUNCE_MS);
-    return () => {
-      clearTimeout(timer);
-      ctrl.abort();
-    };
-  }, [open, isEdit, rowId, rate, apiFetch]);
-  const currentProposal = proposal && proposal.rate === rate ? proposal : null;
-  const lines = isEdit && row ? editLines(row, rate, currentProposal) : null;
-
-  const previewError = preview?.error ?? null;
-  const [submitErrorField, setSubmitErrorField] = useState(null);
-  // A refusal bound to a field (overlap / future start → Válido desde) marks that field.
-  const errorField = (previewError && refusedField(preview)) || (submitError && submitErrorField) || null;
-  const startInError = Boolean(dateError) || errorField === 'validFromDate';
-  const rateInError = Boolean(rateError) || errorField === 'multipleRateBy';
-  const canSubmit = inputsValid && !submitting && !previewError;
-
-  /** Shows a refusal: a non-2xx answer (read through `extractErrorMessage`) or an in-band `data.error`. */
-  async function showRefusal(res, data) {
-    if (!res.ok) {
-      const body = await res.clone().json().catch(() => null);
-      setSubmitErrorField(refusedField(body?.error ?? body));
-      setSubmitError(await extractErrorMessage(res, ui));
-      return;
-    }
-    setSubmitErrorField(refusedField(data));
-    setSubmitError(typeof data?.error === 'string' ? data.error : ui('convRateSaveFailed'));
-  }
-
-  /**
-   * Runs one write at a time: a call while another is in flight is dropped. A thrown error closes
-   * the confirmation (when open) and shows the generic failure.
-   */
-  async function runOnce(task) {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setSubmitting(true);
-    try {
-      await task();
-    } catch (e) {
-      setConfirmOpen(false);
-      setSubmitError(e?.message || ui('convRateSaveFailed'));
-    } finally {
-      inFlight.current = false;
-      setSubmitting(false);
-    }
-  }
-
-  /** Modificar, "Guardar cambios": asks the server for the proposal and opens the confirmation. */
-  async function proposeChange() {
-    const { res, data } = await updateManualRate(apiFetch, { id: row.id, multipleRateBy: rate });
-    if (!res.ok || data?.error || !data?.proposal) {
-      await showRefusal(res, data);
-      return;
-    }
-    setProposal({ rate, ...data.proposal });
-    setConfirmOpen(true);
-  }
-
-  /** "Crear divisa" / "Crear tasa". */
-  async function createRate() {
-    const create = isNewCurrency ? createManualCurrency : createManualRate;
-    const { res, data } = await create(apiFetch, {
-      toCurrency: dest.currencyId,
-      multipleRateBy: rate,
-      validFromDate: validFrom,
-    });
-    if (!res.ok || data?.error) {
-      await showRefusal(res, data);
-      return;
-    }
-    onSaved();
-  }
-
-  async function submit(event) {
+  function submit(event) {
     event?.preventDefault();
     setTouched({ rate: true, date: true });
-    if (!canSubmit || inFlight.current) return;
-    setSubmitError(null);
-    setSubmitErrorField(null);
-    // Modificar: an unchanged rate saves nothing; otherwise "Guardar cambios" only opens the
-    // confirmation.
-    if (isEdit && rate === Number(row.multipleRateBy)) {
-      onClose();
-      return;
-    }
-    await runOnce(isEdit ? proposeChange : createRate);
+    return writes.submit(canSubmit);
   }
 
-  /** "Confirmar cambio": the only step of Modificar that saves (`updateManualRate` + `confirm`). */
-  function confirmChange() {
-    return runOnce(async () => {
-      const { res, data } = await updateManualRate(apiFetch, { id: row.id, multipleRateBy: rate, confirm: true });
-      setConfirmOpen(false);
-      if (!res.ok || data?.error || data?.saved === false) {
-        await showRefusal(res, data);
-        return;
-      }
-      onSaved();
-    });
-  }
-
-  /**
-   * Enter in a field submits the primary action. The submit is deferred one tick so a field that
-   * commits on Enter (DateTimeField, the rate) has published its value; `submit` then judges the
-   * fresh state, so a disabled action stays disabled.
-   */
-  function onFormKeyDown(event) {
-    if (!isEnterSubmitKey(event, formRef.current)) return;
-    event.preventDefault();
-    setTimeout(() => formRef.current?.requestSubmit(), 0);
-  }
-
-  let title = ui('convRateNewCurrencyTitle');
-  if (mode === DIALOG_MODES.NEW_RATE) title = ui('convRateNewRateTitle', { currency: destIso });
-  if (isEdit) title = ui('convRateEditTitle', { currency: destIso });
-  let submitLabel = ui('convRateCreateCurrency');
-  if (mode === DIALOG_MODES.NEW_RATE) submitLabel = ui('convRateCreateRate');
-  if (isEdit) submitLabel = ui('convRateSaveChanges');
-
+  const { title, submitLabel } = dialogTexts(mode, destIso, ui);
   const rateField = (
-    <Field label={ui('convRateRate')} required className="min-w-0" data-testid="Field__convrate-rate">
-      <div
-        className={`flex ${FIELD_HEIGHT} min-w-0 items-center gap-1.5 rounded-lg border bg-card px-3 text-sm shadow-[0px_1px_2px_rgba(18,18,23,0.05)] focus-within:ring-2 focus-within:ring-focus-ring ${rateInError ? 'border-destructive' : 'border-[hsl(var(--border-control))]'}`}>
-        <span className="shrink-0 whitespace-nowrap text-muted-foreground">{ui('convRateOneOrg', { currency: orgIso })}</span>
-        <MaskedAmountInput
-          bare
-          grouping={false}
-          value={form.rateText}
-          onChange={(clean) => setForm((f) => ({ ...f, rateText: clean }))}
-          onBlur={() => setTouched((t) => ({ ...t, rate: true }))}
-          isRawAllowed={(raw) => !String(raw).includes('-')}
-          aria-label={ui('convRateRate')}
-          aria-invalid={rateInError ? true : undefined}
-          aria-describedby={rateError ? 'convrate-rate-error' : undefined}
-          className="w-full min-w-0 border-0 bg-transparent p-0 outline-none focus-visible:ring-0 tabular-nums"
-          data-testid="convrate-dialog-rate" />
-        {destIso && <span className="shrink-0 whitespace-nowrap text-muted-foreground" data-testid="convrate-dialog-rate-suffix">{destIso}</span>}
-      </div>
-      {rateError && (
-        <span id="convrate-rate-error" className="block text-xs font-normal text-destructive" data-testid="convrate-dialog-rate-error">
-          {rateError}
-        </span>
-      )}
-    </Field>
+    <RateField
+      value={form.rateText}
+      onChange={(clean) => setForm((f) => ({ ...f, rateText: clean }))}
+      onBlur={() => setTouched((t) => ({ ...t, rate: true }))}
+      inError={rateInError}
+      error={rateError}
+      orgIso={orgIso}
+      destIso={destIso}
+      ui={ui} />
   );
-
-  // Válido desde: in error (red border, aria-invalid) on a field error or on a server refusal of
-  // the start (overlap, future); the hint stays under it, as in the error design.
-  const validFromField = (
-    <Field label={ui('convRateValidFromDateTime')} required className="min-w-0" data-testid="Field__convrate-from">
-      <DateTimeField
-        value={form.validFrom}
-        onChange={(next) => {
-          setForm((f) => ({ ...f, validFrom: next }));
-          setTouched((t) => ({ ...t, date: true }));
-        }}
-        onBlur={() => setTouched((t) => ({ ...t, date: true }))}
-        max={nowBound ?? undefined}
-        invalid={startInError}
-        required
-        aria-label={ui('convRateValidFromDateTime')}
-        data-testid="convrate-dialog-valid-from-input" />
-      {dateError && (
-        <span className="block text-xs font-normal text-destructive" data-testid="convrate-dialog-date-error">{dateError}</span>
-      )}
-      <span className="block text-xs font-normal text-muted-foreground">{ui('convRateValidFromHint')}</span>
-    </Field>
-  );
-
-  const orgText = orgName ? `${orgIso} · ${orgName}` : orgIso;
-  const destText = dest ? [dest.isoCode, dest.name].filter(Boolean).join(' · ') : '';
+  const blocked = writes.submitting || writes.confirmOpen;
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next && !submitting && !confirmOpen) onClose(); }} data-testid="Dialog__convrate">
+    <Dialog open={open} onOpenChange={closeHandler(blocked, onClose)} data-testid="Dialog__convrate">
       <DialogContent
         className="flex w-[520px] max-w-[calc(100vw-32px)] flex-col gap-0 rounded-[14px] border-0 bg-card p-0 [&>button]:hidden"
-        aria-busy={submitting || undefined}
+        aria-busy={writes.submitting || undefined}
         data-testid="convrate-dialog"
         data-mode={mode}>
-        <form ref={formRef} onSubmit={submit} onKeyDown={onFormKeyDown} noValidate className="flex flex-col">
+        <form ref={formRef} onSubmit={submit} onKeyDown={enterSubmitHandler(formRef)} noValidate className="flex flex-col">
           <DialogHeader
             className="flex flex-row items-center justify-between space-y-0 border-b border-border px-[22px] py-3.5 text-left"
             data-testid="DialogHeader__51f9a2">
@@ -608,7 +841,7 @@ export function ManualRateDialog({
               variant="ghost"
               size="icon"
               onClick={onClose}
-              disabled={submitting}
+              disabled={writes.submitting}
               aria-label={ui('close')}
               title={ui('close')}
               className="h-11 w-11 rounded-full text-muted-foreground"
@@ -622,129 +855,78 @@ export function ManualRateDialog({
             <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
               <Field label={ui('convRateOriginCurrency')} className="min-w-0" data-testid="Field__convrate-origin">
                 <Input
-                  value={orgText ?? ''}
+                  value={originText(orgIso, orgName)}
                   readOnly
                   disabled
                   aria-label={ui('convRateOriginCurrency')}
                   data-testid="convrate-dialog-origin" />
               </Field>
-              <Field label={ui('convRateDestinationCurrency')} required={isNewCurrency} className="min-w-0" data-testid="Field__convrate-destination">
-                {isNewCurrency ? (
-                  <div data-testid="convrate-dialog-destination">
-                    <CreatableSearchSelect
-                      // Seeds its options from staticOptions on mount only: remount once they load.
-                      key={optionsLoaded ? 'convrate-dest-loaded' : 'convrate-dest-loading'}
-                      field={DESTINATION_FIELD}
-                      value={destId ?? ''}
-                      displayValue={dest ? destText : ''}
-                      onChange={(id) => setDestId(id || null)}
-                      resolvedLabel={ui('convRateDestinationCurrency')}
-                      placeholderOverride={ui('convRateSelectCurrency')}
-                      staticOptions={destinationOptions}
-                      disabled={optionsLoaded && options.length === 0}
-                      data-testid="CreatableSearchSelect__convrate-dest" />
-                  </div>
-                ) : (
-                  <Input
-                    value={destText}
-                    readOnly
-                    disabled
-                    aria-label={ui('convRateDestinationCurrency')}
-                    data-testid="convrate-dialog-destination" />
-                )}
-              </Field>
+              <DestinationField
+                isNewCurrency={isNewCurrency}
+                dest={dest}
+                destId={destId}
+                setDestId={setDestId}
+                options={options}
+                optionsLoaded={optionsLoaded}
+                ui={ui} />
             </div>
 
-            {isNewCurrency && (
-              <div className="-mt-1.5 text-xs text-muted-foreground" data-testid="convrate-dialog-hint">
-                {optionsLoaded && options.length === 0 ? ui('convRateNoCurrencyAvailable') : ui('convRateNewCurrencyHint')}
-              </div>
-            )}
-            {mode === DIALOG_MODES.NEW_RATE && currency?.rate != null && (
-              <div className="-mt-1.5 text-xs text-muted-foreground" data-testid="convrate-dialog-current">
-                {ui('convRateCurrentRateLine', {
-                  org: orgIso,
-                  rate: formatRate(currency.rate),
-                  currency: destIso,
-                  from: formatWallClock(currency.validFrom),
-                })}
-              </div>
-            )}
+            <ModeHint
+              mode={mode}
+              noneAvailable={optionsLoaded && options.length === 0}
+              currency={currency}
+              orgIso={orgIso}
+              destIso={destIso}
+              ui={ui} />
 
-            {isEdit ? (
-              <>
-                <div className="max-w-[240px]">{rateField}</div>
-                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
-                  <Field label={ui('convRateValidFromDateTime')} className="min-w-0" data-testid="Field__convrate-from">
-                    <DateTimeField
-                      value={row?.validFromDate}
-                      readOnly
-                      aria-label={ui('convRateValidFromDateTime')}
-                      data-testid="convrate-dialog-valid-from" />
-                  </Field>
-                  <Field label={ui('convRateValidToDateTime')} className="min-w-0" data-testid="Field__convrate-to">
-                    <DateTimeField
-                      value={isOpenEnded(row?.validToDate) ? null : row.validToDate}
-                      readOnly
-                      placeholder={ui('convRateOpenEnd')}
-                      aria-label={ui('convRateValidToDateTime')}
-                      data-testid="convrate-dialog-valid-to" />
-                  </Field>
-                </div>
-                <div className="-mt-1.5 text-xs text-muted-foreground" data-testid="convrate-dialog-edit-hint">
-                  {ui('convRateEditOnlyRate')}
-                </div>
-              </>
-            ) : (
+            {isEdit ? <EditRangeFields rateField={rateField} row={row} ui={ui} /> : (
               <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
                 {rateField}
-                {validFromField}
+                <ValidFromField
+                  value={form.validFrom}
+                  onChange={(next) => {
+                    setForm((f) => ({ ...f, validFrom: next }));
+                    setTouched((t) => ({ ...t, date: true }));
+                  }}
+                  onBlur={() => setTouched((t) => ({ ...t, date: true }))}
+                  max={nowBound}
+                  inError={startInError}
+                  error={dateError}
+                  ui={ui} />
               </div>
             )}
 
-            {isEdit && row && (
-              <>
-                <EditSummary
-                  lines={lines}
-                  destIso={destIso}
-                  orgIso={orgIso}
-                  ui={ui}
-                  data-testid="EditSummary__51f9a2" />
-                <EditNote ui={ui} data-testid="EditNote__51f9a2" />
-              </>
-            )}
-            {!isEdit && !previewError && (
-              <PreviewSummary
-                preview={preview}
-                mode={mode}
-                destIso={destIso}
-                orgIso={orgIso}
-                ui={ui}
-                data-testid="PreviewSummary__51f9a2" />
-            )}
-            <ErrorBox message={submitError ?? previewError} data-testid="ErrorBox__51f9a2" />
+            <DialogSummary
+              isEdit={isEdit}
+              row={row}
+              lines={lines}
+              preview={preview}
+              previewError={previewError}
+              mode={mode}
+              destIso={destIso}
+              orgIso={orgIso}
+              ui={ui} />
+            <ErrorBox message={writes.submitError ?? previewError} data-testid="ErrorBox__51f9a2" />
           </div>
 
-          <div className="flex justify-end gap-2.5 border-t border-border px-[22px] py-3.5">
-            <Button type="button" variant="outline" onClick={onClose} disabled={submitting} data-testid="convrate-dialog-cancel">
-              {ui('cancel')}
-            </Button>
-            <Button type="submit" disabled={!canSubmit} data-testid="convrate-dialog-submit">
-              {submitting ? ui('saving') : submitLabel}
-            </Button>
-          </div>
+          <DialogFooterButtons
+            submitting={writes.submitting}
+            canSubmit={canSubmit}
+            submitLabel={submitLabel}
+            onClose={onClose}
+            ui={ui} />
         </form>
       </DialogContent>
-      {isEdit && row && (
+      {lines && (
         <ConfirmRateChangeDialog
-          open={confirmOpen}
+          open={writes.confirmOpen}
           lines={lines}
           row={row}
           destIso={destIso}
           orgIso={orgIso}
-          saving={submitting}
-          onBack={() => setConfirmOpen(false)}
-          onConfirm={confirmChange}
+          saving={writes.submitting}
+          onBack={() => writes.setConfirmOpen(false)}
+          onConfirm={writes.confirmChange}
           ui={ui}
           data-testid="ConfirmRateChangeDialog__51f9a2" />
       )}
