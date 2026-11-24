@@ -335,7 +335,7 @@ jobs:
           ETENDOBOT_TOKEN: ${{ secrets.ETENDOBOT_TOKEN }}
           BASE_REF: ${{ github.base_ref }}
         run: |
-          repo="https://x-access-token:${ETENDOBOT_TOKEN}@github.com/etendosoftware/com.etendoerp.go.git"
+          repo="https://x-access-token:${ETENDOBOT_TOKEN}@github.com/etendo-ai/com.etendoerp.go.git"
           case "$BASE_REF:$MODULE_BRANCH" in
             main:*|*:main|*:hotfix/*) fallback=main ;;
             *) fallback=develop ;;
@@ -350,7 +350,7 @@ jobs:
       - name: Checkout etendo_core
         uses: actions/checkout@v4
         with:
-          repository: etendosoftware/etendo_core
+          repository: etendo-ai/etendo_core
           token: ${{ secrets.ETENDOBOT_TOKEN }}
           ref: ${{ env.CORE_BRANCH }}
           path: etendo_core
@@ -358,7 +358,7 @@ jobs:
       - name: Checkout com.etendoerp.go
         uses: actions/checkout@v4
         with:
-          repository: etendosoftware/com.etendoerp.go
+          repository: etendo-ai/com.etendoerp.go
           token: ${{ secrets.ETENDOBOT_TOKEN }}
           ref: ${{ steps.go.outputs.branch }}
           path: etendo_core/modules/com.etendoerp.go
@@ -585,7 +585,7 @@ jobs:
           ETENDOBOT_TOKEN: ${{ secrets.ETENDOBOT_TOKEN }}
           BASE_REF: ${{ github.base_ref }}
         run: |
-          repo="https://x-access-token:${ETENDOBOT_TOKEN}@github.com/etendosoftware/com.etendoerp.go.git"
+          repo="https://x-access-token:${ETENDOBOT_TOKEN}@github.com/etendo-ai/com.etendoerp.go.git"
           case "$BASE_REF:$MODULE_BRANCH" in
             main:*|*:main|*:hotfix/*) fallback=main ;;
             *) fallback=develop ;;
@@ -601,7 +601,7 @@ jobs:
         if: steps.changes.outputs.run == 'true'
         uses: actions/checkout@v4
         with:
-          repository: etendosoftware/etendo_core
+          repository: etendo-ai/etendo_core
           token: ${{ secrets.ETENDOBOT_TOKEN }}
           ref: ${{ env.CORE_BRANCH }}
           path: etendo_core
@@ -610,7 +610,7 @@ jobs:
         if: steps.changes.outputs.run == 'true'
         uses: actions/checkout@v4
         with:
-          repository: etendosoftware/com.etendoerp.go
+          repository: etendo-ai/com.etendoerp.go
           token: ${{ secrets.ETENDOBOT_TOKEN }}
           ref: ${{ steps.go.outputs.branch }}
           path: etendo_core/modules/com.etendoerp.go
@@ -684,7 +684,7 @@ jobs:
         if: steps.changes.outputs.run == 'true'
         uses: actions/checkout@v4
         with:
-          repository: etendosoftware/schema_forge_core
+          repository: etendo-ai/schema_forge_core
           ref: refs/tags/${{ steps.core.outputs.version }}
           ssh-key: ${{ secrets.CORE_DEPLOY_KEY }}
           path: schema_forge_core
@@ -771,7 +771,7 @@ jobs:
       - name: Checkout the Go cell map and the report script
         uses: actions/checkout@v4
         with:
-          repository: etendosoftware/com.etendoerp.go
+          repository: etendo-ai/com.etendoerp.go
           token: ${{ secrets.ETENDOBOT_TOKEN }}
           ref: ${{ needs.integration.outputs.go_branch || 'develop' }}
           path: go
