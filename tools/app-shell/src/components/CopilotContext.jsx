@@ -17,51 +17,47 @@ export function CopilotProvider({ children, menuGroups }) {
   const legacy = useCopilotChat({ token });
   const open = useCallback(() => setIsOpen(true), []);
   const ai = useAiCopilotChat({ onOpenCopilot: open, menuGroups });
-  const state = useMemo(() => {
-    return {
-      ...legacy.state,
-      conversations: ai.conversations,
-      archivedConversations: ai.archivedConversations,
-      conversationId: ai.conversationId,
-      isLoadingConversations: ai.isLoadingConversations,
-      isLoadingArchivedConversations: ai.isLoadingArchivedConversations,
-      isLoadingMessages: ai.isLoadingMessages,
-      selectedAssistant: {
-        app_id: 'etendo-go-ai',
-        name: 'Etendo AI',
-      },
-      messages: ai.messages,
-      input: ai.input,
-      isSending: ai.isSending,
-      error: ai.error,
-      pageHelpSuggestion: ai.pageHelpSuggestion,
-      pageHelpError: ai.pageHelpError,
-      pageHelpActive: ai.pageHelpActive,
-      pageHelpLoading: ai.pageHelpLoading,
-    };
-  }, [ai.archivedConversations, ai.conversationId, ai.conversations, ai.error, ai.input, ai.isLoadingArchivedConversations, ai.isLoadingConversations, ai.isLoadingMessages, ai.isSending, ai.messages, ai.pageHelpActive, ai.pageHelpError, ai.pageHelpLoading, ai.pageHelpSuggestion, legacy.state]);
-  const actions = useMemo(() => {
-    return {
-      ...legacy.actions,
-      loadBootstrap: () => {},
-      // History: same backend and list shape as the legacy copilot, driven by the agent chat.
-      loadConversations: ai.actions.loadConversations,
-      loadArchivedConversations: ai.actions.loadArchivedConversations,
-      selectConversation: ai.actions.selectConversation,
-      deleteConversation: ai.actions.deleteConversation,
-      restoreConversation: ai.actions.restoreConversation,
-      permanentDelete: ai.actions.permanentDelete,
-      renameConversation: ai.actions.renameConversation,
-      retry: ai.actions.retry,
-      dismissError: ai.actions.dismissError,
-      sendMessage: ai.actions.sendMessage,
-      setInput: ai.actions.setInput,
-      resetConversation: ai.actions.resetConversation,
-      startNewConversation: ai.actions.startNewConversation,
-      requestPageHelp: ai.actions.requestPageHelp,
-      showPageHelp: ai.actions.showPageHelp,
-    };
-  }, [ai.actions, legacy.actions]);
+  const state = useMemo(() => ({
+    ...legacy.state,
+    conversations: ai.conversations,
+    archivedConversations: ai.archivedConversations,
+    conversationId: ai.conversationId,
+    isLoadingConversations: ai.isLoadingConversations,
+    isLoadingArchivedConversations: ai.isLoadingArchivedConversations,
+    isLoadingMessages: ai.isLoadingMessages,
+    selectedAssistant: {
+      app_id: 'etendo-go-ai',
+      name: 'Etendo AI',
+    },
+    messages: ai.messages,
+    input: ai.input,
+    isSending: ai.isSending,
+    error: ai.error,
+    pageHelpSuggestion: ai.pageHelpSuggestion,
+    pageHelpError: ai.pageHelpError,
+    pageHelpActive: ai.pageHelpActive,
+    pageHelpLoading: ai.pageHelpLoading,
+  }), [ai.archivedConversations, ai.conversationId, ai.conversations, ai.error, ai.input, ai.isLoadingArchivedConversations, ai.isLoadingConversations, ai.isLoadingMessages, ai.isSending, ai.messages, ai.pageHelpActive, ai.pageHelpError, ai.pageHelpLoading, ai.pageHelpSuggestion, legacy.state]);
+  const actions = useMemo(() => ({
+    ...legacy.actions,
+    loadBootstrap: () => {},
+    // History: same backend and list shape as the legacy copilot, driven by the agent chat.
+    loadConversations: ai.actions.loadConversations,
+    loadArchivedConversations: ai.actions.loadArchivedConversations,
+    selectConversation: ai.actions.selectConversation,
+    deleteConversation: ai.actions.deleteConversation,
+    restoreConversation: ai.actions.restoreConversation,
+    permanentDelete: ai.actions.permanentDelete,
+    renameConversation: ai.actions.renameConversation,
+    retry: ai.actions.retry,
+    dismissError: ai.actions.dismissError,
+    sendMessage: ai.actions.sendMessage,
+    setInput: ai.actions.setInput,
+    resetConversation: ai.actions.resetConversation,
+    startNewConversation: ai.actions.startNewConversation,
+    requestPageHelp: ai.actions.requestPageHelp,
+    showPageHelp: ai.actions.showPageHelp,
+  }), [ai.actions, legacy.actions]);
 
   const close = useCallback(() => {
     setIsOpen(false);

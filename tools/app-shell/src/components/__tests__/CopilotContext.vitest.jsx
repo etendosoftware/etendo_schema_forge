@@ -47,4 +47,13 @@ describe('CopilotProvider history wiring', () => {
     act(() => result.current.close());
     expect(legacy.actions.clearAttachments).toHaveBeenCalledTimes(1);
   });
+
+  it('clears attached context when toggling the panel closed, not when opening it', () => {
+    legacy.actions.clearAttachments.mockClear();
+    const { result } = renderHook(() => useCopilot(), { wrapper });
+    act(() => result.current.open());
+    expect(legacy.actions.clearAttachments).not.toHaveBeenCalled();
+    act(() => result.current.toggle());
+    expect(legacy.actions.clearAttachments).toHaveBeenCalledTimes(1);
+  });
 });

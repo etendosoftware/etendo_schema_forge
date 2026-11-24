@@ -95,7 +95,8 @@ lands in the router) would have to be written anew. Whether the model *chooses*
 to call a tool is not testable there.
 
 If such a spec intercepts `/api/ai/chat`, keep two things apart: the test's
-network mock (`page.route`) and the app's mock mode.
+network mock (`page.route`) and the app's mock mode. `page.route` intercepts at the
+network layer, so it only works when the server runs without `VITE_MOCK`.
 
 - **The server must NOT run in mock mode.** ⚠️ In mock mode `App.jsx` patches
   `window.fetch` and sets the API base to `/api`, and `mockFetch.js` claims
