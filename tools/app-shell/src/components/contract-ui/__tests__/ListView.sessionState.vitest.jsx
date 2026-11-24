@@ -83,8 +83,12 @@ vi.mock('@/hooks/useWindowFilterPresets', () => ({
 }));
 
 vi.mock('@/lib/gridQuery', () => ({
-  buildAdvancedFilterCriteria: (advancedFilter) =>
-    advancedFilter ? [{ fieldName: 'advField', operator: 'equals', value: advancedFilter.token }] : null,
+  // Like the real builder, nothing comes out until the Table has reported its columns
+  // (the real one drops every condition whose column it does not know) — ETP-6166.
+  buildAdvancedFilterCriteria: (advancedFilter, columns) =>
+    (advancedFilter && columns?.length
+      ? [{ fieldName: 'advField', operator: 'equals', value: advancedFilter.token }]
+      : null),
   // ETP-5188 added this export; none of this file's fixtures declare a `toQueryParams`
   // column hook, so a plain pass-through matches extractQueryParamConditions' own
   // no-op branch (see gridQuery.js).
@@ -865,5 +869,43 @@ describe('ListView — listViewOptions.defaultDatePreset', () => {
     expect(storedSnapshot()).not.toBeNull();
     act(() => { filterBarProps.onFilterChange('paymentDate', original); });
     expect(storedSnapshot()).toBeNull();
+  });
+});
+
+// ─── ETP-6166 — the catalog (gallery) view applies the restored advanced filter ─
+
+describe('ListView session state — gallery view after List -> Form -> List', () => {
+  const gallery = ({ data }) => <div data-testid="gallery">{data.length}</div>;
+
+  afterEach(() => { window.localStorage.clear(); });
+
+  it('sends the restored advanced filter although the gallery replaces the Table', () => {
+    window.localStorage.setItem('viewMode:testEntity', 'gallery');
+    const first = render(<ListView {...defaultProps} galleryRenderer={gallery} />);
+    act(() => { filterBarProps.onAdvancedFilterChange({ token: 'escalada' }); });
+    expect(capturedEntityOptions.trailingFilter).toContain('escalada');
+
+    // Open a record and come back with Cancel: ListView remounts, still in gallery mode.
+    first.unmount();
+    capturedEntityOptions = null;
+    filterBarProps = null;
+    render(<ListView {...defaultProps} galleryRenderer={gallery} />);
+
+    expect(screen.getByTestId('gallery')).toBeInTheDocument();
+    expect(filterBarProps.advancedFilter).toEqual({ token: 'escalada' });
+    expect(capturedEntityOptions.trailingFilter).toContain('escalada');
+  });
+
+  it('keeps the column probe hidden and out of the list view', () => {
+    window.localStorage.setItem('viewMode:testEntity', 'gallery');
+    const { unmount } = render(<ListView {...defaultProps} galleryRenderer={gallery} />);
+    const probe = screen.getByTestId('list-columns-probe');
+    expect(probe).not.toBeVisible();
+    expect(probe).toHaveAttribute('aria-hidden', 'true');
+    unmount();
+
+    window.localStorage.setItem('viewMode:testEntity', 'list');
+    render(<ListView {...defaultProps} galleryRenderer={gallery} />);
+    expect(screen.queryByTestId('list-columns-probe')).toBeNull();
   });
 });

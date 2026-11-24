@@ -140,7 +140,8 @@ describe('ListView — gallery view mode (default ScrollPane wrapper only)', () 
     render(<ListView {...defaultProps} galleryRenderer={galleryRenderer} />);
 
     expect(screen.getByTestId('gallery-view')).toHaveTextContent('2 items');
-    expect(screen.queryByTestId('mock-table')).not.toBeInTheDocument();
+    // ETP-6166 — only the hidden column probe still mounts the Table, with no rows.
+    expect(screen.getByTestId('mock-table')).not.toBeVisible();
 
     spy.mockRestore();
   });

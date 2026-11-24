@@ -224,11 +224,22 @@ function ListTableRegion({
     );
   }
 
+  const showGallery = viewMode === 'gallery' && galleryRenderer;
   return (
     <ScrollPane
       onReachBottom={onReachBottom}
       className={`${tablePaddingX} ${tablePaddingBottom}`}
       data-testid="ScrollPane__620cbc">
+      {showGallery && (
+        // ETP-6166 — the advanced filter only becomes `criteria=` once the Table reports its
+        // columns (`onColumnsReady`), and the gallery replaces the Table. Without this hidden,
+        // row-less copy a filter restored from the session snapshot (e.g. back from a record
+        // with Cancel) never reaches the request: the catalog lists everything while the
+        // Filters button still counts it.
+        <div hidden aria-hidden="true" data-testid="list-columns-probe">
+          <Table {...tableProps} data={[]} data-testid="Table__620cbc" />
+        </div>
+      )}
       {hook.loading && hook.items.length === 0 ? (
         <div className="space-y-3">
           <Skeleton className="h-10 w-full" data-testid="Skeleton__620cbc" />
@@ -238,7 +249,7 @@ function ListTableRegion({
         </div>
       ) : (
         <div className={tableOpacityClass(hook)}>
-          {viewMode === 'gallery' && galleryRenderer
+          {showGallery
             ? galleryRenderer({ data: hook.items, onNavigate: (id) => navigate(`/${windowName}/${id}`), token, apiBaseUrl })
             : <Table {...tableProps} data-testid="Table__620cbc" />
           }

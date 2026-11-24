@@ -452,7 +452,8 @@ describe('ListView — ETP-4603 coverage top-up', () => {
     const [listBtn, galleryBtn] = toggle.querySelectorAll('button');
     fireEvent.click(galleryBtn);
     expect(screen.getByTestId('gallery-view')).toBeInTheDocument();
-    expect(screen.queryByTestId('mock-table')).not.toBeInTheDocument();
+    // ETP-6166 — only the hidden column probe still mounts the Table, with no rows.
+    expect(screen.getByTestId('mock-table')).not.toBeVisible();
 
     fireEvent.click(listBtn);
     expect(screen.getByTestId('mock-table')).toBeInTheDocument();

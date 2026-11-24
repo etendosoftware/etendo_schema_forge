@@ -827,7 +827,8 @@ describe('ListView — view mode', () => {
 
     await user.click(galleryBtn);
     expect(screen.getByTestId('gallery-view')).toBeInTheDocument();
-    expect(screen.queryByTestId('mock-table')).not.toBeInTheDocument();
+    // ETP-6166 — only the hidden column probe still mounts the Table, with no rows.
+    expect(screen.getByTestId('mock-table')).not.toBeVisible();
     expect(window.localStorage.getItem('viewMode:testEntity')).toBe('gallery');
 
     await user.click(listBtn);
