@@ -504,7 +504,7 @@
     },
     {
       "group": "Taxes",
-      "icon": "Landmark",
+      "icon": "BadgePercent",
       "section": "Finance",
       "items": [
         {

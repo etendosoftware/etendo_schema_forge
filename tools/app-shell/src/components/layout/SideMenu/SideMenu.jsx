@@ -57,6 +57,7 @@ import {
   Receipt,
   Bank,
   Wallet,
+  SealPercent,
   Package,
   Briefcase,
   Users,
@@ -95,8 +96,8 @@ const ICON_MAP = {
   Receipt,
   Building2:      Bank,
   Wallet,
-  // Lucide `Landmark` (building with columns): Phosphor's equivalent is Bank (ETP-6380).
-  Landmark:       Bank,
+  // Lucide `BadgePercent`: Phosphor's equivalent is SealPercent (ETP-6380).
+  BadgePercent:   SealPercent,
   Package,
   Briefcase,
   Users,
