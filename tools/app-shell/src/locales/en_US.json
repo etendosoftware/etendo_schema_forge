@@ -22032,7 +22032,7 @@
     "fiscal.onboarding.goHome": "Go home",
     "fiscal.onboarding.back.wizard": "← Back to wizard",
     "fiscal.onboarding.skipped.title": "Configuration skipped",
-    "fiscal.onboarding.skipped.hint": "You can return to this screen at any time from Settings → Fiscal configuration.",
+    "fiscal.onboarding.skipped.hint": "You can return to this screen at any time from Taxes → Fiscal configuration.",
     "fiscal.onboarding.applied.row.territory": "Fiscal territory",
     "fiscal.onboarding.applied.row.tax": "Tax authority",
     "fiscal.onboarding.applied.row.national": "National operation (SII)",
@@ -22059,9 +22059,9 @@
     "fiscal.onboarding.breadcrumb.details": "Details",
     "fiscal.onboarding.breadcrumb.manual": "Manual configuration",
     "fiscal.onboarding.confirm.title": "Confirm configuration",
-    "fiscal.onboarding.confirm.subtitle": "Review the data before continuing. You can edit any field later in Settings → Fiscal configuration.",
+    "fiscal.onboarding.confirm.subtitle": "Review the data before continuing. You can edit any field later in Taxes → Fiscal configuration.",
     "fiscal.onboarding.confirm.subtitle.pre": "Review the data before continuing. You can edit any field later in ",
-    "fiscal.onboarding.confirm.subtitle.bold": "Settings → Fiscal configuration",
+    "fiscal.onboarding.confirm.subtitle.bold": "Taxes → Fiscal configuration",
     "fiscal.onboarding.confirm.row.territory": "Territory",
     "fiscal.onboarding.confirm.row.hacienda": "Tax authority",
     "fiscal.onboarding.confirm.row.national.yes": "Yes · also declares SII",
@@ -22864,6 +22864,7 @@
     "documentNo": "Document No",
     "finance": "Finance",
     "treasury": "Treasury",
+    "taxes": "Taxes",
     "settings": "Settings",
     "settingsDescription": "Manage your session context. Changing role or organization will re-authenticate your session.",
     "currentSession": "Current Session",
@@ -28262,6 +28263,9 @@
     },
     "Treasury Reports": {
       "label": "Treasury Reports"
+    },
+    "Taxes Reports": {
+      "label": "Taxes Reports"
     },
     "Production Management": {
       "label": "Production Management"

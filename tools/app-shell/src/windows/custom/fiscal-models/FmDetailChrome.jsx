@@ -205,7 +205,7 @@ export function FmEmptyState({ message, icon, title, sub, cta, 'data-testid': te
 // The declaration title lives in the app TopBar, at the same place as the list's "Modelos
 // Fiscales" title, published through the same `useSetPageMeta` the list uses:
 //   title       "Modelo 303 - 2026/T1"
-//   breadcrumb  "Finanzas / Modelos Fiscales / Modelo 303 - 2026/T1" (the TopBar subtitle)
+//   breadcrumb  "Impuestos / Modelos Fiscales / Modelo 303 - 2026/T1" (the TopBar subtitle)
 //   titleExtra  the model badge ("303"/"349") — TopBar's adornment slot next to the title
 //               (precedent: financial-account's sync status); the badge is the same
 //               `.fm-model-badge` element the list's model column renders, not a lookalike.

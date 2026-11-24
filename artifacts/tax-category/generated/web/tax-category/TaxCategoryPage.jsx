@@ -8,7 +8,7 @@ import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Finance / Tax Category';
+const breadcrumb = 'Taxes / Tax Category';
 
 
 // @sf-generated-start summary:taxCategory

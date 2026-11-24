@@ -2,7 +2,7 @@
   "version": "0.21.0",
   "generatedAt": "2026-04-27T19:18:32.198Z",
   "updatedAt": "2026-10-16T16:21:17.709Z",
-  "contractChecksum": "e03c36fa6cae8fa7",
+  "contractChecksum": "5d7c8aa1ec227aad",
   "apiPrediction": {
     "specName": "tax",
     "baseUrl": "/sws/neo/tax",

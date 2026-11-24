@@ -21172,7 +21172,7 @@
     "fiscal.onboarding.goHome": "Ir al inicio",
     "fiscal.onboarding.back.wizard": "← Volver al asistente",
     "fiscal.onboarding.skipped.title": "Configuración omitida",
-    "fiscal.onboarding.skipped.hint": "Puedes volver a esta pantalla en cualquier momento desde Ajustes → Configuración fiscal.",
+    "fiscal.onboarding.skipped.hint": "Puedes volver a esta pantalla en cualquier momento desde Impuestos → Configuración fiscal.",
     "fiscal.onboarding.applied.row.territory": "Territorio fiscal",
     "fiscal.onboarding.applied.row.tax": "Hacienda",
     "fiscal.onboarding.applied.row.national": "Operativa nacional (SII)",
@@ -21199,9 +21199,9 @@
     "fiscal.onboarding.breadcrumb.details": "Detalles",
     "fiscal.onboarding.breadcrumb.manual": "Configuración manual",
     "fiscal.onboarding.confirm.title": "Confirma la configuración",
-    "fiscal.onboarding.confirm.subtitle": "Revisa los datos antes de continuar. Podrás editar cualquier campo después en Ajustes → Configuración fiscal.",
+    "fiscal.onboarding.confirm.subtitle": "Revisa los datos antes de continuar. Podrás editar cualquier campo después en Impuestos → Configuración fiscal.",
     "fiscal.onboarding.confirm.subtitle.pre": "Revisa los datos antes de continuar. Podrás editar cualquier campo después en ",
-    "fiscal.onboarding.confirm.subtitle.bold": "Ajustes → Configuración fiscal",
+    "fiscal.onboarding.confirm.subtitle.bold": "Impuestos → Configuración fiscal",
     "fiscal.onboarding.confirm.row.territory": "Territorio",
     "fiscal.onboarding.confirm.row.hacienda": "Hacienda",
     "fiscal.onboarding.confirm.row.national.yes": "Sí · también declara SII",
@@ -21940,6 +21940,7 @@
     "documentNo": "Nº documento",
     "finance": "Finanzas",
     "treasury": "Tesorería",
+    "taxes": "Impuestos",
     "settings": "Configuración",
     "settingsDescription": "Gestiona el contexto de tu sesión. Cambiar el rol u organización volverá a autenticar tu sesión.",
     "currentSession": "Sesión actual",
@@ -23811,6 +23812,9 @@
     },
     "Treasury Reports": {
       "label": "Informes de Tesorería"
+    },
+    "Taxes Reports": {
+      "label": "Informes de Impuestos"
     },
     "Payment Tracker": {
       "label": "Seguimiento cobros-pagos"

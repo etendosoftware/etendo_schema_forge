@@ -10,6 +10,7 @@ export const CATEGORY_LABELS = Object.freeze({
   purchases: { en: 'Purchases', es: 'Compras' },
   finance: { en: 'Finance', es: 'Finanzas' },
   treasury: { en: 'Treasury', es: 'Tesorería' },
+  taxes: { en: 'Taxes', es: 'Impuestos' },
   sales: { en: 'Sales', es: 'Ventas' },
   inventory: { en: 'Inventory', es: 'Inventario' },
   other: { en: 'Other', es: 'Otros' },

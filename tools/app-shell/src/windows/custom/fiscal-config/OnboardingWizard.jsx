@@ -274,7 +274,7 @@ function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgNam
   const SYS_LABEL = { SII: 'SII', TBAI: 'TicketBAI', 'SII+TBAI': 'SII + TicketBAI', VERIFACTU: 'VERI*FACTU' };
   const sysLabel = SYS_LABEL[system] ?? sys?.name ?? '';
   const pageTitle = `${ui('fiscal.title')} ${sysLabel}`.trim();
-  useSetPageMeta({ title: pageTitle, breadcrumb: `${ui('settings')} / ${ui('fiscal.monitor.nav')} / ${pageTitle}` });
+  useSetPageMeta({ title: pageTitle, breadcrumb: `${ui('taxes')} / ${pageTitle}` });
 
   async function handleSaveDetail() {
     // ETP-5272 follow-up: block the wizard's own detail-editing save too — the

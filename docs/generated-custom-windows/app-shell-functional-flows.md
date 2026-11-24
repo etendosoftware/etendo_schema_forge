@@ -119,14 +119,14 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Manual verification path:**
   1. Sign in and open `/dashboard`.
   2. Confirm the side menu, top bar, command palette, and copilot widget are visible.
-  3. Use an accessible Finance, Treasury or Inventory Reports menu entry and confirm the URL keeps `?category=finance`, `?category=treasury` or `?category=inventory`, and that the entry stays highlighted after opening a report from it. The Purchases Reports entry remains deliberately hidden in `menu.json`.
+  3. Use an accessible Finance, Treasury, Taxes or Inventory Reports menu entry and confirm the URL keeps `?category=finance`, `?category=treasury`, `?category=taxes` or `?category=inventory`, and that the entry stays highlighted after opening a report from it. The Purchases Reports entry remains deliberately hidden in `menu.json`.
   4. Re-open the same route with `?embedded=1` and confirm the shell chrome is hidden while the routed page still renders.
   5. Sign in as a role with restricted `AD_Window_Access`/`AD_Process_Access` grants and confirm the sidebar shows visibly fewer items than a role with full access (e.g. GOClient Admin).
   6. Sign in as a user with no role assigned (or a role with zero window/process access) and confirm the "No access" screen renders instead of the sidebar, and that navigating directly to a known window URL (e.g. `/sales-order`) also lands on the blocking screen rather than the window.
   7. Repeat step 6 with `?embedded=1` appended to the URL and confirm the blocking screen still renders (not the bare routed page or a blank frame).
   8. While signed in as a user with an assigned role and visible sidebar, have an administrator revoke that role (or drop it to zero window/process access) in another session, then trigger a fresh role-menu fetch (e.g. reload or navigate) and confirm the sidebar is replaced by the blocking screen rather than staying visible alongside it.
-  9. As a non-admin with a non-empty role menu, check Treasury Reports against the role's aging-report grants: it shows only with a grant on `aging-receivable` or `aging-payable`; the Financial Reports window alone does not show it. Then check Finance Reports, Inventory Reports, and Smart Scan against that role's permission-anchor grants: `full` or `read-only` shows the entry; a missing grant hides it even though the route is a custom page. Confirm granted entries also open successfully. Since ETP-5830 no system role template grants Smart Scan, so a role built from a template does not see it. It is blocked for every role, Admin/client-admin included: the admin `windowAccess` map only contains a permission-anchor window on which some role holds an active grant, and since ETP-5830 no role does, so the anchor resolves to `none` for Admin too. Only a hand-made grant on some role brings it back, and then for Admin as well.
-  10. As GOAdmin or GOClient Admin, confirm all anchor entries (Finance, Treasury and Inventory Reports, Smart Scan) are visible and open successfully. On a fresh load, confirm menu-tree entries wait for `SFListMenu`, while capability/anchor entries wait for their own maps or the admin exemption; neither nullable map state should briefly expose restricted entries.
+  9. As a non-admin with a non-empty role menu, check Treasury Reports against the role's aging-report grants: it shows only with a grant on `aging-receivable` or `aging-payable`; the Financial Reports window alone does not show it. Taxes Reports (ETP-6380) follows the same rule with the `tax-report` grant. Then check Finance Reports, Inventory Reports, and Smart Scan against that role's permission-anchor grants: `full` or `read-only` shows the entry; a missing grant hides it even though the route is a custom page. Confirm granted entries also open successfully. Since ETP-5830 no system role template grants Smart Scan, so a role built from a template does not see it. It is blocked for every role, Admin/client-admin included: the admin `windowAccess` map only contains a permission-anchor window on which some role holds an active grant, and since ETP-5830 no role does, so the anchor resolves to `none` for Admin too. Only a hand-made grant on some role brings it back, and then for Admin as well.
+  10. As GOAdmin or GOClient Admin, confirm all anchor entries (Finance, Treasury, Taxes and Inventory Reports, Smart Scan) are visible and open successfully. On a fresh load, confirm menu-tree entries wait for `SFListMenu`, while capability/anchor entries wait for their own maps or the admin exemption; neither nullable map state should briefly expose restricted entries.
 
 ### 3. Generated/custom window loading
 
@@ -634,7 +634,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
     because the old category's gate could deny the catalogue fetch before the contract is known.
     A category missing from `REPORT_CATEGORY_WINDOW_IDS`/`REPORT_CATEGORY_REPORT_IDS` is ungated,
     so `treasury` is declared in both (same Financial Reports anchor as `finance`; reports
-    `aging-receivable`, `aging-payable`). The favourite star matches any saved favourite for the
+    `aging-receivable`, `aging-payable`). ETP-6380 did the same for `taxes` (Impuestos › Informes,
+    same anchor, report `tax-report`): an old `category=finance&report=tax-report` link or
+    favourite is re-pointed to `category=taxes`. The favourite star matches any saved favourite for the
     same report id whatever its category (`findReportFavoriteKeys()`): an old-category favourite
     shows the star lit, and un-favouriting removes every favourite of that report (current and
     old-category keys, in one `removeFavorite([...keys])` call) instead of adding a duplicate or
@@ -677,6 +679,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
      becomes `category=treasury` without a new history entry, the breadcrumb reads
      Tesorería / Informes / Antigüedad de Cobros, and Tesorería › Informes is highlighted. A
      favourite saved under the old URL shows the star lit; pressing it removes that favourite.
+     The same holds for `/report-viewer?category=finance&report=tax-report` → `category=taxes`,
+     Impuestos / Informes / Informe de Impuestos, Impuestos › Informes highlighted (ETP-6380).
   7. Widen past 1366px and confirm any page quick actions come back inline and the right `⋯`
      disappears.
 

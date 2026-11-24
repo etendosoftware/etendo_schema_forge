@@ -92,6 +92,21 @@ Menu group "Tesorería" (ETP-6389): Cobro, Pago, Cuentas, Informes (aging report
 | [conversion-rates.md](conversion-rates.md) | Currency Conversion (Conversión de divisas): rates in force per currency, grouped history, manual rates (new currency, new rate, edit, delete); USD/GBP downloaded automatically; feeds the invoice completion guard |
 | [general-ledger-configuration.md](general-ledger-configuration.md) | Custom 4-tab accounting schema setup window aligned to the Figma-first ETP-4246 scope |
 
+## Taxes
+
+Menu group "Impuestos" (ETP-6380), in the Finance section right after Finanzas: Impuesto, Categoría de impuesto, Monitor fiscal, Informes (Tax Report only, `report-viewer?category=taxes`), Configuración fiscal and Modelos fiscales, in that order. None of them is listed under Finanzas or Configuración any more.
+
+| File | Description |
+|------|-------------|
+| [tax.md](tax.md) | Generated tax-rate maintenance window |
+| [tax-category.md](tax-category.md) | Generated tax-category catalog window (groups tax rates; ETP-4249) |
+| [fiscal-monitor.md](fiscal-monitor.md) | Custom fiscal monitor window — real-time invoice submission status for SII, TBAI, and Verifactu |
+| [fiscal-config.md](fiscal-config.md) | Custom fiscal configuration window — onboarding wizard (SII/TBAI/Verifactu) and ongoing config maintenance; SIF activation through the backend `fiscalSystemCatalog` / `configureFiscalSystem` actions on `sii-config` (ETP-6053) |
+| [fiscal-models.md](fiscal-models.md) | Custom fiscal models window — declaration list and per-model detail pages (303, 349, 390) with auto-compute, file generation (390: validated by the AEAT before download) and direct presentation to the AEAT |
+| [sii-monitor.md](sii-monitor.md) | API-only sub-window — SII invoice submission records consumed by FiscalMonitorPage |
+| [monitor-verifactu.md](monitor-verifactu.md) | API-only sub-window — Verifactu invoice submission records consumed by FiscalMonitorPage |
+| [tbai-facturas-enviadas.md](tbai-facturas-enviadas.md) | API-only sub-window — TBAI invoice submission records consumed by FiscalMonitorPage |
+
 ## Projects
 
 | File | Description |
@@ -117,18 +132,10 @@ Menu group "Tesorería" (ETP-6389): Cobro, Pago, Cuentas, Informes (aging report
 | [organization.md](organization.md) | Custom organization-settings window (ETP-4749) — flattens the Classic Organization/Information AD tabs (window 110) into one tabless screen: identity, fiscal data, and contact details, plus the Certificado digital, IAE and Modelo 390 sections shown only when a fiscal configuration that uses them is active (ETP-5831) |
 | [document-sequence.md](document-sequence.md) | Document numbering window (ETP-5190, AD window 112) — prefix/suffix/next-number per sequence, with the Spanish localization prefix rules enforced on write; target of the First Steps invoicing step |
 | [price-list.md](price-list.md) | Custom price-list flow with product-price workspace |
-| [tax.md](tax.md) | Generated tax-rate maintenance window |
-| [tax-category.md](tax-category.md) | Generated tax-category catalog window (groups tax rates; ETP-4249) |
 | [business-partner-category.md](business-partner-category.md) | Generated business-partner-category master/detail flow behind a thin wrapper; contact type + accounts by type (Accounting tab), list type columns and contact-type quick filter behind the `contact-category-type` flag (ETP-5791) |
 | [user.md](user.md) | Generated user window — multi-role template composition with a live permission-preview matrix (ETP-4906) and defaults dependencies |
-| [fiscal-config.md](fiscal-config.md) | Custom fiscal configuration window — onboarding wizard (SII/TBAI/Verifactu) and ongoing config maintenance; SIF activation through the backend `fiscalSystemCatalog` / `configureFiscalSystem` actions on `sii-config` (ETP-6053) |
-| [fiscal-models.md](fiscal-models.md) | Custom fiscal models window — declaration list and per-model detail pages (303, 349, 390) with auto-compute, file generation (390: validated by the AEAT before download) and direct presentation to the AEAT |
-| [fiscal-monitor.md](fiscal-monitor.md) | Custom fiscal monitor window — real-time invoice submission status for SII, TBAI, and Verifactu |
 | [not-posted-documents.md](not-posted-documents.md) | Custom cross-document posting window — aggregates all unposted documents, single-row and bulk Post actions |
 | [acct-process-monitor.md](acct-process-monitor.md) | Synthetic admin-only page (ETP-5269, flag `acct-process-monitor`) — status, next automatic run and execution history of the accounting server process, plus a manual run scoped to the caller's own company. No logs, by design |
-| [sii-monitor.md](sii-monitor.md) | API-only sub-window — SII invoice submission records consumed by FiscalMonitorPage |
-| [monitor-verifactu.md](monitor-verifactu.md) | API-only sub-window — Verifactu invoice submission records consumed by FiscalMonitorPage |
-| [tbai-facturas-enviadas.md](tbai-facturas-enviadas.md) | API-only sub-window — TBAI invoice submission records consumed by FiscalMonitorPage |
 | [conversion-rate-downloader-log.md](conversion-rate-downloader-log.md) | API-only window (ETP-5068) — read-only audit log of automated conversion-rate downloader runs, retired from the Settings menu |
 
 ## Scope

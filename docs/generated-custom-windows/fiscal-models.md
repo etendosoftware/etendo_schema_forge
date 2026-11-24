@@ -30,9 +30,9 @@ debug contracts.
 
 - Route: `/fiscal-models` (list, `FmListPage`); model detail pages render inline within the same route (no separate URL) via `FmModel303Page`/`FmModel349Page`.
 - Implementation type: `layoutType: "custom"` — loaded from `customLoaders` in `tools/app-shell/src/windows/registry.js`.
-- Breadcrumb — list page: `Finanzas / Modelos Fiscales` (`` `${ui('finance')} / ${ui('fm.breadcrumb.section')}` ``, `FmListPage.jsx`), shown as the TopBar subtitle (ETP-5584).
+- Breadcrumb — list page: `Impuestos / Modelos Fiscales` (`` `${ui('taxes')} / ${ui('fm.breadcrumb.section')}` ``, `FmListPage.jsx`), shown as the TopBar subtitle (ETP-5584).
 - Page title — list page: **"Modelos Fiscales"** / "Fiscal Models", the window's menu name, resolved from the same `ui('fm.breadcrumb.section')` key as the breadcrumb's last segment so the title and the breadcrumb can never disagree (ETP-5584 — it used to read "Declaraciones", `fm.list.title`, while the menu and the breadcrumb said "Modelos Fiscales"). It is published to the app TopBar via `useSetPageMeta` — see "List page header (app TopBar) and declarations toolbar" below.
-- Breadcrumb — Modelo 303/349 detail pages: `Finanzas / Modelos Fiscales / Modelo 303 - {periodLabel}` (es_ES) / `Finance / Fiscal Models / Form 303 - {periodLabel}` (en_US) (`FmModel303Page.jsx`), and the equivalent for 349 (`FmModel349Page.jsx`) — 3 segments, consistent between both models. ETP-4945 replaced 3 independently hardcoded, mutually inconsistent breadcrumbs (a raw Spanish literal `Tesorería` on all three pages, with 303 at 2 segments and 349 at 3), and introduced the shared `ui('finance')` / `ui('fm.breadcrumb.section')` keys reused across all three surfaces so the "Modelos Fiscales" segment can't drift between the list and its two detail pages again. ETP-5338 fixed a follow-on bug ETP-4945 left in place: the "Modelo 303"/"Modelo 349" segment itself (and the matching page-title text) was still a raw hardcoded Spanish literal even under `en_US` — now resolved via the shared `fm.config.m303.title` / `fm.config.m349.title` keys (already used by the catalog config section header), which is also why the English segment reads "Form 303", not "Model 303" — "Form" is this codebase's established translation of AEAT's "Modelo" (see `fm.catalog.303.name` / `fm.config.m303.title`). Since ETP-5584 it is the TopBar subtitle, published by `useFmDetailPageMeta`, not in-page text. **Title format (P9, ETP-5584):** both models build the title with one helper, `buildDeclTitle` in `FmDetailChrome.jsx`, so the format is `<model title> - <year>/<period>`. A quarter reads "Modelo 349 - 2026/T4" (349 used to read "2026 T4"). A monthly period shows its month name in the UI locale: "Modelo 303 - 2024/octubre" or "Form 303 - 2024/October". 303 used to show "10M", and 349 used "2026 / octubre". The locale is passed explicitly (`useLocaleSwitch`), never left to the runtime default.
+- Breadcrumb — Modelo 303/349 detail pages: `Impuestos / Modelos Fiscales / Modelo 303 - {periodLabel}` (es_ES) / `Taxes / Fiscal Models / Form 303 - {periodLabel}` (en_US) (`FmModel303Page.jsx`), and the equivalent for 349 (`FmModel349Page.jsx`) — 3 segments, consistent between both models. ETP-4945 replaced 3 independently hardcoded, mutually inconsistent breadcrumbs (a raw Spanish literal `Tesorería` on all three pages, with 303 at 2 segments and 349 at 3), and introduced the shared `ui('finance')` / `ui('fm.breadcrumb.section')` keys reused across all three surfaces so the "Modelos Fiscales" segment can't drift between the list and its two detail pages again. ETP-5338 fixed a follow-on bug ETP-4945 left in place: the "Modelo 303"/"Modelo 349" segment itself (and the matching page-title text) was still a raw hardcoded Spanish literal even under `en_US` — now resolved via the shared `fm.config.m303.title` / `fm.config.m349.title` keys (already used by the catalog config section header), which is also why the English segment reads "Form 303", not "Model 303" — "Form" is this codebase's established translation of AEAT's "Modelo" (see `fm.catalog.303.name` / `fm.config.m303.title`). Since ETP-5584 it is the TopBar subtitle, published by `useFmDetailPageMeta`, not in-page text. **Title format (P9, ETP-5584):** both models build the title with one helper, `buildDeclTitle` in `FmDetailChrome.jsx`, so the format is `<model title> - <year>/<period>`. A quarter reads "Modelo 349 - 2026/T4" (349 used to read "2026 T4"). A monthly period shows its month name in the UI locale: "Modelo 303 - 2024/octubre" or "Form 303 - 2024/October". 303 used to show "10M", and 349 used "2026 / octubre". The locale is passed explicitly (`useLocaleSwitch`), never left to the runtime default.
 
 ## Model registry (ETP-5716)
 
@@ -590,14 +590,14 @@ reference:
 The 303 and 349 detail pages publish their breadcrumb to the app TopBar through
 `useFmDetailPageMeta` (ETP-5584, see "Detail page header, action bar…" below). It is published as
 the TopBar's structured item list (`components/layout/TopBar/breadcrumb.js`):
-`[ui('finance'), { label: ui('fm.breadcrumb.section'), onClick }, declTitle]`. Like the parent
+`[ui('taxes'), { label: ui('fm.breadcrumb.section'), onClick }, declTitle]`. Like the parent
 crumb of a generated window's detail (e.g. *Facturas de compra* back to its list), the TopBar
 renders the **Modelos Fiscales** level as a link that returns to the declarations list. Its
 `onClick` is the page's own back path — 303's `handleCancel` (discards unsaved edits exactly like
-**Cancelar**), 349's `onBack` — because these detail pages are a view state of `FiscalModelsPage`,
-not a route. *Finanzas* and the current page stay plain text, and the visible text is unchanged
-("Finanzas / Modelos Fiscales / Modelo 303 - 2026/T4"). The list page keeps its plain
-*Finanzas / Modelos Fiscales* subtitle (it is already the list). (Before ETP-5584 moved the header
+**Cancelar**), 349's and 390's `onBack` (390 joined this shape in ETP-6380) — because these detail pages are a view state of `FiscalModelsPage`,
+not a route. *Impuestos* (the menu group since ETP-6380, formerly *Finanzas*) and the current page stay plain text, and the visible text is unchanged
+("Impuestos / Modelos Fiscales / Modelo 303 - 2026/T4"). The list page keeps its plain
+*Impuestos / Modelos Fiscales* subtitle (it is already the list). (Before ETP-5584 moved the header
 into the TopBar, ETP-5597 had shipped an in-page `FmBreadcrumb` renderer for this; it was removed
 when the header moved.)
 
@@ -2613,7 +2613,7 @@ same `useSetPageMeta` the list uses:
 | TopBar slot | Value |
 |---|---|
 | `title` | "Modelo 303 - 2026/T1", "Modelo 349 - 2026/T4" — `buildDeclTitle(modelTitle, decl, bcpLocale)`, the one format every model uses: `<model title> - <year>/<period>` via `formatDeclPeriod` (a monthly period shows its month name in the UI locale, e.g. "2024/octubre") |
-| `breadcrumb` (subtitle) | "Finanzas / Modelos Fiscales / Modelo 303 - 2026/T1" — published as items; "Modelos Fiscales" is a link back to the list (see "Header breadcrumb (ETP-5597)") |
+| `breadcrumb` (subtitle) | "Impuestos / Modelos Fiscales / Modelo 303 - 2026/T1" — published as items; "Modelos Fiscales" is a link back to the list (see "Header breadcrumb (ETP-5597)") |
 | `titleExtra` (next to the title) | the model badge: the same `.fm-model-badge fm-model-badge--303` / `--349` element the list's model column renders |
 | kebab (⋮) | `onAddToFavorites` + `isFavorite` (favourite `fiscal-models`) and `onPageHelp` (support chat "Ayuda" tab) — the same two items the old in-page kebab had (that component, `MoreOptionsMenu`, is deleted) |
 
@@ -4503,7 +4503,7 @@ block is rendered. The published meta is:
 |---|---|
 | `title` | `ui('fm.breadcrumb.section')` — the window's menu name, "Modelos Fiscales" / "Fiscal Models" |
 | `recordCount` (badge next to the title) | `decls.length` — the declarations count |
-| `breadcrumb` (subtitle line) | `` `${ui('finance')} / ${ui('fm.breadcrumb.section')}` `` — "Finanzas / Modelos Fiscales" |
+| `breadcrumb` (subtitle line) | `` `${ui('taxes')} / ${ui('fm.breadcrumb.section')}` `` — "Impuestos / Modelos Fiscales" |
 | kebab (⋮ next to the title) | `onAddToFavorites` → `toggleFavorite('fiscal-models', <window name>)` + `isFavorite`, and `onPageHelp` → the support chat "Ayuda" tab (`useSupportChatSafe`), the same two items the detail pages publish through `useFmDetailPageMeta` |
 
 **Hidden list, no meta.** `FiscalModelsPage` keeps `FmListPage` mounted (hidden with

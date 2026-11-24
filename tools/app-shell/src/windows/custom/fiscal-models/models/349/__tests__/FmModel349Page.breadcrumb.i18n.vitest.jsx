@@ -6,7 +6,7 @@
 // `Tesorería / Declaraciones / Modelo 349 - {periodLabel}` — 3 segments,
 // inconsistent with the 303 page's 2-segment version and rooted under a raw
 // hardcoded "Tesorería" literal. The fix aligns both 303 and 349 on
-// `${ui('finance')} / ${ui('fm.breadcrumb.section')} / Modelo <n> - {periodLabel}`.
+// `${ui('taxes')} / ${ui('fm.breadcrumb.section')} / Modelo <n> - {periodLabel}`.
 // Breadcrumb is inline JSX text (not a useSetPageMeta call), so this asserts
 // the rendered title-bar text directly. Mirrors the sibling
 // FmModel349Page.vitest.jsx's mocking shape but with `useUI` backed by the
@@ -119,12 +119,12 @@ const defaultProps = {
 
 
 describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-4945)', () => {
-  it('resolves the es_ES breadcrumb to "Finanzas / Modelos Fiscales / Modelo 349 - 2026/T1", not the stale "Tesorería / Declaraciones"', () => {
+  it('resolves the es_ES breadcrumb to "Impuestos / Modelos Fiscales / Modelo 349 - 2026/T1", not the stale "Tesorería / Declaraciones"', () => {
     activeUi = realUiEs;
     activeLocale = 'es_ES';
     const { container } = renderWithMeta(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
 
-    expect(breadcrumbToText(lastMeta.breadcrumb)).toBe('Finanzas / Modelos Fiscales / Modelo 349 - 2026/T1');
+    expect(breadcrumbToText(lastMeta.breadcrumb)).toBe('Impuestos / Modelos Fiscales / Modelo 349 - 2026/T1');
     expect(lastMeta.title).toBe('Modelo 349 - 2026/T1');
     expect(lastMeta.titleExtra.props.className).toBe('fm-model-badge fm-model-badge--349');
     expect(typeof lastMeta.onAddToFavorites).toBe('function');
@@ -138,12 +138,12 @@ describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-
   // the root/section segments. Now resolved via the shared 'fm.config.m349.title'
   // key (already used by the catalog config section header), which translates
   // "Modelo" to "Form" — the term AEAT-form-aware English UI copy uses.
-  it('resolves the en_US breadcrumb to "Finance / Fiscal Models / Form 349 - 2026/T1", not the stale "Modelo"', () => {
+  it('resolves the en_US breadcrumb to "Taxes / Fiscal Models / Form 349 - 2026/T1", not the stale "Modelo"', () => {
     activeUi = realUiEn;
     activeLocale = 'en_US';
     renderWithMeta(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
 
-    expect(breadcrumbToText(lastMeta.breadcrumb)).toBe('Finance / Fiscal Models / Form 349 - 2026/T1');
+    expect(breadcrumbToText(lastMeta.breadcrumb)).toBe('Taxes / Fiscal Models / Form 349 - 2026/T1');
     expect(lastMeta.title).toBe('Form 349 - 2026/T1');
   });
 
@@ -172,7 +172,7 @@ describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-
 
   // ETP-5597 — like the parent crumb of a generated window's detail, the "Modelos Fiscales" level
   // of the TopBar breadcrumb is a link back to the declarations list: the published item carries an
-  // `onClick` (the TopBar renders it as a button); "Finanzas" and the current page stay plain text.
+  // `onClick` (the TopBar renders it as a button); "Impuestos" and the current page stay plain text.
   it('the "Modelos Fiscales" crumb is a link back to the list (onBack); the others are not', () => {
     activeUi = realUiEs;
     const onBack = vi.fn();

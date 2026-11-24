@@ -57,6 +57,7 @@ import {
   Receipt,
   Bank,
   Wallet,
+  SealPercent,
   Package,
   Briefcase,
   Users,
@@ -95,6 +96,8 @@ const ICON_MAP = {
   Receipt,
   Building2:      Bank,
   Wallet,
+  // Lucide `BadgePercent`: Phosphor's equivalent is SealPercent (ETP-6380).
+  BadgePercent:   SealPercent,
   Package,
   Briefcase,
   Users,

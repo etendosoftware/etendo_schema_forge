@@ -17,7 +17,7 @@ Users should be able to review and update tax-category definitions. Creating a n
 
 ## Interaction model
 - **Route:** `/tax-category` and `/tax-category/:recordId`.
-- **Visibility:** visible from the `Settings` group in `tools/app-shell/src/menu.json` (window ID `138`).
+- **Visibility:** visible from the `Taxes` (Impuestos) group in `tools/app-shell/src/menu.json` (window ID `138`, ETP-6380). Breadcrumb `Impuestos / Categoría de impuesto` (`window.breadcrumb: "Taxes / Tax Category"`).
 - **Implementation type:** generated window loaded through `tools/app-shell/src/windows/registry.js`.
 - **Window shape:** single-entity window (`taxCategory`) with no child entities and no declared process endpoints.
 - **Screen chrome:** print and the generic More menu are hidden (`hidePrint: true`, `hideMoreMenu: true`). The list toolbar hides the generic Create/New button (`hideCreate: true`) and the Delete affordance is hidden in both the list-row hover actions and the detail toolbar (`hideDeleteButton: true`), with delete also disabled at the contract/API level (`hideDelete: true`).
@@ -33,7 +33,7 @@ The `default` boolean marks one category as the system-wide default for new docu
 - The SII-declarable flag links to the Spanish e-invoicing submission system, but no in-app guidance is shown for when to set it.
 
 ## Manual verification
-1. Open `/tax-category` from the Settings menu and confirm the list view loads.
+1. Open `/tax-category` from the Impuestos menu and confirm the list view loads.
 2. Confirm the list shows the `Name` and `Default` columns.
 3. Open `/tax-category/<recordId>` and confirm the form exposes: `Name`, `Description`, `Default`, `As per BOM`, `Tax type`, `Transaction type`, `Rate type`, and `SII declarable`.
 4. Confirm the list toolbar does NOT show a Create/New (`+`) button.

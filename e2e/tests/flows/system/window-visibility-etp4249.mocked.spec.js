@@ -115,8 +115,8 @@ test.describe('TC-35 — Tax Category window accessible', () => {
 // the retired entry used to live in.
 //
 // Anchors that moved out of Settings, so they no longer open the right group:
-// `tax`/`tax-category` (ETP-5146, to Finance) and `payment-term` (ETP-6389, to
-// Tesorería). Re-check which group an anchor lives in before changing it.
+// `tax`/`tax-category` (ETP-5146, to Finance; ETP-6380, to Impuestos), `fiscal-config`
+// (ETP-6380, to Impuestos) and `payment-term` (ETP-6389, to Tesorería). Re-check which group an anchor lives in before changing it.
 // ---------------------------------------------------------------------------
 test.describe('ETP-5068 — Conversion Rate Downloader Log retired from the menu', () => {
   test.beforeEach(async ({ page }) => {
