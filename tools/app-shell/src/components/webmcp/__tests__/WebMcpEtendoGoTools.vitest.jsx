@@ -1,7 +1,6 @@
 import { render, screen } from '@testing-library/react';
 
 const mocks = vi.hoisted(() => ({
-  useFeatureFlag: vi.fn(() => true),
   copilotOpen: vi.fn(),
   copilotSendMessage: vi.fn(),
   agentProps: {},
@@ -13,10 +12,6 @@ vi.mock('@etendosoftware/app-shell-core/webmcp', () => ({
     mocks.agentProps.current = props;
     return <div data-testid="agent-tools" data-enabled={String(props.enabled)} />;
   },
-}));
-vi.mock('@/lib/flags', () => ({
-  WEBMCP_AGENT_CHAT: 'webmcp-agent-chat',
-  useFeatureFlag: mocks.useFeatureFlag,
 }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ token: 'browser-session-token' }) }));
 vi.mock('@/components/CopilotContext', () => ({
@@ -40,6 +35,7 @@ describe('WebMcpEtendoGoTools', () => {
     expect(screen.getByTestId('mcp-tools')).toHaveAttribute('data-enabled', 'true');
     expect(screen.getByTestId('mcp-tools')).toHaveAttribute('data-endpoint', '/mcp');
     expect(screen.getByTestId('mcp-tools')).toHaveAttribute('data-token', 'browser-session-token');
+    expect(screen.getByTestId('agent-tools')).toHaveAttribute('data-enabled', 'true');
   });
 
   it('opens the existing Copilot popup and sends the WebMCP message through it', async () => {
@@ -49,13 +45,5 @@ describe('WebMcpEtendoGoTools', () => {
 
     expect(mocks.copilotOpen).toHaveBeenCalledTimes(1);
     expect(mocks.copilotSendMessage).toHaveBeenCalledWith('Find open orders');
-  });
-
-  it('disables both WebMCP surfaces when the feature flag is off', () => {
-    mocks.useFeatureFlag.mockReturnValue(false);
-    render(<WebMcpEtendoGoTools />);
-
-    expect(screen.getByTestId('mcp-tools')).toHaveAttribute('data-enabled', 'false');
-    expect(screen.getByTestId('agent-tools')).toHaveAttribute('data-enabled', 'false');
   });
 });

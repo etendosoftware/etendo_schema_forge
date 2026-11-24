@@ -52,7 +52,6 @@ import {
 } from '../bootstrap.js';
 import {
   PROOF_OF_CONCEPT_MENU,
-  WEBMCP_AGENT_CHAT,
   IMPORT_BATCH_SIZE,
   GRID_COLUMN_VIEWS,
   FLAG_DEFAULTS,
@@ -89,10 +88,6 @@ afterEach(async () => {
 describe('flag-keys — declared defaults', () => {
   it('declares proof-of-concept-menu as off, hiding internal tooling by default', () => {
     expect(FLAG_DEFAULTS[PROOF_OF_CONCEPT_MENU]).toBe(false);
-  });
-
-  it('declares webmcp-agent-chat as off by default', () => {
-    expect(FLAG_DEFAULTS[WEBMCP_AGENT_CHAT]).toBe(false);
   });
 
   it('resolves an unknown key to false so a typo hides the feature', () => {

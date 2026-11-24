@@ -2,8 +2,7 @@
 
 The BFF keeps the OpenCode Go credential server-side and forwards only the
 current browser session credential to Etendo Go's MCP endpoint. The existing
-Copilot popup calls this BFF when the `webmcp-agent-chat` feature flag is on;
-when it is off, the legacy Copilot API remains unchanged.
+Copilot popup always calls this BFF; there is no feature flag or override.
 
 ## The forwarded credential: two schemes, three headers
 

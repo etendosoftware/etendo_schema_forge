@@ -4,7 +4,6 @@ import { WebMcpAgentTools, WebMcpMcpTools } from '@etendosoftware/app-shell-core
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useCopilot } from '@/components/CopilotContext';
 import { useCurrentWindowContext } from '@/components/CurrentWindowContext';
-import { useFeatureFlag, WEBMCP_AGENT_CHAT } from '@/lib/flags';
 
 /**
  * Etendo Go consumer wiring for the reusable Core WebMCP bridge.
@@ -12,7 +11,6 @@ import { useFeatureFlag, WEBMCP_AGENT_CHAT } from '@/lib/flags';
  * second credential is created for the in-page agent.
  */
 export function WebMcpEtendoGoTools() {
-  const enabled = useFeatureFlag(WEBMCP_AGENT_CHAT);
   const { token } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -36,12 +34,12 @@ export function WebMcpEtendoGoTools() {
   return (
     <>
       <WebMcpMcpTools
-        enabled={enabled}
+        enabled
         endpoint={endpoint}
         accessToken={token}
         data-testid="WebMcpMcpTools__3c602a" />
       <WebMcpAgentTools
-        enabled={enabled}
+        enabled
         getContext={getContext}
         navigate={navigate}
         openChat={openChat}

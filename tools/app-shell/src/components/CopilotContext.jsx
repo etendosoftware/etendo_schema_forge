@@ -2,7 +2,6 @@ import { createContext, useContext, useState, useCallback, useMemo } from 'react
 import { useCopilotChat } from './copilot/useCopilotChat.js';
 import { useAiCopilotChat } from './copilot/useAiCopilotChat.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { useFeatureFlag, WEBMCP_AGENT_CHAT } from '@/lib/flags';
 
 const CopilotContext = createContext(null);
 
@@ -17,10 +16,8 @@ export function CopilotProvider({ children, menuGroups }) {
   const { token } = useAuth();
   const legacy = useCopilotChat({ token });
   const open = useCallback(() => setIsOpen(true), []);
-  const agentEnabled = useFeatureFlag(WEBMCP_AGENT_CHAT);
   const ai = useAiCopilotChat({ onOpenCopilot: open, menuGroups });
   const state = useMemo(() => {
-    if (!agentEnabled) return legacy.state;
     return {
       ...legacy.state,
       conversations: ai.conversations,
@@ -42,9 +39,8 @@ export function CopilotProvider({ children, menuGroups }) {
       pageHelpActive: ai.pageHelpActive,
       pageHelpLoading: ai.pageHelpLoading,
     };
-  }, [agentEnabled, ai.archivedConversations, ai.conversationId, ai.conversations, ai.error, ai.input, ai.isLoadingArchivedConversations, ai.isLoadingConversations, ai.isLoadingMessages, ai.isSending, ai.messages, ai.pageHelpActive, ai.pageHelpError, ai.pageHelpLoading, ai.pageHelpSuggestion, legacy.state]);
+  }, [ai.archivedConversations, ai.conversationId, ai.conversations, ai.error, ai.input, ai.isLoadingArchivedConversations, ai.isLoadingConversations, ai.isLoadingMessages, ai.isSending, ai.messages, ai.pageHelpActive, ai.pageHelpError, ai.pageHelpLoading, ai.pageHelpSuggestion, legacy.state]);
   const actions = useMemo(() => {
-    if (!agentEnabled) return legacy.actions;
     return {
       ...legacy.actions,
       loadBootstrap: () => {},
@@ -65,7 +61,7 @@ export function CopilotProvider({ children, menuGroups }) {
       requestPageHelp: ai.actions.requestPageHelp,
       showPageHelp: ai.actions.showPageHelp,
     };
-  }, [agentEnabled, ai.actions, legacy.actions]);
+  }, [ai.actions, legacy.actions]);
 
   const close = useCallback(() => {
     setIsOpen(false);
@@ -84,7 +80,7 @@ export function CopilotProvider({ children, menuGroups }) {
 
   const value = useMemo(
     () => ({ isOpen, open, close, toggle, state, actions, token }),
-    [isOpen, open, close, toggle, state, actions, token, agentEnabled],
+    [isOpen, open, close, toggle, state, actions, token],
   );
 
   return (

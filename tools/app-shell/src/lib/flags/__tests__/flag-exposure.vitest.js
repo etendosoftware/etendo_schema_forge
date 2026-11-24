@@ -66,7 +66,7 @@ describe('buildExposureProperties', () => {
 
 describe('Datadog RUM feature flag key safety', () => {
   it('normalizes kebab-case and unsupported characters without changing business payloads', () => {
-    expect(sanitizeRumFeatureFlagKey('webmcp-agent-chat')).toBe('webmcp_agent_chat');
+    expect(sanitizeRumFeatureFlagKey('sample-flag-key')).toBe('sample_flag_key');
     expect(sanitizeRumFeatureFlagKey('flag name/value')).toBe('flag_name_value');
     expect(sanitizeRumFeatureFlagKey('')).toBe('flag');
   });
