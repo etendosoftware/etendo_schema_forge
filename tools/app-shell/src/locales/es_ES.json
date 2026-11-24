@@ -16295,6 +16295,9 @@
     "Finance": {
       "label": "Finanzas"
     },
+    "Treasury": {
+      "label": "Tesorería"
+    },
     "Inventory": {
       "label": "Inventario"
     },
@@ -17816,7 +17819,7 @@
     "forceAppRefresh": "Forzar actualización de la app",
     "newPayment": "Nuevo pago",
     "paymentRecordedLocally": "Pago registrado localmente — se sincronizará cuando el endpoint esté disponible",
-    "financeCollections": "Finanzas · Cobros",
+    "treasuryCollections": "Tesorería · Cobros",
     "activity": "Actividad",
     "closeActivityPanel": "Cerrar panel de actividad",
     "paymentCreated": "Cobro creado",
@@ -19607,7 +19610,6 @@
     "statusPaymentMade": "Pago realizado",
     "statusWithdrawnNotCleared": "Retirado sin liquidar",
     "statusDepositedNotCleared": "Depositado sin liquidar",
-    "financeMenuLabel": "Finanzas",
     "financeAccountsPageTitle": "Cuentas",
     "financeAccountsSearchPlaceholder": "Buscar cuenta…",
     "financeAccountsFilterAll": "Todas las cuentas",
@@ -21087,6 +21089,7 @@
     "barChartAria": "Gráfico de barras de ventas mensuales",
     "language": "Idioma",
     "logout": "Cerrar sesión",
+    "cookieSettings": "Configuración de cookies",
     "onboardingLanguageSpanish": "Español",
     "onboardingLanguageEnglish": "Inglés",
     "onboardingAuthFeatureNoCard": "Sin tarjeta de crédito",
@@ -21222,8 +21225,7 @@
     "onboardingMarketingConsent": "Acepto recibir comunicaciones comerciales y material promocional de Etendo por correo electrónico.",
     "onboardingPhoneLabel": "Teléfono",
     "onboardingOptionalHint": "(opcional)",
-    "onboardingPhonePrefixLabel": "Prefijo telefónico",
-    "onboardingPhonePrefixPlaceholder": "Prefijo",
+    "onboardingCountryPlaceholder": "Elige",
     "onboardingPhonePlaceholder": "Número de teléfono",
     "onboardingPhoneInvalid": "Introduce un número de teléfono válido.",
     "onboardingBusinessSectorLabel": "Sector de actividad",
@@ -22662,6 +22664,33 @@
     "sifDataTabs.field.authorizationNo": "Número de autorización",
     "sifDataTabs.field.accountingRegDate": "Fecha registro contable",
     "sifDataTabs.field.registerError": "Modificada error registral",
+    "sifDataTabs.field.dua": "DUA",
+    "sifDataTabs.field.duaDate": "Fecha DUA",
+    "sifDataTabs.field.multiDua": "Múltiple DUA",
+    "sifDataTabs.importTaxes.title": "Impuestos de importación",
+    "sifDataTabs.importTaxes.addCompensatory": "Añadir línea compensatoria",
+    "sifDataTabs.importTaxes.noCompensatoryTax": "No hay configurado un impuesto de importación compensatorio al 0% para: {taxes}.",
+    "sifDataTabs.importTaxes.noImportTaxToCompensate": "No hay impuestos de importación que compensar.",
+    "sifDataTabs.importTaxes.alreadyCompensated": "Ya compensado.",
+    "sifDataTabs.importTaxes.compensatoryAdded": "Líneas compensatorias añadidas",
+    "sifDataTabs.dua.subtitle": "El IVA de importación se declara con los datos del DUA emitido por la aduana.",
+    "sifDataTabs.dua.dateHelper": "Igual o anterior a la fecha de registro contable.",
+    "sifDataTabs.dua.lengthHint": "El DUA tiene 18 caracteres: año (2) + país (2) + recinto (6) + número (7) + dígito de control (1).",
+    "sifDataTabs.dua.dateAfterAccountingDate": "La Fecha DUA es posterior a la Fecha registro contable: el SII rechazará el envío. Corrige una de las dos fechas.",
+    "sifDataTabs.dua.lcHelper": "Número de la liquidación complementaria de Aduanas",
+    "sifDataTabs.dua.lcHintIva": "En una liquidación complementaria se indica el número de liquidación de Aduanas, que empieza por LC, A01 o A02.",
+    "sifDataTabs.dua.lcHintIgic": "En una liquidación complementaria se indica el número de liquidación de Aduanas, que empieza por CLC o 599.",
+    "sifDataTabs.dua.lcHintAny": "En una liquidación complementaria se indica el número de liquidación de Aduanas, que empieza por LC, A01 o A02 (IVA) o CLC o 599 (IGIC).",
+    "sifDataTabs.importTaxes.subtitle": "Introduce la base liquidada en el DUA; la cuota se calcula según el tipo.",
+    "sifDataTabs.importTaxes.rate": "Tipo",
+    "sifDataTabs.importTaxes.summaryTaxAmount": "Cuota IVA importación",
+    "sifDataTabs.importTaxes.duaTotal": "Total DUA",
+    "sifDataTabs.importTaxes.taxableAmount": "Base imponible",
+    "sifDataTabs.importTaxes.taxAmount": "Cuota",
+    "sifDataTabs.importTaxes.add": "Añadir impuesto",
+    "sifDataTabs.importTaxes.empty": "Todavía no hay impuestos de importación.",
+    "sifDataTabs.importTaxes.saveFirst": "Guarda la factura para añadir impuestos de importación.",
+    "sifDataTabs.importTaxes.deleted": "Impuesto de importación eliminado",
     "sifDataTabs.field.siiYear": "Ejercicio SII",
     "sifDataTabs.field.siiPeriod": "Periodo SII",
     "sifDataTabs.field.chainSequence": "Secuencia encadenamiento",
@@ -22988,6 +23017,7 @@
     "docNo": "Nº doc.",
     "documentNo": "Nº documento",
     "finance": "Finanzas",
+    "treasury": "Tesorería",
     "settings": "Configuración",
     "settingsDescription": "Gestiona el contexto de tu sesión. Cambiar el rol u organización volverá a autenticar tu sesión.",
     "currentSession": "Sesión actual",
@@ -27775,6 +27805,9 @@
     },
     "Finance Reports": {
       "label": "Informes de Finanzas"
+    },
+    "Treasury Reports": {
+      "label": "Informes de Tesorería"
     },
     "Payment Tracker": {
       "label": "Seguimiento cobros-pagos"

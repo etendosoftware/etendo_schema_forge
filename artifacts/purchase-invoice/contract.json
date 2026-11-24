@@ -1,8 +1,8 @@
 {
-  "version": "0.9.0",
+  "version": "0.11.0",
   "generatedAt": "2026-09-17T15:12:05.434Z",
-  "updatedAt": "2026-11-18T15:10:52.173Z",
-  "checksum": "9c545e710e455e00",
+  "updatedAt": "2026-11-23T13:46:17.092Z",
+  "checksum": "8787594a3fb2ae25",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -1399,6 +1399,75 @@
             }
           },
           {
+            "name": "aeatsiiDua",
+            "apiKey": "aeatsiiDua",
+            "column": "EM_Aeatsii_Dua",
+            "label": "DUA",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 255
+            },
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII2@='Y' & (@EM_Aeatsii_Clave_Tipo_Fc@='F5' | @EM_Aeatsii_Clave_Tipo_Fc@='LC') & @EM_Aeatsii_Multi_Dua@='N'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "aeatsiiFechaDua",
+            "apiKey": "aeatsiiFechaDua",
+            "column": "EM_Aeatsii_Fecha_Dua",
+            "label": "DUA date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 19
+            },
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII2@='Y' & (@EM_Aeatsii_Clave_Tipo_Fc@='F5' | @EM_Aeatsii_Clave_Tipo_Fc@='LC') & @EM_Aeatsii_Multi_Dua@='N'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "aeatsiiMultiDua",
+            "apiKey": "aeatsiiMultiDua",
+            "column": "EM_Aeatsii_Multi_Dua",
+            "label": "Multiple DUA",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            },
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII2@='Y' & (@EM_Aeatsii_Clave_Tipo_Fc@='F5' | @EM_Aeatsii_Clave_Tipo_Fc@='LC')",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || record['documentStatus'] === 'VO') && (record['processed'] === true || record['processed'] === 'Y')"
+            }
+          },
+          {
             "name": "tbaiIssent",
             "apiKey": "tbaiIssent",
             "column": "EM_Tbai_Issent",
@@ -1863,6 +1932,13 @@
           },
           {
             "name": "aeatsiiIsauthorization",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "aeatsiiMultiDua",
             "derivation": {
               "type": "computed",
               "source": "N"
@@ -3491,7 +3567,7 @@
             "label": "Tax",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": true,
             "form": true,
@@ -3515,7 +3591,7 @@
             "label": "Tax Amount",
             "type": "amount",
             "tsType": "number",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": true,
             "form": true,
@@ -3540,7 +3616,7 @@
             "label": "Taxable Amount",
             "type": "amount",
             "tsType": "number",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": true,
             "form": true,
@@ -3557,6 +3633,58 @@
               "evaluable": true,
               "js": "(record['processed'] === true || record['processed'] === 'Y') || (record['recalculate'] === true || record['recalculate'] === 'Y')"
             }
+          },
+          {
+            "name": "recalculate",
+            "apiKey": "recalculate",
+            "column": "Recalculate",
+            "label": "Recalculate",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "aeatsiiDua",
+            "apiKey": "aeatsiiDua",
+            "column": "EM_Aeatsii_Dua",
+            "label": "DUA",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "aeatsiiFechaDua",
+            "apiKey": "aeatsiiFechaDua",
+            "column": "EM_Aeatsii_Fecha_Dua",
+            "label": "DUA date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 19
+            }
           }
         ],
         "searchableFields": [],
@@ -3566,6 +3694,13 @@
             "derivation": {
               "type": "lookup",
               "source": "SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM C_INVOICETAX WHERE C_Invoice_ID=@C_Invoice_ID@"
+            }
+          },
+          {
+            "name": "recalculate",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
             }
           }
         ]
@@ -6108,7 +6243,7 @@
             "apiKey": "aeatsiiDua",
             "column": "EM_Aeatsii_Dua",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -6116,7 +6251,7 @@
             "apiKey": "aeatsiiFechaDua",
             "column": "EM_Aeatsii_Fecha_Dua",
             "type": "date",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -6124,7 +6259,7 @@
             "apiKey": "aeatsiiMultiDua",
             "column": "EM_Aeatsii_Multi_Dua",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -7543,7 +7678,7 @@
             "apiKey": "tax",
             "column": "C_Tax_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -7551,7 +7686,7 @@
             "apiKey": "taxAmount",
             "column": "TaxAmt",
             "type": "amount",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -7559,7 +7694,7 @@
             "apiKey": "taxableAmount",
             "column": "TaxBaseAmt",
             "type": "amount",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -7567,7 +7702,7 @@
             "apiKey": "recalculate",
             "column": "Recalculate",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -7575,7 +7710,7 @@
             "apiKey": "aeatsiiDua",
             "column": "EM_Aeatsii_Dua",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -7583,7 +7718,7 @@
             "apiKey": "aeatsiiFechaDua",
             "column": "EM_Aeatsii_Fecha_Dua",
             "type": "date",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -9935,17 +10070,13 @@
       "tax": {
         "get": true,
         "getById": true,
-        "post": false,
-        "put": false,
-        "patch": false,
-        "delete": false,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
         "listUrl": "/sws/neo/purchase-invoice/tax",
         "detailUrl": "/sws/neo/purchase-invoice/tax/{id}",
-        "supportedFilters": [],
-        "methods": [
-          "GET",
-          "GETBYID"
-        ]
+        "supportedFilters": []
       },
       "basicDiscounts": {
         "get": true,
@@ -11252,6 +11383,14 @@
         "description": "Default value for 'aeatsiiIssent' in header should be a string"
       },
       {
+        "id": "t-default-value-type-header-aeatsiiMultiDua",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "aeatsiiMultiDua",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiMultiDua' in header should be a string"
+      },
+      {
         "id": "t-default-value-type-header-currency",
         "category": "default-value-type",
         "entity": "header",
@@ -11452,6 +11591,14 @@
         "description": "Default value for 'lineNo' in tax should be a string"
       },
       {
+        "id": "t-default-value-type-tax-recalculate",
+        "category": "default-value-type",
+        "entity": "tax",
+        "field": "recalculate",
+        "runner": "node",
+        "description": "Default value for 'recalculate' in tax should be a string"
+      },
+      {
         "id": "t-displaylogic-evaluable-header-adOrgId",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -11484,6 +11631,14 @@
         "description": "Display logic for 'aeatsiiDescripcionSii' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-header-aeatsiiDua",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiDua",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiDua' in header should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-header-aeatsiiErrorRegistral",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -11500,6 +11655,14 @@
         "description": "Display logic for 'aeatsiiEstado' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-header-aeatsiiFechaDua",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiFechaDua",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiFechaDua' in header should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-header-aeatsiiFechaRegCont",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -11514,6 +11677,14 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Display logic for 'aeatsiiIssent' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-aeatsiiMultiDua",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiMultiDua",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiMultiDua' in header should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-header-costcenter",
@@ -11684,6 +11855,14 @@
         "description": "Display logic for 'aeatsiiDescripcionSii' in header should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-header-aeatsiiDua",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiDua",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiDua' in header should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-header-aeatsiiErrorRegistral",
         "category": "displaylogic-valid",
         "entity": "header",
@@ -11700,6 +11879,14 @@
         "description": "Display logic for 'aeatsiiEstado' in header should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-header-aeatsiiFechaDua",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiFechaDua",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiFechaDua' in header should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-header-aeatsiiFechaRegCont",
         "category": "displaylogic-valid",
         "entity": "header",
@@ -11714,6 +11901,14 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Display logic for 'aeatsiiIssent' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-aeatsiiMultiDua",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiMultiDua",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiMultiDua' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-header-costcenter",
@@ -12188,6 +12383,14 @@
         "description": "Field 'aeatsiiDescripcionSii' should be present in header"
       },
       {
+        "id": "t-field-presence-header-aeatsiiDua",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiDua' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-aeatsiiErrorCode",
         "category": "field-presence",
         "entity": "header",
@@ -12220,6 +12423,14 @@
         "description": "Field 'aeatsiiEstado' should be present in header"
       },
       {
+        "id": "t-field-presence-header-aeatsiiFechaDua",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiFechaDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiFechaDua' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-aeatsiiFechaRegCont",
         "category": "field-presence",
         "entity": "header",
@@ -12242,6 +12453,14 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Field 'aeatsiiIssent' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiMultiDua",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiMultiDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiMultiDua' should be present in header"
       },
       {
         "id": "t-field-presence-header-businessPartner",
@@ -13100,12 +13319,36 @@
         "description": "Field 'motivo' should be present in siiData"
       },
       {
+        "id": "t-field-presence-tax-aeatsiiDua",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "aeatsiiDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiDua' should be present in tax"
+      },
+      {
+        "id": "t-field-presence-tax-aeatsiiFechaDua",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "aeatsiiFechaDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiFechaDua' should be present in tax"
+      },
+      {
         "id": "t-field-presence-tax-lineNo",
         "category": "field-presence",
         "entity": "tax",
         "field": "lineNo",
         "runner": "node",
         "description": "Field 'lineNo' should be present in tax"
+      },
+      {
+        "id": "t-field-presence-tax-recalculate",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "recalculate",
+        "runner": "node",
+        "description": "Field 'recalculate' should be present in tax"
       },
       {
         "id": "t-field-presence-tax-tax",
@@ -13468,6 +13711,14 @@
         "description": "Field 'aeatsiiDescripcionSii' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-aeatsiiDua",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiDua' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-aeatsiiErrorCode",
         "category": "field-type",
         "entity": "header",
@@ -13500,6 +13751,14 @@
         "description": "Field 'aeatsiiEstado' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-aeatsiiFechaDua",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiFechaDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiFechaDua' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-aeatsiiFechaRegCont",
         "category": "field-type",
         "entity": "header",
@@ -13522,6 +13781,14 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Field 'aeatsiiIssent' should have type 'boolean' in header"
+      },
+      {
+        "id": "t-field-type-header-aeatsiiMultiDua",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiMultiDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiMultiDua' should have type 'boolean' in header"
       },
       {
         "id": "t-field-type-header-businessPartner",
@@ -14380,12 +14647,36 @@
         "description": "Field 'motivo' should have type 'string' in siiData"
       },
       {
+        "id": "t-field-type-tax-aeatsiiDua",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "aeatsiiDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiDua' should have type 'string' in tax"
+      },
+      {
+        "id": "t-field-type-tax-aeatsiiFechaDua",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "aeatsiiFechaDua",
+        "runner": "node",
+        "description": "Field 'aeatsiiFechaDua' should have type 'string' in tax"
+      },
+      {
         "id": "t-field-type-tax-lineNo",
         "category": "field-type",
         "entity": "tax",
         "field": "lineNo",
         "runner": "node",
         "description": "Field 'lineNo' should have type 'number' in tax"
+      },
+      {
+        "id": "t-field-type-tax-recalculate",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "recalculate",
+        "runner": "node",
+        "description": "Field 'recalculate' should have type 'boolean' in tax"
       },
       {
         "id": "t-field-type-tax-tax",
@@ -14546,6 +14837,14 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Read-only logic for 'aeatsiiIssent' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiMultiDua",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiMultiDua",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiMultiDua' in header should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-header-businessPartner",
@@ -15146,6 +15445,14 @@
         "field": "aeatsiiIssent",
         "runner": "node",
         "description": "Read-only logic for 'aeatsiiIssent' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiMultiDua",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiMultiDua",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiMultiDua' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-businessPartner",
@@ -16981,14 +17288,6 @@
         "description": "System field 'aeatsiiDescription' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-aeatsiiDua",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiDua",
-        "runner": "node",
-        "description": "System field 'aeatsiiDua' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-aeatsiiDup",
         "category": "system-field",
         "entity": "header",
@@ -17003,14 +17302,6 @@
         "field": "aeatsiiEjercicio",
         "runner": "node",
         "description": "System field 'aeatsiiEjercicio' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiFechaDua",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiFechaDua",
-        "runner": "node",
-        "description": "System field 'aeatsiiFechaDua' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiFechaOperacion",
@@ -17067,14 +17358,6 @@
         "field": "aeatsiiMotivoRectif",
         "runner": "node",
         "description": "System field 'aeatsiiMotivoRectif' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiMultiDua",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiMultiDua",
-        "runner": "node",
-        "description": "System field 'aeatsiiMultiDua' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiPeriodo",
@@ -18733,22 +19016,6 @@
         "description": "System field 'active' should exist in backend but not frontend for tax"
       },
       {
-        "id": "t-system-field-tax-aeatsiiDua",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "aeatsiiDua",
-        "runner": "node",
-        "description": "System field 'aeatsiiDua' should exist in backend but not frontend for tax"
-      },
-      {
-        "id": "t-system-field-tax-aeatsiiFechaDua",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "aeatsiiFechaDua",
-        "runner": "node",
-        "description": "System field 'aeatsiiFechaDua' should exist in backend but not frontend for tax"
-      },
-      {
         "id": "t-system-field-tax-client",
         "category": "system-field",
         "entity": "tax",
@@ -18803,14 +19070,6 @@
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for tax"
-      },
-      {
-        "id": "t-system-field-tax-recalculate",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "recalculate",
-        "runner": "node",
-        "description": "System field 'recalculate' should exist in backend but not frontend for tax"
       },
       {
         "id": "t-system-field-tax-updated",
@@ -18921,25 +19180,25 @@
       }
     ],
     "summary": {
-      "total": 1016,
+      "total": 1032,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 13,
-        "default-value-type": 39,
-        "displaylogic-evaluable": 25,
-        "displaylogic-valid": 25,
-        "field-presence": 160,
-        "field-type": 160,
-        "readonlylogic-evaluable": 75,
-        "readonlylogic-valid": 75,
+        "default-value-type": 41,
+        "displaylogic-evaluable": 28,
+        "displaylogic-valid": 28,
+        "field-presence": 166,
+        "field-type": 166,
+        "readonlylogic-evaluable": 76,
+        "readonlylogic-valid": 76,
         "rule-declared": 23,
         "searchable-filters": 6,
         "selector-endpoint": 54,
-        "system-field": 322,
+        "system-field": 316,
         "visibility": 13
       },
       "byRunner": {
-        "node": 1016,
+        "node": 1032,
         "junit": 0
       }
     }

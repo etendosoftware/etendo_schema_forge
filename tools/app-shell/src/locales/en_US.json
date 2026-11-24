@@ -16266,6 +16266,9 @@
     "Finance": {
       "label": "Finance"
     },
+    "Treasury": {
+      "label": "Treasury"
+    },
     "General": {
       "label": "General"
     },
@@ -17585,7 +17588,7 @@
     "forceAppRefresh": "Force app refresh",
     "newPayment": "New payment",
     "paymentRecordedLocally": "Payment recorded locally — it will sync when the endpoint is available",
-    "financeCollections": "Finance · Collections",
+    "treasuryCollections": "Treasury · Collections",
     "activity": "Activity",
     "closeActivityPanel": "Close activity panel",
     "paymentCreated": "Payment created",
@@ -19371,7 +19374,6 @@
     "statusPaymentMade": "Payment Made",
     "statusWithdrawnNotCleared": "Withdrawn not Cleared",
     "statusDepositedNotCleared": "Deposited not Cleared",
-    "financeMenuLabel": "Finances",
     "financeAccountsPageTitle": "Accounts",
     "financeAccountsSearchPlaceholder": "Search account…",
     "financeAccountsFilterAll": "All accounts",
@@ -20851,6 +20853,7 @@
     "barChartAria": "Monthly sales bar chart",
     "language": "Language",
     "logout": "Logout",
+    "cookieSettings": "Cookie settings",
     "onboardingLanguageSpanish": "Spanish",
     "onboardingLanguageEnglish": "English",
     "onboardingAuthFeatureNoCard": "No credit card",
@@ -20986,8 +20989,7 @@
     "onboardingMarketingConsent": "I agree to receive commercial communications and promotional material from Etendo by email.",
     "onboardingPhoneLabel": "Phone",
     "onboardingOptionalHint": "(optional)",
-    "onboardingPhonePrefixLabel": "Phone prefix",
-    "onboardingPhonePrefixPlaceholder": "Prefix",
+    "onboardingCountryPlaceholder": "Select",
     "onboardingPhonePlaceholder": "Phone number",
     "onboardingPhoneInvalid": "Enter a valid phone number.",
     "onboardingBusinessSectorLabel": "Business sector",
@@ -22426,6 +22428,33 @@
     "sifDataTabs.field.authorizationNo": "Authorization number",
     "sifDataTabs.field.accountingRegDate": "Accounting register date",
     "sifDataTabs.field.registerError": "Register error modified",
+    "sifDataTabs.field.dua": "DUA",
+    "sifDataTabs.field.duaDate": "DUA date",
+    "sifDataTabs.field.multiDua": "Multiple DUA",
+    "sifDataTabs.importTaxes.title": "Import taxes",
+    "sifDataTabs.importTaxes.addCompensatory": "Add compensatory line",
+    "sifDataTabs.importTaxes.noCompensatoryTax": "No compensatory 0% import tax is configured for: {taxes}.",
+    "sifDataTabs.importTaxes.noImportTaxToCompensate": "There is no import tax to compensate.",
+    "sifDataTabs.importTaxes.alreadyCompensated": "Already compensated.",
+    "sifDataTabs.importTaxes.compensatoryAdded": "Compensatory lines added",
+    "sifDataTabs.dua.subtitle": "Import VAT is declared with the data of the DUA issued by customs.",
+    "sifDataTabs.dua.dateHelper": "On or before the accounting register date.",
+    "sifDataTabs.dua.lengthHint": "The DUA has 18 characters: year (2) + country (2) + customs office (6) + number (7) + check digit (1).",
+    "sifDataTabs.dua.dateAfterAccountingDate": "The DUA date is later than the Accounting register date: SII will reject the send. Correct one of the two dates.",
+    "sifDataTabs.dua.lcHelper": "Customs complementary liquidation number",
+    "sifDataTabs.dua.lcHintIva": "For a complementary customs liquidation, enter the customs liquidation number; it starts with LC, A01 or A02.",
+    "sifDataTabs.dua.lcHintIgic": "For a complementary customs liquidation, enter the customs liquidation number; it starts with CLC or 599.",
+    "sifDataTabs.dua.lcHintAny": "For a complementary customs liquidation, enter the customs liquidation number; it starts with LC, A01 or A02 (IVA) or CLC or 599 (IGIC).",
+    "sifDataTabs.importTaxes.subtitle": "Enter the base assessed in the DUA; the tax amount is calculated from the rate.",
+    "sifDataTabs.importTaxes.rate": "Rate",
+    "sifDataTabs.importTaxes.summaryTaxAmount": "Import VAT amount",
+    "sifDataTabs.importTaxes.duaTotal": "DUA total",
+    "sifDataTabs.importTaxes.taxableAmount": "Taxable base",
+    "sifDataTabs.importTaxes.taxAmount": "Tax amount",
+    "sifDataTabs.importTaxes.add": "Add tax",
+    "sifDataTabs.importTaxes.empty": "No import taxes yet.",
+    "sifDataTabs.importTaxes.saveFirst": "Save the invoice to add import taxes.",
+    "sifDataTabs.importTaxes.deleted": "Import tax deleted",
     "sifDataTabs.field.siiYear": "SII year",
     "sifDataTabs.field.siiPeriod": "SII period",
     "sifDataTabs.field.chainSequence": "Chain sequence",
@@ -22752,6 +22781,7 @@
     "docNo": "Doc No",
     "documentNo": "Document No",
     "finance": "Finance",
+    "treasury": "Treasury",
     "settings": "Settings",
     "settingsDescription": "Manage your session context. Changing role or organization will re-authenticate your session.",
     "currentSession": "Current Session",
@@ -28144,6 +28174,9 @@
     },
     "Finance Reports": {
       "label": "Finance Reports"
+    },
+    "Treasury Reports": {
+      "label": "Treasury Reports"
     },
     "Production Management": {
       "label": "Production Management"

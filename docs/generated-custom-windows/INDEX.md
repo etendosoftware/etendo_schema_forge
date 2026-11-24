@@ -57,7 +57,9 @@ This folder is the entry point for documentation that describes how generated an
 | [warehouse.md](warehouse.md) | Custom warehouse flow with products/transactions tabs |
 | [warehouse-storage-bins.md](warehouse-storage-bins.md) | Hidden route-only warehouse storage-bin master/detail window |
 
-## Finance
+## Treasury
+
+Menu group "Tesorería" (ETP-6389): Cobro, Pago, Cuentas, Informes (aging reports only) and Condiciones de pago, in that order.
 
 | File | Description |
 |------|-------------|
@@ -66,10 +68,18 @@ This folder is the entry point for documentation that describes how generated an
 | [financial-account.md](financial-account.md) | Financial account detail: Movimientos, Conciliación (split panel, automatch, bounce pairs and discarded lines since ETP-5581), Extractos importados, cash close and Reconciliaciones |
 | [financial-accounts-page.md](financial-accounts-page.md) | Cuentas landing page (ETP-4095) + offline account create / edit / archive (ETP-4096) |
 | [financial-account-management.md](financial-account-management.md) | Financial account create / edit / archive, bank connection and bank sync (one sync per account, shared state across its four entry points since ETP-6154), `financial-account` spec endpoint and MCP access (ETP-4096 onwards; split out of `financial-account.md`) |
-| [remittance.md](remittance.md) | SEPA remittances ("Remesas", ETP-6148, capability `sepaRemittances`). The `remittance` spec over the Classic REM window reuses Classic columns, including REM's own `Remittance_Status` (added in ETP-6148 on `feature/ETP-6148`): list, header form and read-only lines. The Classic process buttons are hidden; selection, XML and settlement come later |
-| [bank-reconciliation.md](bank-reconciliation.md) | Legacy placeholder; superseded by `financial-account.md` (kept hidden in menu.json until T8) |
+| [bank-reconciliation.md](bank-reconciliation.md) | Retired generated window (removed in ETP-4100, no menu entry or route). Reconciliation is the Conciliación tab of `financial-account.md` (Tesorería › Cuentas) |
 | [match-rule.md](match-rule.md) | Bank Reconciliation matching-rules catalog ("Reglas de matcheo") — first `list-modal` window (grid + create/edit modal, no detail) on generic W CRUD + validation hook |
 | [transaction-type.md](transaction-type.md) | Backend-only user-definable lookup behind the match-rule "Tipo de transacción" field — no menu/route; created inline from the selector (W spec + `TransactionTypeHandler`) |
+| [aging-receivable.md](aging-receivable.md) | NEO-backed aging report of open receivables per contact (Tesorería › Informes), with a per-contact detail drill-down |
+| [aging-payable.md](aging-payable.md) | Payables counterpart of `aging-receivable.md` (Tesorería › Informes) |
+| [payment-term.md](payment-term.md) | Generated `list-modal` payment-term catalog (grid + compact create/edit popup, no detail view; `/payment-term/<id>` opens the popup): name + days only, key and month offset derived server-side, rename syncs translations (ETP-5978). Moved from Settings in ETP-6389 |
+
+## Finance
+
+| File | Description |
+|------|-------------|
+| [remittance.md](remittance.md) | SEPA remittances ("Remesas", ETP-6148, capability `sepaRemittances`). The `remittance` spec over the Classic REM window reuses Classic columns, including REM's own `Remittance_Status` (added in ETP-6148 on `feature/ETP-6148`): list, header form and read-only lines. The Classic process buttons are hidden; selection, XML and settlement come later |
 | [chart-of-accounts.md](chart-of-accounts.md) | Generated chart-of-accounts maintenance window |
 | [cost-center.md](cost-center.md) | Generated cost-center master window (ETP-4892) — flat accounting-dimension catalog, no hierarchy |
 | [service-project.md](service-project.md) | Generated Project master window (ETP-4892) — minimal Search Key/Name/Description/Active view of AD window "Service Project" (`C_Project`), sub-tabs and ~65 other header columns excluded |
@@ -107,7 +117,6 @@ This folder is the entry point for documentation that describes how generated an
 | [organization.md](organization.md) | Custom organization-settings window (ETP-4749) — flattens the Classic Organization/Information AD tabs (window 110) into one tabless screen: identity, fiscal data, and contact details, plus the Certificado digital, IAE and Modelo 390 sections shown only when a fiscal configuration that uses them is active (ETP-5831) |
 | [document-sequence.md](document-sequence.md) | Document numbering window (ETP-5190, AD window 112) — prefix/suffix/next-number per sequence, with the Spanish localization prefix rules enforced on write; target of the First Steps invoicing step |
 | [price-list.md](price-list.md) | Custom price-list flow with product-price workspace |
-| [payment-term.md](payment-term.md) | Generated `list-modal` payment-term catalog (grid + compact create/edit popup, no detail view; `/payment-term/<id>` opens the popup): name + days only, key and month offset derived server-side, rename syncs translations (ETP-5978) |
 | [tax.md](tax.md) | Generated tax-rate maintenance window |
 | [tax-category.md](tax-category.md) | Generated tax-category catalog window (groups tax rates; ETP-4249) |
 | [business-partner-category.md](business-partner-category.md) | Generated business-partner-category master/detail flow behind a thin wrapper; contact type + accounts by type (Accounting tab), list type columns and contact-type quick filter behind the `contact-category-type` flag (ETP-5791) |

@@ -13,7 +13,7 @@ import ReactivarConfirmModal from '../../../custom/ReactivarConfirmModal';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Finance / Payment In';
+const breadcrumb = 'Treasury / Payment In';
 
 
 // @sf-generated-start summary:finPayment

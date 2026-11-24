@@ -29,6 +29,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { fetchMyReportAccess } from '@/lib/rolesApi.js';
 import { useFeatureFlag, DYNAMIC_REPORTS, DYNAMIC_BALANCE_REPORTS } from '@/lib/flags';
 import { opensDynamicView } from '@/components/reports/dynamic/dynamicReports.js';
+import { CATEGORY_LABELS } from '@/components/reports/reportCategories.js';
 import { cn } from '@/lib/utils';
 import DynamicReportBadge, { DYNAMIC_REPORT_CARD_CLASS } from '@/components/reports/dynamic/DynamicReportBadge.jsx';
 import { reportDocumentUrl } from '@/components/reports/reportDocumentUrl.js';
@@ -64,6 +65,9 @@ export function buildReportFilename(reportId, format, suffix = '') {
 // menu-hidden only, a deliberate decision made earlier in this same ticket.
 const REPORT_CATEGORY_WINDOW_IDS = {
   finance: 'D647D118F5014D00AF47A636B2CD0DD3',
+  // ETP-6389 — Tesorería › Informes shares the Financial Reports anchor window: the aging reports
+  // moved out of the finance category, not out of that permission.
+  treasury: 'D647D118F5014D00AF47A636B2CD0DD3',
   inventory: '6346B88619F948F9A42224BDB0B239FA',
 };
 
@@ -77,14 +81,51 @@ const REPORT_CATEGORY_WINDOW_IDS = {
 // report row is ever added, removed, or moved between categories.
 const REPORT_CATEGORY_REPORT_IDS = {
   finance: [
-    'tax-report', 'aging-receivable', 'aging-payable', 'balance-sheet', 'profit-loss',
+    'tax-report', 'balance-sheet', 'profit-loss',
     'report-general-ledger', 'report-journal-entries', 'report-trial-balance',
   ],
+  // ETP-6389 — the aging reports live under Tesorería › Informes. A category missing here is
+  // UNGATED, so this entry is what keeps the treasury catalog behind the per-report grants.
+  treasury: ['aging-receivable', 'aging-payable'],
   inventory: ['inventory-stock-report'],
 };
 
 /** Flattened union of every REPORT_CATEGORY_REPORT_IDS id, for the category-agnostic filter below. */
 const ALL_CATALOG_REPORT_IDS = new Set(Object.values(REPORT_CATEGORY_REPORT_IDS).flat());
+
+/**
+ * The category a catalog report belongs to, from REPORT_CATEGORY_REPORT_IDS — known before the
+ * report catalogue loads (and even when the URL's category gate denies the fetch), which is what
+ * lets a legacy `category=finance&report=aging-receivable` link be re-pointed to `treasury`
+ * before the gate is evaluated (ETP-6389). `null` for a report outside the catalog.
+ */
+export function catalogCategoryOf(reportId) {
+  if (!reportId) return null;
+  for (const [category, ids] of Object.entries(REPORT_CATEGORY_REPORT_IDS)) {
+    if (ids.includes(reportId)) return category;
+  }
+  return null;
+}
+
+/**
+ * Every saved favourite that opens report `reportId`, whatever its category — a favourite is
+ * stored under its exact `report-viewer?category=<cat>&report=<id>` key, so one saved before the
+ * report changed category (ETP-6389: `category=finance&report=aging-receivable`) no longer equals
+ * the key the page builds today. Matching on the `report` param keeps the star lit for it and lets
+ * pressing the star remove it instead of adding a duplicate.
+ *
+ * @param {Array<{name?: string}>|undefined} favorites
+ * @param {string} reportId
+ * @returns {string[]} the matching favourite keys
+ */
+export function findReportFavoriteKeys(favorites, reportId) {
+  if (!reportId || !Array.isArray(favorites)) return [];
+  const prefix = 'report-viewer?';
+  return favorites
+    .map((favorite) => favorite?.name)
+    .filter((name) => typeof name === 'string' && name.startsWith(prefix)
+      && new URLSearchParams(name.slice(prefix.length)).get('report') === reportId);
+}
 
 // Static skeleton placeholders shown while a report renders — fixed-length, never reordered.
 const SKELETON_COLUMN_WIDTHS = [40, 15, 15, 15, 15, 15].map((w, i) => ({ id: i, w }));
@@ -1210,7 +1251,9 @@ function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReport
     const basePath = window.location.pathname.replace(/\/[^/]*$/, ''); // same pattern as the invoice iframe (below)
     const qs = new URLSearchParams();
     qs.set('report', reportId);
-    qs.set('category', 'finance');
+    // The opened report's own category (ETP-6389: the aging reports live under treasury); the
+    // drill-down target is a catalog report, so the static catalog answers first.
+    qs.set('category', catalogCategoryOf(reportId) || report?.category || 'finance');
     // Only forward filled-in values — an empty/undefined one would otherwise
     // stringify as the literal "undefined" and needlessly override the target
     // report's own default for that parameter.
@@ -1219,7 +1262,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReport
     }
     window.open(`${window.location.origin}${basePath}/report-viewer?${qs.toString()}`, '_blank');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportId, JSON.stringify(drillParams)]);
+  }, [reportId, report?.category, JSON.stringify(drillParams)]);
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-2">
@@ -1605,7 +1648,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
     loadAutoDefaults();
   };
 
-  const { toggleFavorite, isFavorite } = useFavorites();
+  const { toggleFavorite, isFavorite, favorites, removeFavorite } = useFavorites();
   const title = report.title?.[locale] || report.title?.en_US || report.title?.es_ES || report.id;
   const categoryLabel = categoryFilter && CATEGORY_LABELS[categoryFilter]
     ? tMenu(CATEGORY_LABELS[categoryFilter].en)
@@ -1624,13 +1667,24 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
   const favKey = categoryFilter
     ? `report-viewer?category=${categoryFilter}&report=${report.id}`
     : `report-viewer?report=${report.id}`;
-  const favActive = isFavorite(favKey);
+  // ETP-6389 — a favourite saved under another category for this same report (before it moved)
+  // counts as this one: the star is lit, and un-favouriting removes EVERY favourite of this report
+  // (current key and legacy ones together, in one call), so a user holding both is not left with
+  // the star still lit. Favouriting is unchanged: it adds the current key.
+  const reportFavKeys = findReportFavoriteKeys(favorites, report.id);
+  const hasLegacyFav = reportFavKeys.some((key) => key !== favKey);
+  const favActive = isFavorite(favKey) || hasLegacyFav;
 
   const favLabel = report.title?.en_US || report.title?.en || report.id;
   const favLabels = report.title && typeof report.title === 'object' ? report.title : undefined;
+  const onToggleFavorite = () => {
+    // `favorites` missing (a context without the list) still knows the current key via isFavorite.
+    if (favActive && removeFavorite) removeFavorite(reportFavKeys.length > 0 ? reportFavKeys : [favKey]);
+    else toggleFavorite(favKey, favLabel, favLabels);
+  };
   // ETP-5519: no `onBack` here — the report view does not show the TopBar ← button. The
   // in-page Cancel button (`action-cancel`) is the way back to the report catalog.
-  useSetPageMeta({ title, breadcrumb, onAddToFavorites: () => toggleFavorite(favKey, favLabel, favLabels), isFavorite: favActive }, [favActive]);
+  useSetPageMeta({ title, breadcrumb, onAddToFavorites: onToggleFavorite, isFavorite: favActive }, [favActive, reportFavKeys.join('|')]);
 
   // document.title (ETP-5013) — this page never set one, so the browser's
   // OWN native print (Cmd/Ctrl+P on the live preview — a different path
@@ -1881,14 +1935,6 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
   );
 }
 
-const CATEGORY_LABELS = {
-  purchases: { en: 'Purchases', es: 'Compras' },
-  finance: { en: 'Finance', es: 'Finanzas' },
-  sales: { en: 'Sales', es: 'Ventas' },
-  inventory: { en: 'Inventory', es: 'Inventario' },
-  other: { en: 'Other', es: 'Otros' },
-};
-
 // One row of the "list" view (ETP-5013) — the table equivalent of ReportCard.
 // Deliberately just Reporte + Formato: unlike a real AD window's list, a
 // report has no secondary identifiers (SKU, category, stock...) worth a
@@ -2055,7 +2101,7 @@ export default function ReportViewerPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { locale } = useLocaleSwitch();
   const localeLangKey = locale === 'es_ES' ? 'es' : 'en';
-  const categoryFilter = searchParams.get('category');
+  const urlCategory = searchParams.get('category');
   const reportId = searchParams.get('report');
   const dynamicFlags = useDynamicReportFlags();
 
@@ -2071,6 +2117,27 @@ export default function ReportViewerPage() {
       .catch(() => { if (!cancelled) setReportAccess({}); });
     return () => { cancelled = true; };
   }, []);
+
+  // ETP-6389 — a report opens under its OWN category. A legacy link or favourite
+  // (`category=finance&report=aging-receivable`, from before the aging reports moved to
+  // Tesorería) is re-pointed to the report's category, replacing the history entry, so the
+  // breadcrumb, Cancel, the favourite star and the highlighted menu entry all say Tesorería.
+  // The static catalog answers first — it is known before `/api/reports` loads, and the gate
+  // below must be evaluated on the right category (the old one may deny the fetch outright);
+  // the report contract's own `category` covers reports outside the catalog once it loads.
+  // A contract without `category` reaches the page as 'other' (report-descriptor default): that is
+  // "unknown", not a home, so it never triggers a rewrite.
+  const contractCategory = reportId ? (reports.find((r) => r.id === reportId)?.category ?? null) : null;
+  const knownContractCategory = contractCategory && contractCategory !== 'other' ? contractCategory : null;
+  const reportCategory = catalogCategoryOf(reportId) ?? knownContractCategory;
+  const categoryMismatch = Boolean(urlCategory && reportCategory && reportCategory !== urlCategory);
+  const categoryFilter = categoryMismatch ? reportCategory : urlCategory;
+  useEffect(() => {
+    if (!categoryMismatch) return;
+    const params = new URLSearchParams(searchParams);
+    params.set('category', reportCategory);
+    setSearchParams(params, { replace: true });
+  }, [categoryMismatch, reportCategory, searchParams, setSearchParams]);
 
   // ETP-5116 — computed before the effect below so the effect can short-circuit
   // the catalog fetch (and any other gated side effect added later) whenever
