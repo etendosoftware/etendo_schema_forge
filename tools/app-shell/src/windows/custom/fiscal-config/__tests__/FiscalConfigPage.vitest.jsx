@@ -10,9 +10,10 @@ import React from 'react';
 
 // `ui()` returns the key; a test that must see an interpolated value (a server message inside a
 // translated sentence) turns `withParams` on, and `ui()` then appends the params' values.
-const i18nMode = vi.hoisted(() => ({ withParams: false }));
+// A test that must see the real text a user reads sets `i18nMode.ui` to a real locale dictionary.
+const i18nMode = vi.hoisted(() => ({ withParams: false, ui: null }));
 vi.mock('@/i18n', () => ({
-  useUI: () => (key, params) => (i18nMode.withParams && params ? `${key} ${Object.values(params).join(' ')}` : key),
+  useUI: () => i18nMode.ui ?? ((key, params) => (i18nMode.withParams && params ? `${key} ${Object.values(params).join(' ')}` : key)),
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
@@ -292,6 +293,7 @@ import { buildTerritories, buildSystems } from '../fiscalCatalog.js';
 import { useFiscalCatalog } from '../useFiscalCatalog.js';
 import { FISCAL_SYSTEM_CATALOG } from './fiscalSystemCatalog.fixture.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
+import { loadLocaleDictionary, makeRealUI } from '../../shared/__tests__/testUtils/realLocaleUI.js';
 import { detectProfile } from '../fiscalConfig.utils.js';
 import { FiscalAccessDeniedError } from '../fiscalSystemApi.js';
 
@@ -300,6 +302,7 @@ import { FiscalAccessDeniedError } from '../fiscalSystemApi.js';
 beforeEach(() => {
   catalogState.value = { catalog: FISCAL_SYSTEM_CATALOG, error: null, loading: false };
   i18nMode.withParams = false;
+  i18nMode.ui = null;
 });
 
 const BASE_PROPS = {
@@ -1895,5 +1898,48 @@ describe('FiscalStatusSummary — deriveConfiguredStatus / buildConfiguredStatus
 
   it.each(['conflict', 'unconfigured', 'something-else', undefined])('returns null for profile %s', (profile) => {
     expect(deriveConfiguredStatus({ profile, siiRecord: { id: 'sii-1' } })).toBeNull();
+  });
+});
+
+// The TopBar breadcrumb is "Impuestos / <title>" (en: "Taxes / <title>"): the page belongs to the
+// Impuestos menu group, so it carries no Configuración / Settings level and no "Monitor fiscal" one.
+describe('FiscalConfigPage — TopBar breadcrumb', () => {
+  const lastMeta = () => vi.mocked(useSetPageMeta).mock.calls.at(-1)[0];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue({
+      selectedOrg: { id: 'org-1', name: 'Test Org' },
+      selectedRole: { orgList: [{ id: 'org-1', name: 'Test Org' }] },
+      selectOrg: vi.fn(),
+    });
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'sii',
+      siiRecord: { id: 'sii-1' },
+      tbaiRecord: null,
+      verifactuRecord: null,
+      refetch: vi.fn(),
+    });
+  });
+
+  it('es_ES: "Impuestos / Configuración Fiscal SII", two levels only', () => {
+    i18nMode.ui = makeRealUI(loadLocaleDictionary('es_ES'));
+    renderPage();
+    const { title, breadcrumb } = lastMeta();
+    expect(title).toBe('Configuración Fiscal SII');
+    expect(breadcrumb).toBe('Impuestos / Configuración Fiscal SII');
+    expect(breadcrumb.split(' / ')).toHaveLength(2);
+    expect(breadcrumb).not.toMatch(/Monitor fiscal/i);
+  });
+
+  it('en_US: "Taxes / Fiscal Configuration SII", with no Settings level', () => {
+    i18nMode.ui = makeRealUI(loadLocaleDictionary('en_US'));
+    renderPage();
+    const { title, breadcrumb } = lastMeta();
+    expect(title).toBe('Fiscal Configuration SII');
+    expect(breadcrumb).toBe('Taxes / Fiscal Configuration SII');
+    expect(breadcrumb).not.toMatch(/Settings|Fiscal Monitor/i);
   });
 });

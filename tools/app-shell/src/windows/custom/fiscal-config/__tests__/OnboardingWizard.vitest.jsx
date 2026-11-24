@@ -4,8 +4,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // --- Mocks ----------------------------------------------------------------
 
+// `ui()` returns the key unless a test switches `i18nState.ui` to a real locale dictionary.
+const i18nState = vi.hoisted(() => ({ ui: null }));
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => i18nState.ui ?? ((key) => key),
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
@@ -60,6 +62,9 @@ import OnboardingWizard from '../OnboardingWizard.jsx';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useFiscalCatalog } from '../useFiscalCatalog.js';
 import { FISCAL_SYSTEM_CATALOG } from './fiscalSystemCatalog.fixture.js';
+import { PageMetaProvider } from '@/components/layout/PageMetaContext';
+import { lastMeta, MetaProbe, renderWithMeta } from '../../fiscal-models/__tests__/testUtils/topBarMetaTestUtils.jsx';
+import { loadLocaleDictionary, makeRealUI } from '../../shared/__tests__/testUtils/realLocaleUI.js';
 
 // --- Helpers --------------------------------------------------------------
 
@@ -978,5 +983,53 @@ describe('OnboardingWizard — forceTestMode (ETP-5272 follow-up)', () => {
       />,
     );
     expect(screen.getByTestId('OnboardingWizard__detailSaveButton')).toBeDisabled();
+  });
+});
+
+// The detail screen (DetailScreen) publishes "Impuestos / <title>" (en: "Taxes / <title>") to the
+// TopBar: the wizard belongs to the Impuestos menu group, so there is no Configuración / Settings
+// level and no "Monitor fiscal" one. The flow is walked with the key-returning ui, then the real
+// dictionary is switched in and the wizard re-rendered on the same screen.
+describe('OnboardingWizard — DetailScreen TopBar breadcrumb', () => {
+  afterEach(() => { i18nState.ui = null; });
+
+  const props = { apiBaseUrl: '/api/fiscal-config', onComplete: vi.fn(), onGoHome: vi.fn() };
+
+  async function openDetailScreen() {
+    const result = renderWithMeta(<OnboardingWizard {...props} />);
+    fireEvent.click(screen.getByText('fiscal.onboarding.territory.prefer.manual.link'));
+    fireEvent.click(screen.getByText('fiscal.territory.navarra'));
+    fireEvent.click(screen.getByText('SII'));
+    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
+    fireEvent.click(screen.getByText('fiscal.onboarding.confirm.btn'));
+    await screen.findByTestId('OnboardingWizard__detailSaveButton');
+    return result;
+  }
+
+  function rerenderIn(rerender, dictionary) {
+    i18nState.ui = makeRealUI(loadLocaleDictionary(dictionary));
+    rerender(<PageMetaProvider><OnboardingWizard {...props} /><MetaProbe /></PageMetaProvider>);
+  }
+
+  it('publishes "taxes / <title>" on the detail screen', async () => {
+    await openDetailScreen();
+    expect(lastMeta.title).toBe('fiscal.title SII');
+    expect(lastMeta.breadcrumb).toBe('taxes / fiscal.title SII');
+  });
+
+  it('es_ES: "Impuestos / Configuración Fiscal SII", two levels only', async () => {
+    const { rerender } = await openDetailScreen();
+    rerenderIn(rerender, 'es_ES');
+    await waitFor(() => expect(lastMeta.breadcrumb).toBe('Impuestos / Configuración Fiscal SII'));
+    expect(lastMeta.title).toBe('Configuración Fiscal SII');
+    expect(lastMeta.breadcrumb.split(' / ')).toHaveLength(2);
+    expect(lastMeta.breadcrumb).not.toMatch(/Monitor fiscal/i);
+  });
+
+  it('en_US: "Taxes / Fiscal Configuration SII", with no Settings level', async () => {
+    const { rerender } = await openDetailScreen();
+    rerenderIn(rerender, 'en_US');
+    await waitFor(() => expect(lastMeta.breadcrumb).toBe('Taxes / Fiscal Configuration SII'));
+    expect(lastMeta.breadcrumb).not.toMatch(/Settings|Fiscal Monitor/i);
   });
 });
