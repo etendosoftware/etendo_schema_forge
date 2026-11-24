@@ -447,7 +447,9 @@ export default function ReportDrawer({
             ? `<div class="report-filters"><strong>${escapeHtml(reportLabels.filtersLabel)}:</strong> ${filtersText}</div>`
             : '';
           const headerCells = cols.map(c => `<th>${escapeHtml(c.label || c.key)}</th>`).join('');
-          const bodyRows = reportRows.map(r => `<tr>${cols.map(c => `<td>${escapeHtml(r[c.key])}</td>`).join('')}</tr>`).join('');
+          // Sonar S4624 — row cells built apart so no template literal is nested in another.
+          const rowCells = r => cols.map(c => `<td>${escapeHtml(r[c.key])}</td>`).join('');
+          const bodyRows = reportRows.map(r => `<tr>${rowCells(r)}</tr>`).join('');
           const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${resolveListingCss(listingConfig, REPORT_CSS)}</style></head><body><div class="report-container"><div class="report-header"><div><div class="report-title">${escapeHtml(title || ui('report'))}</div></div><div class="report-meta"><div>${now}</div><div>${reportRows.length} ${escapeHtml(reportLabels.recordsLabel)}</div></div></div>${filtersHtml}<table class="report-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table><div class="report-footer"><div class="report-summary">${escapeHtml(reportLabels.totalLabel)}: ${reportRows.length} ${escapeHtml(reportLabels.recordsLabel)}</div><div>${escapeHtml(reportLabels.generatedByLabel)}</div></div></div></body></html>`;
           writeToIframe(html);
         }
