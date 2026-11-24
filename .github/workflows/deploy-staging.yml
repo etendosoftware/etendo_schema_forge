@@ -355,7 +355,7 @@ jobs:
         if: steps.configured.outputs.ready == 'true'
         uses: actions/checkout@v4
         with:
-          repository: etendosoftware/schema_forge_core
+          repository: etendo-ai/schema_forge_core
           token: ${{ secrets.CORE_REPO_TOKEN }}
           path: .schema_forge_core
 

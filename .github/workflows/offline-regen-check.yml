@@ -74,7 +74,7 @@ jobs:
       - name: Checkout com.etendoerp.go (matching branch or fallback)
         uses: actions/checkout@v4
         with:
-          repository: etendosoftware/com.etendoerp.go
+          repository: etendo-ai/com.etendoerp.go
           path: etendo_core/modules/com.etendoerp.go
           fetch-depth: 0
           # Public repo → default GITHUB_TOKEN is enough, no secret needed.
