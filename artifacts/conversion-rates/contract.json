@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0",
+  "version": "0.8.0",
   "generatedAt": "2026-05-21T20:22:50.312Z",
-  "updatedAt": "2026-11-17T12:12:20.028Z",
-  "checksum": "c49eb86ffd6e19e4",
+  "updatedAt": "2026-11-19T15:06:53.316Z",
+  "checksum": "c966f2658933f97b",
   "frontendContract": {
     "window": {
       "id": "116",
@@ -139,14 +139,13 @@
             "apiKey": "multipleRateBy",
             "column": "MultiplyRate",
             "label": "Multiple Rate By",
-            "type": "number",
+            "type": "decimal",
             "tsType": "number",
             "visibility": "editable",
             "required": true,
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "explicitType": true,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -168,14 +167,13 @@
             "apiKey": "divideRateBy",
             "column": "DivideRate",
             "label": "Divide Rate By",
-            "type": "number",
+            "type": "decimal",
             "tsType": "number",
             "visibility": "editable",
             "required": true,
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "explicitType": true,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -305,7 +303,7 @@
             "name": "multipleRateBy",
             "apiKey": "multipleRateBy",
             "column": "MultiplyRate",
-            "type": "number",
+            "type": "decimal",
             "visibility": "editable",
             "required": true
           },
@@ -313,7 +311,7 @@
             "name": "divideRateBy",
             "apiKey": "divideRateBy",
             "column": "DivideRate",
-            "type": "number",
+            "type": "decimal",
             "visibility": "editable",
             "required": true
           },

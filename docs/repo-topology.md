@@ -96,11 +96,14 @@ on this repo's `artifacts/` and config — **core code over local data**.
 Override the core location with `SCHEMA_FORGE_CORE=/abs/path` if it is not the
 default sibling directory.
 
-**Gateway (`gateway/`, npm-linked local package):** the `gateway/` NestJS app
+**Gateway (`gateway/`, published package by default):** the `gateway/` NestJS app
 (ETP-5345) consumes `@etendosoftware/api-gateway-core`, published from
 `schema_forge_core`, as a real npm dependency — not a CLI bin (so `sf-local`
 doesn't apply) and not bundler-resolved source (so the Vite alias doesn't apply
-either). For local iteration against the unpublished core source, `npm link` is
+either). Production and Public API E2E install its exact published pin from
+`gateway/package.json` without cloning Core; see the [deployment runbook](ops/public-api-gateway-deploy.md#0-published-gateway-dependency-etp-6150)
+for registry credentials and verified stable package releases.
+For local iteration against the unpublished core source, `npm link` is
 the mechanism:
 
 ```bash

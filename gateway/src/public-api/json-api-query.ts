@@ -26,6 +26,7 @@ export type FilterOperator = (typeof FILTER_OPERATORS)[number];
 type QueryField = {
   direction?: string;
   internalPath: string;
+  queryable?: boolean;
   dataType?: { type?: string; format?: string };
   relationship?: { resource: string };
 };
@@ -45,7 +46,7 @@ const OPERATORS_BY_KIND: Record<FieldKind, readonly FilterOperator[]> = {
 /** Operators a field accepts, or `[]` when it cannot be filtered (also used to document the OpenAPI parameters). */
 export function filterOperatorsFor(field: QueryField): readonly FilterOperator[] {
   const kind = kindOf(field);
-  return kind ? OPERATORS_BY_KIND[kind] : [];
+  return kind && field.queryable !== false ? OPERATORS_BY_KIND[kind] : [];
 }
 
 export function isReadable(field: QueryField | undefined): field is QueryField {
@@ -82,7 +83,7 @@ export interface ListQuery {
 /** Whether a field can be sorted by: filterable type, and not a relationship. */
 export function isSortable(field: QueryField): boolean {
   const kind = kindOf(field);
-  return isReadable(field) && Boolean(kind) && kind !== 'relationship';
+  return isReadable(field) && field.queryable !== false && Boolean(kind) && kind !== 'relationship';
 }
 
 const text = (value: unknown): value is string => typeof value === 'string';
@@ -126,7 +127,7 @@ function parseSort(entity: PublicApiEntity, sort: unknown): string | undefined {
     const field = name ? fieldOf(entity, name) : undefined;
     // A relationship would sort by the foreign key id, which means nothing to a client.
     const kind = field ? kindOf(field) : undefined;
-    if (!field || !kind || kind === 'relationship') throw invalidQueryParameter('sort', `Cannot sort by "${name}": unknown, not readable or not sortable field.`);
+    if (!field || !kind || kind === 'relationship' || field.queryable === false) throw invalidQueryParameter('sort', `Cannot sort by "${name}": unknown, not readable or not sortable field.`);
     if (seen.has(name)) throw invalidQueryParameter('sort', `Field "${name}" is listed twice in sort.`);
     seen.add(name);
     sortBy.push(`${descending ? '-' : ''}${field.internalPath}`);
@@ -217,7 +218,7 @@ function parseFilters(entity: PublicApiEntity, filter: unknown): { clauses: NeoC
   let count = 0;
   for (const [name, spec] of Object.entries(filter)) {
     const field = fieldOf(entity, name);
-    const kind = field ? kindOf(field) : undefined;
+    const kind = field && field.queryable !== false ? kindOf(field) : undefined;
     if (!field || !kind) throw invalidQueryParameter(`filter[${name}]`, `Cannot filter by "${name}": unknown or not filterable field.`);
     const operators: Array<[FilterOperator, unknown, string]> = text(spec)
       ? [['eq', spec, `filter[${name}]`]]

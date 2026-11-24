@@ -4,8 +4,8 @@
 //
 //   node scripts/public-api-e2e-ci.mjs install   (make public-api-e2e-ci-install)
 //     Installs and builds gateway/ with @etendosoftware/api-gateway-core taken from the
-//     schema_forge_core tag this repo pins — the package is not published, so it is packed from
-//     source by scripts/lib/pack-gateway-core.mjs, the sequence deploy-public-api.yml uses too.
+//     published version pinned in gateway/package.json, installed by
+//     scripts/lib/pack-gateway-core.mjs, the sequence deploy-public-api.yml uses too.
 //     A second call with the same pin skips the dependencies and only rebuilds gateway/.
 //
 //   node scripts/public-api-e2e-ci.mjs run       (make public-api-e2e-ci)
@@ -21,18 +21,15 @@
 //
 // Never prints a password, a session cookie, a CSRF token or a client secret.
 import { execFileSync, spawn } from 'node:child_process';
-import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { packGatewayCore } from './lib/pack-gateway-core.mjs';
+import { installGatewayCore } from './lib/pack-gateway-core.mjs';
 
 const REPO_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GATEWAY_DIR = join(REPO_DIR, 'gateway');
-const CORE_PACKAGE = '@etendosoftware/schema-forge-core';
-const CORE_PACKAGE_PATH = 'packages/api-gateway-core';
-const DEFAULT_CORE_REPO = 'git@github.com:etendosoftware/schema_forge_core.git';
+const CORE_PACKAGE = '@etendosoftware/api-gateway-core';
 const INSTALL_STAMP = join(GATEWAY_DIR, 'node_modules', '.public-api-e2e-ci-core');
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
 /** Capabilities of the two keys the run creates: `process` lets the suite run business actions. */
@@ -46,11 +43,11 @@ const log = (message) => console.log(`[public-api-e2e-ci] ${message}`);
 
 // ---------------------------------------------------------------- pure helpers (unit-tested)
 
-/** The exact x.y.z pin of schema_forge_core in package.json; a range has no single tag. */
+/** The exact published api-gateway-core pin in gateway/package.json; ranges are refused. */
 export function pinnedCoreVersion(packageJson) {
   const version = packageJson?.dependencies?.[CORE_PACKAGE] ?? packageJson?.devDependencies?.[CORE_PACKAGE];
-  if (typeof version !== 'string' || !/^\d+\.\d+\.\d+$/.test(version)) {
-    throw new Error(`${CORE_PACKAGE} pin in package.json is '${version}', expected an exact x.y.z (it is the core's git tag)`);
+  if (typeof version !== 'string' || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
+    throw new Error(`${CORE_PACKAGE} pin in package.json is '${version}', expected an exact x.y.z or prerelease`);
   }
   return version;
 }
@@ -203,37 +200,17 @@ function sh(command, args, options = {}) {
 }
 
 function install() {
-  const version = pinnedCoreVersion(JSON.parse(readFileSync(join(REPO_DIR, 'package.json'), 'utf8')));
+  const version = pinnedCoreVersion(JSON.parse(readFileSync(join(GATEWAY_DIR, 'package.json'), 'utf8')));
   const stamp = existsSync(INSTALL_STAMP) ? readFileSync(INSTALL_STAMP, 'utf8').trim() : '';
   if (stamp === version) {
     // Dependencies are current; the build is cheap and follows gateway/src, so it always runs.
-    log(`gateway dependencies already installed with api-gateway-core from core ${version}`);
+    log(`gateway dependencies already installed with api-gateway-core ${version}`);
     sh('npm', ['run', 'build'], { cwd: GATEWAY_DIR });
     return;
   }
-  const work = mkdtempSync(join(tmpdir(), 'public-api-e2e-ci-'));
-  try {
-    const sourceDir = join(work, 'api-gateway-core');
-    const coreDir = process.env.PUBLIC_API_CORE_DIR?.trim();
-    if (coreDir) {
-      // Read-only on that checkout: the pinned tag's tree is exported, the working tree is untouched.
-      log(`exporting ${CORE_PACKAGE_PATH} at tag ${version} from ${coreDir}`);
-      const tar = join(work, 'core.tar');
-      sh('git', ['-C', coreDir, 'archive', '--format=tar', '-o', tar, version, CORE_PACKAGE_PATH]);
-      sh('tar', ['-xf', tar, '-C', work]);
-      sh('mv', [join(work, CORE_PACKAGE_PATH), sourceDir]);
-    } else {
-      const repo = process.env.PUBLIC_API_CORE_REPO?.trim() || DEFAULT_CORE_REPO;
-      log(`cloning schema_forge_core at tag ${version}`);
-      sh('git', ['clone', '--quiet', '--depth', '1', '--branch', version, repo, join(work, 'core')]);
-      sh('mv', [join(work, 'core', CORE_PACKAGE_PATH), sourceDir]);
-    }
-    packGatewayCore({ coreSourceDir: sourceDir, gatewayDir: GATEWAY_DIR, workDir: work, build: true });
-    writeFileSync(INSTALL_STAMP, `${version}\n`);
-    log(`gateway installed and built with api-gateway-core from core ${version}`);
-  } finally {
-    rmSync(work, { recursive: true, force: true });
-  }
+  installGatewayCore({ gatewayDir: GATEWAY_DIR, build: true });
+  writeFileSync(INSTALL_STAMP, `${version}\n`);
+  log(`gateway installed and built with published api-gateway-core ${version}`);
 }
 
 // ---------------------------------------------------------------- run
